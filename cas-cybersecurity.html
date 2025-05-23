@@ -1,0 +1,358 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zactonics CAS-Apps</title>
+    <link rel="icon" href="icon.svg" type="image/x-icon">
+    <link rel="shortcut icon" href="icon.svg" type="image/x-icon">
+    <script src="tailwinds.js"></script>
+    <style>
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .dropdown:hover .dropdown-menu { display: block; }
+    </style>
+</ <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome for Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f5f5f5;
+      font-family: 'Arial', sans-serif;
+    }
+    .dashboard-title {
+      color: #0d6efd;
+      font-weight: bold;
+    }
+    .card-header {
+      background-color: #0d6efd;
+      color: white;
+      font-weight: bold;
+    }
+    .table thead {
+      background-color: #0d6efd;
+      color: white;
+    }
+    .table-hover tbody tr:hover {
+      background-color: #f8f9fa;
+    }
+    .threat-high { background-color: #dc3545; color: white; }
+    .threat-medium { background-color: #ffc107; color: black; }
+    .threat-low { background-color: #28a745; color: white; }
+    .status-critical, .status-exposed, .status-failed, .status-public { background-color: #dc3545; color: white; }
+    .status-warning { background-color: #ffc107; color: black; }
+    .status-stable, .status-secure, .status-running { background-color: #28a745; color: white; }
+    .icon-align { margin-right: 8px; vertical-align: middle; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- Navigation -->
+   <nav class="bg-blue-900 text-white p-4 sticky top-0 z-10">
+    <div class="container mx-auto flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <img src="logo3.png" alt="Zactonics Logo" class="w-10 h-10">
+            <h1 class="text-2xl font-bold">Zactonics Computer Aided Software Solutions</h1>
+        </div>
+        <button id="menu-toggle" class="md:hidden focus:outline-none">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+        <ul id="nav-menu" class="hidden md:flex md:space-x-6 flex-col md:flex-row absolute md:static top-16 left-0 w-full md:w-auto bg-blue-900 md:bg-transparent p-4 md:p-0">
+            <li class="md:mb-0 mb-2"><a href="index.html" class="hover:text-blue-300 transition block">Home</a></li>
+            <li class="relative group md:mb-0 mb-2">
+                <a href="#" class="hover:text-blue-300 transition block flex items-center" id="solutions-toggle">
+                    Solutions
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </a>
+                <ul class="dropdown-menu hidden group-hover:block md:absolute md:bg-blue-900 md:text-white md:mt-2 md:w-48 md:rounded-md md:shadow-lg p-2 md:p-0">
+                    <li><a href="cas-cybersecurity.html" class="block px-4 py-2 hover:bg-blue-800 md:rounded-md">CAS-CyberSecurity</a></li>
+                    <li><a href="cas-apps.html" class="block px-4 py-2 hover:bg-blue-800 md:rounded-md">CAS-Apps</a></li>
+                    <li><a href="cas-tutoring.html" class="block px-4 py-2 hover:bg-blue-800 md:rounded-md">CAS-Tutoring</a></li>
+                    <li><a href="cas-legislation.html" class="block px-4 py-2 hover:bg-blue-800 md:rounded-md">CAS-Legislation</a></li>
+                </ul>
+            </li>
+            <li class="md:mb-0 mb-2"><a href="#faq" class="hover:text-blue-300 transition block">FAQ</a></li>
+            <li><a href="#about" class="hover:text-blue-300 transition block">About Us</a></li>
+<li><a href="https://github.com/zactonicsai" target="_blank"><div class="flex items-center"><svg class="h-6 w-auto" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg></div></a></li>    </div>
+</nav>
+
+ <section class="bg-gradient-to-r from-green-700 to-blue-600 text-white py-20">  
+   <p>CAS-CyberSecurity is an AI-powered cybersecurity service that leverages advanced artificial intelligence to protect digital assets and infrastructure. 
+    <br/>
+    <br/>The platform provides intelligent threat detection, automated response capabilities, and proactive security monitoring to safeguard organizations against cyber threats. By utilizing machine learning algorithms and real-time analysis, CAS-CyberSecurity identifies vulnerabilities, detects anomalous behavior, and responds to security incidents faster than traditional security solutions. The service offers comprehensive protection including network monitoring, endpoint security, threat intelligence, and incident response, making enterprise-grade cybersecurity accessible and manageable for organizations of all sizes.</p>
+   <hr/></section>
+   <section class="bg-gradient-to-r from-blue-700 to-green-600 text-white py-20">
+   <h2 class="dashboard-title mb-4 text-white" ><i class="fas text-white fa-shield-alt icon-align"></i> Summary AI Threat Intelligence Dashboard</h2>
+    <!-- Static JSON Data -->
+    <script>
+      const threatData = {
+        systems: [
+          { id: 1, name: 'Web Server 01', status: 'Critical', threatLevel: 'High', vulnerabilities: ['CVE-2025-1234', 'CVE-2025-5678'], lastScan: '2025-05-22' },
+          { id: 2, name: 'Database Server', status: 'Stable', threatLevel: 'Low', vulnerabilities: [], lastScan: '2025-05-21' },
+          { id: 3, name: 'File Server', status: 'Warning', threatLevel: 'Medium', vulnerabilities: ['CVE-2025-9012'], lastScan: '2025-05-20' }
+        ],
+        applications: [
+          { id: 1, name: 'CRM App', version: '2.1.3', status: 'Exposed', threats: ['SQL Injection', 'XSS'], lastUpdate: '2025-05-15' },
+          { id: 2, name: 'HR Portal', version: '1.4.0', status: 'Secure', threats: [], lastUpdate: '2025-05-10' }
+        ],
+        buildPipelines: [
+          { id: 1, name: 'Frontend CI/CD', status: 'Running', securityIssues: ['Unsecured API Key'], lastRun: '2025-05-23 08:00' },
+          { id: 2, name: 'Backend CI/CD', status: 'Failed', securityIssues: ['Hardcoded Credentials'], lastRun: '2025-05-22 14:30' }
+        ],
+        cloudServices: [
+          { id: 1, name: 'AWS S3 Bucket', status: 'Public', risks: ['Misconfigured Permissions'], lastChecked: '2025-05-22' },
+          { id: 2, name: 'Azure VM', status: 'Secure', risks: [], lastChecked: '2025-05-21' }
+        ],
+        threatCategories: [
+          { category: 'Malware', count: 12, severity: 'High', description: 'Detected malicious software attempts' },
+          { category: 'Phishing', count: 25, severity: 'Medium', description: 'Suspicious email campaigns' },
+          { category: 'DDoS', count: 3, severity: 'Critical', description: 'Distributed denial-of-service attacks' },
+          { category: 'Insider Threats', count: 5, severity: 'Low', description: 'Unauthorized internal access attempts' }
+        ]
+      };
+
+      // Functions to retrieve static data
+      function getSystems() { return threatData.systems; }
+      function getApplications() { return threatData.applications; }
+      function getBuildPipelines() { return threatData.buildPipelines; }
+      function getCloudServices() { return threatData.cloudServices; }
+      function getThreatCategories() { return threatData.threatCategories; }
+    </script>
+
+    <!-- Threat Categories -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header"><i class="fas fa-exclamation-triangle icon-align"></i> Threat Categories</div>
+      <div class="card-body">
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3">
+          <script>
+            getThreatCategories().forEach(category => {
+              const icon = category.category === 'Malware' ? 'fa-bug' :
+                           category.category === 'Phishing' ? 'fa-fish' :
+                           category.category === 'DDoS' ? 'fa-hammer' : 'fa-user-shield';
+              const severityClass = category.severity === 'High' || category.severity === 'Critical' ? 'threat-high' :
+                                   category.severity === 'Medium' ? 'threat-medium' : 'threat-low';
+              document.write(`
+                <div class="col">
+                  <div class="card h-100">
+                    <div class="card-body">
+                      <h5 class="card-title"><i class="fas ${icon} icon-align"></i> ${category.category}</h5>
+                      <p class="card-text">Count: ${category.count}</p>
+                      <span class="badge ${severityClass}">${category.severity}</span>
+                      <p class="card-text mt-2">${category.description}</p>
+                    </div>
+                  </div>
+                </div>
+              `);
+            });
+          </script>
+        </div>
+      </div>
+    </div>
+
+    <!-- Systems Table -->
+    <div class="row">
+      <div class="col-md-6 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header"><i class="fas fa-server icon-align"></i> Systems</div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>System Name</th>
+                    <th>Status</th>
+                    <th>Threat Level</th>
+                    <th>Vulnerabilities</th>
+                    <th>Last Scan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <script>
+                    getSystems().forEach(system => {
+                      const statusClass = 'status-' + system.status.toLowerCase();
+                      const threatClass = 'threat-' + system.threatLevel.toLowerCase();
+                      const threatIcon = system.threatLevel === 'High' ? 'fa-exclamation-triangle' :
+                                        system.threatLevel === 'Medium' ? 'fa-exclamation-circle' : 'fa-lock';
+                      document.write(`
+                        <tr>
+                          <td>${system.name}</td>
+                          <td><span class="badge ${statusClass}">${system.status}</span></td>
+                          <td><i class="fas ${threatIcon} icon-align"></i> ${system.threatLevel}</td>
+                          <td>${system.vulnerabilities.length ? system.vulnerabilities.join(', ') : 'None'}</td>
+                          <td>${system.lastScan}</td>
+                        </tr>
+                      `);
+                    });
+                  </script>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Applications Table -->
+      <div class="col-md-6 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header"><i class="fas fa-cube icon-align"></i> Applications</div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Application</th>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Threats</th>
+                    <th>Last Update</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <script>
+                    getApplications().forEach(app => {
+                      const statusClass = 'status-' + app.status.toLowerCase();
+                      document.write(`
+                        <tr>
+                          <td>${app.name}</td>
+                          <td>${app.version}</td>
+                          <td><span class="badge ${statusClass}">${app.status}</span></td>
+                          <td>${app.threats.length ? app.threats.join(', ') : 'None'}</td>
+                          <td>${app.lastUpdate}</td>
+                        </tr>
+                      `);
+                    });
+                  </script>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Build Pipelines Table -->
+    <div class="row">
+      <div class="col-md-6 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header"><i class="fas fa-cogs icon-align"></i> Build Pipelines</div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Pipeline</th>
+                    <th>Status</th>
+                    <th>Security Issues</th>
+                    <th>Last Run</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <script>
+                    getBuildPipelines().forEach(pipeline => {
+                      const statusClass = 'status-' + pipeline.status.toLowerCase();
+                      document.write(`
+                        <tr>
+                          <td>${pipeline.name}</td>
+                          <td><span class="badge ${statusClass}">${pipeline.status}</span></td>
+                          <td>${pipeline.securityIssues.length ? pipeline.securityIssues.join(', ') : 'None'}</td>
+                          <td>${pipeline.lastRun}</td>
+                        </tr>
+                      `);
+                    });
+                  </script>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cloud Services Table -->
+      <div class="col-md-6 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header"><i class="fas fa-cloud icon-align"></i> Cloud Services</div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Cloud Service</th>
+                    <th>Status</th>
+                    <th>Risks</th>
+                    <th>Last Checked</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <script>
+                    getCloudServices().forEach(service => {
+                      const statusClass = 'status-' + service.status.toLowerCase();
+                      document.write(`
+                        <tr>
+                          <td>${service.name}</td>
+                          <td><span class="badge ${statusClass}">${service.status}</span></td>
+                          <td>${service.risks.length ? service.risks.join(', ') : 'None'}</td>
+                          <td>${service.lastChecked}</td>
+                        </tr>
+                      `);
+                    });
+                  </script>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+  <!-- Bootstrap 5 JS (for responsive behavior) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
