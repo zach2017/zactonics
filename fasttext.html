@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FastText Label Generator | Zactonics CAS Solutions</title>
+  <link rel="icon" href="../icon.svg" type="image/x-icon">
+  <link rel="shortcut icon" href="../icon.svg" type="image/x-icon">
+  <script src="tailwinds.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+  <!-- Navigation -->
+  <nav class="bg-blue-900 text-white p-4 sticky top-0 z-10">
+    <div class="container mx-auto flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <img src="logo3.png" alt="Zactonics Logo" class="w-10 h-10">
+        <h1 class="text-2xl font-bold">Zactonics CAS Solutions</h1>
+      </div>
+      <a href="cas-helpdesk.html" class="hover:text-blue-300 transition">HelpDesk AI</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="bg-gradient-to-r from-blue-700 to-blue-500 text-white py-16 text-center">
+    <div class="container mx-auto px-4">
+      <h2 class="text-4xl font-bold mb-4">FastText Label Generator</h2>
+      <p class="text-lg mb-6">Train and label your AI models efficiently for internal system support and error classification.</p>
+      <img src="trainmodel.png" alt="AI Model Training" class="mx-auto rounded-lg shadow-lg max-w-md">
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <div class="container mx-auto px-4 py-16 max-w-xl bg-white rounded-lg shadow">
+    <div class="space-y-6">
+      <div class="form-group">
+        <label for="message" class="block text-gray-700 font-semibold mb-2">Error Message:</label>
+        <input type="text" id="message" placeholder="Enter system error message" maxlength="255" class="w-full p-3 border border-gray-300 rounded">
+      </div>
+
+      <div class="form-group">
+        <label for="primaryLabel" class="block text-gray-700 font-semibold mb-2">Primary Label:</label>
+        <select id="primaryLabel" class="w-full p-3 border border-gray-300 rounded">
+          <option value="" disabled selected>Select Primary Label</option>
+          <option value="Info">Info</option>
+          <option value="Critical">Critical</option>
+          <option value="Security">Security</option>
+          <option value="Fatal">Fatal</option>
+          <option value="Warning">Warning</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="secondaryLabel" class="block text-gray-700 font-semibold mb-2">Secondary Label:</label>
+        <select id="secondaryLabel" class="w-full p-3 border border-gray-300 rounded">
+          <option value="" disabled selected>Select Secondary Label</option>
+          <option value="System">System</option>
+          <option value="Database">Database</option>
+          <option value="App">App</option>
+          <option value="Network">Network</option>
+          <option value="Identity">Identity</option>
+          <option value="CVE">CVE</option>
+          <option value="CWE">CWE</option>
+          <option value="OWASP">OWASP</option>
+          <option value="NIST">NIST</option>
+          <option value="User">User</option>
+          <option value="Hardware">Hardware</option>
+        </select>
+      </div>
+
+      <div class="flex flex-col space-y-4">
+        <button onclick="saveMessage()" class="bg-blue-900 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-800 transition">Save Message</button>
+        <button onclick="sendToBackend()" class="bg-green-700 text-white px-6 py-3 rounded-full font-semibold hover:bg-green-800 transition">Send to Backend</button>
+        <button onclick="clearStorage()" class="bg-red-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-red-700 transition">Clear Local Storage</button>
+      </div>
+
+      <div id="error" class="text-red-600 text-center"></div>
+      <div id="success" class="text-green-600 text-center"></div>
+
+      <h2 class="text-2xl font-bold text-center mt-8">Saved Messages</h2>
+      <ul id="messages" class="space-y-2"></ul>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-blue-900 text-white py-8 mt-16">
+    <div class="container mx-auto px-4 text-center">
+      <p><img src="logo3.png" alt="Zactonics Logo" class="w-10 h-10 inline-block"> © 2025 Zactonics AI Solutions. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    const PRIMARY_LABELS = ['Info', 'Critical', 'Security', 'Fatal', 'Warning'];
+    const SECONDARY_LABELS = ['System', 'Database', 'App', 'Network', 'Identity', 'CVE', 'CWE', 'OWASP', 'NIST', 'User', 'Hardware'];
+
+    window.onload = loadMessages;
+
+    function saveMessage() {
+      const message = document.getElementById('message').value.trim();
+      const primaryLabel = document.getElementById('primaryLabel').value;
+      const secondaryLabel = document.getElementById('secondaryLabel').value;
+      const errorDiv = document.getElementById('error');
+      const successDiv = document.getElementById('success');
+
+      errorDiv.textContent = '';
+      successDiv.textContent = '';
+
+      if (!message) {
+        errorDiv.textContent = 'Please enter a message.';
+        return;
+      }
+      if (!primaryLabel || !PRIMARY_LABELS.includes(primaryLabel)) {
+        errorDiv.textContent = 'Please select a valid primary label.';
+        return;
+      }
+      if (!secondaryLabel || !SECONDARY_LABELS.includes(secondaryLabel)) {
+        errorDiv.textContent = 'Please select a valid secondary label.';
+        return;
+      }
+      if (message.length > 255) {
+        errorDiv.textContent = 'Message is too long (max 255 characters).';
+        return;
+      }
+
+      const formattedMessage = `__label__${primaryLabel}__${secondaryLabel} ${message}`;
+      let messages = JSON.parse(localStorage.getItem('fastTextMessages') || '[]');
+      messages.push(formattedMessage);
+      localStorage.setItem('fastTextMessages', JSON.stringify(messages));
+
+      successDiv.textContent = 'Message saved successfully!';
+      document.getElementById('message').value = '';
+      document.getElementById('primaryLabel').value = '';
+      document.getElementById('secondaryLabel').value = '';
+
+      loadMessages();
+    }
+
+    function loadMessages() {
+      const messagesList = document.getElementById('messages');
+      messagesList.innerHTML = '';
+      const messages = JSON.parse(localStorage.getItem('fastTextMessages') || '[]');
+      messages.forEach(msg => {
+        const li = document.createElement('li');
+        li.textContent = msg;
+        li.className = 'bg-gray-50 p-3 rounded shadow';
+        messagesList.appendChild(li);
+      });
+    }
+
+    function sendToBackend() {
+      const errorDiv = document.getElementById('error');
+      const successDiv = document.getElementById('success');
+      errorDiv.textContent = '';
+      successDiv.textContent = '';
+
+      const messages = JSON.parse(localStorage.getItem('fastTextMessages') || '[]');
+      if (messages.length === 0) {
+        errorDiv.textContent = 'No messages to send.';
+        return;
+      }
+
+      fetch('http://localhost:3000/api/training', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ trainingData: messages })
+      })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        return response.json();
+      })
+      .then(data => {
+        successDiv.textContent = 'Data sent successfully!';
+      })
+      .catch(error => {
+        errorDiv.textContent = 'Error sending data: ' + error.message;
+      });
+    }
+
+    function clearStorage() {
+      const errorDiv = document.getElementById('error');
+      const successDiv = document.getElementById('success');
+      errorDiv.textContent = '';
+      successDiv.textContent = '';
+
+      localStorage.removeItem('fastTextMessages');
+      successDiv.textContent = 'Local storage cleared!';
+      loadMessages();
+    }
+  </script>
+
+</body>
+</html>
