@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Network & Log Analysis Quiz</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-indigo-900 to-blue-900 min-h-screen text-white">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">
+        🌐 Network & Log Analysis Quiz
+      </h1>
+      <p class="text-gray-300">Log filtering • IPs, Ports, Protocols • Common Ports • Excel/Sheets tools</p>
+    </div>
+
+    <!-- Score Display -->
+    <div class="bg-black/30 rounded-lg p-4 mb-6 backdrop-blur-sm border border-gray-700">
+      <div class="flex justify-between items-center">
+        <div class="text-lg">
+          <span class="text-green-400">Score: </span>
+          <span id="score" class="font-bold">0</span>
+        </div>
+        <div class="text-lg">
+          <span class="text-blue-400">Question: </span>
+          <span id="currentQuestion" class="font-bold">1</span> /
+          <span id="totalQuestions" class="font-bold">10</span>
+        </div>
+        <button id="resetBtn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">
+          Reset Quiz
+        </button>
+      </div>
+    </div>
+
+    <!-- Quiz Container -->
+    <div id="quizContainer" class="bg-black/40 rounded-xl p-6 backdrop-blur-sm border border-gray-600 shadow-2xl">
+      <!-- Question Display -->
+      <div id="questionCard" class="mb-6">
+        <h2 class="text-2xl font-semibold mb-4 text-cyan-300" id="questionTitle">Question 1</h2>
+        <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+          <p id="questionText" class="text-lg"></p>
+        </div>
+      </div>
+
+      <!-- Answer Input -->
+      <div class="mb-6">
+        <label for="answerInput" class="block text-sm font-medium text-gray-300 mb-2">Your Answer:</label>
+        <input
+          type="text"
+          id="answerInput"
+          class="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400"
+          placeholder="Enter your answer here… (e.g., 443, TCP, PRIVATE)"
+        />
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-4 mb-6">
+        <button id="submitBtn" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+          Submit Answer
+        </button>
+        <button id="hintBtn" class="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+          Get Hint
+        </button>
+        <button id="skipBtn" class="bg-gray-600 hover:bg-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+          Skip
+        </button>
+      </div>
+
+      <!-- Feedback Area -->
+      <div id="feedbackArea" class="hidden">
+        <div class="bg-gray-800/70 rounded-lg p-4 border-l-4 border-blue-500">
+          <h3 class="font-semibold mb-2 text-blue-300">Feedback:</h3>
+          <p id="feedbackText" class="text-gray-300 whitespace-pre-wrap"></p>
+        </div>
+      </div>
+
+      <!-- Next Button -->
+      <button id="nextBtn" class="hidden w-full bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-semibold mt-4 transition-all transform hover:scale-105">
+        Next Question →
+      </button>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="resultsScreen" class="hidden bg-black/40 rounded-xl p-8 backdrop-blur-sm border border-gray-600 shadow-2xl text-center">
+      <h2 class="text-3xl font-bold mb-4 text-cyan-300">Quiz Complete! 🎉</h2>
+      <div class="text-6xl font-bold mb-4" id="finalScore">0/30</div>
+      <p class="text-xl mb-6 text-gray-300" id="scoreMessage"></p>
+      <div class="bg-gray-800/50 rounded-lg p-4 mb-6">
+        <h3 class="font-semibold mb-2 text-purple-300">Performance Breakdown:</h3>
+        <div id="performanceStats" class="text-left"></div>
+      </div>
+      <button id="restartBtn" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-8 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+        Take Quiz Again
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // ==========================
+    // Quiz Data (Network & Logs)
+    // ==========================
+    const questions = [
+      {
+        id: 1,
+        question: "Which TCP/UDP port does HTTPS commonly use?",
+        answer: "443",
+        hint: "It's the secure version of HTTP.",
+        steps: "1) Recall common ports: HTTP=80, HTTPS=?, SSH=22\n2) HTTPS default is the secure web traffic port\n3) Provide the number only",
+        explanation: "HTTPS runs on TCP port 443 by default."
+      },
+      {
+        id: 2,
+        question: "Which protocol is connection-oriented: TCP or UDP?",
+        answer: "TCP",
+        hint: "Think: three-way handshake (SYN, SYN-ACK, ACK).",
+        steps: "1) Compare features: TCP vs UDP\n2) TCP has reliability and ordering\n3) UDP is connectionless",
+        explanation: "TCP is connection-oriented; UDP is connectionless."
+      },
+      {
+        id: 3,
+        question: "Most DNS queries use which transport protocol by default?",
+        answer: "UDP",
+        hint: "Zone transfers often use TCP, but typical lookups use…",
+        steps: "1) Recall DNS port is 53\n2) Typical queries prefer lightweight transport\n3) TCP appears mainly for zone transfers/large responses",
+        explanation: "DNS typically uses UDP/53; TCP is used for special cases like zone transfers."
+      },
+      {
+        id: 4,
+        question: "Identify the status code in this access log: '192.168.1.10 - - [21/Aug/2025:12:00:00 +0000] \"GET /index.html HTTP/1.1\" 200 512'",
+        answer: "200",
+        hint: "In common/combined formats, the status appears right after the request.",
+        steps: "1) Locate the quoted request\n2) The number after the quote is the HTTP status\n3) Extract that code",
+        explanation: "In common/combined logs, the field after the request is the HTTP status, here 200."
+      },
+      {
+        id: 5,
+        question: "Is the IP 10.0.5.7 private or public?",
+        answer: "PRIVATE",
+        hint: "10.0.0.0/8 is reserved for internal networks.",
+        steps: "1) Recall RFC1918 ranges: 10/8, 172.16/12, 192.168/16\n2) 10.x.x.x falls into private space\n3) Answer 'PRIVATE' or 'PUBLIC'",
+        explanation: "10.0.5.7 is in the 10.0.0.0/8 private range."
+      },
+      {
+        id: 6,
+        question: "Which port is commonly used for SSH?",
+        answer: "22",
+        hint: "Remote shell over secure channel.",
+        steps: "1) Map common ports: SSH=?, FTP 21 (control), HTTP 80\n2) Choose SSH default\n3) Return the number",
+        explanation: "SSH listens on TCP port 22 by default."
+      },
+      {
+        id: 7,
+        question: "From this log line, what is the source IP? '2025-08-21T12:00:00Z 192.168.1.25 GET /home 200'",
+        answer: "192.168.1.25",
+        hint: "Look right after the timestamp.",
+        steps: "1) Identify fields: timestamp, IP, method, path, status\n2) Extract the IP address\n3) Enter the dotted-quad",
+        explanation: "The second field is the client/source IP: 192.168.1.25."
+      },
+      {
+        id: 8,
+        question: "At which OSI layer do 'ports' (like 80 and 443) operate?",
+        answer: "TRANSPORT",
+        hint: "Layers: Physical → Data Link → Network → ? → Session → Presentation → Application.",
+        steps: "1) Recall mapping: IP=Network, TCP/UDP=?\n2) Ports belong to TCP/UDP\n3) Name the OSI layer",
+        explanation: "Ports are part of TCP/UDP which live at the Transport layer."
+      },
+      {
+        id: 9,
+        question: "In Excel/Google Sheets, name the function that returns rows matching a condition (e.g., text contains 'ERROR').",
+        answer: "FILTER",
+        hint: "Sheets: =FILTER(range, condition). Excel has it in newer versions too.",
+        steps: "1) Think spreadsheet functions for row filtering\n2) Not SORT, not QUERY (unless using Sheets’ QUERY)\n3) The built-in function is called FILTER",
+        explanation: "The FILTER function returns only rows that meet a condition."
+      },
+      {
+        id: 10,
+        question: "Which port is used by the FTP control connection?",
+        answer: "21",
+        hint: "FTP has a control port and a separate data channel.",
+        steps: "1) Recall FTP uses two ports\n2) Control vs data (20)\n3) Provide the control port number",
+        explanation: "FTP’s control connection uses TCP port 21 (data channel commonly uses 20)."
+      }
+    ];
+
+    // Storage (separate key so it doesn't collide with your other quiz)
+    let gameData = {
+      currentQuestion: 0,
+      score: 0,
+      attempts: {},
+      questionStats: {}
+    };
+
+    function loadGameData() {
+      try {
+        const saved = localStorage.getItem('netLogQuizData');
+        if (saved) gameData = {...gameData, ...JSON.parse(saved)};
+      } catch(e) { console.log('Using in-memory storage'); }
+    }
+    function saveGameData() {
+      try { localStorage.setItem('netLogQuizData', JSON.stringify(gameData)); } catch(e) {}
+    }
+
+    // DOM elements
+    const elements = {
+      score: document.getElementById('score'),
+      currentQuestion: document.getElementById('currentQuestion'),
+      totalQuestions: document.getElementById('totalQuestions'),
+      questionTitle: document.getElementById('questionTitle'),
+      questionText: document.getElementById('questionText'),
+      answerInput: document.getElementById('answerInput'),
+      submitBtn: document.getElementById('submitBtn'),
+      hintBtn: document.getElementById('hintBtn'),
+      skipBtn: document.getElementById('skipBtn'),
+      nextBtn: document.getElementById('nextBtn'),
+      feedbackArea: document.getElementById('feedbackArea'),
+      feedbackText: document.getElementById('feedbackText'),
+      quizContainer: document.getElementById('quizContainer'),
+      resultsScreen: document.getElementById('resultsScreen'),
+      finalScore: document.getElementById('finalScore'),
+      scoreMessage: document.getElementById('scoreMessage'),
+      performanceStats: document.getElementById('performanceStats'),
+      resetBtn: document.getElementById('resetBtn'),
+      restartBtn: document.getElementById('restartBtn')
+    };
+
+    function initializeQuiz() {
+      loadGameData();
+      elements.totalQuestions.textContent = questions.length;
+      displayQuestion();
+      updateDisplay();
+    }
+
+    function displayQuestion() {
+      const question = questions[gameData.currentQuestion];
+      if (!question) { showResults(); return; }
+
+      elements.questionTitle.textContent = `Question ${gameData.currentQuestion + 1}`;
+      elements.questionText.textContent = question.question;
+      elements.answerInput.value = '';
+      elements.answerInput.disabled = false;
+      elements.answerInput.focus();
+
+      elements.feedbackArea.classList.add('hidden');
+      elements.nextBtn.classList.add('hidden');
+      elements.submitBtn.classList.remove('hidden');
+
+      if (!gameData.attempts[question.id]) gameData.attempts[question.id] = 0;
+    }
+
+    function updateDisplay() {
+      elements.score.textContent = gameData.score;
+      elements.currentQuestion.textContent = gameData.currentQuestion + 1;
+    }
+
+    function showFeedback(message, type) {
+      elements.feedbackText.textContent = message;
+      elements.feedbackArea.classList.remove('hidden');
+      elements.feedbackArea.classList.add('fade-in');
+
+      const borderColor = { success: 'border-green-500', error: 'border-red-500', hint: 'border-yellow-500' }[type] || 'border-blue-500';
+      elements.feedbackArea.querySelector('div').className = `bg-gray-800/70 rounded-lg p-4 border-l-4 ${borderColor}`;
+    }
+
+    function submitAnswer() {
+      const question = questions[gameData.currentQuestion];
+      const userAnswer = elements.answerInput.value.trim().toUpperCase();
+      const correctAnswer = question.answer.toUpperCase();
+
+      gameData.attempts[question.id]++;
+
+      if (userAnswer === correctAnswer) {
+        const points = Math.max(1, 4 - gameData.attempts[question.id]); // 1st try=3pts, 2nd=2pts, 3rd=1pt
+        gameData.score += points;
+        gameData.questionStats[question.id] = { correct: true, attempts: gameData.attempts[question.id], points };
+        showFeedback(`✅ Correct! You earned ${points} points. ${question.explanation}`, 'success');
+        elements.nextBtn.classList.remove('hidden');
+        elements.submitBtn.classList.add('hidden');
+        elements.answerInput.disabled = true;
+      } else {
+        gameData.questionStats[question.id] = { correct: false, attempts: gameData.attempts[question.id], points: 0 };
+        if (gameData.attempts[question.id] >= 3) {
+          showFeedback(`❌ Incorrect. The correct answer is: ${question.answer}. ${question.explanation}`, 'error');
+          elements.nextBtn.classList.remove('hidden');
+          elements.submitBtn.classList.add('hidden');
+          elements.answerInput.disabled = true;
+        } else {
+          showFeedback(`❌ Incorrect. Try again! (Attempt ${gameData.attempts[question.id]}/3)`, 'error');
+        }
+      }
+
+      updateDisplay();
+      saveGameData();
+    }
+
+    function showHint() {
+      const question = questions[gameData.currentQuestion];
+      const attempts = gameData.attempts[question.id];
+
+      let hintText;
+      if (attempts === 0) {
+        hintText = `💡 Hint: ${question.hint}`;
+      } else if (attempts === 1) {
+        hintText = `📋 Detailed Steps:\n${question.steps}`;
+      } else {
+        hintText = `📝 Answer: ${question.answer}\n\n${question.explanation}`;
+        elements.nextBtn.classList.remove('hidden');
+        elements.submitBtn.classList.add('hidden');
+        elements.answerInput.disabled = true;
+      }
+
+      showFeedback(hintText, 'hint');
+
+      if (attempts < 3) {
+        gameData.attempts[question.id]++;
+        saveGameData();
+      }
+    }
+
+    function skipQuestion() {
+      const question = questions[gameData.currentQuestion];
+      gameData.questionStats[question.id] = {
+        correct: false,
+        attempts: gameData.attempts[question.id] || 0,
+        points: 0,
+        skipped: true
+      };
+      nextQuestion();
+    }
+
+    function nextQuestion() {
+      gameData.currentQuestion++;
+      if (gameData.currentQuestion < questions.length) {
+        displayQuestion();
+        updateDisplay();
+      } else {
+        showResults();
+      }
+      saveGameData();
+    }
+
+    function showResults() {
+      elements.quizContainer.classList.add('hidden');
+      elements.resultsScreen.classList.remove('hidden');
+
+      const totalPossibleScore = questions.length * 3;
+      const percentage = Math.round((gameData.score / totalPossibleScore) * 100);
+
+      elements.finalScore.textContent = `${gameData.score}/${totalPossibleScore}`;
+
+      let message;
+      if (percentage >= 90) message = "🏆 Network Sleuth! Outstanding analysis skills.";
+      else if (percentage >= 75) message = "🌟 Great job! Strong network/log fundamentals.";
+      else if (percentage >= 60) message = "👍 Good work! A bit more practice on ports & parsing.";
+      else if (percentage >= 40) message = "📚 Not bad—review common ports & log formats.";
+      else message = "🔍 Keep going—practice makes perfect!";
+
+      elements.scoreMessage.textContent = message;
+
+      let statsHtml = '';
+      let correctCount = 0;
+      let skippedCount = 0;
+
+      questions.forEach((q, i) => {
+        const stat = gameData.questionStats[q.id];
+        if (stat) {
+          if (stat.correct) correctCount++;
+          if (stat.skipped) skippedCount++;
+          const status = stat.correct ? '✅' : (stat.skipped ? '⏭️' : '❌');
+          const points = stat.points || 0;
+          const attempts = stat.attempts || 0;
+          statsHtml += `<div class="flex justify-between py-1">
+            <span>Q${i + 1}: ${status}</span>
+            <span>${points} pts (${attempts} attempts)</span>
+          </div>`;
+        }
+      });
+
+      statsHtml += `<hr class="my-2 border-gray-600">`;
+      statsHtml += `<div class="flex justify-between font-semibold">
+        <span>Correct: ${correctCount}/${questions.length}</span>
+        <span>Skipped: ${skippedCount}</span>
+      </div>`;
+
+      elements.performanceStats.innerHTML = statsHtml;
+    }
+
+    function resetQuiz() {
+      gameData = { currentQuestion: 0, score: 0, attempts: {}, questionStats: {} };
+      saveGameData();
+      elements.resultsScreen.classList.add('hidden');
+      elements.quizContainer.classList.remove('hidden');
+      displayQuestion();
+      updateDisplay();
+    }
+
+    // Events
+    elements.submitBtn.addEventListener('click', submitAnswer);
+    elements.hintBtn.addEventListener('click', showHint);
+    elements.skipBtn.addEventListener('click', skipQuestion);
+    elements.nextBtn.addEventListener('click', nextQuestion);
+    elements.resetBtn.addEventListener('click', resetQuiz);
+    elements.restartBtn.addEventListener('click', resetQuiz);
+    elements.answerInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !elements.submitBtn.classList.contains('hidden')) submitAnswer();
+    });
+
+    // Init
+    initializeQuiz();
+  </script>
+</body>
+</html>

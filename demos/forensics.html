@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Digital Forensics Quiz</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-indigo-900 to-blue-900 min-h-screen text-white">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">
+        🧪 Digital Forensics Quiz
+      </h1>
+    <p class="text-gray-300 mb-6 leading-relaxed">
+  Investigate digital evidence by identifying file types from magic bytes and headers, reading EXIF and other metadata,
+  and uncovering hidden payloads (e.g., data after <code>IEND</code> or inside images via steganography). 
+  Practice recognizing common signatures like <span class="font-semibold">MZ</span>, <span class="font-semibold">JFIF</span>, 
+  <span class="font-semibold">GIF89a</span>, and <span class="font-semibold">PK</span>, using tools such as 
+  <span class="text-emerald-300">hexdump</span>, <span class="text-purple-300">CyberChef</span>, 
+  <span class="text-teal-300">StegOnline</span>, and <span class="text-rose-300">Aperi'Solve</span>.
+</p>
+
+<div class="flex flex-wrap gap-2 mb-6 justify-center">
+  <span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm border border-green-500/30">Magic Bytes</span>
+  <span class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm border border-blue-500/30">File Headers</span>
+  <span class="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm border border-purple-500/30">EXIF / Metadata</span>
+  <span class="px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-sm border border-amber-500/30">Steganography</span>
+  <span class="px-3 py-1 bg-cyan-500/20 text-cyan-300 rounded-full text-sm border border-cyan-500/30">ZIP (PK) / PDF (%PDF)</span>
+  <span class="px-3 py-1 bg-rose-500/20 text-rose-300 rounded-full text-sm border border-rose-500/30">JPEG (JFIF) / PNG</span>
+  <span class="px-3 py-1 bg-teal-500/20 text-teal-300 rounded-full text-sm border border-teal-500/30">Tools: Hexdump</span>
+  <span class="px-3 py-1 bg-fuchsia-500/20 text-fuchsia-300 rounded-full text-sm border border-fuchsia-500/30">Tools: CyberChef</span>
+</div>
+
+
+    <!-- Score / Controls -->
+    <div class="bg-black/30 rounded-lg p-4 mb-6 backdrop-blur-sm border border-gray-700">
+      <div class="flex flex-wrap gap-4 justify-between items-center">
+        <div class="text-lg">
+          <span class="text-green-400">Score: </span><span id="score" class="font-bold">0</span>
+        </div>
+        <div class="text-lg">
+          <span class="text-blue-400">Question: </span>
+          <span id="currentQuestion" class="font-bold">1</span> /
+          <span id="totalQuestions" class="font-bold">12</span>
+        </div>
+        <button id="resetBtn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">
+          Reset Quiz
+        </button>
+      </div>
+    </div>
+
+    <!-- Quiz -->
+    <div id="quizContainer" class="bg-black/40 rounded-xl p-6 backdrop-blur-sm border border-gray-600 shadow-2xl">
+      <div id="questionCard" class="mb-6">
+        <h2 class="text-2xl font-semibold mb-4 text-cyan-300" id="questionTitle">Question 1</h2>
+        <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+          <p id="questionText" class="text-lg"></p>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <label for="answerInput" class="block text-sm font-medium text-gray-300 mb-2">Your Answer:</label>
+        <input
+          type="text"
+          id="answerInput"
+          class="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400"
+          placeholder="Enter your answer… (e.g., GIF89A, MZ, PK, JFIF)"
+        />
+      </div>
+
+      <div class="flex gap-4 mb-6">
+        <button id="submitBtn" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+          Submit Answer
+        </button>
+        <button id="hintBtn" class="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+          Get Hint
+        </button>
+        <button id="skipBtn" class="bg-gray-600 hover:bg-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+          Skip
+        </button>
+      </div>
+
+      <div id="feedbackArea" class="hidden">
+        <div class="bg-gray-800/70 rounded-lg p-4 border-l-4 border-blue-500">
+          <h3 class="font-semibold mb-2 text-blue-300">Feedback:</h3>
+          <p id="feedbackText" class="text-gray-300 whitespace-pre-wrap"></p>
+        </div>
+      </div>
+
+      <button id="nextBtn" class="hidden w-full bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-semibold mt-4 transition-all transform hover:scale-105">
+        Next Question →
+      </button>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsScreen" class="hidden bg-black/40 rounded-xl p-8 backdrop-blur-sm border border-gray-600 shadow-2xl text-center">
+      <h2 class="text-3xl font-bold mb-4 text-cyan-300">Quiz Complete! 🎉</h2>
+      <div class="text-6xl font-bold mb-4" id="finalScore">0/36</div>
+      <p class="text-xl mb-6 text-gray-300" id="scoreMessage"></p>
+      <div class="bg-gray-800/50 rounded-lg p-4 mb-6">
+        <h3 class="font-semibold mb-2 text-purple-300">Performance Breakdown:</h3>
+        <div id="performanceStats" class="text-left"></div>
+      </div>
+      <button id="restartBtn" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-8 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+        Take Quiz Again
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // ==========================
+    // Quiz Data (Forensics)
+    // Scoring: 1st try=3 pts, 2nd=2 pts, 3rd=1 pt
+    // ==========================
+    const questions = [
+      {
+        id: 1,
+        question: "Which ASCII signature marks the start of a Windows executable (PE) file?",
+        answer: "MZ",
+        hint: "Two characters at the very start of EXE files.",
+        steps: "1) Check first two bytes in hex/ASCII\n2) DOS header begins with 'MZ'\n3) Answer the two letters",
+        explanation: "All PE/EXE files start with the DOS header signature 'MZ'."
+      },
+      {
+        id: 2,
+        question: "What ASCII signature appears at the start of a standard ZIP archive?",
+        answer: "PK",
+        hint: "Initials of the ZIP format author (Phil Katz).",
+        steps: "1) Open in hexdump\n2) Look for '50 4B' at offset 0\n3) ASCII → 'PK'",
+        explanation: "ZIP files begin with bytes 0x50 0x4B → 'PK'."
+      },
+      {
+        id: 3,
+        question: "Give the ASCII header string that identifies a GIF file.",
+        answer: "GIF89A",
+        hint: "There are two common versions: one ends with 87a and another with 89a.",
+        steps: "1) Read first six bytes as ASCII\n2) Choose the newer common version\n3) Uppercase answer without quotes",
+        explanation: "GIF headers are 'GIF87a' or 'GIF89a'; 'GIF89A' is accepted here."
+      },
+      {
+        id: 4,
+        question: "Which marker commonly indicates a JPEG/JFIF image in ASCII?",
+        answer: "JFIF",
+        hint: "Found shortly after the JPEG SOI marker.",
+        steps: "1) SOI bytes: FF D8\n2) Look for ASCII chunk naming the format\n3) Type the four letters",
+        explanation: "Many JPEGs include 'JFIF' near the header, indicating JFIF metadata."
+      },
+      {
+        id: 5,
+        question: "What four ASCII characters commonly start a PDF file?",
+        answer: "%PDF",
+        hint: "The percent sign is part of it.",
+        steps: "1) Open in hex/ASCII view\n2) First four bytes read as ASCII\n3) Include the '%'",
+        explanation: "PDF files start with '%PDF' followed by a version."
+      },
+      {
+        id: 6,
+        question: "Name one tool that can quickly visualize and manipulate file bytes in recipes (choose: CyberChef or Paint).",
+        answer: "CYBERCHEF",
+        hint: "The one that does 'recipes' for data.",
+        steps: "1) Compare the options\n2) Pick the browser-based data tool\n3) Uppercase the answer",
+        explanation: "CyberChef supports recipes for decoding/encoding and byte-level analysis."
+      },
+      {
+        id: 7,
+        question: "Which web tool specializes in detecting steganography in images (choose: StegOnline or Notepad)?",
+        answer: "STEGONLINE",
+        hint: "One is a steg analysis site; the other is a text editor.",
+        steps: "1) Consider purpose: steg vs text editing\n2) Select the steg tool\n3) Uppercase the answer",
+        explanation: "StegOnline offers various steganalysis features in the browser."
+      },
+      {
+        id: 8,
+        question: "Which platform can automatically try multiple CTF-style steg/crypto pipelines on an image archive?",
+        answer: "APERI'SOLVE",
+        hint: "It’s often used to auto-run many analyzers in one place.",
+        steps: "1) Recall common CTF helper platforms\n2) Choose the one with broad pipeline support\n3) Type APERI'SOLVE (apostrophe included)",
+        explanation: "Aperi'Solve orchestrates many tools to analyze uploaded files."
+      },
+      {
+        id: 9,
+        question: "In EXIF metadata, which tag typically stores the camera model? (Answer the tag name only, e.g., MODEL).",
+        answer: "MODEL",
+        hint: "Paired with MAKE (manufacturer).",
+        steps: "1) Recall EXIF MAKE vs MODEL\n2) MAKE = vendor, MODEL = specific camera\n3) Answer MODEL",
+        explanation: "EXIF MODEL stores the camera model; MAKE stores the manufacturer."
+      },
+      {
+        id: 10,
+        question: "You suspect a PNG hides extra data appended after its IEND chunk. What quick command-line idea can reveal the tail? (Answer the tool name only.)",
+        answer: "HEXDUMP",
+        hint: "Think byte-level inspection utilities.",
+        steps: "1) Consider xxd/hexdump/strings\n2) Choose a hex viewer to see trailing bytes\n3) Answer HEXDUMP",
+        explanation: "Hexdump (or xxd) shows raw bytes and can reveal data after IEND."
+      },
+      {
+        id: 11,
+        question: "What is the common ASCII at the start of a PNG file? (Answer 3 letters.)",
+        answer: "PNG",
+        hint: "The first 8 bytes include a signature; ASCII portion spells the format name.",
+        steps: "1) PNG sig: 89 50 4E 47 0D 0A 1A 0A\n2) ASCII includes 'PNG'\n3) Answer the 3 letters",
+        explanation: "PNG’s magic bytes contain 'PNG' as the ASCII part."
+      },
+      {
+        id: 12,
+        question: "You see the bytes 42 4D at the start of a file. Which image format is this?",
+        answer: "BMP",
+        hint: "Think classic Windows bitmap.",
+        steps: "1) 0x42 0x4D → 'BM'\n2) 'BM' is the Windows bitmap header\n3) Answer BMP",
+        explanation: "BMP files start with the ASCII letters 'BM' (0x42 0x4D)."
+      }
+    ];
+
+    // --------------------------
+    // State (unique localStorage key)
+    // --------------------------
+    let gameData = {
+      currentQuestion: 0,
+      score: 0,
+      attempts: {},
+      questionStats: {}
+    };
+
+    function loadGameData() {
+      try {
+        const saved = localStorage.getItem('forensicsQuizData');
+        if (saved) gameData = { ...gameData, ...JSON.parse(saved) };
+      } catch(e) { console.log('Using in-memory storage'); }
+    }
+    function saveGameData() {
+      try { localStorage.setItem('forensicsQuizData', JSON.stringify(gameData)); } catch(e) {}
+    }
+
+    // --------------------------
+    // DOM
+    // --------------------------
+    const elements = {
+      score: document.getElementById('score'),
+      currentQuestion: document.getElementById('currentQuestion'),
+      totalQuestions: document.getElementById('totalQuestions'),
+      questionTitle: document.getElementById('questionTitle'),
+      questionText: document.getElementById('questionText'),
+      answerInput: document.getElementById('answerInput'),
+      submitBtn: document.getElementById('submitBtn'),
+      hintBtn: document.getElementById('hintBtn'),
+      skipBtn: document.getElementById('skipBtn'),
+      nextBtn: document.getElementById('nextBtn'),
+      feedbackArea: document.getElementById('feedbackArea'),
+      feedbackText: document.getElementById('feedbackText'),
+      quizContainer: document.getElementById('quizContainer'),
+      resultsScreen: document.getElementById('resultsScreen'),
+      finalScore: document.getElementById('finalScore'),
+      scoreMessage: document.getElementById('scoreMessage'),
+      performanceStats: document.getElementById('performanceStats'),
+      resetBtn: document.getElementById('resetBtn'),
+      restartBtn: document.getElementById('restartBtn')
+    };
+
+    // --------------------------
+    // Init
+    // --------------------------
+    function initializeQuiz() {
+      loadGameData();
+      elements.totalQuestions.textContent = questions.length;
+      displayQuestion();
+      updateDisplay();
+    }
+
+    function displayQuestion() {
+      const question = questions[gameData.currentQuestion];
+      if (!question) { showResults(); return; }
+
+      elements.questionTitle.textContent = `Question ${gameData.currentQuestion + 1}`;
+      elements.questionText.textContent = question.question;
+      elements.answerInput.value = '';
+      elements.answerInput.disabled = false;
+      elements.answerInput.focus();
+
+      elements.feedbackArea.classList.add('hidden');
+      elements.nextBtn.classList.add('hidden');
+      elements.submitBtn.classList.remove('hidden');
+
+      if (!gameData.attempts[question.id]) gameData.attempts[question.id] = 0;
+    }
+
+    function updateDisplay() {
+      elements.score.textContent = gameData.score;
+      elements.currentQuestion.textContent = gameData.currentQuestion + 1;
+    }
+
+    function showFeedback(message, type) {
+      elements.feedbackText.textContent = message;
+      elements.feedbackArea.classList.remove('hidden');
+      elements.feedbackArea.classList.add('fade-in');
+
+      const borderColor = { success: 'border-green-500', error: 'border-red-500', hint: 'border-yellow-500' }[type] || 'border-blue-500';
+      elements.feedbackArea.querySelector('div').className = `bg-gray-800/70 rounded-lg p-4 border-l-4 ${borderColor}`;
+    }
+
+    function normalized(input) {
+      return input.trim().toUpperCase();
+    }
+
+    function submitAnswer() {
+      const q = questions[gameData.currentQuestion];
+      const userAnswer = normalized(elements.answerInput.value);
+      const correctAnswer = normalized(q.answer);
+
+      gameData.attempts[q.id]++;
+
+      if (userAnswer === correctAnswer) {
+        const points = Math.max(1, 4 - gameData.attempts[q.id]); // 1st=3, 2nd=2, 3rd+=1
+        gameData.score += points;
+        gameData.questionStats[q.id] = { correct: true, attempts: gameData.attempts[q.id], points };
+        showFeedback(`✅ Correct! You earned ${points} points. ${q.explanation}`, 'success');
+        elements.nextBtn.classList.remove('hidden');
+        elements.submitBtn.classList.add('hidden');
+        elements.answerInput.disabled = true;
+      } else {
+        gameData.questionStats[q.id] = { correct: false, attempts: gameData.attempts[q.id], points: 0 };
+        if (gameData.attempts[q.id] >= 3) {
+          showFeedback(`❌ Incorrect. The correct answer is: ${q.answer}. ${q.explanation}`, 'error');
+          elements.nextBtn.classList.remove('hidden');
+          elements.submitBtn.classList.add('hidden');
+          elements.answerInput.disabled = true;
+        } else {
+          showFeedback(`❌ Incorrect. Try again! (Attempt ${gameData.attempts[q.id]}/3)`, 'error');
+        }
+      }
+
+      updateDisplay();
+      saveGameData();
+    }
+
+    function showHint() {
+      const q = questions[gameData.currentQuestion];
+      const attempts = gameData.attempts[q.id];
+
+      let hintText;
+      if (attempts === 0) {
+        hintText = `💡 Hint: ${q.hint}`;
+      } else if (attempts === 1) {
+        hintText = `📋 Detailed Steps:\n${q.steps}`;
+      } else {
+        hintText = `📝 Answer: ${q.answer}\n\n${q.explanation}`;
+        elements.nextBtn.classList.remove('hidden');
+        elements.submitBtn.classList.add('hidden');
+        elements.answerInput.disabled = true;
+      }
+
+      showFeedback(hintText, 'hint');
+
+      if (attempts < 3) {
+        gameData.attempts[q.id]++;
+        saveGameData();
+      }
+    }
+
+    function skipQuestion() {
+      const q = questions[gameData.currentQuestion];
+      gameData.questionStats[q.id] = {
+        correct: false,
+        attempts: gameData.attempts[q.id] || 0,
+        points: 0,
+        skipped: true
+      };
+      nextQuestion();
+    }
+
+    function nextQuestion() {
+      gameData.currentQuestion++;
+      if (gameData.currentQuestion < questions.length) {
+        displayQuestion();
+        updateDisplay();
+      } else {
+        showResults();
+      }
+      saveGameData();
+    }
+
+    function showResults() {
+      elements.quizContainer.classList.add('hidden');
+      elements.resultsScreen.classList.remove('hidden');
+
+      const totalPossibleScore = questions.length * 3;
+      const percentage = Math.round((gameData.score / totalPossibleScore) * 100);
+
+      elements.finalScore.textContent = `${gameData.score}/${totalPossibleScore}`;
+
+      let message;
+      if (percentage >= 90) message = "🏆 Forensics Ace! Your header-fu is strong.";
+      else if (percentage >= 75) message = "🌟 Great job—confident with formats & metadata.";
+      else if (percentage >= 60) message = "👍 Good work—review signatures and PNG/JPEG details.";
+      else if (percentage >= 40) message = "📚 Keep practicing with hexdump and CyberChef.";
+      else message = "🔍 Try again—Aperi'Solve and StegOnline can help you explore files quickly.";
+
+      elements.scoreMessage.textContent = message;
+
+      let statsHtml = '';
+      let correctCount = 0;
+      let skippedCount = 0;
+
+      questions.forEach((q, i) => {
+        const stat = gameData.questionStats[q.id];
+        if (stat) {
+          if (stat.correct) correctCount++;
+          if (stat.skipped) skippedCount++;
+          const status = stat.correct ? '✅' : (stat.skipped ? '⏭️' : '❌');
+          const points = stat.points || 0;
+          const attempts = stat.attempts || 0;
+          statsHtml += `<div class="flex justify-between py-1">
+            <span>Q${i + 1}: ${status}</span>
+            <span>${points} pts (${attempts} attempts)</span>
+          </div>`;
+        }
+      });
+
+      statsHtml += `<hr class="my-2 border-gray-600">`;
+      statsHtml += `<div class="flex justify-between font-semibold">
+        <span>Correct: ${correctCount}/${questions.length}</span>
+        <span>Skipped: ${skippedCount}</span>
+      </div>`;
+
+      elements.performanceStats.innerHTML = statsHtml;
+    }
+
+    function resetQuiz() {
+      gameData = { currentQuestion: 0, score: 0, attempts: {}, questionStats: {} };
+      saveGameData();
+      elements.resultsScreen.classList.add('hidden');
+      elements.quizContainer.classList.remove('hidden');
+      displayQuestion();
+      updateDisplay();
+    }
+
+    // Events
+    elements.submitBtn.addEventListener('click', submitAnswer);
+    elements.hintBtn.addEventListener('click', showHint);
+    elements.skipBtn.addEventListener('click', skipQuestion);
+    elements.nextBtn.addEventListener('click', nextQuestion);
+    elements.resetBtn.addEventListener('click', resetQuiz);
+    elements.restartBtn.addEventListener('click', resetQuiz);
+    elements.answerInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !elements.submitBtn.classList.contains('hidden')) submitAnswer();
+    });
+
+    // Start
+    initializeQuiz();
+  </script>
+</body>
+</html>
