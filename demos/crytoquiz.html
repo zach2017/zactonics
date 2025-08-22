@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cryptography Skills Quiz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                🔐 Cryptography Skills Quiz
+            </h1>
+            <p class="text-gray-300">Test your knowledge of ciphers and cryptographic techniques</p>
+        </div>
+
+        <!-- Score Display -->
+        <div class="bg-black/30 rounded-lg p-4 mb-6 backdrop-blur-sm border border-gray-700">
+            <div class="flex justify-between items-center">
+                <div class="text-lg">
+                    <span class="text-green-400">Score: </span>
+                    <span id="score" class="font-bold">0</span>
+                </div>
+                <div class="text-lg">
+                    <span class="text-blue-400">Question: </span>
+                    <span id="currentQuestion" class="font-bold">1</span> / 
+                    <span id="totalQuestions" class="font-bold">10</span>
+                </div>
+                <button id="resetBtn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">
+                    Reset Quiz
+                </button>
+            </div>
+        </div>
+
+        <!-- Quiz Container -->
+        <div id="quizContainer" class="bg-black/40 rounded-xl p-6 backdrop-blur-sm border border-gray-600 shadow-2xl">
+            <!-- Question Display -->
+            <div id="questionCard" class="mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-cyan-300" id="questionTitle">Question 1</h2>
+                <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+                    <p id="questionText" class="text-lg"></p>
+                </div>
+            </div>
+
+            <!-- Answer Input -->
+            <div class="mb-6">
+                <label for="answerInput" class="block text-sm font-medium text-gray-300 mb-2">Your Answer:</label>
+                <input type="text" id="answerInput" 
+                       class="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400"
+                       placeholder="Enter your answer here...">
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 mb-6">
+                <button id="submitBtn" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+                    Submit Answer
+                </button>
+                <button id="hintBtn" class="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+                    Get Hint
+                </button>
+                <button id="skipBtn" class="bg-gray-600 hover:bg-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+                    Skip
+                </button>
+            </div>
+
+            <!-- Feedback Area -->
+            <div id="feedbackArea" class="hidden">
+                <div class="bg-gray-800/70 rounded-lg p-4 border-l-4 border-blue-500">
+                    <h3 class="font-semibold mb-2 text-blue-300">Feedback:</h3>
+                    <p id="feedbackText" class="text-gray-300"></p>
+                </div>
+            </div>
+
+            <!-- Next Button -->
+            <button id="nextBtn" class="hidden w-full bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-semibold mt-4 transition-all transform hover:scale-105">
+                Next Question →
+            </button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-black/40 rounded-xl p-8 backdrop-blur-sm border border-gray-600 shadow-2xl text-center">
+            <h2 class="text-3xl font-bold mb-4 text-cyan-300">Quiz Complete! 🎉</h2>
+            <div class="text-6xl font-bold mb-4" id="finalScore">0/10</div>
+            <p class="text-xl mb-6 text-gray-300" id="scoreMessage"></p>
+            <div class="bg-gray-800/50 rounded-lg p-4 mb-6">
+                <h3 class="font-semibold mb-2 text-purple-300">Performance Breakdown:</h3>
+                <div id="performanceStats" class="text-left"></div>
+            </div>
+            <button id="restartBtn" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-8 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+                Take Quiz Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Quiz Data
+        const questions = [
+            {
+                id: 1,
+                question: "Decode this Caesar cipher with a shift of 3: 'KHOOR ZRUOG'",
+                answer: "HELLO WORLD",
+                hint: "Caesar cipher shifts each letter by a fixed number. Try shifting each letter back by 3 positions in the alphabet.",
+                steps: "1. Take each letter and shift it back 3 positions\n2. K → H, H → E, O → L, O → L, R → O\n3. Z → W, R → O, U → R, O → L, G → D\n4. Remember to handle spaces and punctuation as-is",
+                explanation: "Caesar cipher shifts each letter by 3: K(-3)=H, H(-3)=E, O(-3)=L, etc. The answer is 'HELLO WORLD'."
+            },
+            {
+                id: 2,
+                question: "What type of cipher replaces each letter with its opposite in the alphabet (A↔Z, B↔Y, etc.)?",
+                answer: "ATBASH",
+                hint: "This is a substitution cipher where the alphabet is reversed. A=Z, B=Y, C=X, and so on.",
+                steps: "1. Think about substitution ciphers\n2. This specific one maps A to Z, B to Y, C to X\n3. It's named after Hebrew letters\n4. The name starts with 'ATB'",
+                explanation: "Atbash cipher is a substitution cipher that replaces each letter with its mirror opposite in the alphabet."
+            },
+            {
+                id: 3,
+                question: "Decode this Morse code: '.... . .-.. .-.. ---'",
+                answer: "HELLO",
+                hint: "Each group of dots and dashes represents a letter. Use a Morse code chart or remember: H=...., E=., L=.-.., O=---",
+                steps: "1. Break into groups: '....' '.' '.-..' '.-..' '---'\n2. Look up each pattern: H = ...., E = ., L = .-.., O = ---\n3. Combine the letters together",
+                explanation: "Morse code uses dots and dashes. .... = H, . = E, .-.. = L (twice), --- = O. Answer: HELLO"
+            },
+            {
+                id: 4,
+                question: "In cryptography, what term describes the original, unencrypted message before it's encoded?",
+                answer: "PLAINTEXT",
+                hint: "This is the readable, original form of a message before any encryption is applied.",
+                steps: "1. Think about the encryption process\n2. You start with readable text\n3. You apply encryption to get ciphertext\n4. The original readable form has a specific term",
+                explanation: "Plaintext is the original, readable message before encryption. After encryption, it becomes ciphertext."
+            },
+            {
+                id: 5,
+                question: "What is ROT13 equivalent to in terms of Caesar cipher shift?",
+                answer: "13",
+                hint: "ROT13 stands for 'rotate by 13'. Think about how many positions each letter is shifted.",
+                steps: "1. ROT13 means 'rotate by 13'\n2. It's a specific case of Caesar cipher\n3. Each letter is shifted by the same number\n4. The number is in the name itself",
+                explanation: "ROT13 is a Caesar cipher with a shift of 13. It's special because applying ROT13 twice returns the original text."
+            },
+            {
+                id: 6,
+                question: "Decode this Rail Fence cipher (2 rails): 'HLOWR ELO LD'",
+                answer: "HELLO WORLD",
+                hint: "Rail Fence writes the message in a zigzag pattern across multiple 'rails', then reads off each rail. Try arranging the letters in 2 rows.",
+                steps: "1. Split the cipher into 2 groups (for 2 rails): 'HLOWR' and 'ELO LD'\n2. Write them as two rails:\n   H L O W R\n   E L O   L D\n3. Read zigzag: H-E-L-L-O (space) W-O-R-L-D",
+                explanation: "Rail Fence with 2 rails zigzags the text. First rail: HLOWR, second rail: ELO LD. Reading zigzag gives: HELLO WORLD"
+            },
+            {
+                id: 7,
+                question: "What term describes the encrypted version of a message after a cipher has been applied?",
+                answer: "CIPHERTEXT",
+                hint: "This is what you get after applying encryption to plaintext. It's the encoded, unreadable form.",
+                steps: "1. Start with plaintext (readable)\n2. Apply encryption/cipher\n3. Result is the encrypted, unreadable form\n4. This encoded result has a specific name",
+                explanation: "Ciphertext is the encrypted result after applying a cipher to plaintext. It appears unreadable without decryption."
+            },
+            {
+                id: 8,
+                question: "Which cipher uses a keyword to create multiple Caesar shifts throughout the message?",
+                answer: "VIGENERE",
+                hint: "This cipher uses a repeating keyword where each letter determines how much to shift the corresponding plaintext letter.",
+                steps: "1. Think about ciphers that use keywords\n2. Each letter of the keyword determines a different shift amount\n3. The keyword repeats throughout the message\n4. Named after a French cryptographer",
+                explanation: "Vigenère cipher uses a keyword where each letter determines the shift amount for that position, creating multiple Caesar shifts."
+            },
+            {
+                id: 9,
+                question: "What popular online tool is recommended for analyzing and solving various cipher types?",
+                answer: "DCODE",
+                hint: "This website has .fr domain and is widely used for cryptanalysis. It can analyze and solve many different cipher types automatically.",
+                steps: "1. Think about online cipher-solving tools\n2. This one has a French domain (.fr)\n3. It's mentioned in cryptography communities frequently\n4. The name suggests 'decoding'",
+                explanation: "dCode.fr is a popular online tool for cipher analysis and solving. It can automatically detect and solve many cipher types."
+            },
+            {
+                id: 10,
+                question: "If A=1, B=2, C=3... decode this: '8-5-12-16'",
+                answer: "HELP",
+                hint: "Each number represents a letter's position in the alphabet. Convert each number to its corresponding letter.",
+                steps: "1. Map each number to alphabet position: A=1, B=2, C=3...\n2. 8 = H (8th letter)\n3. 5 = E (5th letter)\n4. 12 = L (12th letter)\n5. 16 = P (16th letter)",
+                explanation: "Simple substitution where numbers represent alphabet positions: 8=H, 5=E, 12=L, 16=P. Answer: HELP"
+            }
+        ];
+
+        // Storage system (using memory instead of localStorage for compatibility)
+        let gameData = {
+            currentQuestion: 0,
+            score: 0,
+            attempts: {},
+            questionStats: {}
+        };
+
+        // Try to load from localStorage if available
+        function loadGameData() {
+            try {
+                const saved = localStorage.getItem('cryptoQuizData');
+                if (saved) {
+                    gameData = {...gameData, ...JSON.parse(saved)};
+                }
+            } catch(e) {
+                // Fallback to memory storage
+                console.log('Using in-memory storage');
+            }
+        }
+
+        // Save to localStorage if available
+        function saveGameData() {
+            try {
+                localStorage.setItem('cryptoQuizData', JSON.stringify(gameData));
+            } catch(e) {
+                // Continue with memory storage
+            }
+        }
+
+        // DOM elements
+        const elements = {
+            score: document.getElementById('score'),
+            currentQuestion: document.getElementById('currentQuestion'),
+            totalQuestions: document.getElementById('totalQuestions'),
+            questionTitle: document.getElementById('questionTitle'),
+            questionText: document.getElementById('questionText'),
+            answerInput: document.getElementById('answerInput'),
+            submitBtn: document.getElementById('submitBtn'),
+            hintBtn: document.getElementById('hintBtn'),
+            skipBtn: document.getElementById('skipBtn'),
+            nextBtn: document.getElementById('nextBtn'),
+            feedbackArea: document.getElementById('feedbackArea'),
+            feedbackText: document.getElementById('feedbackText'),
+            quizContainer: document.getElementById('quizContainer'),
+            resultsScreen: document.getElementById('resultsScreen'),
+            finalScore: document.getElementById('finalScore'),
+            scoreMessage: document.getElementById('scoreMessage'),
+            performanceStats: document.getElementById('performanceStats'),
+            resetBtn: document.getElementById('resetBtn'),
+            restartBtn: document.getElementById('restartBtn')
+        };
+
+        // Initialize quiz
+        function initializeQuiz() {
+            loadGameData();
+            elements.totalQuestions.textContent = questions.length;
+            displayQuestion();
+            updateDisplay();
+        }
+
+        // Display current question
+        function displayQuestion() {
+            const question = questions[gameData.currentQuestion];
+            if (!question) {
+                showResults();
+                return;
+            }
+
+            elements.questionTitle.textContent = `Question ${gameData.currentQuestion + 1}`;
+            elements.questionText.textContent = question.question;
+            elements.answerInput.value = '';
+            elements.answerInput.focus();
+            
+            // Reset UI state
+            elements.feedbackArea.classList.add('hidden');
+            elements.nextBtn.classList.add('hidden');
+            elements.submitBtn.classList.remove('hidden');
+            elements.answerInput.disabled = false;
+
+            // Initialize attempts for this question if not exists
+            if (!gameData.attempts[question.id]) {
+                gameData.attempts[question.id] = 0;
+            }
+        }
+
+        // Update score and question display
+        function updateDisplay() {
+            elements.score.textContent = gameData.score;
+            elements.currentQuestion.textContent = gameData.currentQuestion + 1;
+        }
+
+        // Submit answer
+        function submitAnswer() {
+            const question = questions[gameData.currentQuestion];
+            const userAnswer = elements.answerInput.value.trim().toUpperCase();
+            const correctAnswer = question.answer.toUpperCase();
+            
+            gameData.attempts[question.id]++;
+            
+            if (userAnswer === correctAnswer) {
+                // Correct answer
+                const points = Math.max(1, 4 - gameData.attempts[question.id]);
+                gameData.score += points;
+                gameData.questionStats[question.id] = {
+                    correct: true,
+                    attempts: gameData.attempts[question.id],
+                    points: points
+                };
+                
+                showFeedback(`✅ Correct! You earned ${points} points. ${question.explanation}`, 'success');
+                elements.nextBtn.classList.remove('hidden');
+                elements.submitBtn.classList.add('hidden');
+                elements.answerInput.disabled = true;
+            } else {
+                // Wrong answer
+                gameData.questionStats[question.id] = {
+                    correct: false,
+                    attempts: gameData.attempts[question.id],
+                    points: 0
+                };
+                
+                if (gameData.attempts[question.id] >= 3) {
+                    showFeedback(`❌ Incorrect. The correct answer is: ${question.answer}. ${question.explanation}`, 'error');
+                    elements.nextBtn.classList.remove('hidden');
+                    elements.submitBtn.classList.add('hidden');
+                    elements.answerInput.disabled = true;
+                } else {
+                    showFeedback(`❌ Incorrect. Try again! (Attempt ${gameData.attempts[question.id]}/3)`, 'error');
+                }
+            }
+            
+            updateDisplay();
+            saveGameData();
+        }
+
+        // Show hint
+        function showHint() {
+            const question = questions[gameData.currentQuestion];
+            const attempts = gameData.attempts[question.id];
+            
+            let hintText;
+            if (attempts === 0) {
+                hintText = `💡 Hint: ${question.hint}`;
+            } else if (attempts === 1) {
+                hintText = `📋 Detailed Steps:\n${question.steps}`;
+            } else {
+                hintText = `📝 Answer: ${question.answer}\n\n${question.explanation}`;
+                elements.nextBtn.classList.remove('hidden');
+                elements.submitBtn.classList.add('hidden');
+                elements.answerInput.disabled = true;
+            }
+            
+            showFeedback(hintText, 'hint');
+            
+            if (attempts < 3) {
+                gameData.attempts[question.id]++;
+                saveGameData();
+            }
+        }
+
+        // Show feedback
+        function showFeedback(message, type) {
+            elements.feedbackText.textContent = message;
+            elements.feedbackArea.classList.remove('hidden');
+            elements.feedbackArea.classList.add('fade-in');
+            
+            // Update border color based on type
+            const borderColor = {
+                success: 'border-green-500',
+                error: 'border-red-500',
+                hint: 'border-yellow-500'
+            }[type] || 'border-blue-500';
+            
+            elements.feedbackArea.querySelector('div').className = `bg-gray-800/70 rounded-lg p-4 border-l-4 ${borderColor}`;
+        }
+
+        // Skip question
+        function skipQuestion() {
+            const question = questions[gameData.currentQuestion];
+            gameData.questionStats[question.id] = {
+                correct: false,
+                attempts: gameData.attempts[question.id] || 0,
+                points: 0,
+                skipped: true
+            };
+            nextQuestion();
+        }
+
+        // Next question
+        function nextQuestion() {
+            gameData.currentQuestion++;
+            if (gameData.currentQuestion < questions.length) {
+                displayQuestion();
+                updateDisplay();
+            } else {
+                showResults();
+            }
+            saveGameData();
+        }
+
+        // Show results
+        function showResults() {
+            elements.quizContainer.classList.add('hidden');
+            elements.resultsScreen.classList.remove('hidden');
+            
+            const totalPossibleScore = questions.length * 3; // Max 3 points per question
+            const percentage = Math.round((gameData.score / totalPossibleScore) * 100);
+            
+            elements.finalScore.textContent = `${gameData.score}/${totalPossibleScore}`;
+            
+            let message;
+            if (percentage >= 90) message = "🏆 Cryptography Master! Outstanding work!";
+            else if (percentage >= 75) message = "🌟 Great job! You have strong crypto skills!";
+            else if (percentage >= 60) message = "👍 Good work! Keep practicing those ciphers!";
+            else if (percentage >= 40) message = "📚 Not bad! Review the basics and try again!";
+            else message = "🔍 Keep learning! Cryptography takes practice!";
+            
+            elements.scoreMessage.textContent = message;
+            
+            // Performance breakdown
+            let statsHtml = '';
+            let correctCount = 0;
+            let skippedCount = 0;
+            
+            questions.forEach((question, index) => {
+                const stat = gameData.questionStats[question.id];
+                if (stat) {
+                    if (stat.correct) correctCount++;
+                    if (stat.skipped) skippedCount++;
+                    
+                    const status = stat.correct ? '✅' : (stat.skipped ? '⏭️' : '❌');
+                    const points = stat.points || 0;
+                    const attempts = stat.attempts || 0;
+                    
+                    statsHtml += `<div class="flex justify-between py-1">
+                        <span>Q${index + 1}: ${status}</span>
+                        <span>${points} pts (${attempts} attempts)</span>
+                    </div>`;
+                }
+            });
+            
+            statsHtml += `<hr class="my-2 border-gray-600">`;
+            statsHtml += `<div class="flex justify-between font-semibold">
+                <span>Correct: ${correctCount}/${questions.length}</span>
+                <span>Skipped: ${skippedCount}</span>
+            </div>`;
+            
+            elements.performanceStats.innerHTML = statsHtml;
+        }
+
+        // Reset quiz
+        function resetQuiz() {
+            gameData = {
+                currentQuestion: 0,
+                score: 0,
+                attempts: {},
+                questionStats: {}
+            };
+            saveGameData();
+            elements.resultsScreen.classList.add('hidden');
+            elements.quizContainer.classList.remove('hidden');
+            displayQuestion();
+            updateDisplay();
+        }
+
+        // Event listeners
+        elements.submitBtn.addEventListener('click', submitAnswer);
+        elements.hintBtn.addEventListener('click', showHint);
+        elements.skipBtn.addEventListener('click', skipQuestion);
+        elements.nextBtn.addEventListener('click', nextQuestion);
+        elements.resetBtn.addEventListener('click', resetQuiz);
+        elements.restartBtn.addEventListener('click', resetQuiz);
+
+        // Enter key to submit
+        elements.answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !elements.submitBtn.classList.contains('hidden')) {
+                submitAnswer();
+            }
+        });
+
+        // Initialize the quiz
+        initializeQuiz();
+    </script>
+</body>
+</html>
