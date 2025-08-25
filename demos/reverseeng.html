@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reverse Engineering Skills Quiz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .code-font {
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-red-900 via-orange-900 to-yellow-900 min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
+                🔍 Reverse Engineering Quiz
+            </h1>
+            <p class="text-gray-300">Master file disassembly, code analysis, and enumeration techniques</p>
+        </div>
+
+        <!-- Score Display -->
+        <div class="bg-black/30 rounded-lg p-4 mb-6 backdrop-blur-sm border border-gray-700">
+            <div class="flex justify-between items-center">
+                <div class="text-lg">
+                    <span class="text-green-400">Score: </span>
+                    <span id="score" class="font-bold">0</span>
+                </div>
+                <div class="text-lg">
+                    <span class="text-blue-400">Question: </span>
+                    <span id="currentQuestion" class="font-bold">1</span> / 
+                    <span id="totalQuestions" class="font-bold">10</span>
+                </div>
+                <button id="resetBtn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">
+                    Reset Quiz
+                </button>
+            </div>
+        </div>
+
+        <!-- Quiz Container -->
+        <div id="quizContainer" class="bg-black/40 rounded-xl p-6 backdrop-blur-sm border border-gray-600 shadow-2xl">
+            <!-- Question Display -->
+            <div id="questionCard" class="mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-orange-300" id="questionTitle">Question 1</h2>
+                <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+                    <p id="questionText" class="text-lg mb-3"></p>
+                    <div id="codeData" class="bg-gray-900/70 rounded-lg p-3 code-font text-green-300 border border-gray-600 text-sm overflow-x-auto hidden"></div>
+                </div>
+            </div>
+
+            <!-- Answer Input -->
+            <div class="mb-6">
+                <label for="answerInput" class="block text-sm font-medium text-gray-300 mb-2">Your Answer:</label>
+                <input type="text" id="answerInput" 
+                       class="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-white placeholder-gray-400"
+                       placeholder="Enter your answer...">
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 mb-6">
+                <button id="submitBtn" class="flex-1 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+                    Submit Answer
+                </button>
+                <button id="hintBtn" class="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+                    Get Hint
+                </button>
+                <button id="skipBtn" class="bg-gray-600 hover:bg-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+                    Skip
+                </button>
+            </div>
+
+            <!-- Feedback Area -->
+            <div id="feedbackArea" class="hidden">
+                <div class="bg-gray-800/70 rounded-lg p-4 border-l-4 border-blue-500">
+                    <h3 class="font-semibold mb-2 text-blue-300">Feedback:</h3>
+                    <pre id="feedbackText" class="text-gray-300 whitespace-pre-wrap font-mono text-sm"></pre>
+                </div>
+            </div>
+
+            <!-- Next Button -->
+            <button id="nextBtn" class="hidden w-full bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-semibold mt-4 transition-all transform hover:scale-105">
+                Next Question →
+            </button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-black/40 rounded-xl p-8 backdrop-blur-sm border border-gray-600 shadow-2xl text-center">
+            <h2 class="text-3xl font-bold mb-4 text-orange-300">Quiz Complete! 🎉</h2>
+            <div class="text-6xl font-bold mb-4" id="finalScore">0/30</div>
+            <p class="text-xl mb-6 text-gray-300" id="scoreMessage"></p>
+            <div class="bg-gray-800/50 rounded-lg p-4 mb-6">
+                <h3 class="font-semibold mb-2 text-purple-300">Performance Breakdown:</h3>
+                <div id="performanceStats" class="text-left"></div>
+            </div>
+            <button id="restartBtn" class="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 px-8 py-3 rounded-lg font-semibold transition-all transform hover:scale-105">
+                Take Quiz Again
+            </button>
+        </div>
+
+        <!-- Reverse Engineering Reference -->
+        <div class="bg-black/30 rounded-xl p-6 backdrop-blur-sm border border-gray-600 shadow-2xl mt-8">
+            <h2 class="text-2xl font-semibold mb-4 text-orange-300">🛠️ Reverse Engineering Quick Reference</h2>
+            <div class="grid md:grid-cols-2 gap-6 text-sm">
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <h3 class="font-semibold text-red-300 mb-3">Disassembly Tools</h3>
+                    <div class="space-y-2 text-gray-300">
+                        <div><span class="text-yellow-300">IDA Pro:</span> Industry standard disassembler</div>
+                        <div><span class="text-yellow-300">Ghidra:</span> NSA's free reverse engineering suite</div>
+                        <div><span class="text-yellow-300">x64dbg:</span> Open-source Windows debugger</div>
+                        <div><span class="text-yellow-300">Radare2:</span> Command-line reverse engineering</div>
+                    </div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <h3 class="font-semibold text-red-300 mb-3">Online Decompilers</h3>
+                    <div class="space-y-2 text-gray-300">
+                        <div><span class="text-yellow-300">dogbolt.org:</span> Multi-decompiler platform</div>
+                        <div><span class="text-yellow-300">pylingual.io:</span> Python bytecode decompiler</div>
+                        <div><span class="text-yellow-300">retdec.com:</span> RetDec online decompiler</div>
+                        <div><span class="text-yellow-300">onlinegdb.com:</span> Online compiler/debugger</div>
+                    </div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <h3 class="font-semibold text-red-300 mb-3">File Analysis</h3>
+                    <div class="space-y-2 text-gray-300">
+                        <div><span class="text-yellow-300">file:</span> Identify file types</div>
+                        <div><span class="text-yellow-300">strings:</span> Extract readable strings</div>
+                        <div><span class="text-yellow-300">hexdump:</span> View binary data</div>
+                        <div><span class="text-yellow-300">objdump:</span> Display object file info</div>
+                    </div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <h3 class="font-semibold text-red-300 mb-3">Analysis Techniques</h3>
+                    <div class="space-y-2 text-gray-300">
+                        <div>• Static analysis (code without execution)</div>
+                        <div>• Dynamic analysis (runtime behavior)</div>
+                        <div>• Control flow analysis</div>
+                        <div>• String and function enumeration</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Quiz Data
+        const questions = [
+            {
+                id: 1,
+                question: "What file command output indicates a Linux ELF executable?",
+                data: "",
+                answer: "ELF",
+                hint: "Look for the standard format identifier used for executable files on Linux systems.",
+                steps: "1. The 'file' command identifies file types\n2. Linux executables use a specific format\n3. This format stands for 'Executable and Linkable Format'\n4. The output will contain this 3-letter acronym",
+                explanation: "ELF (Executable and Linkable Format) is the standard file format for executables on Linux. The 'file' command will show 'ELF' in its output for Linux binaries."
+            },
+            {
+                id: 2,
+                question: "In assembly code, what does the 'mov' instruction do?",
+                data: "mov eax, 42",
+                answer: "move",
+                hint: "This is one of the most fundamental assembly instructions. It transfers data from one location to another.",
+                steps: "1. 'mov' is short for a basic data operation\n2. It takes two operands: destination and source\n3. In 'mov eax, 42', it puts 42 into register eax\n4. The full name is a 4-letter word meaning to transfer",
+                explanation: "The 'mov' instruction stands for 'move'. It copies data from the source (42) to the destination (eax register). It's the most common way to transfer data in assembly."
+            },
+            {
+                id: 3,
+                question: "What Python bytecode instruction loads a constant value?",
+                data: "LOAD_CONST    0 ('Hello')",
+                answer: "LOAD_CONST",
+                hint: "Python compiles to bytecode instructions. This one specifically deals with constant values.",
+                steps: "1. Python bytecode has specific instruction names\n2. This instruction deals with constant values\n3. It 'loads' something that is 'constant'\n4. The format is LOAD_CONST",
+                explanation: "LOAD_CONST is the Python bytecode instruction that loads a constant value onto the stack. In this example, it loads the string 'Hello'."
+            },
+            {
+                id: 4,
+                question: "What tool would you use to view strings in a binary file on Linux?",
+                data: "",
+                answer: "strings",
+                hint: "There's a specific command-line utility designed to extract readable text from binary files.",
+                steps: "1. Linux has many command-line tools for file analysis\n2. One tool specifically extracts readable text\n3. It's named after what it finds in files\n4. The command is simply called 'strings'",
+                explanation: "The 'strings' command extracts and displays sequences of printable characters from binary files. It's essential for finding hardcoded text, URLs, or other readable data in executables."
+            },
+            {
+                id: 5,
+                question: "In x86 assembly, what register is commonly used for the stack pointer?",
+                data: "",
+                answer: "ESP",
+                hint: "The stack pointer register has a 3-letter name that includes 'SP' for 'stack pointer'.",
+                steps: "1. x86 has several special-purpose registers\n2. The stack pointer tracks the top of the stack\n3. In 32-bit x86, it's a 3-letter register name\n4. It's 'E' + 'SP' (Extended Stack Pointer)",
+                explanation: "ESP (Extended Stack Pointer) is the 32-bit stack pointer register in x86 architecture. It points to the top of the stack and is crucial for function calls and local variables."
+            },
+            {
+                id: 6,
+                question: "What does the 'objdump -d' command do?",
+                data: "objdump -d binary_file",
+                answer: "disassemble",
+                hint: "The -d flag stands for a specific reverse engineering operation that converts machine code to assembly.",
+                steps: "1. objdump is a binary analysis tool\n2. The -d flag performs a specific operation\n3. It converts machine code back to human-readable form\n4. This process is called disassembly",
+                explanation: "The 'objdump -d' command disassembles a binary file, converting machine code back into assembly language instructions that humans can read and analyze."
+            },
+            {
+                id: 7,
+                question: "What file extension typically indicates a Python bytecode file?",
+                data: "",
+                answer: ".pyc",
+                hint: "Python compiles source code to bytecode files with a specific 4-character extension.",
+                steps: "1. Python source files end in .py\n2. Compiled Python bytecode has a different extension\n3. It's .py + one more character\n4. The 'c' stands for 'compiled'",
+                explanation: "Python bytecode files use the .pyc extension (Python Compiled). These files contain the bytecode that the Python interpreter executes, and can be decompiled back to source code."
+            },
+            {
+                id: 8,
+                question: "In assembly, what does the 'cmp' instruction do?",
+                data: "cmp eax, ebx",
+                answer: "compare",
+                hint: "This instruction is used before conditional jumps to test relationships between values.",
+                steps: "1. 'cmp' is short for a mathematical operation\n2. It tests the relationship between two values\n3. It doesn't store the result, but sets flags\n4. The full word is 'compare'",
+                explanation: "The 'cmp' instruction stands for 'compare'. It subtracts the second operand from the first and sets flags based on the result, but doesn't store the result. It's used before conditional jumps."
+            },
+            {
+                id: 9,
+                question: "What online platform allows you to upload binaries and try multiple decompilers?",
+                data: "",
+                answer: "dogbolt",
+                hint: "This platform has an animal-themed name and provides access to multiple decompilers in one place.",
+                steps: "1. There are online platforms for binary analysis\n2. One platform provides multiple decompilers\n3. It has an animal name + 'bolt'\n4. The site is dogbolt.org",
+                explanation: "Dogbolt.org is an online platform that allows you to upload binary files and try multiple different decompilers (like Ghidra, IDA, etc.) to see which works best for your file."
+            },
+            {
+                id: 10,
+                question: "What does 'static analysis' mean in reverse engineering?",
+                data: "",
+                answer: "analysis without execution",
+                hint: "This type of analysis examines code or binaries without running them. It's the opposite of dynamic analysis.",
+                steps: "1. There are two main types of analysis in reverse engineering\n2. Static analysis doesn't involve running the program\n3. It examines the code/binary at rest\n4. The key is 'without execution' or 'without running'",
+                explanation: "Static analysis refers to examining code or binaries without executing them. This includes disassembly, decompilation, string extraction, and code structure analysis - all done on the file at rest."
+            }
+        ];
+
+        // Storage system - use localStorage when available, fallback to memory
+        let gameData = {
+            currentQuestion: 0,
+            score: 0,
+            attempts: {},
+            questionStats: {}
+        };
+
+        // Load game data from storage
+        function loadGameData() {
+            try {
+                const saved = localStorage.getItem('reverseEngineeringQuizData');
+                if (saved) {
+                    gameData = JSON.parse(saved);
+                }
+            } catch(e) {
+                console.log('Using in-memory storage - localStorage not available');
+            }
+        }
+
+        // Save game data to storage
+        function saveGameData() {
+            try {
+                localStorage.setItem('reverseEngineeringQuizData', JSON.stringify(gameData));
+            } catch(e) {
+                // Continue with memory storage
+            }
+        }
+
+        // DOM elements
+        const elements = {
+            score: document.getElementById('score'),
+            currentQuestion: document.getElementById('currentQuestion'),
+            totalQuestions: document.getElementById('totalQuestions'),
+            questionTitle: document.getElementById('questionTitle'),
+            questionText: document.getElementById('questionText'),
+            codeData: document.getElementById('codeData'),
+            answerInput: document.getElementById('answerInput'),
+            submitBtn: document.getElementById('submitBtn'),
+            hintBtn: document.getElementById('hintBtn'),
+            skipBtn: document.getElementById('skipBtn'),
+            nextBtn: document.getElementById('nextBtn'),
+            feedbackArea: document.getElementById('feedbackArea'),
+            feedbackText: document.getElementById('feedbackText'),
+            quizContainer: document.getElementById('quizContainer'),
+            resultsScreen: document.getElementById('resultsScreen'),
+            finalScore: document.getElementById('finalScore'),
+            scoreMessage: document.getElementById('scoreMessage'),
+            performanceStats: document.getElementById('performanceStats'),
+            resetBtn: document.getElementById('resetBtn'),
+            restartBtn: document.getElementById('restartBtn')
+        };
+
+        // Initialize quiz
+        function initializeQuiz() {
+            loadGameData();
+            elements.totalQuestions.textContent = questions.length;
+            displayQuestion();
+            updateDisplay();
+        }
+
+        // Display current question
+        function displayQuestion() {
+            const question = questions[gameData.currentQuestion];
+            if (!question) {
+                showResults();
+                return;
+            }
+
+            elements.questionTitle.textContent = `Question ${gameData.currentQuestion + 1}`;
+            elements.questionText.textContent = question.question;
+            
+            if (question.data && question.data.trim() !== '') {
+                elements.codeData.textContent = question.data;
+                elements.codeData.classList.remove('hidden');
+            } else {
+                elements.codeData.classList.add('hidden');
+            }
+            
+            elements.answerInput.value = '';
+            elements.answerInput.focus();
+            
+            // Reset UI state
+            elements.feedbackArea.classList.add('hidden');
+            elements.nextBtn.classList.add('hidden');
+            elements.submitBtn.classList.remove('hidden');
+            elements.answerInput.disabled = false;
+
+            // Initialize attempts for this question if not exists
+            if (!gameData.attempts[question.id]) {
+                gameData.attempts[question.id] = 0;
+            }
+        }
+
+        // Update score and question display
+        function updateDisplay() {
+            elements.score.textContent = gameData.score;
+            elements.currentQuestion.textContent = gameData.currentQuestion + 1;
+        }
+
+        // Normalize answer for comparison
+        function normalizeAnswer(answer) {
+            return answer.trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+
+        // Submit answer
+        function submitAnswer() {
+            const question = questions[gameData.currentQuestion];
+            const userAnswer = elements.answerInput.value.trim();
+            const correctAnswer = question.answer;
+            
+            gameData.attempts[question.id]++;
+            
+            // Check if answer is correct (flexible matching)
+            const normalizedUser = normalizeAnswer(userAnswer);
+            const normalizedCorrect = normalizeAnswer(correctAnswer);
+            
+            const isCorrect = normalizedUser === normalizedCorrect ||
+                             normalizedUser.includes(normalizedCorrect) ||
+                             normalizedCorrect.includes(normalizedUser);
+            
+            if (isCorrect) {
+                // Correct answer
+                const points = Math.max(1, 4 - gameData.attempts[question.id]);
+                gameData.score += points;
+                gameData.questionStats[question.id] = {
+                    correct: true,
+                    attempts: gameData.attempts[question.id],
+                    points: points
+                };
+                
+                showFeedback(`✅ Correct! You earned ${points} points.\n\n${question.explanation}`, 'success');
+                elements.nextBtn.classList.remove('hidden');
+                elements.submitBtn.classList.add('hidden');
+                elements.answerInput.disabled = true;
+            } else {
+                // Wrong answer
+                gameData.questionStats[question.id] = {
+                    correct: false,
+                    attempts: gameData.attempts[question.id],
+                    points: 0
+                };
+                
+                if (gameData.attempts[question.id] >= 3) {
+                    showFeedback(`❌ Incorrect. The correct answer is: ${question.answer}\n\n${question.explanation}`, 'error');
+                    elements.nextBtn.classList.remove('hidden');
+                    elements.submitBtn.classList.add('hidden');
+                    elements.answerInput.disabled = true;
+                } else {
+                    showFeedback(`❌ Incorrect. Try again! (Attempt ${gameData.attempts[question.id]}/3)`, 'error');
+                }
+            }
+            
+            updateDisplay();
+            saveGameData();
+        }
+
+        // Show hint based on current attempt count
+        function showHint() {
+            const question = questions[gameData.currentQuestion];
+            const attempts = gameData.attempts[question.id];
+            
+            let hintText;
+            if (attempts === 0) {
+                // First try - show basic hint
+                hintText = `💡 Hint: ${question.hint}`;
+                gameData.attempts[question.id] = 1;
+            } else if (attempts === 1) {
+                // Second try - show detailed steps
+                hintText = `📋 Detailed Steps:\n${question.steps}`;
+                gameData.attempts[question.id] = 2;
+            } else {
+                // Third try - show answer
+                hintText = `📝 Answer: ${question.answer}\n\n${question.explanation}`;
+                gameData.attempts[question.id] = 3;
+                elements.nextBtn.classList.remove('hidden');
+                elements.submitBtn.classList.add('hidden');
+                elements.answerInput.disabled = true;
+            }
+            
+            showFeedback(hintText, 'hint');
+            saveGameData();
+        }
+
+        // Show feedback
+        function showFeedback(message, type) {
+            elements.feedbackText.textContent = message;
+            elements.feedbackArea.classList.remove('hidden');
+            elements.feedbackArea.classList.add('fade-in');
+            
+            // Update border color based on type
+            const borderColor = {
+                success: 'border-green-500',
+                error: 'border-red-500',
+                hint: 'border-yellow-500'
+            }[type] || 'border-blue-500';
+            
+            elements.feedbackArea.querySelector('div').className = `bg-gray-800/70 rounded-lg p-4 border-l-4 ${borderColor}`;
+        }
+
+        // Skip question
+        function skipQuestion() {
+            const question = questions[gameData.currentQuestion];
+            gameData.questionStats[question.id] = {
+                correct: false,
+                attempts: gameData.attempts[question.id] || 0,
+                points: 0,
+                skipped: true
+            };
+            nextQuestion();
+        }
+
+        // Next question
+        function nextQuestion() {
+            gameData.currentQuestion++;
+            if (gameData.currentQuestion < questions.length) {
+                displayQuestion();
+                updateDisplay();
+            } else {
+                showResults();
+            }
+            saveGameData();
+        }
+
+        // Show results
+        function showResults() {
+            elements.quizContainer.classList.add('hidden');
+            elements.resultsScreen.classList.remove('hidden');
+            
+            const totalPossibleScore = questions.length * 3; // Max 3 points per question
+            const percentage = Math.round((gameData.score / totalPossibleScore) * 100);
+            
+            elements.finalScore.textContent = `${gameData.score}/${totalPossibleScore}`;
+            
+            let message;
+            if (percentage >= 90) message = "🔍 Reverse Engineering Master! Outstanding analysis skills!";
+            else if (percentage >= 75) message = "🌟 Excellent work! You've got strong RE fundamentals!";
+            else if (percentage >= 60) message = "👍 Great progress! Keep practicing those analysis techniques!";
+            else if (percentage >= 40) message = "📚 Good foundation! Review the tools and try again!";
+            else message = "🛠️ Keep learning! Reverse engineering mastery takes practice!";
+            
+            elements.scoreMessage.textContent = message;
+            
+            // Performance breakdown
+            let statsHtml = '';
+            let correctCount = 0;
+            let skippedCount = 0;
+            
+            questions.forEach((question, index) => {
+                const stat = gameData.questionStats[question.id];
+                if (stat) {
+                    if (stat.correct) correctCount++;
+                    if (stat.skipped) skippedCount++;
+                    
+                    const status = stat.correct ? '✅' : (stat.skipped ? '⏭️' : '❌');
+                    const points = stat.points || 0;
+                    const attempts = stat.attempts || 0;
+                    
+                    statsHtml += `<div class="flex justify-between py-1">
+                        <span>Q${index + 1}: ${status}</span>
+                        <span>${points} pts (${attempts} attempts)</span>
+                    </div>`;
+                }
+            });
+            
+            statsHtml += `<hr class="my-2 border-gray-600">`;
+            statsHtml += `<div class="flex justify-between font-semibold">
+                <span>Correct: ${correctCount}/${questions.length}</span>
+                <span>Skipped: ${skippedCount}</span>
+            </div>`;
+            
+            elements.performanceStats.innerHTML = statsHtml;
+        }
+
+        // Reset quiz
+        function resetQuiz() {
+            gameData = {
+                currentQuestion: 0,
+                score: 0,
+                attempts: {},
+                questionStats: {}
+            };
+            saveGameData();
+            elements.resultsScreen.classList.add('hidden');
+            elements.quizContainer.classList.remove('hidden');
+            displayQuestion();
+            updateDisplay();
+        }
+
+        // Event listeners
+        elements.submitBtn.addEventListener('click', submitAnswer);
+        elements.hintBtn.addEventListener('click', showHint);
+        elements.skipBtn.addEventListener('click', skipQuestion);
+        elements.nextBtn.addEventListener('click', nextQuestion);
+        elements.resetBtn.addEventListener('click', resetQuiz);
+        elements.restartBtn.addEventListener('click', resetQuiz);
+
+        // Enter key to submit
+        elements.answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !elements.submitBtn.classList.contains('hidden')) {
+                submitAnswer();
+            }
+        });
+
+        // Initialize the quiz when page loads
+        document.addEventListener('DOMContentLoaded', initializeQuiz);
+    </script>
+</body>
+</html>
