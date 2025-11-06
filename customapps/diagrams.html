@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagram & Flowchart App</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for the canvas grid background */
+        #canvas {
+            background-image: linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-position: 0 0;
+            overflow: hidden; /* Prevent shapes from being dragged out of bounds */
+        }
+        /* Base style for shapes on the canvas */
+        .shape {
+            min-width: 100px;
+            min-height: 60px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            border: 2px solid #333;
+            background-color: white;
+            z-index: 10;
+            transition: box-shadow 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px; /* Rounded corners for all shapes */
+        }
+        /* Specific shape styles */
+        .shape.diamond {
+            transform: rotate(45deg);
+            width: 100px;
+            height: 100px;
+            min-width: 100px;
+            min-height: 100px;
+        }
+        .shape.diamond > div {
+            transform: rotate(-45deg); /* Counter-rotate text */
+            max-width: 100px;
+            text-align: center;
+            word-wrap: break-word;
+        }
+        .shape.circle {
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+            min-width: 100px;
+            min-height: 100px;
+        }
+        .shape.rect > div,
+        .shape.circle > div {
+            text-align: center;
+            word-wrap: break-word;
+        }
+
+        /* New Shape: Cloud */
+        .shape.cloud {
+            min-width: 120px;
+            min-height: 70px;
+            border-radius: 50%; /* Creates an oval */
+        }
+        .shape.cloud > div {
+            text-align: center;
+            word-wrap: break-word;
+        }
+        
+        /* New Shape: Person */
+        .shape.person {
+            min-width: 80px;
+            min-height: 100px;
+            padding-top: 30px; /* Make space for head */
+            border-radius: 40px 40px 10px 10px; /* Rounded top for body */
+            position: relative; /* For pseudo-element head */
+        }
+        .shape.person::before {
+            content: '';
+            position: absolute;
+            top: -22px; /* Position head outside */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 44px; /* Head size */
+            height: 44px;
+            border-radius: 50%;
+            background-color: inherit; /* Match shape color */
+            border: 2px solid #333;
+        }
+        .shape.person.selected::before {
+            border-color: #3b82f6; /* Blue-500 */
+            border-width: 3px;
+        }
+        .shape.person > div {
+            text-align: center;
+            word-wrap: break-word;
+        }
+        
+        /* New Shape: Display */
+        .shape.display {
+            min-width: 120px;
+            min-height: 80px;
+            border-radius: 8px; /* Screen */
+            position: relative;
+        }
+        .shape.display::after {
+            content: '';
+            position: absolute;
+            bottom: -15px; /* Position base below */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            /* Trapezoid shape */
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 15px solid #333; /* Base color */
+        }
+        /* Update base border color on selection */
+        .shape.display.selected::after {
+            border-top-color: #3b82f6; /* Blue-500 */
+        }
+        .shape.display > div {
+            text-align: center;
+            word-wrap: break-word;
+        }
+        
+        /* Style for selected shapes */
+        .shape.selected {
+            border-color: #3b82f6; /* Blue-500 */
+            border-width: 3px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.7);
+        }
+        /* Style for text editing */
+        .shape [contenteditable="true"] {
+            outline: 2px dashed #3b82f6;
+            cursor: text;
+        }
+        /* Toolbar item style */
+        .toolbar-item {
+            cursor: grab;
+            border: 2px dashed #9ca3af;
+            background-color: #f3f4f6;
+            transition: all 0.2s;
+        }
+        .toolbar-item:active {
+            cursor: grabbing;
+            background-color: #e5e7eb;
+            border-color: #3b82f6;
+        }
+        /* Connection line style */
+        .connector-line {
+            stroke: #333;
+            stroke-width: 2;
+            pointer-events: none; /* Lines don't block clicks */
+        }
+        
+        /* Print-specific styles */
+        @media print {
+            /* Hide everything except the canvas area */
+            body > header,
+            body > div > aside {
+                display: none;
+            }
+            
+            /* Reset body and main content area for printing */
+            body, .flex-1.flex.overflow-hidden {
+                display: block;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Make the canvas fill the print page */
+            #canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                overflow: visible; /* Show all content */
+                background-image: none; /* Remove grid */
+                border: none;
+                box-shadow: none;
+            }
+            
+            /* Ensure shapes and lines are visible */
+            .shape {
+                box-shadow: none;
+                z-index: 100; /* Ensure shapes are on top */
+            }
+            #svg-layer {
+                z-index: 99; /* Ensure lines are visible */
+            }
+            
+            /* Hide print-related UI */
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-200 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-gray-800 text-white p-3 text-center shadow-md z-30 no-print">
+        <h1 class="text-2xl font-bold">Flowchart & UML Diagram Tool</h1>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex overflow-hidden">
+
+        <!-- Toolbar -->
+        <aside class="w-64 bg-gray-100 p-4 shadow-lg border-r border-gray-300 z-20 overflow-y-auto no-print">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">Shapes</h2>
+            <div class="space-y-4">
+                <!-- Draggable Shape: Rectangle -->
+                <div draggable="true" data-shape="rect" class="toolbar-item p-4 rounded-lg flex items-center justify-center h-16">
+                    <div class="w-24 h-12 bg-white border-2 border-gray-600 rounded"></div>
+                </div>
+                <!-- Draggable Shape: Diamond -->
+                <div draggable="true" data-shape="diamond" class="toolbar-item p-4 rounded-lg flex items-center justify-center h-24">
+                    <div class="w-12 h-12 bg-white border-2 border-gray-600 rounded transform rotate-45"></div>
+                </div>
+                <!-- Draggable Shape: Circle -->
+                <div draggable="true" data-shape="circle" class="toolbar-item p-4 rounded-lg flex items-center justify-center h-24">
+                    <div class="w-16 h-16 bg-white border-2 border-gray-600 rounded-full"></div>
+                </div>
+
+                <!-- Draggable Shape: Cloud -->
+                <div draggable="true" data-shape="cloud" class="toolbar-item p-4 rounded-lg flex items-center justify-center h-24">
+                    <!-- This will be an oval -->
+                    <div class="w-20 h-14 bg-white border-2 border-gray-600" style="border-radius: 50%;"></div>
+                </div>
+
+                <!-- Draggable Shape: Person -->
+                <div draggable="true" data-shape="person" class="toolbar-item p-4 rounded-lg flex items-center justify-center h-24">
+                    <div class="flex flex-col items-center">
+                        <div class="w-8 h-8 bg-white border-2 border-gray-600 rounded-full"></div>
+                        <div class="w-12 h-10 bg-white border-2 border-gray-600 rounded-t-lg -mt-1"></div>
+                    </div>
+                </div>
+                
+                <!-- Draggable Shape: Display -->
+                <div draggable="true" data-shape="display" class="toolbar-item p-4 rounded-lg flex items-center justify-center h-24">
+                    <div class="flex flex-col items-center">
+                        <div class="w-20 h-14 bg-white border-2 border-gray-600 rounded"></div>
+                        <!-- Trapezoid base -->
+                        <div class="w-10 h-0 border-b-[10px] border-b-gray-600 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-6 border-gray-300">
+
+            <!-- Tools -->
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">Tools</h2>
+            <div class="space-y-3">
+                <button id="connect-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-all shadow-sm">
+                    Connect Shapes
+                </button>
+                <button id="clear-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-all shadow-sm">
+                    Clear Canvas
+                </button>
+                <button id="print-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition-all shadow-sm no-print">
+                    Print Diagram
+                </button>
+            </div>
+        </aside>
+
+        <!-- Canvas -->
+        <main id="canvas" class="flex-1 relative bg-white">
+            <!-- SVG layer for lines (must be under shapes) -->
+            <svg id="svg-layer" class="absolute inset-0 w-full h-full" style="z-index: 1;">
+                <defs>
+                    <!-- Arrowhead definition -->
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                          refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+                    </marker>
+                </defs>
+            </svg>
+            <!-- Shapes will be appended here by JS and will have z-index: 10 -->
+        </main>
+
+        <!-- Properties Panel -->
+        <aside id="properties-panel" class="w-72 bg-gray-100 p-4 shadow-lg border-l border-gray-300 z-20 overflow-y-auto no-print">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">Properties</h2>
+            
+            <!-- Default message -->
+            <div id="properties-default" class="text-gray-500">
+                <p>Select a shape to edit its properties.</p>
+            </div>
+
+            <!-- Editor for selected shape -->
+            <div id="properties-editor" class="hidden space-y-4">
+                <div>
+                    <label for="text-input" class="block text-sm font-medium text-gray-600 mb-1">Text</label>
+                    <textarea id="text-input" rows="3" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                </div>
+                
+                <div>
+                    <label for="color-input" class="block text-sm font-medium text-gray-600 mb-1">Background Color</label>
+                    <input type="color" id="color-input" class="w-full h-10 p-1 border border-gray-300 rounded-md cursor-pointer">
+                </div>
+
+                <hr class="my-4 border-gray-300">
+
+                <button id="delete-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-all shadow-sm">
+                    Delete Shape
+                </button>
+            </div>
+        </aside>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element References ---
+            const canvas = document.getElementById('canvas');
+            const svgLayer = document.getElementById('svg-layer');
+            const propertiesPanel = document.getElementById('properties-panel');
+            const propsDefault = document.getElementById('properties-default');
+            const propsEditor = document.getElementById('properties-editor');
+            const textInput = document.getElementById('text-input');
+            const colorInput = document.getElementById('color-input');
+            const deleteBtn = document.getElementById('delete-btn');
+            const connectBtn = document.getElementById('connect-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const toolbarItems = document.querySelectorAll('.toolbar-item');
+            const printBtn = document.getElementById('print-btn'); // New button
+            
+            // --- Application State ---
+            let shapes = []; // Stores shape data { id, x, y, text, color, type, element, connections }
+            let lines = [];  // Stores line data { id, startShapeId, endShapeId, element }
+            let selectedShapeId = null;
+            let isDragging = false;
+            let dragOffsetX, dragOffsetY;
+            let currentDraggingElement = null;
+            let isConnecting = false;
+            let connectionStartShapeId = null;
+            let shapeCounter = 0;
+            let lineCounter = 0;
+
+            // --- Drag and Drop (Toolbar to Canvas) ---
+
+            toolbarItems.forEach(item => {
+                item.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', e.target.dataset.shape);
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+            });
+
+            canvas.addEventListener('dragover', (e) => {
+                e.preventDefault(); // Allow dropping
+                e.dataTransfer.dropEffect = 'copy';
+            });
+
+            canvas.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const shapeType = e.dataTransfer.getData('text/plain');
+                const canvasRect = canvas.getBoundingClientRect();
+                
+                // Calculate drop position relative to the canvas
+                let x = e.clientX - canvasRect.left;
+                let y = e.clientY - canvasRect.top;
+
+                // Create the shape
+                createShape(shapeType, x, y);
+            });
+
+            // --- Shape Creation ---
+
+            function createShape(type, x, y) {
+                const shapeId = `shape-${shapeCounter++}`;
+                const shapeEl = document.createElement('div');
+                shapeEl.id = shapeId;
+                shapeEl.className = `shape ${type}`;
+                shapeEl.style.left = `${x}px`;
+                shapeEl.style.top = `${y}px`;
+
+                // Add text container
+                const textEl = document.createElement('div');
+                textEl.innerText = 'Text';
+                textEl.setAttribute('contenteditable', 'false');
+                shapeEl.appendChild(textEl);
+
+                // Make shape draggable on the canvas
+                shapeEl.addEventListener('mousedown', onShapeMouseDown);
+                // Select shape on click
+                shapeEl.addEventListener('click', onShapeClick);
+                // Edit text on double-click
+                shapeEl.addEventListener('dblclick', onShapeDblClick);
+                
+                // Add to canvas
+                canvas.appendChild(shapeEl);
+
+                // Store in state
+                const newShape = {
+                    id: shapeId,
+                    x: x,
+                    y: y,
+                    text: 'Text',
+                    color: '#ffffff',
+                    type: type,
+                    element: shapeEl,
+                    connections: [] // Stores { lineId, endType: 'start' | 'end' }
+                };
+                shapes.push(newShape);
+                
+                // Adjust position to center the shape on the cursor
+                // Do this after appending so offsetWidth/Height are available
+                x -= shapeEl.offsetWidth / 2;
+                y -= shapeEl.offsetHeight / 2;
+                shapeEl.style.left = `${x}px`;
+                shapeEl.style.top = `${y}px`;
+                newShape.x = x;
+                newShape.y = y;
+                
+                selectShape(shapeId);
+            }
+
+            // --- Shape Movement on Canvas ---
+
+            function onShapeMouseDown(e) {
+                // Don't drag if in connection mode or editing text
+                if (isConnecting || e.target.getAttribute('contenteditable') === 'true') return;
+                
+                e.preventDefault(); // Prevent text selection
+                
+                currentDraggingElement = this; // 'this' is the shapeEl
+                const shape = findShapeById(currentDraggingElement.id);
+                
+                isDragging = true;
+                
+                // Calculate offset from the element's top-left corner
+                dragOffsetX = e.clientX - shape.x;
+                dragOffsetY = e.clientY - shape.y;
+
+                // Add global listeners
+                document.addEventListener('mousemove', onWindowMouseMove);
+                document.addEventListener('mouseup', onWindowMouseUp);
+            }
+
+            function onWindowMouseMove(e) {
+                if (!isDragging || !currentDraggingElement) return;
+
+                const shape = findShapeById(currentDraggingElement.id);
+                const canvasRect = canvas.getBoundingClientRect();
+
+                // Calculate new position
+                let newX = e.clientX - dragOffsetX;
+                let newY = e.clientY - dragOffsetY;
+                
+                // Constrain to canvas boundaries
+                newX = Math.max(0, Math.min(newX, canvasRect.width - currentDraggingElement.offsetWidth));
+                newY = Math.max(0, Math.min(newY, canvasRect.height - currentDraggingElement.offsetHeight));
+
+                // Update element style
+                currentDraggingElement.style.left = `${newX}px`;
+                currentDraggingElement.style.top = `${newY}px`;
+
+                // Update state
+                shape.x = newX;
+                shape.y = newY;
+                
+                // Update connected lines
+                updateLinesForShape(shape.id);
+            }
+
+            function onWindowMouseUp(e) {
+                isDragging = false;
+                currentDraggingElement = null;
+                document.removeEventListener('mousemove', onWindowMouseMove);
+                document.removeEventListener('mouseup', onWindowMouseUp);
+            }
+
+            // --- Shape Selection & Properties Panel ---
+
+            function onShapeClick(e) {
+                e.stopPropagation(); // Prevent canvas click
+                
+                if (isConnecting) {
+                    handleConnectionClick(this.id); // 'this' is the shapeEl
+                    return;
+                }
+
+                selectShape(this.id);
+            }
+
+            canvas.addEventListener('click', () => {
+                // Deselect when clicking canvas background
+                if (!isConnecting) {
+                    selectShape(null);
+                }
+            });
+
+            function selectShape(shapeId) {
+                // Clear old selection
+                if (selectedShapeId) {
+                    const oldShape = findShapeById(selectedShapeId);
+                    if (oldShape) {
+                        oldShape.element.classList.remove('selected');
+                    }
+                }
+
+                selectedShapeId = shapeId;
+
+                if (shapeId) {
+                    // Set new selection
+                    const shape = findShapeById(shapeId);
+                    shape.element.classList.add('selected');
+                    
+                    // Update properties panel
+                    propsDefault.classList.add('hidden');
+                    propsEditor.classList.remove('hidden');
+
+                    textInput.value = shape.text;
+                    colorInput.value = shape.color;
+                } else {
+                    // No shape selected
+                    propsDefault.classList.remove('hidden');
+                    propsEditor.classList.add('hidden');
+                }
+            }
+
+            // --- Property Editors ---
+
+            textInput.addEventListener('input', (e) => {
+                if (!selectedShapeId) return;
+                const shape = findShapeById(selectedShapeId);
+                const newText = e.target.value;
+                
+                shape.text = newText;
+                shape.element.querySelector('div').innerText = newText;
+            });
+
+            colorInput.addEventListener('input', (e) => {
+                if (!selectedShapeId) return;
+                const shape = findShapeById(selectedShapeId);
+                const newColor = e.target.value;
+                
+                shape.color = newColor;
+                shape.element.style.backgroundColor = newColor;
+            });
+
+            deleteBtn.addEventListener('click', () => {
+                if (!selectedShapeId) return;
+                
+                // Remove all connected lines
+                const shape = findShapeById(selectedShapeId);
+                [...shape.connections].forEach(conn => { // Iterate over a copy
+                    deleteLine(conn.lineId);
+                });
+                
+                // Remove shape element
+                shape.element.remove();
+                
+                // Remove from state
+                shapes = shapes.filter(s => s.id !== selectedShapeId);
+                
+                // Clear selection
+                selectShape(null);
+            });
+
+            // --- Direct Text Editing ---
+            function onShapeDblClick(e) {
+                e.stopPropagation();
+                if (isConnecting) return;
+
+                const textEl = this.querySelector('div');
+                textEl.setAttribute('contenteditable', 'true');
+                textEl.focus();
+                
+                // Select all text
+                const range = document.createRange();
+                range.selectNodeContents(textEl);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+
+                // Add blur listener to stop editing
+                textEl.addEventListener('blur', onTextBlur, { once: true });
+                textEl.addEventListener('keydown', onTextKeydown);
+            }
+            
+            function onTextBlur(e) {
+                const textEl = e.target;
+                const shapeEl = textEl.closest('.shape');
+                const shape = findShapeById(shapeEl.id);
+                
+                textEl.setAttribute('contenteditable', 'false');
+                const newText = textEl.innerText;
+                shape.text = newText;
+                
+                // Update properties panel if it's the selected shape
+                if (shape.id === selectedShapeId) {
+                    textInput.value = newText;
+                }
+                textEl.removeEventListener('keydown', onTextKeydown);
+            }
+
+            function onTextKeydown(e) {
+                // Stop editing on Enter key
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.target.blur();
+                }
+            }
+
+            // --- Connection Logic ---
+
+            connectBtn.addEventListener('click', () => {
+                isConnecting = !isConnecting;
+                if (isConnecting) {
+                    connectBtn.textContent = 'Cancel Connection';
+                    connectBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                    connectBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                    canvas.style.cursor = 'crosshair';
+                    selectShape(null); // Deselect
+                } else {
+                    resetConnectionState();
+                }
+            });
+
+            function handleConnectionClick(shapeId) {
+                if (!connectionStartShapeId) {
+                    // This is the first shape
+                    connectionStartShapeId = shapeId;
+                    findShapeById(shapeId).element.classList.add('selected'); // Highlight start
+                } else {
+                    // This is the second shape
+                    if (connectionStartShapeId !== shapeId) {
+                        createLine(connectionStartShapeId, shapeId);
+                    }
+                    // Reset state
+                    resetConnectionState();
+                }
+            }
+            
+            function resetConnectionState() {
+                if (connectionStartShapeId) {
+                    const startShape = findShapeById(connectionStartShapeId);
+                    if (startShape) {
+                        startShape.element.classList.remove('selected');
+                    }
+                }
+                isConnecting = false;
+                connectionStartShapeId = null;
+                connectBtn.textContent = 'Connect Shapes';
+                connectBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                connectBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                canvas.style.cursor = 'default';
+            }
+
+            function createLine(startShapeId, endShapeId) {
+                const lineId = `line-${lineCounter++}`;
+                
+                const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                lineEl.id = lineId;
+                lineEl.setAttribute('class', 'connector-line');
+                lineEl.setAttribute('marker-end', 'url(#arrowhead)');
+                
+                svgLayer.appendChild(lineEl);
+
+                // Store in state
+                const newLine = {
+                    id: lineId,
+                    startShapeId: startShapeId,
+                    endShapeId: endShapeId,
+                    element: lineEl
+                };
+                lines.push(newLine);
+
+                // Update shape connection lists
+                const startShape = findShapeById(startShapeId);
+                const endShape = findShapeById(endShapeId);
+                startShape.connections.push({ lineId: lineId, endType: 'start' });
+                endShape.connections.push({ lineId: lineId, endType: 'end' });
+                
+                // Draw line immediately
+                updateLinePosition(lineId);
+            }
+            
+            function deleteLine(lineId) {
+                const line = findLineById(lineId);
+                if (!line) return;
+                
+                // Remove from shape connection arrays
+                const startShape = findShapeById(line.startShapeId);
+                if (startShape) {
+                    startShape.connections = startShape.connections.filter(c => c.lineId !== lineId);
+                }
+                const endShape = findShapeById(line.endShapeId);
+                if (endShape) {
+                    endShape.connections = endShape.connections.filter(c => c.lineId !== lineId);
+                }
+                
+                // Remove from DOM
+                line.element.remove();
+                
+                // Remove from state
+                lines = lines.filter(l => l.id !== lineId);
+            }
+
+            function updateLinesForShape(shapeId) {
+                const shape = findShapeById(shapeId);
+                if (!shape) return;
+                
+                shape.connections.forEach(conn => {
+                    updateLinePosition(conn.lineId);
+                });
+            }
+
+            function updateLinePosition(lineId) {
+                const line = findLineById(lineId);
+                if (!line) return;
+
+                const startShape = findShapeById(line.startShapeId);
+                const endShape = findShapeById(line.endShapeId);
+                if (!startShape || !endShape) return;
+                
+                const startCenter = getShapeCenter(startShape);
+                const endCenter = getShapeCenter(endShape);
+                
+                // This is a simple implementation.
+                // A more advanced one would find the intersection with the shape's bounding box.
+                
+                line.element.setAttribute('x1', startCenter.x);
+                line.element.setAttribute('y1', startCenter.y);
+                line.element.setAttribute('x2', endCenter.x);
+                line.element.setAttribute('y2', endCenter.y);
+            }
+
+            // --- Clear Canvas ---
+            clearBtn.addEventListener('click', () => {
+                // Remove all shape elements
+                shapes.forEach(shape => shape.element.remove());
+                // Remove all line elements
+                lines.forEach(line => line.element.remove());
+                
+                // Reset state
+                shapes = [];
+                lines = [];
+                selectedShapeId = null;
+                isConnecting = false;
+                connectionStartShapeId = null;
+                shapeCounter = 0;
+                lineCounter = 0;
+                
+                // Reset UI
+                selectShape(null);
+                resetConnectionState();
+            });
+
+            // --- Print Button ---
+            printBtn.addEventListener('click', () => {
+                window.print();
+            });
+
+            // --- Utility Functions ---
+
+            function findShapeById(id) {
+                return shapes.find(s => s.id === id);
+            }
+
+            function findLineById(id) {
+                return lines.find(l => l.id === id);
+            }
+
+            function getShapeCenter(shape) {
+                const x = shape.x + shape.element.offsetWidth / 2;
+                const y = shape.y + shape.element.offsetHeight / 2;
+                return { x, y };
+            }
+
+        });
+    </script>
+</body>
+</html>
