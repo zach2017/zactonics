@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temporal.io — Workers, Workflows & Activities Best Practices</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800;900&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        display: ['Outfit', 'sans-serif'],
+        body: ['Source Serif 4', 'Georgia', 'serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      colors: {
+        temporal: {
+          50: '#f0f7ff',
+          100: '#dfeeff',
+          200: '#b8dbff',
+          300: '#79bfff',
+          400: '#329dff',
+          500: '#0070f3',
+          600: '#0058cc',
+          700: '#0046a5',
+          800: '#003d88',
+          900: '#003370',
+          950: '#001d42',
+        },
+        ink: '#0a0f1a',
+        sand: '#f8f6f1',
+        chalk: '#fdfcfa',
+      }
+    }
+  }
+}
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Source Serif 4', Georgia, serif; background: #fdfcfa; color: #0a0f1a; }
+  
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #f8f6f1; }
+  ::-webkit-scrollbar-thumb { background: #c4bfb6; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9e9a92; }
+
+  /* Hero grain overlay */
+  .grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* Diagonal corner accent */
+  .corner-accent {
+    position: relative;
+  }
+  .corner-accent::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 80px; height: 80px;
+    background: linear-gradient(135deg, transparent 50%, rgba(0,112,243,0.07) 50%);
+    pointer-events: none;
+  }
+
+  /* Code blocks */
+  .code-block {
+    background: #0f1219;
+    color: #e2e8f0;
+    border-radius: 10px;
+    overflow-x: auto;
+    position: relative;
+  }
+  .code-block::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 8px; right: 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #4a5568;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+  }
+  .code-block code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    display: block;
+    padding: 1.25rem 1.5rem;
+    white-space: pre;
+  }
+  .code-block .kw { color: #c792ea; }
+  .code-block .fn { color: #82aaff; }
+  .code-block .str { color: #c3e88d; }
+  .code-block .cm { color: #546e7a; }
+  .code-block .typ { color: #ffcb6b; }
+  .code-block .num { color: #f78c6c; }
+  .code-block .dec { color: #89ddff; }
+
+  /* Tip / Warning boxes */
+  .callout { border-radius: 10px; position: relative; overflow: hidden; }
+  .callout::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+  .callout-tip::before { background: #0070f3; }
+  .callout-warn::before { background: #f59e0b; }
+
+  /* Navigation pill */
+  .nav-pill {
+    transition: all 0.2s ease;
+  }
+  .nav-pill:hover {
+    background: rgba(0,112,243,0.08);
+    transform: translateX(4px);
+  }
+  .nav-pill.active {
+    background: rgba(0,112,243,0.1);
+    color: #0070f3;
+    font-weight: 600;
+  }
+
+  /* Section entrance animation */
+  .section-card {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .section-card.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Tab system */
+  .tab-btn { transition: all 0.2s ease; }
+  .tab-btn.active-tab {
+    background: #0f1219;
+    color: #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active-panel { display: block; }
+
+  /* External link icon */
+  .ext-link::after {
+    content: ' ↗';
+    font-size: 0.75em;
+    opacity: 0.5;
+  }
+
+  /* Table */
+  .data-table th { 
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  /* Back to top */
+  #back-to-top {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+  }
+  #back-to-top.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+  }
+
+  /* Copy button */
+  .copy-btn {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .code-block:hover .copy-btn { opacity: 1; }
+
+  /* Checklist */
+  .check-item input:checked + span {
+    text-decoration: line-through;
+    color: #9e9a92;
+  }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- FIXED SIDEBAR NAVIGATION -->
+<nav id="sidebar" class="hidden lg:flex flex-col fixed left-0 top-0 h-screen w-64 bg-chalk border-r border-gray-200/60 z-40 overflow-y-auto py-8 px-5">
+  <a href="#hero" class="flex items-center gap-2.5 mb-8 group">
+    <div class="w-8 h-8 rounded-lg bg-temporal-500 flex items-center justify-center">
+      <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    <span class="font-display font-bold text-sm tracking-tight text-ink">Temporal Guide</span>
+  </a>
+  <div class="space-y-0.5 text-[13px] font-display">
+    <a href="#core-concepts" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">1. Core Concepts</a>
+    <a href="#workflows" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">2. Workflow Best Practices</a>
+    <a href="#activities" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">3. Activity Best Practices</a>
+    <a href="#workers" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">4. Worker Best Practices</a>
+    <a href="#local-testing" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">5. Local CLI Testing</a>
+    <a href="#test-frameworks" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">6. Test Frameworks</a>
+    <a href="#python-sdk" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">7. Python SDK</a>
+    <a href="#go-sdk" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">8. Go SDK</a>
+    <a href="#docker" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">9. Docker Setup</a>
+    <a href="#azure" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">10. Azure Deployment</a>
+    <a href="#checklist" class="nav-pill block px-3 py-1.5 rounded-md text-gray-600">11. Production Checklist</a>
+  </div>
+  <div class="mt-auto pt-6 border-t border-gray-200/60">
+    <p class="text-[11px] font-display text-gray-400 uppercase tracking-widest mb-2">Official Docs</p>
+    <a href="https://docs.temporal.io" target="_blank" class="ext-link block text-[12px] text-temporal-600 hover:text-temporal-800 font-display mb-1">docs.temporal.io</a>
+    <a href="https://learn.temporal.io" target="_blank" class="ext-link block text-[12px] text-temporal-600 hover:text-temporal-800 font-display mb-1">learn.temporal.io</a>
+    <a href="https://github.com/temporalio" target="_blank" class="ext-link block text-[12px] text-temporal-600 hover:text-temporal-800 font-display">GitHub</a>
+  </div>
+</nav>
+
+<!-- MOBILE NAV TOGGLE -->
+<button id="mobile-nav-btn" class="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 bg-white rounded-lg shadow-md flex items-center justify-center border border-gray-200">
+  <svg class="w-5 h-5 text-ink" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+</button>
+
+<!-- MAIN CONTENT -->
+<main class="lg:ml-64">
+
+  <!-- HERO -->
+  <section id="hero" class="relative grain overflow-hidden bg-gradient-to-br from-temporal-950 via-[#001840] to-[#002855] text-white min-h-[85vh] flex items-center">
+    <!-- Geometric shapes -->
+    <div class="absolute top-20 right-20 w-72 h-72 border border-white/5 rounded-full"></div>
+    <div class="absolute top-40 right-40 w-48 h-48 border border-white/5 rounded-full"></div>
+    <div class="absolute bottom-20 left-10 w-32 h-32 border border-temporal-400/10 rotate-45"></div>
+    <div class="absolute top-1/3 left-1/4 w-2 h-2 bg-temporal-400/40 rounded-full"></div>
+    <div class="absolute top-1/2 right-1/3 w-1.5 h-1.5 bg-blue-300/30 rounded-full"></div>
+    
+    <div class="relative z-10 max-w-4xl mx-auto px-8 py-20">
+      <div class="inline-flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full px-4 py-1.5 mb-8">
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+        <span class="font-display text-xs tracking-wide text-blue-200">Updated March 2026</span>
+      </div>
+      <h1 class="font-display font-900 text-5xl md:text-7xl leading-[0.95] tracking-tight mb-6">
+        Temporal<span class="text-temporal-400">.io</span><br>
+        <span class="text-3xl md:text-5xl font-300 text-blue-200/80">Best Practices Guide</span>
+      </h1>
+      <p class="text-lg md:text-xl text-blue-200/60 max-w-2xl leading-relaxed font-light mb-10">
+        Workers, Workflows & Activities — with Python & Go recommendations, local testing patterns, Docker setup, and Azure deployment tutorials.
+      </p>
+      <div class="flex flex-wrap gap-3">
+        <a href="#core-concepts" class="font-display text-sm font-600 bg-temporal-500 hover:bg-temporal-600 text-white px-6 py-2.5 rounded-lg transition-all shadow-lg shadow-temporal-500/20">
+          Start Reading
+        </a>
+        <a href="https://docs.temporal.io" target="_blank" class="font-display text-sm font-500 bg-white/5 hover:bg-white/10 border border-white/10 text-blue-100 px-6 py-2.5 rounded-lg transition-all ext-link">
+          Official Docs
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 1: CORE CONCEPTS -->
+  <section id="core-concepts" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 01</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-4 tracking-tight">Core Concepts & Architecture</h2>
+    <p class="text-gray-600 text-lg leading-relaxed mb-8">
+      Temporal separates the <strong class="text-ink">orchestration engine</strong> (Temporal Server) from the <strong class="text-ink">execution engine</strong> (Workers). The Server persists Workflow state as an append-only Event History. Workers poll Task Queues, execute code, and report results back.
+    </p>
+
+    <div class="overflow-x-auto mb-8 rounded-xl border border-gray-200">
+      <table class="data-table w-full text-sm">
+        <thead>
+          <tr class="bg-temporal-950 text-white text-left">
+            <th class="px-5 py-3">Component</th>
+            <th class="px-5 py-3">Responsibility</th>
+            <th class="px-5 py-3">Key Characteristic</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Temporal Server</td><td class="px-5 py-3">State management, task routing, timers</td><td class="px-5 py-3">Must be highly available</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Worker</td><td class="px-5 py-3">Executes Workflow and Activity code</td><td class="px-5 py-3">Stateless, horizontally scalable</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Workflow</td><td class="px-5 py-3">Orchestration logic (deterministic)</td><td class="px-5 py-3">Must not perform I/O directly</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Activity</td><td class="px-5 py-3">Business logic with side effects</td><td class="px-5 py-3">Can call APIs, databases, etc.</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Task Queue</td><td class="px-5 py-3">Routes tasks to appropriate Workers</td><td class="px-5 py-3">Lightweight, dynamically created</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/temporal" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Temporal Explained</a>
+      <a href="https://docs.temporal.io/task-queue" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Task Queues Docs</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 2: WORKFLOWS -->
+  <section id="workflows" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 02</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Workflow Best Practices</h2>
+
+    <!-- Determinism -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Keep Workflows Deterministic</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Workflows must produce the same sequence of Commands when replayed from the same Event History. This is the single most important constraint.</p>
+    
+    <div class="bg-sand rounded-xl p-6 mb-8 border border-gray-200/60 corner-accent">
+      <h4 class="font-display font-700 text-sm uppercase tracking-widest text-temporal-700 mb-4">Rules for Determinism</h4>
+      <ul class="space-y-2 text-[15px] text-gray-700">
+        <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5 font-mono text-xs">✗</span> Never use system time — use <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-gray-200">workflow.Now()</code> (Go) or <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-gray-200">workflow.time()</code> (Python)</li>
+        <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5 font-mono text-xs">✗</span> Never use random number generators — use <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-gray-200">workflow.SideEffect()</code></li>
+        <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5 font-mono text-xs">✗</span> Never perform I/O inside Workflows — delegate all I/O to Activities</li>
+        <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5 font-mono text-xs">✗</span> Never use global mutable state — each Workflow Execution must be self-contained</li>
+        <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5 font-mono text-xs">✗</span> Never iterate over maps without sorting keys (Go) or use threading (Python)</li>
+      </ul>
+    </div>
+
+    <!-- Single Input/Output -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Use Single Input/Output Objects</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Wrap all inputs and outputs in a single struct or dataclass. This lets you add fields later without breaking running Executions.</p>
+    
+    <div class="mb-8">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="io-python" data-group="io">Python</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="io-go" data-group="io">Go</button>
+      </div>
+      <div id="io-python" class="tab-panel active-panel" data-group="io">
+        <div class="code-block" data-lang="python"><code><span class="dec">@dataclass</span>
+<span class="kw">class</span> <span class="typ">OrderInput</span>:
+    order_id: <span class="typ">str</span>
+    customer_id: <span class="typ">str</span>
+    items: list[<span class="typ">str</span>]
+    priority: <span class="typ">str</span> = <span class="str">"normal"</span>  <span class="cm"># New field, backward compatible</span>
+
+<span class="dec">@dataclass</span>
+<span class="kw">class</span> <span class="typ">OrderResult</span>:
+    status: <span class="typ">str</span>
+    tracking_id: <span class="typ">str</span></code></div>
+      </div>
+      <div id="io-go" class="tab-panel" data-group="io">
+        <div class="code-block" data-lang="go"><code><span class="kw">type</span> <span class="typ">OrderInput</span> <span class="kw">struct</span> {
+    OrderID    <span class="typ">string</span>   <span class="str">`json:"order_id"`</span>
+    CustomerID <span class="typ">string</span>   <span class="str">`json:"customer_id"`</span>
+    Items      []<span class="typ">string</span> <span class="str">`json:"items"`</span>
+    Priority   <span class="typ">string</span>   <span class="str">`json:"priority"`</span>  <span class="cm">// zero-value safe</span>
+}
+
+<span class="kw">type</span> <span class="typ">OrderResult</span> <span class="kw">struct</span> {
+    Status     <span class="typ">string</span> <span class="str">`json:"status"`</span>
+    TrackingID <span class="typ">string</span> <span class="str">`json:"tracking_id"`</span>
+}</code></div>
+      </div>
+    </div>
+
+    <!-- Event History -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Manage Event History Growth</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Keep histories below a few thousand events. Individual payloads must not exceed 2 MB. Total history must stay below 50 MB. Use <strong>Continue-As-New</strong> for long-running Workflows.</p>
+    
+    <div class="callout callout-tip bg-temporal-50/60 pl-6 pr-5 py-4 mb-8">
+      <p class="text-sm text-temporal-800"><span class="font-display font-700">Tip:</span> Use <code class="font-mono text-xs bg-white/60 px-1 py-0.5 rounded">workflow.info().get_current_history_length()</code> (Python) or <code class="font-mono text-xs bg-white/60 px-1 py-0.5 rounded">workflow.GetInfo(ctx).GetCurrentHistoryLength()</code> (Go) to check and trigger Continue-As-New.</p>
+    </div>
+
+    <!-- Versioning -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Versioning Workflows Safely</h3>
+    <div class="grid md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-sand rounded-xl p-5 border border-gray-200/60">
+        <h4 class="font-display font-700 text-sm text-ink mb-2">Patching <span class="text-gray-400 font-400">(Code-Level)</span></h4>
+        <p class="text-sm text-gray-600 mb-3">Branch logic within the same Workflow function using <code class="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-gray-200">workflow.patched()</code>. Keeps code in one place but adds complexity.</p>
+        <a href="https://docs.temporal.io/develop/python/versioning" target="_blank" class="ext-link text-xs font-display font-500 text-temporal-600 hover:text-temporal-800">Python Versioning →</a>
+      </div>
+      <div class="bg-sand rounded-xl p-5 border border-gray-200/60">
+        <h4 class="font-display font-700 text-sm text-ink mb-2">Worker Versioning <span class="text-amber-500 font-400 text-[11px]">Public Preview</span></h4>
+        <p class="text-sm text-gray-600 mb-3">Pin Workflow Executions to specific Worker build IDs. Pinned Workflows always run on the same build version until completion.</p>
+        <a href="https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning" target="_blank" class="ext-link text-xs font-display font-500 text-temporal-600 hover:text-temporal-800">Worker Versioning →</a>
+      </div>
+    </div>
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/develop/go/versioning" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go Versioning Docs</a>
+      <a href="https://docs.temporal.io/develop/python/versioning" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Python Versioning Docs</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 3: ACTIVITIES -->
+  <section id="activities" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 03</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Activity Best Practices</h2>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Always Set Start-To-Close Timeout</h3>
+    <p class="text-gray-600 leading-relaxed mb-6">Without this timeout, a crashed Worker will cause the Activity to appear stuck indefinitely. Temporal <strong>strongly recommends</strong> setting this on every Activity.</p>
+
+    <div class="overflow-x-auto mb-8 rounded-xl border border-gray-200">
+      <table class="data-table w-full text-sm">
+        <thead>
+          <tr class="bg-temporal-950 text-white text-left">
+            <th class="px-5 py-3">Timeout</th>
+            <th class="px-5 py-3">Purpose</th>
+            <th class="px-5 py-3">Recommendation</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr class="hover:bg-temporal-50/50 bg-green-50/40"><td class="px-5 py-3 font-display font-600">Start-To-Close ⭐</td><td class="px-5 py-3">Max duration of a single attempt</td><td class="px-5 py-3 font-600 text-green-700">ALWAYS set this</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Schedule-To-Close</td><td class="px-5 py-3">Max duration including all retries</td><td class="px-5 py-3">Optional overall deadline</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Heartbeat</td><td class="px-5 py-3">Max gap between heartbeats</td><td class="px-5 py-3">~30s for long-running Activities</td></tr>
+          <tr class="hover:bg-temporal-50/50"><td class="px-5 py-3 font-display font-600">Schedule-To-Start</td><td class="px-5 py-3">Max time in Task Queue</td><td class="px-5 py-3">Rarely needed — monitor metrics instead</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Heartbeat Long-Running Activities</h3>
+    <div class="mb-8">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="hb-go" data-group="hb">Go</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="hb-py" data-group="hb">Python</button>
+      </div>
+      <div id="hb-go" class="tab-panel active-panel" data-group="hb">
+        <div class="code-block" data-lang="go"><code><span class="kw">func</span> <span class="fn">LongRunningActivity</span>(ctx context.<span class="typ">Context</span>, input <span class="typ">ProcessInput</span>) (<span class="typ">ProcessResult</span>, <span class="typ">error</span>) {
+    <span class="kw">for</span> i := <span class="num">0</span>; i < <span class="fn">len</span>(input.Items); i++ {
+        activity.<span class="fn">RecordHeartbeat</span>(ctx, i) <span class="cm">// Report progress</span>
+        err := <span class="fn">processItem</span>(input.Items[i])
+        <span class="kw">if</span> err != <span class="kw">nil</span> { <span class="kw">return</span> <span class="typ">ProcessResult</span>{}, err }
+    }
+    <span class="kw">return</span> <span class="typ">ProcessResult</span>{Status: <span class="str">"done"</span>}, <span class="kw">nil</span>
+}</code></div>
+      </div>
+      <div id="hb-py" class="tab-panel" data-group="hb">
+        <div class="code-block" data-lang="python"><code><span class="dec">@activity.defn</span>
+<span class="kw">async def</span> <span class="fn">long_running_activity</span>(input: <span class="typ">ProcessInput</span>) -> <span class="typ">ProcessResult</span>:
+    <span class="kw">for</span> i, item <span class="kw">in</span> <span class="fn">enumerate</span>(input.items):
+        activity.<span class="fn">heartbeat</span>(i)  <span class="cm"># Report progress</span>
+        <span class="kw">await</span> <span class="fn">process_item</span>(item)
+    <span class="kw">return</span> <span class="typ">ProcessResult</span>(status=<span class="str">"done"</span>)</code></div>
+      </div>
+    </div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Configure Retry Policies Thoughtfully</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Default: unlimited retries, 1s initial interval, 2.0 backoff, 100s max interval. Customize per use case:</p>
+    <ul class="space-y-2 text-[15px] text-gray-700 mb-6">
+      <li class="flex items-start gap-2"><span class="text-temporal-500 mt-1">●</span> Set <code class="font-mono text-xs bg-sand px-1.5 py-0.5 rounded border border-gray-200">MaximumAttempts</code> for operations that shouldn't retry forever (e.g., payments)</li>
+      <li class="flex items-start gap-2"><span class="text-temporal-500 mt-1">●</span> Use <code class="font-mono text-xs bg-sand px-1.5 py-0.5 rounded border border-gray-200">NonRetryableErrorTypes</code> for errors that can never succeed on retry (4xx, validation)</li>
+      <li class="flex items-start gap-2"><span class="text-temporal-500 mt-1">●</span> Activity logic changes don't break Workflow determinism — update Activities freely</li>
+    </ul>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/encyclopedia/detecting-activity-failures" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Failure Detection Docs</a>
+      <a href="https://docs.temporal.io/develop/go/failure-detection" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go Timeout/Retry API</a>
+      <a href="https://temporal.io/blog/activity-timeouts" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Activity Timeouts Blog</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 4: WORKERS -->
+  <section id="workers" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 04</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Worker Best Practices</h2>
+
+    <div class="grid md:grid-cols-2 gap-5 mb-8">
+      <div class="bg-sand rounded-xl p-6 border border-gray-200/60">
+        <div class="w-10 h-10 rounded-lg bg-temporal-100 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-temporal-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        </div>
+        <h3 class="font-display font-700 text-ink mb-2">Long-Running Services</h3>
+        <p class="text-sm text-gray-600">Package Workers as Docker images. Deploy via CI/CD. Inject Temporal connection params at runtime via env vars.</p>
+      </div>
+      <div class="bg-sand rounded-xl p-6 border border-gray-200/60">
+        <div class="w-10 h-10 rounded-lg bg-temporal-100 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-temporal-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="font-display font-700 text-ink mb-2">Tune Concurrency</h3>
+        <p class="text-sm text-gray-600">Don't rely on SDK defaults. Tune Activity slots for I/O vs CPU bound work. Use <strong>Poller Autoscaling</strong> (recommended).</p>
+      </div>
+      <div class="bg-sand rounded-xl p-6 border border-gray-200/60">
+        <div class="w-10 h-10 rounded-lg bg-temporal-100 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-temporal-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M4 12h8m-8 6h16"/></svg>
+        </div>
+        <h3 class="font-display font-700 text-ink mb-2">Separate Task Queues</h3>
+        <p class="text-sm text-gray-600">Isolate CPU-heavy vs I/O-heavy. Separate by priority level or team/domain for independent scaling.</p>
+      </div>
+      <div class="bg-sand rounded-xl p-6 border border-gray-200/60">
+        <div class="w-10 h-10 rounded-lg bg-temporal-100 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-temporal-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+        </div>
+        <h3 class="font-display font-700 text-ink mb-2">Rainbow Deployments</h3>
+        <p class="text-sm text-gray-600">Multiple Worker versions run simultaneously. Old versions drain pinned Workflows; new versions handle new Executions.</p>
+      </div>
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/best-practices/worker" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Worker Deployment Docs</a>
+      <a href="https://docs.temporal.io/develop/worker-performance" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Worker Performance Docs</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 5: LOCAL TESTING -->
+  <section id="local-testing" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 05</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-4 tracking-tight">Local CLI Testing Without Temporal</h2>
+    <p class="text-gray-600 text-lg leading-relaxed mb-8">Activities are regular functions — test them directly with standard testing tools, no Temporal infrastructure required.</p>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Test Activities as Plain Functions</h3>
+    <div class="mb-8">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="unit-py" data-group="unit">Python</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="unit-go" data-group="unit">Go</button>
+      </div>
+      <div id="unit-py" class="tab-panel active-panel" data-group="unit">
+        <div class="code-block" data-lang="python"><code><span class="cm"># test_activities.py — no Temporal server needed</span>
+<span class="kw">import</span> pytest
+<span class="kw">from</span> activities <span class="kw">import</span> process_order
+<span class="kw">from</span> unittest.mock <span class="kw">import</span> patch, AsyncMock
+
+<span class="dec">@pytest.mark.asyncio</span>
+<span class="kw">async def</span> <span class="fn">test_process_order_success</span>():
+    <span class="str">"""Test activity as a plain async function."""</span>
+    <span class="kw">with</span> <span class="fn">patch</span>(<span class="str">'activities.call_payment_api'</span>, new_callable=AsyncMock) <span class="kw">as</span> mock_api:
+        mock_api.return_value = <span class="typ">MockPaymentResult</span>(txn_id=<span class="str">"txn_123"</span>)
+        result = <span class="kw">await</span> <span class="fn">process_order</span>(<span class="typ">OrderInput</span>(
+            order_id=<span class="str">"ord_1"</span>, amount=<span class="num">99.99</span>
+        ))
+        <span class="kw">assert</span> result.status == <span class="str">"processed"</span>
+        <span class="kw">assert</span> result.txn_id == <span class="str">"txn_123"</span></code></div>
+      </div>
+      <div id="unit-go" class="tab-panel" data-group="unit">
+        <div class="code-block" data-lang="go"><code><span class="cm">// activities_test.go — uses TestActivityEnvironment for context</span>
+<span class="kw">func</span> <span class="fn">TestProcessOrder_Success</span>(t *testing.<span class="typ">T</span>) {
+    <span class="kw">var</span> suite testsuite.<span class="typ">WorkflowTestSuite</span>
+    env := suite.<span class="fn">NewTestActivityEnvironment</span>()
+    env.<span class="fn">RegisterActivity</span>(ProcessOrder)
+
+    result, err := env.<span class="fn">ExecuteActivity</span>(ProcessOrder, <span class="typ">OrderInput</span>{
+        OrderID: <span class="str">"ord_1"</span>, Amount: <span class="num">99.99</span>,
+    })
+    assert.<span class="fn">NoError</span>(t, err)
+
+    <span class="kw">var</span> output <span class="typ">OrderResult</span>
+    err = result.<span class="fn">Get</span>(&output)
+    assert.<span class="fn">NoError</span>(t, err)
+    assert.<span class="fn">Equal</span>(t, <span class="str">"processed"</span>, output.Status)
+}</code></div>
+      </div>
+    </div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Temporal CLI Dev Server</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">For integration tests, the CLI includes an in-memory dev server — no Docker or external DB needed:</p>
+    <div class="code-block mb-6" data-lang="bash"><code><span class="cm"># Install CLI</span>
+brew install temporal   <span class="cm"># macOS</span>
+curl -sSf https://temporal.download/cli | sh  <span class="cm"># Linux</span>
+
+<span class="cm"># Start dev server (in-memory, supports time-skipping)</span>
+temporal server start-dev
+
+<span class="cm"># Server: localhost:7233 | Web UI: http://localhost:8233</span>
+
+<span class="cm"># Start a workflow</span>
+temporal workflow start \
+  --task-queue my-task-queue \
+  --type MyWorkflow \
+  --input <span class="str">'{"key": "value"}'</span></code></div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Design for Testability: Dependency Injection</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Accept dependencies as constructor params so you can swap mocks in tests:</p>
+    <div class="mb-6">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="di-go" data-group="di">Go</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="di-py" data-group="di">Python</button>
+      </div>
+      <div id="di-go" class="tab-panel active-panel" data-group="di">
+        <div class="code-block" data-lang="go"><code><span class="kw">type</span> <span class="typ">OrderActivities</span> <span class="kw">struct</span> {
+    PaymentClient <span class="typ">PaymentClient</span>  <span class="cm">// interface</span>
+    DB            <span class="typ">Database</span>       <span class="cm">// interface</span>
+}
+
+<span class="kw">func</span> (a *<span class="typ">OrderActivities</span>) <span class="fn">ProcessPayment</span>(ctx context.<span class="typ">Context</span>, input <span class="typ">PaymentInput</span>) (<span class="typ">PaymentResult</span>, <span class="typ">error</span>) {
+    <span class="kw">return</span> a.PaymentClient.<span class="fn">Charge</span>(input.Amount, input.CardToken)
+}
+
+<span class="cm">// Tests: inject mocks</span>
+activities := &<span class="typ">OrderActivities</span>{PaymentClient: &<span class="typ">MockPaymentClient</span>{}, DB: &<span class="typ">MockDB</span>{}}
+
+<span class="cm">// Production: inject real implementations</span>
+activities := &<span class="typ">OrderActivities</span>{PaymentClient: stripe.<span class="fn">NewClient</span>(apiKey), DB: postgres.<span class="fn">NewDB</span>(connStr)}</code></div>
+      </div>
+      <div id="di-py" class="tab-panel" data-group="di">
+        <div class="code-block" data-lang="python"><code><span class="kw">class</span> <span class="typ">OrderActivities</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, payment_client, db):
+        self.payment_client = payment_client
+        self.db = db
+
+    <span class="dec">@activity.defn</span>
+    <span class="kw">async def</span> <span class="fn">process_payment</span>(self, input: <span class="typ">PaymentInput</span>) -> <span class="typ">PaymentResult</span>:
+        <span class="kw">return await</span> self.payment_client.<span class="fn">charge</span>(input.amount, input.card_token)
+
+<span class="cm"># Tests</span>
+activities = <span class="typ">OrderActivities</span>(payment_client=<span class="typ">MockPaymentClient</span>(), db=<span class="typ">MockDB</span>())
+
+<span class="cm"># Production</span>
+activities = <span class="typ">OrderActivities</span>(payment_client=<span class="typ">StripeClient</span>(api_key), db=<span class="typ">PostgresDB</span>(conn_str))</code></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 6: TEST FRAMEWORKS -->
+  <section id="test-frameworks" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 06</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-4 tracking-tight">Testing with Temporal Frameworks</h2>
+    <p class="text-gray-600 text-lg leading-relaxed mb-8">Both SDKs provide test environments for Workflow integration tests with mocked Activities and time-skipping.</p>
+
+    <div class="mb-8">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="fw-py" data-group="fw">Python (pytest)</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="fw-go" data-group="fw">Go (testsuite)</button>
+      </div>
+      <div id="fw-py" class="tab-panel active-panel" data-group="fw">
+        <div class="code-block" data-lang="python"><code><span class="kw">import</span> pytest
+<span class="kw">from</span> temporalio.testing <span class="kw">import</span> WorkflowEnvironment
+<span class="kw">from</span> temporalio.worker <span class="kw">import</span> Worker
+
+<span class="dec">@pytest.fixture</span>
+<span class="kw">async def</span> <span class="fn">env</span>():
+    <span class="kw">async with await</span> WorkflowEnvironment.<span class="fn">start_time_skipping</span>() <span class="kw">as</span> env:
+        <span class="kw">yield</span> env
+
+<span class="dec">@pytest.mark.asyncio</span>
+<span class="kw">async def</span> <span class="fn">test_order_workflow</span>(env):
+    <span class="dec">@activity.defn</span>(name=<span class="str">"process_payment"</span>)
+    <span class="kw">async def</span> <span class="fn">mock_payment</span>(input: <span class="typ">PaymentInput</span>) -> <span class="typ">PaymentResult</span>:
+        <span class="kw">return</span> <span class="typ">PaymentResult</span>(txn_id=<span class="str">"mock_txn"</span>)
+
+    <span class="kw">async with</span> <span class="typ">Worker</span>(
+        env.client, task_queue=<span class="str">"test-queue"</span>,
+        workflows=[<span class="typ">OrderWorkflow</span>],
+        activities=[mock_payment],
+    ):
+        result = <span class="kw">await</span> env.client.<span class="fn">execute_workflow</span>(
+            <span class="typ">OrderWorkflow</span>.run,
+            <span class="typ">OrderInput</span>(order_id=<span class="str">"test_1"</span>),
+            id=<span class="str">"test-workflow-id"</span>,
+            task_queue=<span class="str">"test-queue"</span>,
+        )
+        <span class="kw">assert</span> result.status == <span class="str">"completed"</span></code></div>
+      </div>
+      <div id="fw-go" class="tab-panel" data-group="fw">
+        <div class="code-block" data-lang="go"><code><span class="kw">type</span> <span class="typ">OrderWorkflowTestSuite</span> <span class="kw">struct</span> {
+    suite.<span class="typ">Suite</span>
+    testsuite.<span class="typ">WorkflowTestSuite</span>
+    env *testsuite.<span class="typ">TestWorkflowEnvironment</span>
+}
+
+<span class="kw">func</span> (s *<span class="typ">OrderWorkflowTestSuite</span>) <span class="fn">SetupTest</span>() {
+    s.env = s.<span class="fn">NewTestWorkflowEnvironment</span>()
+}
+
+<span class="kw">func</span> (s *<span class="typ">OrderWorkflowTestSuite</span>) <span class="fn">Test_OrderWorkflow_Success</span>() {
+    <span class="cm">// Mock activity</span>
+    s.env.<span class="fn">OnActivity</span>(ProcessPayment, mock.Anything, mock.Anything).<span class="fn">Return</span>(
+        <span class="typ">PaymentResult</span>{TxnID: <span class="str">"mock_txn"</span>}, <span class="kw">nil</span>,
+    )
+
+    s.env.<span class="fn">ExecuteWorkflow</span>(OrderWorkflow, <span class="typ">OrderInput</span>{OrderID: <span class="str">"test_1"</span>})
+    s.<span class="fn">True</span>(s.env.<span class="fn">IsWorkflowCompleted</span>())
+    s.<span class="fn">NoError</span>(s.env.<span class="fn">GetWorkflowError</span>())
+
+    <span class="kw">var</span> result <span class="typ">OrderResult</span>
+    s.<span class="fn">NoError</span>(s.env.<span class="fn">GetWorkflowResult</span>(&result))
+    s.<span class="fn">Equal</span>(<span class="str">"completed"</span>, result.Status)
+}
+
+<span class="kw">func</span> <span class="fn">TestOrderWorkflowSuite</span>(t *testing.<span class="typ">T</span>) {
+    suite.<span class="fn">Run</span>(t, <span class="fn">new</span>(<span class="typ">OrderWorkflowTestSuite</span>))
+}</code></div>
+      </div>
+    </div>
+
+    <div class="callout callout-warn bg-amber-50/60 pl-6 pr-5 py-4 mb-6">
+      <p class="text-sm text-amber-900"><span class="font-display font-700">Warning:</span> Unless Activities are mocked, the test environment executes actual Activity code including external service calls. Always mock when testing Workflow logic in isolation.</p>
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/develop/python/testing-suite" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Python Testing Docs</a>
+      <a href="https://docs.temporal.io/develop/go/testing-suite" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go Testing Docs</a>
+      <a href="https://github.com/temporalio/samples-python" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Python Samples</a>
+      <a href="https://github.com/temporalio/samples-go" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go Samples</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 7: PYTHON SDK -->
+  <section id="python-sdk" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 07</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Python SDK Recommendations</h2>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Recommended Project Structure</h3>
+    <div class="code-block mb-8" data-lang=""><code>my-temporal-app/
+├── activities/
+│   ├── __init__.py
+│   ├── order_activities.py
+│   └── notification_activities.py
+├── workflows/
+│   ├── __init__.py
+│   └── order_workflow.py
+├── models/
+│   ├── __init__.py
+│   └── order.py          <span class="cm"># Input/Output dataclasses</span>
+├── worker.py              <span class="cm"># Worker entry point</span>
+├── client.py              <span class="cm"># Workflow starter</span>
+├── config.py              <span class="cm"># Configuration loader</span>
+├── tests/
+│   ├── test_activities.py
+│   └── test_workflows.py
+├── Dockerfile
+└── requirements.txt</code></div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Worker Configuration</h3>
+    <div class="code-block mb-6" data-lang="python"><code><span class="cm"># worker.py</span>
+<span class="kw">import</span> asyncio
+<span class="kw">from</span> temporalio.client <span class="kw">import</span> Client
+<span class="kw">from</span> temporalio.worker <span class="kw">import</span> Worker
+<span class="kw">from</span> temporalio <span class="kw">import</span> workflow
+<span class="kw">from</span> config <span class="kw">import</span> get_config
+
+<span class="kw">with</span> workflow.unsafe.<span class="fn">imports_passed_through</span>():
+    <span class="kw">from</span> workflows.order_workflow <span class="kw">import</span> <span class="typ">OrderWorkflow</span>
+    <span class="kw">from</span> activities.order_activities <span class="kw">import</span> <span class="typ">OrderActivities</span>
+
+<span class="kw">async def</span> <span class="fn">main</span>():
+    config = <span class="fn">get_config</span>()
+    client = <span class="kw">await</span> Client.<span class="fn">connect</span>(config.temporal_address, namespace=config.namespace)
+
+    activities = <span class="typ">OrderActivities</span>(
+        payment_client=<span class="fn">create_payment_client</span>(config),
+        db=<span class="fn">create_db_pool</span>(config),
+    )
+
+    worker = <span class="typ">Worker</span>(
+        client,
+        task_queue=config.task_queue,
+        workflows=[<span class="typ">OrderWorkflow</span>],
+        activities=[activities.process_payment, activities.update_inventory],
+    )
+    <span class="kw">await</span> worker.<span class="fn">run</span>()
+
+<span class="kw">if</span> __name__ == <span class="str">"__main__"</span>:
+    asyncio.<span class="fn">run</span>(<span class="fn">main</span>())</code></div>
+
+    <div class="callout callout-tip bg-temporal-50/60 pl-6 pr-5 py-4 mb-6">
+      <p class="text-sm text-temporal-800"><span class="font-display font-700">Important:</span> Use <code class="font-mono text-xs bg-white/60 px-1 py-0.5 rounded">workflow.unsafe.imports_passed_through()</code> for importing Activity modules. This ensures Activities are accessible during sandboxed Workflow execution.</p>
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/develop/python" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Python SDK Guide</a>
+      <a href="https://docs.temporal.io/develop/python/set-up-your-local-python" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Python Local Setup</a>
+      <a href="https://github.com/temporalio/sdk-python" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">SDK GitHub</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 8: GO SDK -->
+  <section id="go-sdk" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 08</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Go SDK Recommendations</h2>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Worker Configuration</h3>
+    <div class="code-block mb-6" data-lang="go"><code><span class="cm">// cmd/worker/main.go</span>
+<span class="kw">func</span> <span class="fn">main</span>() {
+    cfg := config.<span class="fn">Load</span>()
+    c, err := client.<span class="fn">Dial</span>(client.<span class="typ">Options</span>{
+        HostPort:  cfg.TemporalAddress,
+        Namespace: cfg.Namespace,
+    })
+    <span class="kw">if</span> err != <span class="kw">nil</span> { log.<span class="fn">Fatalln</span>(<span class="str">"Unable to create client:"</span>, err) }
+    <span class="kw">defer</span> c.<span class="fn">Close</span>()
+
+    w := worker.<span class="fn">New</span>(c, cfg.TaskQueue, worker.<span class="typ">Options</span>{
+        MaxConcurrentActivityExecutionSize:     <span class="num">200</span>,
+        MaxConcurrentWorkflowTaskExecutionSize: <span class="num">100</span>,
+    })
+
+    orderActs := &activities.<span class="typ">OrderActivities</span>{
+        PaymentClient: <span class="fn">createPaymentClient</span>(cfg),
+        DB:            <span class="fn">createDBPool</span>(cfg),
+    }
+    w.<span class="fn">RegisterWorkflow</span>(workflows.OrderWorkflow)
+    w.<span class="fn">RegisterActivity</span>(orderActs)
+
+    <span class="kw">if</span> err := w.<span class="fn">Run</span>(worker.<span class="fn">InterruptCh</span>()); err != <span class="kw">nil</span> {
+        log.<span class="fn">Fatalln</span>(<span class="str">"Worker failed:"</span>, err)
+    }
+}</code></div>
+
+    <div class="callout callout-tip bg-temporal-50/60 pl-6 pr-5 py-4 mb-6">
+      <p class="text-sm text-temporal-800"><span class="font-display font-700">Go Pattern:</span> Declare a nil pointer to your Activity struct (<code class="font-mono text-xs bg-white/60 px-1 py-0.5 rounded">var acts *OrderActivities</code>) in Workflows and pass method references. This gives compile-time type checking with runtime dispatch via the Worker's registered struct.</p>
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/develop/go" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go SDK Guide</a>
+      <a href="https://pkg.go.dev/go.temporal.io/sdk" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go SDK Reference</a>
+      <a href="https://github.com/temporalio/samples-go" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Go Samples</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 9: DOCKER -->
+  <section id="docker" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 09</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Docker Setup Tutorial</h2>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Quick Start with Official Docker Compose</h3>
+    <div class="code-block mb-6" data-lang="bash"><code><span class="cm"># Clone official repo</span>
+git clone https://github.com/temporalio/docker-compose.git
+cd docker-compose
+
+<span class="cm"># Start (PostgreSQL + Elasticsearch by default)</span>
+docker compose up -d
+
+<span class="cm"># Temporal gRPC → localhost:7233</span>
+<span class="cm"># Temporal Web UI → http://localhost:8080</span></code></div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Custom Production-Like Compose</h3>
+    <div class="code-block mb-6" data-lang="yaml"><code><span class="cm"># docker-compose.yml</span>
+<span class="kw">version</span>: <span class="str">"3.8"</span>
+<span class="kw">services</span>:
+  <span class="fn">postgresql</span>:
+    image: postgres:<span class="num">16</span>
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    ports: [<span class="str">"5432:5432"</span>]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [temporal-network]
+
+  <span class="fn">temporal</span>:
+    image: temporalio/auto-setup:latest
+    depends_on: [postgresql]
+    environment:
+      - DB=postgres12_pgx
+      - DB_PORT=<span class="num">5432</span>
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+    ports: [<span class="str">"7233:7233"</span>]
+    networks: [temporal-network]
+
+  <span class="fn">temporal-ui</span>:
+    image: temporalio/ui:latest
+    depends_on: [temporal]
+    environment: [TEMPORAL_ADDRESS=temporal:<span class="num">7233</span>]
+    ports: [<span class="str">"8080:8080"</span>]
+    networks: [temporal-network]
+
+  <span class="fn">worker</span>:
+    build: { context: ./worker, dockerfile: Dockerfile }
+    depends_on: [temporal]
+    environment:
+      - TEMPORAL_ADDRESS=temporal:<span class="num">7233</span>
+      - TASK_QUEUE=my-task-queue
+    networks: [temporal-network]
+    restart: unless-stopped</code></div>
+
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Worker Dockerfiles</h3>
+    <div class="mb-8">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="dock-py" data-group="dock">Python</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="dock-go" data-group="dock">Go</button>
+      </div>
+      <div id="dock-py" class="tab-panel active-panel" data-group="dock">
+        <div class="code-block" data-lang="dockerfile"><code><span class="kw">FROM</span> python:<span class="num">3.12</span>-slim
+<span class="kw">WORKDIR</span> /app
+<span class="kw">COPY</span> requirements.txt .
+<span class="kw">RUN</span> pip install --no-cache-dir -r requirements.txt
+<span class="kw">COPY</span> . .
+<span class="kw">CMD</span> [<span class="str">"python"</span>, <span class="str">"worker.py"</span>]</code></div>
+      </div>
+      <div id="dock-go" class="tab-panel" data-group="dock">
+        <div class="code-block" data-lang="dockerfile"><code><span class="kw">FROM</span> golang:<span class="num">1.23</span> <span class="kw">AS</span> builder
+<span class="kw">WORKDIR</span> /app
+<span class="kw">COPY</span> go.mod go.sum ./
+<span class="kw">RUN</span> go mod download
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> CGO_ENABLED=<span class="num">0</span> GOOS=linux go build -o /worker ./cmd/worker
+
+<span class="kw">FROM</span> gcr.io/distroless/static-debian12
+<span class="kw">COPY</span> --from=builder /worker /worker
+<span class="kw">CMD</span> [<span class="str">"/worker"</span>]</code></div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://github.com/temporalio/docker-compose" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Official Docker Compose</a>
+      <a href="https://docs.temporal.io/self-hosted-guide/deployment" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Deployment Guide</a>
+      <a href="https://hub.docker.com/r/temporalio/auto-setup" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Docker Hub: auto-setup</a>
+      <a href="https://temporal.io/blog/auto-setup" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Auto-Setup Explained</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 10: AZURE -->
+  <section id="azure" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 10</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Azure Deployment Guide</h2>
+
+    <!-- AKS -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3">Option A: Azure Kubernetes Service (AKS)</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Recommended for full production Temporal deployments with dedicated server infrastructure.</p>
+
+    <h4 class="font-display font-600 text-sm uppercase tracking-widest text-gray-500 mb-2">Step 1: Create Azure Resources</h4>
+    <div class="code-block mb-6" data-lang="bash"><code><span class="cm"># Create resource group + ACR + AKS</span>
+az group create --name rg-temporal --location eastus2
+
+az acr create --resource-group rg-temporal --name mytemporalacr --sku Basic
+
+az aks create \
+  --resource-group rg-temporal \
+  --name aks-temporal \
+  --node-count <span class="num">3</span> \
+  --attach-acr mytemporalacr \
+  --generate-ssh-keys
+
+az aks get-credentials --resource-group rg-temporal --name aks-temporal</code></div>
+
+    <h4 class="font-display font-600 text-sm uppercase tracking-widest text-gray-500 mb-2">Step 2: Deploy Temporal Server via Helm</h4>
+    <div class="code-block mb-6" data-lang="bash"><code>helm repo add temporal https://charts.temporal.io
+helm repo update
+
+<span class="cm"># Create Azure PostgreSQL Flexible Server</span>
+az postgres flexible-server create \
+  --resource-group rg-temporal \
+  --name temporal-pg-server \
+  --admin-user temporaladmin \
+  --admin-password &lt;strong-password&gt; \
+  --sku-name Standard_B2s --version <span class="num">16</span>
+
+<span class="cm"># Install Temporal</span>
+helm install temporal temporal/temporal \
+  --namespace temporal --create-namespace \
+  --set server.replicaCount=<span class="num">2</span> \
+  --set persistence.default.driver=sql \
+  --set persistence.default.sql.driver=postgres12 \
+  --set persistence.default.sql.host=temporal-pg-server.postgres.database.azure.com</code></div>
+
+    <h4 class="font-display font-600 text-sm uppercase tracking-widest text-gray-500 mb-2">Step 3: Deploy Worker</h4>
+    <div class="code-block mb-6" data-lang="yaml"><code><span class="cm"># worker-deployment.yaml</span>
+<span class="kw">apiVersion</span>: apps/v1
+<span class="kw">kind</span>: Deployment
+<span class="kw">metadata</span>:
+  name: temporal-worker
+  namespace: temporal
+<span class="kw">spec</span>:
+  replicas: <span class="num">3</span>
+  selector:
+    matchLabels: { app: temporal-worker }
+  template:
+    metadata:
+      labels: { app: temporal-worker }
+    spec:
+      containers:
+      - name: worker
+        image: mytemporalacr.azurecr.io/temporal-worker:v1
+        env:
+        - name: TEMPORAL_ADDRESS
+          value: <span class="str">"temporal-frontend.temporal.svc.cluster.local:7233"</span>
+        - name: TASK_QUEUE
+          value: <span class="str">"my-task-queue"</span>
+        resources:
+          requests: { cpu: <span class="str">"250m"</span>, memory: <span class="str">"256Mi"</span> }
+          limits:   { cpu: <span class="str">"500m"</span>, memory: <span class="str">"512Mi"</span> }</code></div>
+
+    <!-- Container Apps -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3 mt-10">Option B: Azure Container Apps (Workers Only)</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Simpler operational model for stateless Workers. Pair with Temporal Cloud or an AKS-hosted Temporal Server.</p>
+    <div class="code-block mb-6" data-lang="bash"><code>az containerapp env create \
+  --name temporal-env --resource-group rg-temporal --location eastus2
+
+az containerapp create \
+  --name temporal-worker \
+  --resource-group rg-temporal \
+  --environment temporal-env \
+  --image mytemporalacr.azurecr.io/temporal-worker:v1 \
+  --registry-server mytemporalacr.azurecr.io \
+  --min-replicas <span class="num">1</span> --max-replicas <span class="num">10</span> \
+  --cpu <span class="num">0.5</span> --memory <span class="num">1.0</span>Gi \
+  --env-vars TEMPORAL_ADDRESS=&lt;address&gt;:<span class="num">7233</span> TASK_QUEUE=my-task-queue</code></div>
+
+    <!-- Temporal Cloud -->
+    <h3 class="font-display font-700 text-xl text-ink mb-3 mt-10">Option C: Temporal Cloud + Azure Workers</h3>
+    <p class="text-gray-600 leading-relaxed mb-4">Simplest path — use Temporal's managed SaaS and deploy only Workers to Azure:</p>
+    <div class="mb-6">
+      <div class="flex gap-1 mb-2">
+        <button class="tab-btn active-tab font-display text-xs font-600 px-4 py-1.5 rounded-md" data-tab="cloud-py" data-group="cloud">Python</button>
+        <button class="tab-btn font-display text-xs font-600 px-4 py-1.5 rounded-md text-gray-500" data-tab="cloud-go" data-group="cloud">Go</button>
+      </div>
+      <div id="cloud-py" class="tab-panel active-panel" data-group="cloud">
+        <div class="code-block" data-lang="python"><code>client = <span class="kw">await</span> Client.<span class="fn">connect</span>(
+    <span class="str">"&lt;namespace&gt;.&lt;account&gt;.tmprl.cloud:7233"</span>,
+    namespace=<span class="str">"&lt;namespace&gt;.&lt;account&gt;"</span>,
+    tls=<span class="typ">TLSConfig</span>(
+        client_cert=Path(<span class="str">"client.pem"</span>).read_bytes(),
+        client_private_key=Path(<span class="str">"client.key"</span>).read_bytes(),
+    ),
+)</code></div>
+      </div>
+      <div id="cloud-go" class="tab-panel" data-group="cloud">
+        <div class="code-block" data-lang="go"><code>c, err := client.<span class="fn">Dial</span>(client.<span class="typ">Options</span>{
+    HostPort:  <span class="str">"&lt;namespace&gt;.&lt;account&gt;.tmprl.cloud:7233"</span>,
+    Namespace: <span class="str">"&lt;namespace&gt;.&lt;account&gt;"</span>,
+    ConnectionOptions: client.<span class="typ">ConnectionOptions</span>{
+        TLS: &tls.<span class="typ">Config</span>{Certificates: []tls.<span class="typ">Certificate</span>{cert}},
+    },
+})</code></div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 flex-wrap">
+      <a href="https://blog.aks.azure.com/2025/07/31/temporal-on-aks" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Temporal on AKS Blog</a>
+      <a href="https://docs.temporal.io/self-hosted-guide" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Self-Hosted Guide</a>
+      <a href="https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-portal" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">AKS Quickstart</a>
+      <a href="https://temporal.io/cloud" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Temporal Cloud</a>
+    </div>
+  </section>
+
+  <div class="max-w-4xl mx-auto px-6 md:px-8"><div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div></div>
+
+  <!-- SECTION 11: CHECKLIST -->
+  <section id="checklist" class="section-card max-w-4xl mx-auto px-6 md:px-8 py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="font-display text-xs font-600 text-temporal-500 tracking-widest uppercase">Section 11</span>
+      <div class="h-px flex-1 bg-gray-200"></div>
+    </div>
+    <h2 class="font-display font-800 text-3xl md:text-4xl text-ink mb-6 tracking-tight">Production Checklist</h2>
+    <p class="text-gray-600 mb-8">Interactive checklist — click items to mark as done. Progress is session-only.</p>
+
+    <div id="checklist-container" class="space-y-6">
+      <!-- Checklist items injected by JS -->
+    </div>
+
+    <div class="mt-10 flex gap-3 flex-wrap">
+      <a href="https://docs.temporal.io/best-practices" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">All Best Practices</a>
+      <a href="https://docs.temporal.io/self-hosted-guide" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Self-Hosted Guide</a>
+      <a href="https://docs.temporal.io/best-practices/worker" target="_blank" class="ext-link inline-flex items-center gap-1.5 text-sm font-display font-500 text-temporal-600 hover:text-temporal-800 bg-temporal-50 px-4 py-2 rounded-lg transition-colors">Worker Best Practices</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="bg-temporal-950 text-blue-200/60 py-16">
+    <div class="max-w-4xl mx-auto px-6 md:px-8">
+      <div class="grid md:grid-cols-3 gap-10 mb-10">
+        <div>
+          <h4 class="font-display font-700 text-white text-sm mb-3">Official Resources</h4>
+          <div class="space-y-1.5 text-sm">
+            <a href="https://docs.temporal.io" target="_blank" class="block hover:text-white transition-colors">Documentation</a>
+            <a href="https://learn.temporal.io" target="_blank" class="block hover:text-white transition-colors">Learning Center</a>
+            <a href="https://temporal.io/cloud" target="_blank" class="block hover:text-white transition-colors">Temporal Cloud</a>
+            <a href="https://community.temporal.io" target="_blank" class="block hover:text-white transition-colors">Community Forum</a>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-display font-700 text-white text-sm mb-3">SDK References</h4>
+          <div class="space-y-1.5 text-sm">
+            <a href="https://docs.temporal.io/develop/python" target="_blank" class="block hover:text-white transition-colors">Python SDK Guide</a>
+            <a href="https://docs.temporal.io/develop/go" target="_blank" class="block hover:text-white transition-colors">Go SDK Guide</a>
+            <a href="https://github.com/temporalio/sdk-python" target="_blank" class="block hover:text-white transition-colors">Python SDK GitHub</a>
+            <a href="https://github.com/temporalio/sdk-go" target="_blank" class="block hover:text-white transition-colors">Go SDK GitHub</a>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-display font-700 text-white text-sm mb-3">Azure Integration</h4>
+          <div class="space-y-1.5 text-sm">
+            <a href="https://blog.aks.azure.com/2025/07/31/temporal-on-aks" target="_blank" class="block hover:text-white transition-colors">Temporal on AKS Blog</a>
+            <a href="https://learn.microsoft.com/en-us/azure/aks/" target="_blank" class="block hover:text-white transition-colors">AKS Documentation</a>
+            <a href="https://learn.microsoft.com/en-us/azure/container-apps/" target="_blank" class="block hover:text-white transition-colors">Container Apps Docs</a>
+            <a href="https://github.com/temporalio/helm-charts" target="_blank" class="block hover:text-white transition-colors">Temporal Helm Charts</a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-white/10 pt-6 text-center text-xs font-display">
+        Generated March 2026 · Based on Temporal official documentation and community best practices
+      </div>
+    </div>
+  </footer>
+
+</main>
+
+<!-- BACK TO TOP -->
+<button id="back-to-top" onclick="window.scrollTo({top:0})" class="fixed bottom-6 right-6 z-40 w-10 h-10 bg-temporal-500 hover:bg-temporal-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 15l7-7 7 7"/></svg>
+</button>
+
+<script>
+// ========== TAB SYSTEM ==========
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const group = btn.dataset.group;
+    const target = btn.dataset.tab;
+    // Deactivate all in group
+    document.querySelectorAll(`.tab-btn[data-group="${group}"]`).forEach(b => {
+      b.classList.remove('active-tab');
+      b.classList.add('text-gray-500');
+    });
+    document.querySelectorAll(`.tab-panel[data-group="${group}"]`).forEach(p => p.classList.remove('active-panel'));
+    // Activate selected
+    btn.classList.add('active-tab');
+    btn.classList.remove('text-gray-500');
+    document.getElementById(target).classList.add('active-panel');
+  });
+});
+
+// ========== SCROLL ANIMATIONS ==========
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) entry.target.classList.add('visible');
+  });
+}, { threshold: 0.05 });
+document.querySelectorAll('.section-card').forEach(el => observer.observe(el));
+
+// ========== ACTIVE NAV TRACKING ==========
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav-pill');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(section => {
+    if (window.scrollY >= section.offsetTop - 200) current = section.id;
+  });
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+  });
+  // Back to top
+  document.getElementById('back-to-top').classList.toggle('show', window.scrollY > 500);
+});
+
+// ========== MOBILE NAV ==========
+const sidebar = document.getElementById('sidebar');
+const mobileBtn = document.getElementById('mobile-nav-btn');
+mobileBtn.addEventListener('click', () => {
+  sidebar.classList.toggle('hidden');
+  sidebar.classList.toggle('flex');
+  sidebar.style.zIndex = '50';
+});
+// Close sidebar on link click (mobile)
+navLinks.forEach(link => {
+  link.addEventListener('click', () => {
+    if (window.innerWidth < 1024) {
+      sidebar.classList.add('hidden');
+      sidebar.classList.remove('flex');
+    }
+  });
+});
+
+// ========== CHECKLIST ==========
+const checklistData = {
+  "Workers": [
+    "Concurrency settings tuned (not using defaults)",
+    "Poller Autoscaling enabled",
+    "Deployed via CI/CD as Docker images",
+    "Resource limits set (CPU/memory)",
+    "Multiple replicas running",
+  ],
+  "Workflows": [
+    "All inputs/outputs use single objects",
+    "No I/O or non-deterministic operations",
+    "Continue-As-New for long-running Workflows",
+    "Versioning strategy selected (Patching or Worker Versioning)",
+  ],
+  "Activities": [
+    "Start-To-Close Timeout set on every Activity",
+    "Heartbeating for long-running Activities",
+    "Retry policies with non-retryable error types",
+    "Dependencies injected for testability",
+  ],
+  "Testing": [
+    "Unit tests for Activities (plain function calls)",
+    "Integration tests with mocked Activities",
+    "Replay tests for Workflow determinism",
+  ],
+  "Infrastructure": [
+    "Task Queues separated by workload type",
+    "Monitoring and metrics (Prometheus/Grafana)",
+    "TLS/mTLS enabled for Server connections",
+    "Event History size monitored",
+  ],
+  "Azure": [
+    "ACR configured with image scanning",
+    "AKS node pools sized appropriately",
+    "Database backed by Azure PostgreSQL Flexible Server",
+    "Secrets stored in Azure Key Vault",
+  ],
+};
+
+const container = document.getElementById('checklist-container');
+const categoryColors = {
+  Workers: 'bg-blue-100 text-blue-800',
+  Workflows: 'bg-purple-100 text-purple-800',
+  Activities: 'bg-green-100 text-green-800',
+  Testing: 'bg-amber-100 text-amber-800',
+  Infrastructure: 'bg-red-100 text-red-800',
+  Azure: 'bg-cyan-100 text-cyan-800',
+};
+
+Object.entries(checklistData).forEach(([category, items]) => {
+  const section = document.createElement('div');
+  section.innerHTML = `
+    <div class="flex items-center gap-2 mb-3">
+      <span class="font-display font-600 text-xs px-2.5 py-1 rounded-full ${categoryColors[category]}">${category}</span>
+      <span class="text-xs text-gray-400 font-display" id="count-${category.toLowerCase()}">0/${items.length}</span>
+    </div>
+    <div class="space-y-2">
+      ${items.map((item, i) => `
+        <label class="check-item flex items-center gap-3 cursor-pointer group">
+          <input type="checkbox" data-category="${category.toLowerCase()}" data-total="${items.length}" class="w-4 h-4 rounded border-gray-300 text-temporal-500 focus:ring-temporal-500 accent-temporal-500 cursor-pointer">
+          <span class="text-sm text-gray-700 group-hover:text-ink transition-colors">${item}</span>
+        </label>
+      `).join('')}
+    </div>
+  `;
+  container.appendChild(section);
+});
+
+// Update counts
+container.addEventListener('change', (e) => {
+  if (e.target.type === 'checkbox') {
+    const cat = e.target.dataset.category;
+    const total = parseInt(e.target.dataset.total);
+    const checked = container.querySelectorAll(`input[data-category="${cat}"]:checked`).length;
+    document.getElementById(`count-${cat}`).textContent = `${checked}/${total}`;
+  }
+});
+</script>
+</body>
+</html>
