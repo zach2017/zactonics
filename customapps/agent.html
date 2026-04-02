@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Forge — AI Workflow Designer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0a0e17;
+  --bg-surface: #111827;
+  --bg-card: #1a2235;
+  --bg-elevated: #222d42;
+  --border: #2a3650;
+  --border-focus: #3b82f6;
+  --text-primary: #e2e8f0;
+  --text-secondary: #8899b4;
+  --text-muted: #556580;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #06b6d4;
+  --accent-green: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --accent-violet: #8b5cf6;
+  --accent-orange: #f97316;
+  --glow-blue: rgba(59, 130, 246, 0.15);
+  --glow-cyan: rgba(6, 182, 212, 0.15);
+  --grid-line: rgba(42, 54, 80, 0.4);
+  --grid-dot: rgba(59, 130, 246, 0.12);
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --node-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+/* ─── LAYOUT ─────────────────────────────── */
+.app { display: flex; height: 100vh; flex-direction: column; }
+.toolbar {
+  height: 48px; background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px;
+  gap: 12px; flex-shrink: 0; z-index: 100;
+}
+.toolbar-brand {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 16px; letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-right: 16px;
+}
+.toolbar-brand span { font-weight: 400; opacity: 0.6; -webkit-text-fill-color: var(--text-secondary); }
+.toolbar-divider { width: 1px; height: 24px; background: var(--border); }
+.toolbar-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-secondary); padding: 6px 12px;
+  border-radius: 6px; font-family: var(--font-mono);
+  font-size: 11px; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; gap: 6px;
+}
+.toolbar-btn:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--accent-blue); }
+.toolbar-btn.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+.toolbar-spacer { flex: 1; }
+.toolbar-status {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-muted); display: flex; align-items: center; gap: 6px;
+}
+.toolbar-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ─── PALETTE ────────────────────────────── */
+.palette {
+  width: 280px; background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+  overflow: hidden;
+}
+.palette-header {
+  padding: 14px 16px 10px;
+  font-family: var(--font-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--text-muted); border-bottom: 1px solid var(--border);
+}
+.palette-search {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.palette-search input {
+  width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-primary); padding: 7px 10px; border-radius: 6px;
+  font-family: var(--font-mono); font-size: 11px; outline: none;
+}
+.palette-search input::placeholder { color: var(--text-muted); }
+.palette-search input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 2px var(--glow-blue); }
+.palette-body { flex: 1; overflow-y: auto; padding: 8px; }
+.palette-body::-webkit-scrollbar { width: 4px; }
+.palette-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.palette-section { margin-bottom: 6px; }
+.palette-section-title {
+  font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--text-muted); padding: 8px 8px 4px;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  user-select: none;
+}
+.palette-section-title .chevron { transition: transform 0.2s; font-size: 8px; }
+.palette-section.collapsed .chevron { transform: rotate(-90deg); }
+.palette-section.collapsed .palette-items { display: none; }
+
+.palette-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; margin: 2px 0;
+  border-radius: 6px; cursor: grab;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  user-select: none;
+}
+.palette-item:hover { background: var(--bg-card); border-color: var(--border); }
+.palette-item:active { cursor: grabbing; }
+.palette-item .icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.palette-item .info { min-width: 0; }
+.palette-item .info .name {
+  font-family: var(--font-display); font-size: 12px;
+  font-weight: 500; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.palette-item .info .desc {
+  font-size: 10px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ─── CANVAS ─────────────────────────────── */
+.canvas-container {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--bg-deep);
+}
+.canvas-grid {
+  position: absolute; inset: 0; overflow: hidden;
+  cursor: default;
+  background-image:
+    radial-gradient(circle, var(--grid-dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.canvas-grid.panning { cursor: move; }
+
+#canvas-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 1;
+}
+#canvas-svg line, #canvas-svg path { pointer-events: stroke; }
+
+.canvas-nodes { position: absolute; inset: 0; z-index: 2; }
+
+/* ─── NODES ──────────────────────────────── */
+.node {
+  position: absolute; min-width: 180px; max-width: 260px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--node-shadow);
+  cursor: move; user-select: none; z-index: 10;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.node:hover { border-color: rgba(59,130,246,0.3); }
+.node.selected {
+  border-color: var(--accent-blue);
+  box-shadow: var(--node-shadow), 0 0 0 2px var(--glow-blue);
+  z-index: 20;
+}
+.node-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+.node-icon {
+  width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.node-title {
+  font-family: var(--font-display); font-size: 12px;
+  font-weight: 600; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.node-delete {
+  width: 20px; height: 20px; border-radius: 4px;
+  background: transparent; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 14px; display: flex;
+  align-items: center; justify-content: center;
+  opacity: 0; transition: all 0.15s;
+}
+.node:hover .node-delete { opacity: 1; }
+.node-delete:hover { background: var(--accent-rose); color: #fff; }
+
+.node-body { padding: 10px 12px; font-size: 11px; color: var(--text-secondary); }
+.node-body .node-label {
+  font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted); margin-bottom: 3px;
+}
+.node-body .node-value { margin-bottom: 8px; }
+
+.node-ports { display: flex; justify-content: space-between; padding: 0 12px 10px; }
+.port {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--bg-surface);
+  cursor: crosshair; transition: all 0.15s; position: relative;
+}
+.port:hover { border-color: var(--accent-cyan); background: var(--accent-cyan); transform: scale(1.3); }
+.port.input { margin-left: -18px; }
+.port.output { margin-right: -18px; }
+.port-label {
+  font-family: var(--font-mono); font-size: 8px;
+  color: var(--text-muted); white-space: nowrap;
+  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+}
+
+/* ─── PROPERTIES PANEL ──────────────────── */
+.properties {
+  width: 300px; background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+  overflow: hidden; transition: width 0.3s;
+}
+.properties.hidden { width: 0; min-width: 0; border: none; }
+.props-header {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.props-header .props-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.props-header .props-title {
+  font-family: var(--font-display); font-size: 14px; font-weight: 600; flex: 1;
+}
+.props-header .props-close {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 18px;
+}
+.props-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.props-body::-webkit-scrollbar { width: 4px; }
+.props-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.prop-group { margin-bottom: 16px; }
+.prop-group-title {
+  font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--text-muted); margin-bottom: 8px;
+}
+.prop-field { margin-bottom: 10px; }
+.prop-label {
+  display: block; font-size: 11px; color: var(--text-secondary);
+  margin-bottom: 4px; font-weight: 500;
+}
+.prop-input, .prop-textarea, .prop-select {
+  width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-primary); padding: 7px 10px; border-radius: 6px;
+  font-family: var(--font-mono); font-size: 11px; outline: none;
+}
+.prop-input:focus, .prop-textarea:focus, .prop-select:focus {
+  border-color: var(--accent-blue); box-shadow: 0 0 0 2px var(--glow-blue);
+}
+.prop-textarea { min-height: 60px; resize: vertical; font-family: var(--font-body); }
+.prop-select { cursor: pointer; }
+
+.prop-tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.prop-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 8px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary);
+}
+
+/* ─── CONNECTIONS ────────────────────────── */
+.connection {
+  stroke: var(--accent-cyan); stroke-width: 2;
+  fill: none; opacity: 0.6;
+  transition: opacity 0.2s, stroke 0.2s;
+}
+.connection:hover { opacity: 1; stroke-width: 3; cursor: pointer; }
+.connection.selected { stroke: var(--accent-blue); opacity: 1; stroke-width: 2.5; }
+.connection-temp { stroke: var(--accent-cyan); stroke-width: 2; stroke-dasharray: 6; fill: none; opacity: 0.5; }
+.connection-arrow { fill: var(--accent-cyan); opacity: 0.6; }
+
+/* ─── DROP INDICATOR ─────────────────────── */
+.drop-indicator {
+  position: fixed; pointer-events: none; z-index: 9999;
+  background: var(--bg-card); border: 2px dashed var(--accent-blue);
+  border-radius: 10px; padding: 10px 16px;
+  font-family: var(--font-display); font-size: 12px;
+  color: var(--accent-blue); opacity: 0.9;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  display: none;
+}
+
+/* ─── MINIMAP ────────────────────────────── */
+.minimap {
+  position: absolute; bottom: 12px; right: 12px;
+  width: 160px; height: 100px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; z-index: 50;
+  opacity: 0.8;
+}
+.minimap canvas { width: 100%; height: 100%; }
+
+/* ─── ZOOM CONTROLS ──────────────────────── */
+.zoom-controls {
+  position: absolute; bottom: 12px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; z-index: 50;
+}
+.zoom-btn {
+  width: 28px; height: 28px; border: none;
+  background: transparent; color: var(--text-secondary);
+  border-radius: 6px; cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.zoom-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.zoom-label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-muted); padding: 0 8px; min-width: 40px; text-align: center;
+}
+
+/* ─── COLOR CODING ───────────────────────── */
+.color-agents { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.3); }
+.color-collectors { background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.3); }
+.color-llm { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.3); }
+.color-storage { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
+.color-actuators { background: rgba(249,115,22,0.12); border-color: rgba(249,115,22,0.3); }
+.color-utilities { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.3); }
+.color-config { background: rgba(244,63,94,0.12); border-color: rgba(244,63,94,0.3); }
+
+/* ─── CONTEXT MENU ───────────────────────── */
+.context-menu {
+  position: fixed; z-index: 1000;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; min-width: 160px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  display: none;
+}
+.context-menu-item {
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 8px;
+}
+.context-menu-item:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.context-menu-item.danger:hover { background: rgba(244,63,94,0.15); color: var(--accent-rose); }
+.context-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ─── EMPTY STATE ────────────────────────── */
+.empty-state {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center; pointer-events: none; z-index: 0;
+  opacity: 0.4;
+}
+.empty-state .es-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state h3 {
+  font-family: var(--font-display); font-size: 18px;
+  font-weight: 500; color: var(--text-secondary); margin-bottom: 6px;
+}
+.empty-state p { font-size: 12px; color: var(--text-muted); }
+
+/* ─── ANIMATIONS ─────────────────────────── */
+@keyframes nodeAppear {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+.node { animation: nodeAppear 0.2s ease-out; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.connecting-mode .port { animation: pulse 1s infinite; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-brand">⚡ Agent Forge <span>v1.0</span></div>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-btn" onclick="clearCanvas()" title="Clear canvas">🗑 Clear</button>
+    <button class="toolbar-btn" onclick="autoLayout()" title="Auto-arrange nodes">⊞ Layout</button>
+    <button class="toolbar-btn" onclick="exportWorkflow()" title="Export JSON">↓ Export</button>
+    <button class="toolbar-btn" onclick="importWorkflow()" title="Import JSON">↑ Import</button>
+    <div class="toolbar-spacer"></div>
+    <div class="toolbar-status">
+      <span class="dot"></span>
+      <span id="statusText">Ready — drag components to build</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- PALETTE -->
+    <div class="palette">
+      <div class="palette-header">Components</div>
+      <div class="palette-search">
+        <input type="text" id="paletteSearch" placeholder="Search components..." oninput="filterPalette(this.value)">
+      </div>
+      <div class="palette-body" id="paletteBody"></div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-container" id="canvasContainer">
+      <div class="canvas-grid" id="canvasGrid">
+        <svg id="canvas-svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" class="connection-arrow"/>
+            </marker>
+          </defs>
+        </svg>
+        <div class="canvas-nodes" id="canvasNodes"></div>
+        <div class="empty-state" id="emptyState">
+          <div class="es-icon">🔧</div>
+          <h3>Design Your Agent Workflow</h3>
+          <p>Drag components from the palette onto the canvas</p>
+        </div>
+      </div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()">+</button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button class="zoom-btn" onclick="zoomOut()">−</button>
+        <button class="zoom-btn" onclick="zoomReset()" title="Reset zoom">⊡</button>
+      </div>
+    </div>
+
+    <!-- PROPERTIES PANEL -->
+    <div class="properties hidden" id="propsPanel">
+      <div class="props-header">
+        <div class="props-icon" id="propsIcon"></div>
+        <div class="props-title" id="propsTitle">Properties</div>
+        <button class="props-close" onclick="closeProps()">×</button>
+      </div>
+      <div class="props-body" id="propsBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DROP GHOST -->
+<div class="drop-indicator" id="dropIndicator"></div>
+
+<!-- CONTEXT MENU -->
+<div class="context-menu" id="contextMenu">
+  <div class="context-menu-item" onclick="duplicateNode()">⧉ Duplicate</div>
+  <div class="context-menu-item" onclick="editNodeProps()">✎ Edit Properties</div>
+  <div class="context-menu-sep"></div>
+  <div class="context-menu-item danger" onclick="deleteSelectedNode()">✕ Delete</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// COMPONENT DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+
+const COMPONENTS = {
+  agents: {
+    label: 'Agent Templates',
+    items: [
+      { id: 'email_agent', name: 'Email Agent', icon: '📧', color: 'color-agents',
+        desc: 'IMAP inbox reader + classifier',
+        features: ['IMAP inbox reading', 'LLM classification (urgent/action/fyi/spam)', 'Auto-draft replies', 'Daily digest emails', 'ES email history'],
+        fields: { imap_server: 'imap.gmail.com', email_user: '', check_interval: '30m' }},
+      { id: 'ad_agent', name: 'Ad Posting Agent', icon: '📢', color: 'color-agents',
+        desc: 'Generate & post classified ads',
+        features: ['LLM ad copy generation', 'Multi-platform posting', 'Duplicate detection via ES', 'Performance reporting', 'Auto-expiry tracking'],
+        fields: { platforms: 'craigslist, facebook', ad_api_url: '', category: 'electronics' }},
+      { id: 'crawler_agent', name: 'Web Crawler Agent', icon: '🕷️', color: 'color-agents',
+        desc: 'BFS crawl + change detection',
+        features: ['Breadth-first crawling', 'Content hashing for changes', 'ES page history', 'LLM executive summaries', 'HTML/PDF report generation'],
+        fields: { seed_urls: '', max_pages: 30, crawl_depth: 3 }},
+      { id: 'stock_agent', name: 'Stock News Agent', icon: '📈', color: 'color-agents',
+        desc: 'RSS sentiment + ticker alerts',
+        features: ['Multi-feed RSS polling', 'Ticker extraction', 'LLM sentiment scoring', 'Signal aggregation (24h window)', 'Email alerts on 3+ aligned signals'],
+        fields: { tickers: 'AAPL, MSFT, NVDA', alert_threshold: 3, rss_feeds: '4 default feeds' }},
+    ]
+  },
+  collectors: {
+    label: 'Data Collectors',
+    items: [
+      { id: 'imap_reader', name: 'IMAP Reader', icon: '📬', color: 'color-collectors',
+        desc: 'Fetch emails via IMAP',
+        features: ['SSL/TLS connection', 'UNSEEN filter', 'RFC822 parsing', 'Multipart support', 'Header decoding'],
+        fields: { server: 'imap.gmail.com', port: 993, folder: 'INBOX' }},
+      { id: 'rss_reader', name: 'RSS Feed Reader', icon: '📡', color: 'color-collectors',
+        desc: 'Parse RSS/Atom feeds',
+        features: ['Multi-feed support', 'feedparser integration', 'Date normalization', 'Content extraction'],
+        fields: { feeds: '', poll_interval: '2h' }},
+      { id: 'web_crawler', name: 'Web Crawler', icon: '🌐', color: 'color-collectors',
+        desc: 'BFS page fetcher + parser',
+        features: ['Breadth-first traversal', 'Same-domain filtering', 'robots.txt respect', 'BeautifulSoup parsing', 'Content cleaning'],
+        fields: { user_agent: 'AgentBot/1.0', timeout: 15, delay: 1 }},
+      { id: 'api_collector', name: 'API Collector', icon: '🔌', color: 'color-collectors',
+        desc: 'REST API data fetcher',
+        features: ['httpx async support', 'Auth headers', 'Rate limiting', 'Response parsing'],
+        fields: { base_url: '', auth_type: 'bearer', rate_limit: '60/min' }},
+    ]
+  },
+  llm: {
+    label: 'LLM / Reasoning',
+    items: [
+      { id: 'ollama_llm', name: 'Ollama LLM', icon: '🧠', color: 'color-llm',
+        desc: 'Local LLM inference engine',
+        features: ['Chat completions', 'Embeddings API', 'Streaming support', 'Temperature control', 'System prompts'],
+        fields: { model: 'llama3', temperature: 0.3, base_url: 'http://localhost:11434' }},
+      { id: 'classifier', name: 'LLM Classifier', icon: '🏷️', color: 'color-llm',
+        desc: 'Structured classification',
+        features: ['Multi-category output', 'Priority scoring', 'Structured format parsing', 'System prompt tuning'],
+        fields: { categories: 'urgent, action-required, fyi, spam', output_format: 'structured' }},
+      { id: 'summarizer', name: 'LLM Summarizer', icon: '📝', color: 'color-llm',
+        desc: 'Executive summaries',
+        features: ['Multi-document synthesis', 'Length control', 'Audience targeting', 'Key point extraction'],
+        fields: { max_length: '3-4 sentences', audience: 'stakeholders' }},
+      { id: 'sentiment', name: 'Sentiment Analyzer', icon: '🎭', color: 'color-llm',
+        desc: 'Sentiment + confidence scoring',
+        features: ['Bullish/bearish/neutral', 'Confidence 0.0-1.0', 'Recommendation output', 'Reasoning chain'],
+        fields: { scale: 'bullish/bearish/neutral', confidence_range: '0.0-1.0' }},
+      { id: 'copywriter', name: 'Ad Copywriter', icon: '✍️', color: 'color-llm',
+        desc: 'Generate compelling ad copy',
+        features: ['Title generation', 'Body copywriting', 'Tag suggestions', 'Multi-variant output'],
+        fields: { tone: 'persuasive', max_title_chars: 80, variants: 1 }},
+      { id: 'reply_drafter', name: 'Reply Drafter', icon: '💬', color: 'color-llm',
+        desc: 'Draft professional email replies',
+        features: ['Context-aware replies', 'Tone matching', 'Action-based drafting', 'Signature support'],
+        fields: { sign_off: 'The Team', tone: 'professional' }},
+    ]
+  },
+  storage: {
+    label: 'Storage / Memory',
+    items: [
+      { id: 'elasticsearch', name: 'Elasticsearch', icon: '🔍', color: 'color-storage',
+        desc: 'Search, index & dedup store',
+        features: ['Full-text search', 'Keyword filtering', 'Aggregations', 'Custom mappings', 'Content hashing / dedup'],
+        fields: { host: 'http://localhost:9200', index_prefix: 'agent_' }},
+      { id: 'es_emails', name: 'Email Index', icon: '📋', color: 'color-storage',
+        desc: 'Processed email storage',
+        features: ['from/subject/body fields', 'category + priority', 'suggested_reply', 'Date indexing'],
+        fields: { index: 'agent_emails', mappings: '7 typed fields' }},
+      { id: 'es_ads', name: 'Ads Index', icon: '📊', color: 'color-storage',
+        desc: 'Posted ad tracking',
+        features: ['Active/expired status', 'Platform tracking', 'Duplicate prevention', 'Expiry dates'],
+        fields: { index: 'agent_ads', ttl: '30 days' }},
+      { id: 'es_pages', name: 'Pages Index', icon: '📄', color: 'color-storage',
+        desc: 'Crawled page history',
+        features: ['URL + domain indexing', 'Content hash tracking', 'Change detection', 'Word count'],
+        fields: { index: 'agent_pages' }},
+      { id: 'es_signals', name: 'Signals Index', icon: '📉', color: 'color-storage',
+        desc: 'Stock signal storage',
+        features: ['Ticker + sentiment', 'Confidence scores', 'Article URLs', 'Time-range queries'],
+        fields: { index: 'agent_stock_signals' }},
+      { id: 'es_logs', name: 'Activity Logs', icon: '📜', color: 'color-storage',
+        desc: 'Structured agent logs',
+        features: ['Agent name + event', 'Detail field', 'Timestamp auto', 'Health monitoring'],
+        fields: { index: 'agent_logs' }},
+    ]
+  },
+  actuators: {
+    label: 'Actuators / Output',
+    items: [
+      { id: 'email_sender', name: 'Email Sender', icon: '📤', color: 'color-actuators',
+        desc: 'Send via SMTP / yagmail',
+        features: ['SMTP + yagmail', 'HTML body support', 'Attachment support', 'Digest formatting'],
+        fields: { smtp_server: 'smtp.gmail.com', from: '' }},
+      { id: 'ad_poster', name: 'Ad Platform API', icon: '📣', color: 'color-actuators',
+        desc: 'POST ads to platforms',
+        features: ['REST API posting', 'Bearer auth', 'Multi-platform', 'Response parsing'],
+        fields: { api_url: '', platforms: 'craigslist, facebook' }},
+      { id: 'report_gen', name: 'HTML Report', icon: '📰', color: 'color-actuators',
+        desc: 'Jinja2 HTML/PDF reports',
+        features: ['Jinja2 templates', 'Styled HTML output', 'WeasyPrint PDF', 'Stats & charts'],
+        fields: { template: 'report.html', format: 'html' }},
+      { id: 'alert_sender', name: 'Alert Sender', icon: '🚨', color: 'color-actuators',
+        desc: 'Trigger email alerts',
+        features: ['Threshold-based triggers', 'Signal synthesis', 'Formatted alerts', 'Multi-recipient'],
+        fields: { threshold: 3, window: '24h' }},
+    ]
+  },
+  utilities: {
+    label: 'Utilities & Config',
+    items: [
+      { id: 'scheduler', name: 'APScheduler', icon: '⏰', color: 'color-utilities',
+        desc: 'Cron & interval scheduling',
+        features: ['Interval jobs', 'Cron expressions', 'Market hours support', 'Job chaining'],
+        fields: { type: 'BlockingScheduler' }},
+      { id: 'content_hash', name: 'Content Hasher', icon: '#️⃣', color: 'color-utilities',
+        desc: 'SHA256 deduplication IDs',
+        features: ['SHA256 hashing', '16-char truncation', 'Stable document IDs', 'Idempotent indexing'],
+        fields: { algorithm: 'sha256', length: 16 }},
+      { id: 'base_agent', name: 'BaseAgent', icon: '🧬', color: 'color-utilities',
+        desc: 'Core agent framework class',
+        features: ['think() — LLM calls', 'remember() — ES store', 'recall() — ES search', 'log_event() — logging'],
+        fields: { pattern: 'Perceive → Reason → Act' }},
+      { id: 'dotenv', name: '.env Config', icon: '⚙️', color: 'color-config',
+        desc: 'Environment variables',
+        features: ['python-dotenv', 'Secrets management', 'Per-agent config', 'Docker env_file'],
+        fields: { vars: 'OLLAMA, ES, EMAIL, API keys' }},
+      { id: 'docker', name: 'Docker Compose', icon: '🐳', color: 'color-config',
+        desc: 'Production deployment',
+        features: ['ES + Ollama + Agents', 'GPU passthrough', 'Volume persistence', 'Service dependencies'],
+        fields: { services: 'elasticsearch, ollama, agents' }},
+      { id: 'logging', name: 'Logger', icon: '📋', color: 'color-utilities',
+        desc: 'Python + ES logging',
+        features: ['Structured format', 'ES log storage', 'Health reports', 'Per-agent namespaces'],
+        fields: { format: '%(asctime)s [%(name)s] %(message)s' }},
+    ]
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+
+let nodes = [];
+let connections = [];
+let selectedNodeId = null;
+let contextNodeId = null;
+let nextNodeId = 1;
+let zoom = 1;
+let panX = 0, panY = 0;
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let connectingFrom = null; // { nodeId, portType }
+let tempLine = null;
+
+// ═══════════════════════════════════════════════════════════════
+// PALETTE RENDERING
+// ═══════════════════════════════════════════════════════════════
+
+function renderPalette(filter = '') {
+  const body = document.getElementById('paletteBody');
+  body.innerHTML = '';
+  const lf = filter.toLowerCase();
+
+  for (const [key, section] of Object.entries(COMPONENTS)) {
+    const filtered = section.items.filter(i =>
+      !lf || i.name.toLowerCase().includes(lf) || i.desc.toLowerCase().includes(lf) || i.id.includes(lf)
+    );
+    if (filtered.length === 0) continue;
+
+    const sec = document.createElement('div');
+    sec.className = 'palette-section';
+    sec.innerHTML = `<div class="palette-section-title" onclick="this.parentElement.classList.toggle('collapsed')">
+      <span class="chevron">▾</span> ${section.label} (${filtered.length})
+    </div><div class="palette-items"></div>`;
+
+    const itemsDiv = sec.querySelector('.palette-items');
+    for (const item of filtered) {
+      const el = document.createElement('div');
+      el.className = 'palette-item';
+      el.draggable = true;
+      el.dataset.componentId = item.id;
+      el.innerHTML = `<div class="icon ${item.color}">${item.icon}</div>
+        <div class="info"><div class="name">${item.name}</div><div class="desc">${item.desc}</div></div>`;
+      el.addEventListener('dragstart', onPaletteDragStart);
+      itemsDiv.appendChild(el);
+    }
+    body.appendChild(sec);
+  }
+}
+
+function filterPalette(val) { renderPalette(val); }
+
+function getComponentDef(componentId) {
+  for (const section of Object.values(COMPONENTS)) {
+    const found = section.items.find(i => i.id === componentId);
+    if (found) return found;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAG & DROP
+// ═══════════════════════════════════════════════════════════════
+
+let dragData = null;
+const dropIndicator = document.getElementById('dropIndicator');
+
+function onPaletteDragStart(e) {
+  const cid = e.currentTarget.dataset.componentId;
+  dragData = cid;
+  e.dataTransfer.setData('text/plain', cid);
+  e.dataTransfer.effectAllowed = 'copy';
+  dropIndicator.style.display = 'block';
+  const def = getComponentDef(cid);
+  dropIndicator.textContent = `${def.icon} ${def.name}`;
+}
+
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropIndicator.style.left = (e.clientX + 14) + 'px';
+  dropIndicator.style.top = (e.clientY + 14) + 'px';
+});
+
+document.addEventListener('dragend', () => {
+  dropIndicator.style.display = 'none';
+  dragData = null;
+});
+
+const canvasGrid = document.getElementById('canvasGrid');
+canvasGrid.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+canvasGrid.addEventListener('drop', onCanvasDrop);
+
+function onCanvasDrop(e) {
+  e.preventDefault();
+  dropIndicator.style.display = 'none';
+  const cid = e.dataTransfer.getData('text/plain') || dragData;
+  if (!cid) return;
+  const def = getComponentDef(cid);
+  if (!def) return;
+
+  const rect = canvasGrid.getBoundingClientRect();
+  const x = (e.clientX - rect.left - panX) / zoom;
+  const y = (e.clientY - rect.top - panY) / zoom;
+
+  addNode(def, x, y);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NODE MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+function addNode(def, x, y) {
+  const node = {
+    id: nextNodeId++,
+    componentId: def.id,
+    x: Math.round(x / 24) * 24,
+    y: Math.round(y / 24) * 24,
+    name: def.name,
+    icon: def.icon,
+    color: def.color,
+    desc: def.desc,
+    features: [...def.features],
+    fields: { ...def.fields },
+    userNotes: '',
+  };
+  nodes.push(node);
+  renderNode(node);
+  updateStatus();
+  hideEmptyState();
+  selectNode(node.id);
+}
+
+function renderNode(node) {
+  const el = document.createElement('div');
+  el.className = `node`;
+  el.id = `node-${node.id}`;
+  el.style.left = node.x + 'px';
+  el.style.top = node.y + 'px';
+  el.style.transform = `scale(${zoom})`;
+  el.style.transformOrigin = 'top left';
+
+  const featureList = node.features.slice(0, 3).map(f => `• ${f}`).join('<br>');
+  el.innerHTML = `
+    <div class="node-header ${node.color}">
+      <div class="node-icon ${node.color}">${node.icon}</div>
+      <div class="node-title">${node.name}</div>
+      <button class="node-delete" onclick="event.stopPropagation(); deleteNode(${node.id})">×</button>
+    </div>
+    <div class="node-body">
+      <div class="node-label">Features</div>
+      <div class="node-value" style="font-size:10px; line-height:1.5">${featureList}</div>
+    </div>
+    <div class="node-ports">
+      <div class="port input" data-node="${node.id}" data-port="input" title="Input">
+        <span class="port-label">in</span>
+      </div>
+      <div class="port output" data-node="${node.id}" data-port="output" title="Output">
+        <span class="port-label">out</span>
+      </div>
+    </div>`;
+
+  // Node drag
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('port') || e.target.classList.contains('node-delete')) return;
+    e.stopPropagation();
+    selectNode(node.id);
+    startNodeDrag(node.id, e);
+  });
+
+  // Context menu
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    contextNodeId = node.id;
+    selectNode(node.id);
+    showContextMenu(e.clientX, e.clientY);
+  });
+
+  // Port connections
+  el.querySelectorAll('.port').forEach(port => {
+    port.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      startConnection(parseInt(port.dataset.node), port.dataset.port, e);
+    });
+  });
+
+  document.getElementById('canvasNodes').appendChild(el);
+}
+
+function updateNodeElement(node) {
+  const el = document.getElementById(`node-${node.id}`);
+  if (!el) return;
+  el.style.left = node.x + 'px';
+  el.style.top = node.y + 'px';
+}
+
+function deleteNode(id) {
+  nodes = nodes.filter(n => n.id !== id);
+  connections = connections.filter(c => c.from !== id && c.to !== id);
+  const el = document.getElementById(`node-${id}`);
+  if (el) el.remove();
+  if (selectedNodeId === id) { selectedNodeId = null; closeProps(); }
+  renderConnections();
+  updateStatus();
+  if (nodes.length === 0) showEmptyState();
+}
+
+function selectNode(id) {
+  document.querySelectorAll('.node.selected').forEach(el => el.classList.remove('selected'));
+  selectedNodeId = id;
+  const el = document.getElementById(`node-${id}`);
+  if (el) el.classList.add('selected');
+  showProps(id);
+}
+
+function deselectAll() {
+  document.querySelectorAll('.node.selected').forEach(el => el.classList.remove('selected'));
+  selectedNodeId = null;
+  closeProps();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NODE DRAGGING
+// ═══════════════════════════════════════════════════════════════
+
+let draggingNodeId = null;
+let dragOffset = { x: 0, y: 0 };
+
+function startNodeDrag(id, e) {
+  draggingNodeId = id;
+  const node = nodes.find(n => n.id === id);
+  const rect = canvasGrid.getBoundingClientRect();
+  dragOffset.x = (e.clientX - rect.left - panX) / zoom - node.x;
+  dragOffset.y = (e.clientY - rect.top - panY) / zoom - node.y;
+  document.addEventListener('mousemove', onNodeDrag);
+  document.addEventListener('mouseup', onNodeDragEnd);
+}
+
+function onNodeDrag(e) {
+  if (!draggingNodeId) return;
+  const node = nodes.find(n => n.id === draggingNodeId);
+  const rect = canvasGrid.getBoundingClientRect();
+  node.x = Math.round(((e.clientX - rect.left - panX) / zoom - dragOffset.x) / 24) * 24;
+  node.y = Math.round(((e.clientY - rect.top - panY) / zoom - dragOffset.y) / 24) * 24;
+  updateNodeElement(node);
+  renderConnections();
+}
+
+function onNodeDragEnd() {
+  draggingNodeId = null;
+  document.removeEventListener('mousemove', onNodeDrag);
+  document.removeEventListener('mouseup', onNodeDragEnd);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONNECTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function startConnection(nodeId, portType, e) {
+  connectingFrom = { nodeId, portType };
+  document.body.classList.add('connecting-mode');
+
+  const svg = document.getElementById('canvas-svg');
+  tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  tempLine.classList.add('connection-temp');
+  const pos = getPortPosition(nodeId, portType);
+  tempLine.setAttribute('x1', pos.x);
+  tempLine.setAttribute('y1', pos.y);
+  tempLine.setAttribute('x2', pos.x);
+  tempLine.setAttribute('y2', pos.y);
+  svg.appendChild(tempLine);
+
+  document.addEventListener('mousemove', onConnectionDrag);
+  document.addEventListener('mouseup', onConnectionEnd);
+}
+
+function onConnectionDrag(e) {
+  if (!tempLine) return;
+  const rect = canvasGrid.getBoundingClientRect();
+  const x = (e.clientX - rect.left - panX) / zoom;
+  const y = (e.clientY - rect.top - panY) / zoom;
+  tempLine.setAttribute('x2', x);
+  tempLine.setAttribute('y2', y);
+}
+
+function onConnectionEnd(e) {
+  document.removeEventListener('mousemove', onConnectionDrag);
+  document.removeEventListener('mouseup', onConnectionEnd);
+  document.body.classList.remove('connecting-mode');
+
+  if (tempLine) { tempLine.remove(); tempLine = null; }
+  if (!connectingFrom) return;
+
+  // Find if we dropped on a port
+  const target = document.elementFromPoint(e.clientX, e.clientY);
+  if (target && target.classList.contains('port')) {
+    const toNode = parseInt(target.dataset.node);
+    const toPort = target.dataset.port;
+    if (toNode !== connectingFrom.nodeId && toPort !== connectingFrom.portType) {
+      const fromId = connectingFrom.portType === 'output' ? connectingFrom.nodeId : toNode;
+      const toId = connectingFrom.portType === 'output' ? toNode : connectingFrom.nodeId;
+      // Avoid duplicate
+      if (!connections.find(c => c.from === fromId && c.to === toId)) {
+        connections.push({ from: fromId, to: toId });
+        renderConnections();
+      }
+    }
+  }
+  connectingFrom = null;
+}
+
+function getPortPosition(nodeId, portType) {
+  const el = document.getElementById(`node-${nodeId}`);
+  if (!el) return { x: 0, y: 0 };
+  const port = el.querySelector(`.port.${portType}`);
+  if (!port) return { x: 0, y: 0 };
+
+  const node = nodes.find(n => n.id === nodeId);
+  const portRect = port.getBoundingClientRect();
+  const gridRect = canvasGrid.getBoundingClientRect();
+  return {
+    x: (portRect.left + portRect.width / 2 - gridRect.left - panX) / zoom,
+    y: (portRect.top + portRect.height / 2 - gridRect.top - panY) / zoom
+  };
+}
+
+function renderConnections() {
+  const svg = document.getElementById('canvas-svg');
+  svg.querySelectorAll('.connection-path').forEach(el => el.remove());
+
+  for (const conn of connections) {
+    const from = getPortPosition(conn.from, 'output');
+    const to = getPortPosition(conn.to, 'input');
+
+    const dx = Math.abs(to.x - from.x) * 0.5;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`);
+    path.classList.add('connection', 'connection-path');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    path.dataset.from = conn.from;
+    path.dataset.to = conn.to;
+    path.style.pointerEvents = 'stroke';
+
+    path.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('Remove this connection?')) {
+        connections = connections.filter(c => !(c.from === conn.from && c.to === conn.to));
+        renderConnections();
+      }
+    });
+
+    svg.appendChild(path);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROPERTIES PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function showProps(nodeId) {
+  const node = nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  const panel = document.getElementById('propsPanel');
+  panel.classList.remove('hidden');
+
+  document.getElementById('propsIcon').className = `props-icon ${node.color}`;
+  document.getElementById('propsIcon').textContent = node.icon;
+  document.getElementById('propsTitle').textContent = node.name;
+
+  const body = document.getElementById('propsBody');
+  let html = '';
+
+  // Name
+  html += `<div class="prop-group">
+    <div class="prop-group-title">General</div>
+    <div class="prop-field">
+      <label class="prop-label">Display Name</label>
+      <input class="prop-input" value="${node.name}" onchange="updateNodeField(${node.id}, 'name', this.value)">
+    </div>
+    <div class="prop-field">
+      <label class="prop-label">Description</label>
+      <textarea class="prop-textarea" onchange="updateNodeField(${node.id}, 'desc', this.value)">${node.desc}</textarea>
+    </div>
+    <div class="prop-field">
+      <label class="prop-label">Notes</label>
+      <textarea class="prop-textarea" placeholder="Add your notes about this component..." onchange="updateNodeField(${node.id}, 'userNotes', this.value)">${node.userNotes || ''}</textarea>
+    </div>
+  </div>`;
+
+  // Features
+  html += `<div class="prop-group">
+    <div class="prop-group-title">Features</div>
+    <div class="prop-tag-list">`;
+  for (const f of node.features) {
+    html += `<span class="prop-tag">${f}</span>`;
+  }
+  html += `</div></div>`;
+
+  // Config fields
+  if (node.fields && Object.keys(node.fields).length) {
+    html += `<div class="prop-group"><div class="prop-group-title">Configuration</div>`;
+    for (const [key, val] of Object.entries(node.fields)) {
+      html += `<div class="prop-field">
+        <label class="prop-label">${key.replace(/_/g, ' ')}</label>
+        <input class="prop-input" value="${val}" onchange="updateNodeConfig(${node.id}, '${key}', this.value)">
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Connections
+  const inbound = connections.filter(c => c.to === node.id);
+  const outbound = connections.filter(c => c.from === node.id);
+  if (inbound.length || outbound.length) {
+    html += `<div class="prop-group"><div class="prop-group-title">Connections</div>`;
+    for (const c of inbound) {
+      const src = nodes.find(n => n.id === c.from);
+      if (src) html += `<div class="prop-tag" style="margin-bottom:4px">← ${src.icon} ${src.name}</div>`;
+    }
+    for (const c of outbound) {
+      const tgt = nodes.find(n => n.id === c.to);
+      if (tgt) html += `<div class="prop-tag" style="margin-bottom:4px">→ ${tgt.icon} ${tgt.name}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  body.innerHTML = html;
+}
+
+function closeProps() {
+  document.getElementById('propsPanel').classList.add('hidden');
+}
+
+function updateNodeField(id, field, value) {
+  const node = nodes.find(n => n.id === id);
+  if (node) {
+    node[field] = value;
+    if (field === 'name') {
+      const el = document.getElementById(`node-${id}`);
+      if (el) el.querySelector('.node-title').textContent = value;
+    }
+  }
+}
+
+function updateNodeConfig(id, key, value) {
+  const node = nodes.find(n => n.id === id);
+  if (node) node.fields[key] = value;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAN & ZOOM
+// ═══════════════════════════════════════════════════════════════
+
+canvasGrid.addEventListener('mousedown', (e) => {
+  if (e.target === canvasGrid || e.target.id === 'canvasNodes' || e.target === document.getElementById('emptyState') || e.target.parentElement === document.getElementById('emptyState')) {
+    if (e.button === 0 && !e.target.classList.contains('port')) {
+      deselectAll();
+      hideContextMenu();
+    }
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      isPanning = true;
+      panStart = { x: e.clientX - panX, y: e.clientY - panY };
+      canvasGrid.classList.add('panning');
+    }
+  }
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (isPanning) {
+    panX = e.clientX - panStart.x;
+    panY = e.clientY - panStart.y;
+    applyTransform();
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  isPanning = false;
+  canvasGrid.classList.remove('panning');
+});
+
+canvasGrid.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const newZoom = Math.min(2, Math.max(0.3, zoom * delta));
+  const rect = canvasGrid.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  panX = mx - (mx - panX) * (newZoom / zoom);
+  panY = my - (my - panY) * (newZoom / zoom);
+  zoom = newZoom;
+  applyTransform();
+}, { passive: false });
+
+function applyTransform() {
+  const nodesEl = document.getElementById('canvasNodes');
+  nodesEl.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  nodesEl.style.transformOrigin = '0 0';
+
+  const svg = document.getElementById('canvas-svg');
+  svg.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  svg.style.transformOrigin = '0 0';
+
+  document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + '%';
+
+  // Update grid
+  const size = 24 * zoom;
+  canvasGrid.style.backgroundSize = `${size}px ${size}px`;
+  canvasGrid.style.backgroundPosition = `${panX}px ${panY}px`;
+}
+
+function zoomIn() { zoom = Math.min(2, zoom * 1.2); applyTransform(); }
+function zoomOut() { zoom = Math.max(0.3, zoom / 1.2); applyTransform(); }
+function zoomReset() { zoom = 1; panX = 0; panY = 0; applyTransform(); }
+
+// ═══════════════════════════════════════════════════════════════
+// CONTEXT MENU
+// ═══════════════════════════════════════════════════════════════
+
+function showContextMenu(x, y) {
+  const menu = document.getElementById('contextMenu');
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.style.display = 'block';
+}
+
+function hideContextMenu() {
+  document.getElementById('contextMenu').style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.context-menu')) hideContextMenu();
+});
+
+function deleteSelectedNode() {
+  hideContextMenu();
+  if (contextNodeId) deleteNode(contextNodeId);
+}
+
+function duplicateNode() {
+  hideContextMenu();
+  const node = nodes.find(n => n.id === contextNodeId);
+  if (!node) return;
+  const def = getComponentDef(node.componentId);
+  if (def) addNode(def, node.x + 40, node.y + 40);
+}
+
+function editNodeProps() {
+  hideContextMenu();
+  if (contextNodeId) selectNode(contextNodeId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLBAR ACTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function clearCanvas() {
+  if (nodes.length === 0 || confirm('Clear all nodes and connections?')) {
+    nodes = []; connections = []; selectedNodeId = null;
+    document.getElementById('canvasNodes').innerHTML = '';
+    renderConnections();
+    closeProps();
+    showEmptyState();
+    updateStatus();
+  }
+}
+
+function autoLayout() {
+  if (nodes.length === 0) return;
+  const cols = Math.ceil(Math.sqrt(nodes.length));
+  const spacingX = 260;
+  const spacingY = 220;
+  nodes.forEach((node, i) => {
+    node.x = 80 + (i % cols) * spacingX;
+    node.y = 80 + Math.floor(i / cols) * spacingY;
+    updateNodeElement(node);
+  });
+  renderConnections();
+  zoomReset();
+}
+
+function exportWorkflow() {
+  const data = { nodes, connections };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'agent-workflow.json';
+  a.click();
+}
+
+function importWorkflow() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        nodes = data.nodes || [];
+        connections = data.connections || [];
+        nextNodeId = Math.max(...nodes.map(n => n.id), 0) + 1;
+        document.getElementById('canvasNodes').innerHTML = '';
+        nodes.forEach(n => renderNode(n));
+        renderConnections();
+        updateStatus();
+        if (nodes.length > 0) hideEmptyState();
+      } catch (err) {
+        alert('Invalid workflow file');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function updateStatus() {
+  document.getElementById('statusText').textContent =
+    `${nodes.length} node${nodes.length !== 1 ? 's' : ''} · ${connections.length} connection${connections.length !== 1 ? 's' : ''}`;
+}
+
+function hideEmptyState() { document.getElementById('emptyState').style.display = 'none'; }
+function showEmptyState() { document.getElementById('emptyState').style.display = 'block'; }
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedNodeId && !e.target.matches('input, textarea')) {
+      deleteNode(selectedNodeId);
+    }
+  }
+  if (e.key === 'Escape') {
+    deselectAll();
+    hideContextMenu();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+
+renderPalette();
+</script>
+</body>
+</html>
