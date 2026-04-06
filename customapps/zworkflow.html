@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Z -Workflow-Manager · AI Workflow Engine</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Light Theme (default) ── */
+  :root, [data-theme="light"] {
+    --bg-deep: #f4f6f9;
+    --bg-panel: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f0f3f8;
+    --border: #dce1e8;
+    --border-bright: #b8c2d0;
+    --text-primary: #0f172a;
+    --text-secondary: #374151;
+    --text-muted: #94a3b8;
+    --accent-green: #047857;
+    --accent-green-dim: rgba(4,120,87,0.08);
+    --accent-blue: #1e3a8a;
+    --accent-blue-dim: rgba(30,58,138,0.06);
+    --accent-amber: #92400e;
+    --accent-amber-dim: rgba(146,64,14,0.08);
+    --accent-red: #b91c1c;
+    --accent-red-dim: rgba(185,28,28,0.06);
+    --accent-purple: #6d28d9;
+    --json-key: #1e3a8a;
+    --json-string: #047857;
+    --json-number: #92400e;
+    --json-bool: #6d28d9;
+    --json-null: #94a3b8;
+    --json-bracket: #94a3b8;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+    --noise-opacity: 0;
+  }
+
+  /* ── Dark Theme ── */
+  [data-theme="dark"] {
+    --bg-deep: #0a0e17;
+    --bg-panel: #0f1520;
+    --bg-card: #141c2b;
+    --bg-hover: #1a2435;
+    --border: #1e2a3d;
+    --border-bright: #2a3a52;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --accent-green: #22d3a7;
+    --accent-green-dim: rgba(34,211,167,0.12);
+    --accent-blue: #60a5fa;
+    --accent-blue-dim: rgba(96,165,250,0.1);
+    --accent-amber: #fbbf24;
+    --accent-amber-dim: rgba(251,191,36,0.12);
+    --accent-red: #f87171;
+    --accent-red-dim: rgba(248,113,113,0.1);
+    --accent-purple: #a78bfa;
+    --json-key: #7dd3fc;
+    --json-string: #86efac;
+    --json-number: #fbbf24;
+    --json-bool: #c084fc;
+    --json-null: #64748b;
+    --json-bracket: #475569;
+    --shadow-sm: none;
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+    --noise-opacity: 0.02;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    transition: background 0.4s ease, color 0.3s ease;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 99px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+    transition: background 0.3s, color 0.3s;
+  }
+  .status-completed { background: var(--accent-green-dim); color: var(--accent-green); }
+  .status-running  { background: var(--accent-blue-dim); color: var(--accent-blue); }
+  .status-failed   { background: var(--accent-red-dim); color: var(--accent-red); }
+  .status-pending  { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+
+  .activity-node {
+    position: relative; padding: 14px 16px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer;
+    transition: all 0.2s ease; box-shadow: var(--shadow-sm);
+  }
+  .activity-node:hover {
+    background: var(--bg-hover); border-color: var(--border-bright);
+    transform: translateY(-1px); box-shadow: var(--shadow-md);
+  }
+  .activity-node.selected {
+    border-color: var(--accent-blue);
+    background: var(--accent-blue-dim);
+  }
+  .activity-connector {
+    width: 2px; height: 22px;
+    background: var(--border); margin-left: 28px; position: relative;
+  }
+  .activity-connector::after {
+    content:''; position:absolute; bottom:-3px; left:-3px;
+    width:8px; height:8px; border-radius:50%; background:var(--border-bright);
+  }
+
+  .tab-btn {
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    color: var(--text-muted); cursor: pointer;
+    border: none; background: none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text-primary); }
+  .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+
+  .json-viewer {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; line-height: 1.75;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .json-key { color: var(--json-key); }
+  .json-string { color: var(--json-string); }
+  .json-number { color: var(--json-number); }
+  .json-bool { color: var(--json-bool); }
+  .json-null { color: var(--json-null); font-style: italic; }
+  .json-bracket { color: var(--json-bracket); }
+
+  .pulse { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  .workflow-row {
+    display: grid;
+    grid-template-columns: 2fr 1.2fr 0.8fr 1fr 1fr 0.6fr;
+    align-items: center; padding: 13px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .workflow-row:hover { background: var(--bg-hover); }
+  .workflow-row.selected { background: var(--accent-blue-dim); }
+
+  .bg-noise {
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    opacity: var(--noise-opacity); transition: opacity 0.4s;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  .slide-in { animation: slideIn 0.25s ease; }
+  @keyframes slideIn { from{opacity:0;transform:translateX(12px);}to{opacity:1;transform:none;}}
+
+  /* ── Theme Toggle Switch ── */
+  .theme-switch {
+    position: relative; width: 52px; height: 28px;
+    border-radius: 99px; cursor: pointer;
+    background: var(--border); border: 1px solid var(--border-bright);
+    transition: all 0.4s ease;
+    display: flex; align-items: center; padding: 0 3px;
+    flex-shrink: 0;
+  }
+  .theme-switch:hover { border-color: var(--accent-blue); }
+  .theme-switch .knob {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--bg-panel);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.4s cubic-bezier(0.4,0,0.2,1), background 0.3s;
+    transform: translateX(0);
+  }
+  [data-theme="dark"] .theme-switch .knob { transform: translateX(23px); }
+  .knob-icon { width: 14px; height: 14px; transition: all 0.3s; }
+
+  /* Themed transitions on all elements */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, box-shadow, opacity;
+    transition-duration: 0.3s;
+    transition-timing-function: ease;
+  }
+  /* Exempt animations from global transition */
+  .pulse, .fade-in, .slide-in { transition: none; }
+</style>
+</head>
+<body>
+<div class="bg-noise"></div>
+
+<div id="app" style="position:relative;z-index:1;display:flex;flex-direction:column;height:100vh;">
+
+  <!-- Top Bar -->
+  <header style="background:var(--bg-panel);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;height:54px;flex-shrink:0;box-shadow:var(--shadow-sm);">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span class="mono" style="font-weight:700;font-size:15px;letter-spacing:-0.5px;">Z -Workflow-Manager</span>
+      <span style="color:var(--text-muted);font-size:13px;margin-left:4px;">· AI Workflow Engine</span>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:22px;">
+      <span class="mono" style="font-size:11px;color:var(--text-muted);">namespace: <span style="color:var(--text-secondary);">cooking-rag-prod</span></span>
+      <span class="mono" style="font-size:11px;color:var(--text-muted);">cluster: <span style="color:var(--accent-green);">● healthy</span></span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-amber)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <div class="theme-switch" onclick="toggleTheme()" title="Toggle dark / light mode">
+          <div class="knob">
+            <svg id="icon-sun" class="knob-icon" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="4"/></svg>
+            <svg id="icon-moon" class="knob-icon" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div style="display:flex;flex:1;overflow:hidden;">
+
+    <!-- Left: Workflow List -->
+    <div id="workflow-list-panel" style="width:100%;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:20px 24px 12px;border-bottom:1px solid var(--border);background:var(--bg-panel);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h2 style="font-size:18px;font-weight:700;letter-spacing:-0.3px;">Workflows</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="filterStatus('all')" class="filter-btn status-pill" style="cursor:pointer;border:none;background:var(--accent-blue-dim);color:var(--accent-blue);" data-filter="all">All</button>
+            <button onclick="filterStatus('Completed')" class="filter-btn status-pill status-completed" style="cursor:pointer;border:none;" data-filter="Completed">Completed</button>
+            <button onclick="filterStatus('Running')" class="filter-btn status-pill status-running" style="cursor:pointer;border:none;" data-filter="Running">Running</button>
+            <button onclick="filterStatus('Failed')" class="filter-btn status-pill status-failed" style="cursor:pointer;border:none;" data-filter="Failed">Failed</button>
+          </div>
+        </div>
+        <div class="mono" style="display:grid;grid-template-columns:2fr 1.2fr 0.8fr 1fr 1fr 0.6fr;padding:0 20px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">
+          <span>Workflow ID</span><span>Type</span><span>Status</span><span>Started</span><span>Duration</span><span>Tasks</span>
+        </div>
+      </div>
+      <div id="workflow-rows" style="flex:1;overflow-y:auto;background:var(--bg-panel);"></div>
+    </div>
+
+    <!-- Right: Detail Panel -->
+    <div id="detail-panel" style="display:none;flex:1;flex-direction:column;overflow:hidden;border-left:1px solid var(--border);min-width:0;">
+      <div id="detail-header" style="padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg-panel);flex-shrink:0;"></div>
+      <div style="display:flex;flex:1;overflow:hidden;">
+        <div id="activity-timeline" style="width:310px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:20px;background:var(--bg-panel);"></div>
+        <div id="activity-detail" style="flex:1;overflow-y:auto;padding:0;background:var(--bg-deep);min-width:0;"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Theme Toggle ──
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', next);
+  document.getElementById('icon-sun').style.display = next === 'light' ? 'block' : 'none';
+  document.getElementById('icon-moon').style.display = next === 'dark' ? 'block' : 'none';
+}
+
+// ── Workflow Data ──
+const WORKFLOWS = [
+  {
+    id: "cooking-chat-7f3a9b", runId: "run-84c2e1a0", type: "CookingChatWorkflow", status: "Completed",
+    startTime: "2026-04-05T14:23:11Z", endTime: "2026-04-05T14:23:14Z", duration: "2.8s", taskQueue: "cooking-rag-workers",
+    input: { userId: "user_8821", sessionId: "sess_f90a1", query: "How do I make a classic French omelette?", conversationHistory: [{ role: "user", content: "I want to learn French cooking" }, { role: "assistant", content: "Great! French cooking has many wonderful techniques. What would you like to start with?" }] },
+    activities: [
+      { id:1, name:"ValidateAndParseInput", status:"Completed", duration:"45ms", type:"activity", retries:0,
+        input: { query: "How do I make a classic French omelette?", userId: "user_8821" },
+        output: { parsed:true, intent:"recipe_how_to", cuisine:"french", dish:"omelette", sanitizedQuery:"classic french omelette technique", tokens:12, language:"en" } },
+      { id:2, name:"ElasticsearchRAGRetrieval", status:"Completed", duration:"320ms", type:"activity", retries:0,
+        input: { index:"cooking-knowledge-v3", query:{ bool:{ must:[{ multi_match:{ query:"classic french omelette technique", fields:["title^3","content^2","ingredients","technique_tags"], type:"best_fields" }}], filter:[{ term:{ cuisine:"french" }},{ term:{ content_type:"recipe" }}] }}, size:5, _source:["title","content","technique_steps","difficulty","chef_notes"], highlight:{ fields:{ content:{ fragment_size:200 }}} },
+        output: { hits:{ total:{ value:47, relation:"eq" }, max_score:14.82, hits:[{ _index:"cooking-knowledge-v3", _id:"doc_9921", _score:14.82, _source:{ title:"Classic French Omelette – Jacques Pépin Method", content:"The French omelette is a test of a cook's skill. Use 3 eggs, beaten just until blended. Heat butter in an 8-inch non-stick pan over high heat. Pour eggs in, stir rapidly with a fork while shaking the pan. Total cooking time: under 2 minutes for a creamy, pale exterior.", technique_steps:["Beat eggs gently","High heat + butter","Fork stir + shake","Roll onto plate"], difficulty:"intermediate" }},{ _index:"cooking-knowledge-v3", _id:"doc_1184", _score:11.03, _source:{ title:"Omelette Troubleshooting Guide", content:"Common mistakes: over-beating eggs incorporates too much air. Browning means heat was too high or cooking too long. Interior should remain slightly creamy (baveuse).", difficulty:"beginner" }},{ _index:"cooking-knowledge-v3", _id:"doc_5567", _score:8.71, _source:{ title:"Essential Egg Techniques in French Cuisine", content:"French cuisine treats eggs with reverence. Temperature control is paramount — a properly made omelette never browns.", difficulty:"intermediate" }}] }, took:18, timed_out:false } },
+      { id:3, name:"BuildContextWindow", status:"Completed", duration:"12ms", type:"activity", retries:0,
+        input: { retrievedDocs:3, maxContextTokens:4096, conversationHistoryLength:2 },
+        output: { systemPrompt:"You are a helpful cooking assistant specializing in French cuisine. Use the following retrieved knowledge to answer precisely.", contextDocuments:["Classic French Omelette – Jacques Pépin Method: The French omelette is a test of a cook's skill...","Omelette Troubleshooting Guide: Common mistakes...","Essential Egg Techniques: French cuisine treats eggs with reverence..."], totalTokens:1847, truncated:false, contextWindowUsage:"45.1%" } },
+      { id:4, name:"LLMCompletionCall", status:"Completed", duration:"2.1s", type:"activity", retries:0,
+        input: { model:"claude-sonnet-4-20250514", temperature:0.3, maxTokens:1024, messages:[{ role:"system", content:"[system prompt + RAG context]" },{ role:"user", content:"How do I make a classic French omelette?" }] },
+        output: { response:"A classic French omelette is all about technique and speed!\n\n1. Eggs: Crack 3 fresh eggs and beat gently — just until combined.\n2. Pan & Butter: Heat 8-inch non-stick over high heat. Add 1 tbsp butter, swirl until foaming stops.\n3. Cook: Pour eggs in. Stir rapidly with fork while shaking pan. Under 2 minutes total.\n4. Finish: Exterior pale (never browned!), interior slightly creamy — 'baveuse'.\n5. Roll: Tilt pan and fold onto warm plate.\n\nPro tip: This is considered a test of a chef's skill!", finishReason:"stop", usage:{ promptTokens:1871, completionTokens:204, totalTokens:2075 }, latency:"2.1s" } },
+      { id:5, name:"StoreConversationTurn", status:"Completed", duration:"85ms", type:"activity", retries:0,
+        input: { sessionId:"sess_f90a1", userId:"user_8821", store:"elasticsearch", index:"chat-history-v2" },
+        output: { stored:true, documentId:"chat_turn_88210045", indexResult:{ _id:"chat_turn_88210045", result:"created", _shards:{ total:2, successful:2, failed:0 }}, conversationLength:4 } }
+    ]
+  },
+  {
+    id: "cooking-chat-a12bc4", runId: "run-55d8f3b1", type: "CookingChatWorkflow", status: "Completed",
+    startTime: "2026-04-05T14:21:08Z", endTime: "2026-04-05T14:21:12Z", duration: "3.4s", taskQueue: "cooking-rag-workers",
+    input: { userId: "user_3304", sessionId: "sess_c71b8", query: "What spices go well with roasted lamb?", conversationHistory: [] },
+    activities: [
+      { id:1, name:"ValidateAndParseInput", status:"Completed", duration:"38ms", type:"activity", retries:0,
+        input: { query:"What spices go well with roasted lamb?", userId:"user_3304" },
+        output: { parsed:true, intent:"ingredient_pairing", protein:"lamb", method:"roasting", sanitizedQuery:"best spices roasted lamb pairing", tokens:9, language:"en" } },
+      { id:2, name:"ElasticsearchRAGRetrieval", status:"Completed", duration:"280ms", type:"activity", retries:0,
+        input: { index:"cooking-knowledge-v3", query:{ bool:{ must:[{ multi_match:{ query:"best spices roasted lamb pairing", fields:["title^3","content^2","ingredients^2","technique_tags"], type:"best_fields" }}], should:[{ term:{ content_type:"spice_guide" }},{ term:{ content_type:"recipe" }}] }}, size:5 },
+        output: { hits:{ total:{ value:63, relation:"eq" }, max_score:12.41, hits:[{ _id:"doc_2203", _score:12.41, _source:{ title:"Spice Pairing Guide: Lamb", content:"Lamb pairs beautifully with rosemary, cumin, coriander, mint, and sumac. For roasting, garlic-rosemary-dijon crust is classic." }},{ _id:"doc_7781", _score:9.88, _source:{ title:"Perfect Roast Lamb – Herb Crusted", content:"Create a paste: 4 garlic cloves, 2 tbsp rosemary, 1 tbsp thyme, olive oil, salt and pepper. Score the lamb, rub paste in. 425°F 20 min then 325°F." }}] }, took:14 } },
+      { id:3, name:"BuildContextWindow", status:"Completed", duration:"9ms", type:"activity", retries:0,
+        input: { retrievedDocs:2, maxContextTokens:4096, conversationHistoryLength:0 },
+        output: { totalTokens:1102, truncated:false, contextWindowUsage:"26.9%" } },
+      { id:4, name:"LLMCompletionCall", status:"Completed", duration:"2.7s", type:"activity", retries:0,
+        input: { model:"claude-sonnet-4-20250514", temperature:0.3, maxTokens:1024 },
+        output: { response:"Lamb is incredibly versatile with spices!\n\nClassic European: Rosemary, thyme, garlic, black pepper.\nMiddle Eastern: Cumin, coriander, sumac, mint.\nNorth African: Ras el hanout, harissa, preserved lemon.\n\nFor foolproof roast: garlic-rosemary-dijon paste rubbed into scored cuts.", finishReason:"stop", usage:{ promptTokens:1126, completionTokens:148, totalTokens:1274 } } },
+      { id:5, name:"StoreConversationTurn", status:"Completed", duration:"72ms", type:"activity", retries:0,
+        input: { sessionId:"sess_c71b8", userId:"user_3304", store:"elasticsearch", index:"chat-history-v2" },
+        output: { stored:true, documentId:"chat_turn_33040012", conversationLength:2 } }
+    ]
+  },
+  {
+    id: "cooking-chat-e45f01", runId: "run-9a71c4e2", type: "CookingChatWorkflow", status: "Running",
+    startTime: "2026-04-05T14:25:02Z", endTime: null, duration: "1.2s…", taskQueue: "cooking-rag-workers",
+    input: { userId: "user_5519", sessionId: "sess_d88e2", query: "Can I substitute buttermilk in pancake recipes?", conversationHistory: [{ role: "user", content: "I'm making pancakes tomorrow" }] },
+    activities: [
+      { id:1, name:"ValidateAndParseInput", status:"Completed", duration:"41ms", type:"activity", retries:0,
+        input: { query:"Can I substitute buttermilk in pancake recipes?", userId:"user_5519" },
+        output: { parsed:true, intent:"substitution_question", dish:"pancakes", ingredient:"buttermilk", sanitizedQuery:"buttermilk substitute pancakes", tokens:8, language:"en" } },
+      { id:2, name:"ElasticsearchRAGRetrieval", status:"Completed", duration:"305ms", type:"activity", retries:0,
+        input: { index:"cooking-knowledge-v3", query:{ bool:{ must:[{ multi_match:{ query:"buttermilk substitute pancakes", fields:["title^3","content^2","ingredients"], type:"best_fields" }}] }}, size:5 },
+        output: { hits:{ total:{ value:28, relation:"eq" }, max_score:11.55, hits:[{ _id:"doc_4410", _score:11.55, _source:{ title:"Ingredient Substitution Bible", content:"Buttermilk sub: 1 tbsp lemon juice or vinegar + 1 cup milk. Let stand 5 min. Also: thin yogurt with milk." }}] }, took:22 } },
+      { id:3, name:"BuildContextWindow", status:"Completed", duration:"8ms", type:"activity", retries:0,
+        input: { retrievedDocs:1, maxContextTokens:4096 },
+        output: { totalTokens:890, truncated:false, contextWindowUsage:"21.7%" } },
+      { id:4, name:"LLMCompletionCall", status:"Running", duration:"850ms…", type:"activity", retries:0,
+        input: { model:"claude-sonnet-4-20250514", temperature:0.3, maxTokens:1024 },
+        output: null },
+      { id:5, name:"StoreConversationTurn", status:"Pending", duration:"—", type:"activity", retries:0,
+        input: null, output: null }
+    ]
+  },
+  {
+    id: "cooking-index-b82d11", runId: "run-c33ef901", type: "KnowledgeIndexWorkflow", status: "Completed",
+    startTime: "2026-04-05T13:00:00Z", endTime: "2026-04-05T13:02:45Z", duration: "2m 45s", taskQueue: "indexing-workers",
+    input: { source: "s3://cooking-content/new-recipes-batch-042.json", documentCount: 124, targetIndex: "cooking-knowledge-v3" },
+    activities: [
+      { id:1, name:"FetchSourceDocuments", status:"Completed", duration:"4.2s", type:"activity", retries:0,
+        input: { source:"s3://cooking-content/new-recipes-batch-042.json", format:"json" },
+        output: { documentsLoaded:124, totalSizeBytes:847200, categories:{ recipe:89, technique:22, spice_guide:8, substitution:5 } } },
+      { id:2, name:"ChunkAndEmbed", status:"Completed", duration:"1m 52s", type:"activity", retries:0,
+        input: { chunkStrategy:"semantic", maxChunkTokens:512, overlapTokens:50, embeddingModel:"text-embedding-3-small" },
+        output: { chunksCreated:341, avgChunkTokens:287, embeddingDimension:1536, failedChunks:0, processingRate:"3.05 chunks/sec" } },
+      { id:3, name:"BulkIndexToElasticsearch", status:"Completed", duration:"38s", type:"activity", retries:1,
+        input: { index:"cooking-knowledge-v3", bulkSize:50, pipeline:"cooking-enrichment-pipeline", refresh:"wait_for" },
+        output: { indexed:341, errors:0, retryReason:"bulk_request_timeout on first attempt", took:3420, refreshed:true, indexStats:{ totalDocs:14892, indexSizeBytes:89400000 } } }
+    ]
+  },
+  {
+    id: "cooking-chat-x99fa3", runId: "run-dead0001", type: "CookingChatWorkflow", status: "Failed",
+    startTime: "2026-04-05T14:18:30Z", endTime: "2026-04-05T14:18:32Z", duration: "1.9s", taskQueue: "cooking-rag-workers",
+    input: { userId: "user_1102", sessionId: "sess_badf00d", query: "How long to smoke a brisket?", conversationHistory: [] },
+    activities: [
+      { id:1, name:"ValidateAndParseInput", status:"Completed", duration:"35ms", type:"activity", retries:0,
+        input: { query:"How long to smoke a brisket?", userId:"user_1102" },
+        output: { parsed:true, intent:"cooking_time", protein:"brisket", method:"smoking", sanitizedQuery:"smoke brisket time temperature", tokens:7, language:"en" } },
+      { id:2, name:"ElasticsearchRAGRetrieval", status:"Failed", duration:"1.8s", type:"activity", retries:3,
+        input: { index:"cooking-knowledge-v3", query:{ bool:{ must:[{ multi_match:{ query:"smoke brisket time temperature", fields:["title^3","content^2"] }}] }}, size:5 },
+        output: { error:"ConnectionError: failed to connect to elasticsearch cluster [es-prod-cooking:9200] — all 3 retries exhausted", errorType:"ELASTICSEARCH_CONNECTION_FAILURE", lastRetryAt:"2026-04-05T14:18:32.110Z", retryBackoffs:["200ms","800ms","1600ms"] } }
+    ]
+  }
+];
+
+// ── Rendering ──
+let selectedWorkflow = null;
+let selectedActivity = null;
+let currentFilter = 'all';
+
+function renderWorkflowList() {
+  const c = document.getElementById('workflow-rows');
+  const filtered = currentFilter === 'all' ? WORKFLOWS : WORKFLOWS.filter(w => w.status === currentFilter);
+  c.innerHTML = filtered.map(w => `
+    <div class="workflow-row ${selectedWorkflow?.id === w.id ? 'selected' : ''}" onclick="selectWorkflow('${w.id}')">
+      <div>
+        <span class="mono" style="font-size:13px;color:var(--accent-blue);font-weight:500;">${w.id}</span>
+        <div class="mono" style="font-size:10px;color:var(--text-muted);margin-top:2px;">${w.runId}</div>
+      </div>
+      <div>
+        <span style="font-size:13px;font-weight:600;">${w.type}</span>
+        <div class="mono" style="font-size:10px;color:var(--text-muted);margin-top:2px;">${w.taskQueue}</div>
+      </div>
+      <div><span class="status-pill status-${w.status.toLowerCase()}">${sIcon(w.status)} ${w.status}</span></div>
+      <div class="mono" style="font-size:12px;color:var(--text-secondary);">${fmtTime(w.startTime)}</div>
+      <div class="mono" style="font-size:12px;color:var(--text-secondary);">${w.duration}</div>
+      <div class="mono" style="font-size:12px;color:var(--text-secondary);text-align:center;">${w.activities.length}</div>
+    </div>
+  `).join('');
+}
+
+function sIcon(s) {
+  return s==='Completed'?'✓':s==='Running'?'<span class="pulse">◉</span>':s==='Failed'?'✗':'○';
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}
+
+function filterStatus(status) {
+  currentFilter = status;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.style.opacity = (status==='all'&&b.dataset.filter==='all')||b.dataset.filter===status?'1':'0.35';
+  });
+  renderWorkflowList();
+}
+
+function selectWorkflow(id) {
+  selectedWorkflow = WORKFLOWS.find(w=>w.id===id);
+  selectedActivity = selectedWorkflow.activities[0];
+  document.getElementById('workflow-list-panel').style.width='42%';
+  document.getElementById('workflow-list-panel').style.flexShrink='0';
+  document.getElementById('detail-panel').style.display='flex';
+  renderWorkflowList(); renderDetailHeader(); renderTimeline(); renderActivityDetail();
+}
+
+function renderDetailHeader() {
+  const w = selectedWorkflow;
+  document.getElementById('detail-header').innerHTML = `
+    <div class="fade-in" style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <span class="mono" style="font-size:15px;font-weight:600;color:var(--accent-blue);">${w.id}</span>
+          <span class="status-pill status-${w.status.toLowerCase()}">${sIcon(w.status)} ${w.status}</span>
+        </div>
+        <div class="mono" style="font-size:11px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+          <span>type: <span style="color:var(--text-secondary)">${w.type}</span></span>
+          <span>queue: <span style="color:var(--text-secondary)">${w.taskQueue}</span></span>
+          <span>run: <span style="color:var(--text-secondary)">${w.runId}</span></span>
+        </div>
+      </div>
+      <button onclick="closeDetail()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;padding:4px 12px;font-size:12px;font-weight:600;" onmouseover="this.style.borderColor='var(--accent-red)';this.style.color='var(--accent-red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">✕</button>
+    </div>`;
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').style.display='none';
+  document.getElementById('workflow-list-panel').style.width='100%';
+  selectedWorkflow=null; selectedActivity=null; renderWorkflowList();
+}
+
+function renderTimeline() {
+  const acts = selectedWorkflow.activities;
+  document.getElementById('activity-timeline').innerHTML = `<div class="fade-in">
+    <div class="mono" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">Activity Timeline</div>
+    ${acts.map((a,i)=>`
+      <div class="activity-node ${selectedActivity?.id===a.id?'selected':''}" onclick="selectActivity(${a.id})">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+          <span class="status-pill status-${a.status.toLowerCase()}" style="font-size:9px;padding:2px 7px;">${sIcon(a.status)}</span>
+          <span class="mono" style="font-size:12px;font-weight:600;">${a.name}</span>
+        </div>
+        <div class="mono" style="font-size:10px;color:var(--text-muted);display:flex;gap:12px;">
+          <span>${a.duration}</span>
+          ${a.retries>0?`<span style="color:var(--accent-amber);">⟳ ${a.retries} retries</span>`:''}
+        </div>
+      </div>
+      ${i<acts.length-1?'<div class="activity-connector"></div>':''}
+    `).join('')}
+  </div>`;
+}
+
+function selectActivity(id) {
+  selectedActivity = selectedWorkflow.activities.find(a=>a.id===id);
+  renderTimeline(); renderActivityDetail();
+}
+
+function renderActivityDetail() {
+  const a = selectedActivity;
+  if (!a) { document.getElementById('activity-detail').innerHTML=''; return; }
+  document.getElementById('activity-detail').innerHTML = `<div class="slide-in">
+    <div style="padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg-panel);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span class="status-pill status-${a.status.toLowerCase()}">${sIcon(a.status)} ${a.status}</span>
+        <span class="mono" style="font-size:14px;font-weight:600;">${a.name}</span>
+      </div>
+      <div class="mono" style="font-size:11px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+        <span>duration: <span style="color:var(--text-secondary)">${a.duration}</span></span>
+        <span>type: <span style="color:var(--text-secondary)">${a.type}</span></span>
+        <span>retries: <span style="color:${a.retries>0?'var(--accent-amber)':'var(--text-secondary)'}">${a.retries}</span></span>
+      </div>
+    </div>
+    <div style="display:flex;border-bottom:1px solid var(--border);padding:0 24px;background:var(--bg-panel);">
+      <button class="tab-btn active" onclick="switchTab('Input',this)">Input</button>
+      <button class="tab-btn" onclick="switchTab('Output',this)">Output</button>
+    </div>
+    <div id="tab-content" style="padding:20px 24px;overflow-y:auto;max-height:calc(100vh - 280px);">
+      ${renderJson(a.input)}
+    </div>
+  </div>`;
+}
+
+function switchTab(tab,el) {
+  el.parentElement.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  const a=selectedActivity, d=tab==='Input'?a.input:a.output;
+  document.getElementById('tab-content').innerHTML = d===null
+    ? `<div style="color:var(--text-muted);font-style:italic;padding:20px 0;">${a.status==='Running'?'<span class="pulse">●</span> In progress…':a.status==='Pending'?'Not yet started':'No data'}</div>`
+    : renderJson(d);
+}
+
+function renderJson(obj) {
+  if (obj==null) return '<span class="json-null">null</span>';
+  return `<div class="json-viewer">${highlight(JSON.stringify(obj,null,2))}</div>`;
+}
+
+function highlight(json) {
+  return json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?/g, m => {
+      if (m.endsWith(':')) return `<span class="json-key">${m.slice(0,-1)}</span>:`;
+      return `<span class="json-string">${m}</span>`;
+    })
+    .replace(/\b(true|false)\b/g,'<span class="json-bool">$1</span>')
+    .replace(/\bnull\b/g,'<span class="json-null">null</span>')
+    .replace(/\b(-?\d+\.?\d*([eE][+-]?\d+)?)\b/g,'<span class="json-number">$1</span>')
+    .replace(/([[\]{}])/g,'<span class="json-bracket">$1</span>');
+}
+
+// Init
+filterStatus('all');
+renderWorkflowList();
+</script>
+</body>
+</html>
