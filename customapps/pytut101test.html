@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Python Testing Tutorial — pytest, unittest.mock, AWS, Azure, REST, Postgres, Temporal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef6ff',
+              100: '#d9ebff',
+              200: '#bcdcff',
+              300: '#8fc5ff',
+              400: '#5aa6ff',
+              500: '#2f84ff',
+              600: '#1a65db',
+              700: '#174fad',
+              800: '#194487',
+              900: '#1b3b70'
+            }
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(0,0,0,0.10)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .code-block { white-space: pre-wrap; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans">
+  <div class="min-h-screen">
+    <header class="bg-gradient-to-br from-brand-700 via-brand-600 to-slate-900 text-white">
+      <div class="max-w-7xl mx-auto px-6 py-10 lg:py-14">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+          <div class="max-w-4xl">
+            <p class="uppercase tracking-[0.25em] text-brand-100 text-xs font-semibold">Hands-on Tutorial</p>
+            <h1 class="text-4xl lg:text-5xl font-black leading-tight mt-3">Build Python tests with <span class="text-brand-200">pytest</span> and <span class="text-brand-200">unittest.mock</span></h1>
+            <p class="mt-5 text-base lg:text-lg text-slate-100/90 max-w-3xl">
+              Learn a simple step-by-step approach for testing AWS S3, Azure Blob Storage, REST APIs, Boto clients,
+              PostgreSQL code, and Temporal Python apps. This page focuses on practical structure, small examples,
+              setup tips, and easy scripts so a new developer can get working quickly.
+            </p>
+            <div class="mt-6 flex flex-wrap gap-3">
+              <a href="#roadmap" class="px-4 py-2 rounded-xl bg-white text-slate-900 font-semibold hover:bg-slate-100 transition">Start tutorial</a>
+              <a href="#project-layout" class="px-4 py-2 rounded-xl border border-white/30 hover:bg-white/10 transition">Project layout</a>
+              <a href="#official-links" class="px-4 py-2 rounded-xl border border-white/30 hover:bg-white/10 transition">Official docs</a>
+            </div>
+          </div>
+          <div class="flex flex-col gap-3 min-w-[220px]">
+            <button id="themeToggle" class="px-4 py-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-white/20 transition text-left">
+              <span class="block text-sm text-brand-100">Display</span>
+              <span class="font-semibold">Toggle light / dark mode</span>
+            </button>
+            <button class="px-4 py-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-white/20 transition text-left" onclick="openModal('modal-quickwin')">
+              <span class="block text-sm text-brand-100">Quick win</span>
+              <span class="font-semibold">How to keep tests simple</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+      <section id="roadmap" class="grid lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <h2 class="text-2xl font-bold">1) Testing roadmap</h2>
+          <p class="mt-3 text-slate-700 dark:text-slate-300">
+            The easiest way to test cloud and integration-heavy Python apps is to keep business logic separate from service SDK calls.
+            That lets you mock the SDK layer and test your own logic first, then add a small number of integration tests later.
+          </p>
+          <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 border border-slate-200 dark:border-slate-700">
+              <div class="text-sm font-semibold text-brand-700 dark:text-brand-300">Step 1</div>
+              <h3 class="font-bold mt-1">Build small wrappers</h3>
+              <p class="text-sm mt-2 text-slate-600 dark:text-slate-300">Wrap boto3, Azure SDK, requests, psycopg, and Temporal client code in small classes or functions.</p>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 border border-slate-200 dark:border-slate-700">
+              <div class="text-sm font-semibold text-brand-700 dark:text-brand-300">Step 2</div>
+              <h3 class="font-bold mt-1">Mock the boundary</h3>
+              <p class="text-sm mt-2 text-slate-600 dark:text-slate-300">Use unittest.mock.patch or pytest monkeypatch at the place your code imports the dependency.</p>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 border border-slate-200 dark:border-slate-700">
+              <div class="text-sm font-semibold text-brand-700 dark:text-brand-300">Step 3</div>
+              <h3 class="font-bold mt-1">Assert behavior</h3>
+              <p class="text-sm mt-2 text-slate-600 dark:text-slate-300">Check returned values, raised exceptions, retry logic, SQL parameters, headers, and method calls.</p>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 border border-slate-200 dark:border-slate-700">
+              <div class="text-sm font-semibold text-brand-700 dark:text-brand-300">Step 4</div>
+              <h3 class="font-bold mt-1">Add a few integration tests</h3>
+              <p class="text-sm mt-2 text-slate-600 dark:text-slate-300">Use real services only for key end-to-end paths, not every single unit test.</p>
+            </div>
+          </div>
+        </div>
+
+        <aside class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <h2 class="text-xl font-bold">What you will learn</h2>
+          <ul class="mt-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
+            <li>pytest basics and test discovery</li>
+            <li>unittest.mock patch, Mock, MagicMock, AsyncMock</li>
+            <li>Testing S3 and boto3 wrappers</li>
+            <li>Testing Azure Blob client wrappers</li>
+            <li>Testing REST clients with mocked requests</li>
+            <li>Testing Postgres access code</li>
+            <li>Testing Temporal workflows and activities</li>
+            <li>Simple shell and batch scripts for running tests</li>
+          </ul>
+          <button class="mt-5 w-full px-4 py-3 rounded-2xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition" onclick="openModal('modal-test-types')">More info: test types</button>
+        </aside>
+      </section>
+
+      <section id="project-layout" class="mt-8 bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold">2) Simple project layout</h2>
+            <p class="mt-2 text-slate-700 dark:text-slate-300">A clean structure makes testing much easier.</p>
+          </div>
+          <button class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" onclick="copyCode('layoutCode')">Copy layout</button>
+        </div>
+        <div id="layoutCode" class="mt-5 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 overflow-x-auto font-mono text-sm">myapp/
+├── src/
+│   ├── config.py
+│   ├── s3_service.py
+│   ├── azure_blob_service.py
+│   ├── rest_client.py
+│   ├── postgres_repo.py
+│   ├── temporal_client_app.py
+│   └── temporal_activities.py
+├── tests/
+│   ├── test_s3_service.py
+│   ├── test_azure_blob_service.py
+│   ├── test_rest_client.py
+│   ├── test_postgres_repo.py
+│   ├── test_temporal_client_app.py
+│   ├── test_temporal_activities.py
+│   └── conftest.py
+├── requirements.txt
+├── pytest.ini
+├── run-tests.sh
+└── run-tests.bat</div>
+      </section>
+
+      <section class="mt-8 grid lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <h2 class="text-2xl font-bold">3) Setup and configuration</h2>
+          <div class="mt-4 space-y-4 text-sm">
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4">
+              <h3 class="font-bold">requirements.txt</h3>
+              <div id="requirementsCode" class="mt-3 code-block rounded-xl bg-slate-950 text-slate-100 p-4 font-mono overflow-x-auto">pytest
+pytest-cov
+requests
+boto3
+botocore
+azure-storage-blob
+psycopg[binary]
+temporalio</div>
+              <button class="mt-3 px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="copyCode('requirementsCode')">Copy requirements</button>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4">
+              <h3 class="font-bold">pytest.ini</h3>
+              <div id="pytestCode" class="mt-3 code-block rounded-xl bg-slate-950 text-slate-100 p-4 font-mono overflow-x-auto">[pytest]
+testpaths = tests
+python_files = test_*.py
+addopts = -q --tb=short</div>
+              <button class="mt-3 px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="copyCode('pytestCode')">Copy pytest.ini</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <h2 class="text-2xl font-bold">4) Easy run scripts</h2>
+          <div class="space-y-4 mt-4">
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="font-bold">run-tests.sh</h3>
+                <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="copyCode('shellCode')">Copy shell</button>
+              </div>
+              <div id="shellCode" class="mt-3 code-block rounded-xl bg-slate-950 text-slate-100 p-4 font-mono overflow-x-auto">#!/usr/bin/env bash
+set -e
+
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pytest -v
+pytest --cov=src --cov-report=term-missing</div>
+            </div>
+            <div class="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="font-bold">run-tests.bat</h3>
+                <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="copyCode('batCode')">Copy batch</button>
+              </div>
+              <div id="batCode" class="mt-3 code-block rounded-xl bg-slate-950 text-slate-100 p-4 font-mono overflow-x-auto">@echo off
+python -m venv .venv
+call .venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pytest -v
+pytest --cov=src --cov-report=term-missing</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-8 bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="text-2xl font-bold">5) Core testing pattern</h2>
+            <p class="mt-2 text-slate-700 dark:text-slate-300">Write code so the external dependency is easy to replace in tests.</p>
+          </div>
+          <button class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" onclick="openModal('modal-patching')">More info: where to patch</button>
+        </div>
+        <div class="grid lg:grid-cols-2 gap-6 mt-5">
+          <div>
+            <h3 class="font-bold text-lg">Example service</h3>
+            <div id="corePatternCode" class="mt-3 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># src/rest_client.py
+import requests
+
+class UserApiClient:
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip('/')
+
+    def get_user(self, user_id: str) -> dict:
+        response = requests.get(f"{self.base_url}/users/{user_id}", timeout=10)
+        response.raise_for_status()
+        return response.json()</div>
+            <button class="mt-3 px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="copyCode('corePatternCode')">Copy example</button>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg">Example test</h3>
+            <div id="corePatternTestCode" class="mt-3 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># tests/test_rest_client.py
+from unittest.mock import Mock, patch
+from src.rest_client import UserApiClient
+
+@patch('src.rest_client.requests.get')
+def test_get_user_returns_json(mock_get):
+    fake_response = Mock()
+    fake_response.json.return_value = {'id': '123', 'name': 'Ada'}
+    fake_response.raise_for_status.return_value = None
+    mock_get.return_value = fake_response
+
+    client = UserApiClient('https://api.example.com')
+    result = client.get_user('123')
+
+    assert result['name'] == 'Ada'
+    mock_get.assert_called_once()</div>
+            <button class="mt-3 px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="copyCode('corePatternTestCode')">Copy test</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-8 grid xl:grid-cols-2 gap-6">
+        <article class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold">6) Test AWS S3 and boto3</h2>
+              <p class="mt-2 text-slate-700 dark:text-slate-300">Mock the boto3 client or resource instead of calling real AWS in unit tests.</p>
+            </div>
+            <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="openModal('modal-s3')">More info</button>
+          </div>
+          <div id="s3Code" class="mt-4 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># src/s3_service.py
+import boto3
+
+class S3DocumentStore:
+    def __init__(self, bucket_name: str):
+        self.bucket_name = bucket_name
+        self.client = boto3.client('s3')
+
+    def upload_text(self, key: str, text: str) -> None:
+        self.client.put_object(
+            Bucket=self.bucket_name,
+            Key=key,
+            Body=text.encode('utf-8'),
+            ContentType='text/plain'
+        )
+
+# tests/test_s3_service.py
+from unittest.mock import patch
+from src.s3_service import S3DocumentStore
+
+@patch('src.s3_service.boto3.client')
+def test_upload_text_calls_put_object(mock_boto_client):
+    fake_client = mock_boto_client.return_value
+    store = S3DocumentStore('demo-bucket')
+
+    store.upload_text('docs/a.txt', 'hello')
+
+    fake_client.put_object.assert_called_once()</div>
+        </article>
+
+        <article class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold">7) Test Azure Blob Storage</h2>
+              <p class="mt-2 text-slate-700 dark:text-slate-300">Create a small wrapper and patch BlobServiceClient where your module imports it.</p>
+            </div>
+            <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="openModal('modal-azure')">More info</button>
+          </div>
+          <div id="azureCode" class="mt-4 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># src/azure_blob_service.py
+from azure.storage.blob import BlobServiceClient
+
+class AzureBlobStore:
+    def __init__(self, conn_str: str, container_name: str):
+        self.client = BlobServiceClient.from_connection_string(conn_str)
+        self.container_name = container_name
+
+    def upload_text(self, blob_name: str, text: str):
+        blob_client = self.client.get_blob_client(container=self.container_name, blob=blob_name)
+        blob_client.upload_blob(text, overwrite=True)
+
+# tests/test_azure_blob_service.py
+from unittest.mock import patch
+from src.azure_blob_service import AzureBlobStore
+
+@patch('src.azure_blob_service.BlobServiceClient')
+def test_upload_text_to_blob(mock_blob_service_client):
+    fake_service = mock_blob_service_client.from_connection_string.return_value
+    fake_blob_client = fake_service.get_blob_client.return_value
+
+    store = AzureBlobStore('UseDevelopmentStorage=true', 'docs')
+    store.upload_text('sample.txt', 'hello azure')
+
+    fake_blob_client.upload_blob.assert_called_once_with('hello azure', overwrite=True)</div>
+        </article>
+      </section>
+
+      <section class="mt-8 grid xl:grid-cols-2 gap-6">
+        <article class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold">8) Test REST APIs</h2>
+              <p class="mt-2 text-slate-700 dark:text-slate-300">Mock requests.get, requests.post, or a Session object. Check URL, headers, payload, timeout, and error handling.</p>
+            </div>
+            <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="openModal('modal-rest')">More info</button>
+          </div>
+          <div id="restCode" class="mt-4 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm">from unittest.mock import Mock, patch
+import pytest
+from src.rest_client import UserApiClient
+
+@patch('src.rest_client.requests.get')
+def test_get_user_raises_for_bad_status(mock_get):
+    fake_response = Mock()
+    fake_response.raise_for_status.side_effect = Exception('boom')
+    mock_get.return_value = fake_response
+
+    client = UserApiClient('https://api.example.com')
+
+    with pytest.raises(Exception):
+        client.get_user('999')</div>
+        </article>
+
+        <article class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold">9) Test Postgres code</h2>
+              <p class="mt-2 text-slate-700 dark:text-slate-300">Mock the psycopg connection and cursor for unit tests. Keep SQL parameters separate and assert execute calls.</p>
+            </div>
+            <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="openModal('modal-postgres')">More info</button>
+          </div>
+          <div id="postgresCode" class="mt-4 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># src/postgres_repo.py
+import psycopg
+
+class UserRepository:
+    def __init__(self, dsn: str):
+        self.dsn = dsn
+
+    def get_user_name(self, user_id: int) -> str | None:
+        with psycopg.connect(self.dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT name FROM users WHERE id = %s', (user_id,))
+                row = cur.fetchone()
+                return row[0] if row else None
+
+# tests/test_postgres_repo.py
+from unittest.mock import MagicMock, patch
+from src.postgres_repo import UserRepository
+
+@patch('src.postgres_repo.psycopg.connect')
+def test_get_user_name(mock_connect):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = ('Ada',)
+
+    mock_connect.return_value.__enter__.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+    repo = UserRepository('postgresql://demo')
+    name = repo.get_user_name(1)
+
+    assert name == 'Ada'
+    mock_cur.execute.assert_called_once_with('SELECT name FROM users WHERE id = %s', (1,))</div>
+        </article>
+      </section>
+
+      <section class="mt-8 grid xl:grid-cols-2 gap-6">
+        <article class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold">10) Test Temporal apps</h2>
+              <p class="mt-2 text-slate-700 dark:text-slate-300">Separate workflow logic, activities, and client startup. Mock activity dependencies for unit tests and use Temporal's test tools for deeper tests.</p>
+            </div>
+            <button class="px-3 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition" onclick="openModal('modal-temporal')">More info</button>
+          </div>
+          <div id="temporalCode" class="mt-4 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># src/temporal_activities.py
+async def normalize_filename(name: str) -> str:
+    return name.strip().lower().replace(' ', '_')
+
+# tests/test_temporal_activities.py
+import pytest
+from src.temporal_activities import normalize_filename
+
+@pytest.mark.asyncio
+async def test_normalize_filename():
+    result = await normalize_filename(' My File.PDF ')
+    assert result == 'my_file.pdf'</div>
+          <div class="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm">
+            <strong>Tip:</strong> For full workflow and worker tests, keep most logic in activities or helper modules so you can unit test it cheaply. Then add a smaller number of Temporal integration tests.
+          </div>
+        </article>
+
+        <article class="bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+          <h2 class="text-2xl font-bold">11) Use fixtures to reduce duplication</h2>
+          <div id="fixtureCode" class="mt-4 code-block rounded-2xl bg-slate-950 text-slate-100 p-5 font-mono overflow-x-auto text-sm"># tests/conftest.py
+import pytest
+from src.rest_client import UserApiClient
+
+@pytest.fixture
+def api_client():
+    return UserApiClient('https://api.example.com')</div>
+          <p class="mt-4 text-sm text-slate-700 dark:text-slate-300">
+            Fixtures help centralize setup like config, fake environment variables, reusable mock data, and sample payloads.
+          </p>
+          <button class="mt-4 px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" onclick="openModal('modal-fixtures')">More info: fixtures and env vars</button>
+        </article>
+      </section>
+
+      <section class="mt-8 bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+        <h2 class="text-2xl font-bold">12) Suggested step-by-step learning path</h2>
+        <div class="mt-5 grid md:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div class="font-bold">Week 1</div>
+            <p class="mt-2">Learn pytest discovery, asserts, fixtures, and running tests from shell scripts.</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div class="font-bold">Week 2</div>
+            <p class="mt-2">Practice unittest.mock patch, Mock, MagicMock, and AsyncMock on REST and SDK wrappers.</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div class="font-bold">Week 3</div>
+            <p class="mt-2">Add Postgres and cloud storage tests. Assert SQL statements, request payloads, and error handling.</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div class="font-bold">Week 4</div>
+            <p class="mt-2">Add Temporal tests. Start with activity logic, then worker and workflow integration tests.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="official-links" class="mt-8 bg-white dark:bg-slate-900 rounded-3xl shadow-soft p-6 border border-slate-200 dark:border-slate-800">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="text-2xl font-bold">Official docs and references</h2>
+            <p class="mt-2 text-slate-700 dark:text-slate-300">These are the main links you will want open while learning and building tests.</p>
+          </div>
+          <button class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" onclick="openModal('modal-doc-links')">Why these links?</button>
+        </div>
+        <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5 text-sm">
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://docs.pytest.org/en/stable/getting-started.html" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">pytest getting started</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">Install, first tests, and basic workflow</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://docs.python.org/3/library/unittest.mock.html" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">unittest.mock</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">Mock, patch, assert calls, side effects</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://docs.pytest.org/en/stable/how-to/monkeypatch.html" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">pytest monkeypatch</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">Patch env vars, attributes, and globals</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://docs.aws.amazon.com/boto3/latest/reference/services/s3.html" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">Boto3 S3 reference</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">S3 client and resource operations</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://learn.microsoft.com/en-us/python/api/overview/azure/storage-blob-readme?view=azure-python" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">Azure Blob Storage SDK</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">Blob client, upload, auth, and examples</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://requests.readthedocs.io/en/latest/user/quickstart/" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">Requests quickstart</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">HTTP methods, JSON handling, timeouts</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://www.psycopg.org/psycopg3/docs/basic/usage.html" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">Psycopg 3 usage</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">Connections, cursors, SQL parameters</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://docs.temporal.io/develop/python/testing-suite" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">Temporal Python testing</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">Workflow, activity, and integration testing</div>
+          </a>
+          <a class="block p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition" href="https://python.temporal.io/" target="_blank" rel="noopener noreferrer">
+            <div class="font-bold">Temporal Python API</div>
+            <div class="mt-1 text-slate-600 dark:text-slate-300">SDK modules, classes, and packages</div>
+          </a>
+        </div>
+      </section>
+
+      <section class="mt-8 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl shadow-soft p-6 border border-slate-700">
+        <h2 class="text-2xl font-bold">13) Final advice</h2>
+        <div class="grid md:grid-cols-2 gap-4 mt-5 text-sm">
+          <div class="p-4 rounded-2xl bg-white/5 border border-white/10">Test your code first, not the cloud vendor's SDK internals.</div>
+          <div class="p-4 rounded-2xl bg-white/5 border border-white/10">Mock at the module import location used by your code.</div>
+          <div class="p-4 rounded-2xl bg-white/5 border border-white/10">Keep real integration tests small, targeted, and separate from unit tests.</div>
+          <div class="p-4 rounded-2xl bg-white/5 border border-white/10">Use simple scripts so anyone on the team can run tests quickly on Windows or shell.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modalBackdrop" class="hidden fixed inset-0 bg-black/60 z-40"></div>
+  <div id="modalContainer" class="hidden fixed inset-0 z-50 p-4 md:p-8 overflow-y-auto">
+    <div class="max-w-3xl mx-auto bg-white dark:bg-slate-900 rounded-3xl shadow-soft border border-slate-200 dark:border-slate-800">
+      <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+        <div>
+          <h3 id="modalTitle" class="text-2xl font-bold">More info</h3>
+        </div>
+        <button onclick="closeModal()" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Close</button>
+      </div>
+      <div id="modalBody" class="p-6 text-sm leading-7 text-slate-700 dark:text-slate-300"></div>
+    </div>
+  </div>
+
+  <script>
+    const modalContent = {
+      'modal-quickwin': {
+        title: 'How to keep tests simple',
+        body: `
+          <p>Keep your app code split into two layers:</p>
+          <ol class="list-decimal ml-6 mt-3 space-y-2">
+            <li>Business logic that transforms data and decides what to do.</li>
+            <li>Integration code that calls AWS, Azure, databases, HTTP APIs, or Temporal.</li>
+          </ol>
+          <p class="mt-4">Unit tests should mostly target layer 1 and only mock layer 2.</p>
+        `
+      },
+      'modal-test-types': {
+        title: 'Test types to use',
+        body: `
+          <ul class="list-disc ml-6 space-y-2">
+            <li><strong>Unit tests:</strong> fast, local, mostly mocked.</li>
+            <li><strong>Integration tests:</strong> real database, local emulator, or test container.</li>
+            <li><strong>End-to-end tests:</strong> full path through the app, used sparingly.</li>
+          </ul>
+          <p class="mt-4">A healthy project usually has many unit tests, fewer integration tests, and only a handful of end-to-end tests.</p>
+        `
+      },
+      'modal-patching': {
+        title: 'Where to patch',
+        body: `
+          <p>The biggest beginner mistake is patching the library in the wrong place.</p>
+          <p class="mt-3">Patch the object <strong>where your module looks it up</strong>.</p>
+          <div class="mt-4 rounded-2xl bg-slate-950 text-slate-100 p-4 font-mono">@patch('src.rest_client.requests.get')</div>
+          <p class="mt-4">Do not patch the global package name unless your code actually reads it from there at runtime.</p>
+        `
+      },
+      'modal-s3': {
+        title: 'Testing S3 and boto3',
+        body: `
+          <ul class="list-disc ml-6 space-y-2">
+            <li>Mock <code>boto3.client</code> or <code>boto3.resource</code>.</li>
+            <li>Assert bucket name, key, content type, and payload.</li>
+            <li>Test error handling with <code>side_effect</code>.</li>
+            <li>Move retry logic into your own code so you can test it directly.</li>
+          </ul>
+        `
+      },
+      'modal-azure': {
+        title: 'Testing Azure Blob Storage',
+        body: `
+          <ul class="list-disc ml-6 space-y-2">
+            <li>Wrap <code>BlobServiceClient</code> in your own class.</li>
+            <li>Mock <code>from_connection_string</code> and <code>get_blob_client</code>.</li>
+            <li>Assert blob name, container, and overwrite flags.</li>
+            <li>Keep auth and connection string loading in config helpers.</li>
+          </ul>
+        `
+      },
+      'modal-rest': {
+        title: 'Testing REST clients',
+        body: `
+          <ul class="list-disc ml-6 space-y-2">
+            <li>Mock <code>requests.get</code>, <code>requests.post</code>, or a Session object.</li>
+            <li>Test timeout use, auth headers, query params, and JSON body shape.</li>
+            <li>Use <code>raise_for_status</code> in app code and test failure paths.</li>
+            <li>Keep parsing logic in separate helpers when responses are complex.</li>
+          </ul>
+        `
+      },
+      'modal-postgres': {
+        title: 'Testing PostgreSQL code',
+        body: `
+          <ul class="list-disc ml-6 space-y-2">
+            <li>Mock <code>psycopg.connect</code> for unit tests.</li>
+            <li>Assert the exact SQL and parameters passed to <code>execute</code>.</li>
+            <li>Test row-found and row-not-found cases.</li>
+            <li>For stronger confidence, add a few integration tests against a real Postgres instance.</li>
+          </ul>
+        `
+      },
+      'modal-temporal': {
+        title: 'Testing Temporal Python apps',
+        body: `
+          <ul class="list-disc ml-6 space-y-2">
+            <li>Keep activities small and test them directly.</li>
+            <li>Keep pure helper logic outside workflow decorators when possible.</li>
+            <li>Use async tests for async activities.</li>
+            <li>Add Temporal integration tests for worker and workflow behavior after unit tests are solid.</li>
+          </ul>
+        `
+      },
+      'modal-fixtures': {
+        title: 'Fixtures and environment variables',
+        body: `
+          <p>Use fixtures to create reusable setup. Combine them with <code>monkeypatch</code> to safely change environment variables during tests.</p>
+          <div class="mt-4 rounded-2xl bg-slate-950 text-slate-100 p-4 font-mono overflow-x-auto">def test_reads_env(monkeypatch):
+    monkeypatch.setenv('AWS_REGION', 'us-east-1')</div>
+        `
+      },
+      'modal-doc-links': {
+        title: 'Why these official links',
+        body: `
+          <p>These links cover the exact tools used in this tutorial:</p>
+          <ul class="list-disc ml-6 mt-3 space-y-2">
+            <li>pytest for test running, fixtures, and monkeypatch</li>
+            <li>unittest.mock for patching and assertions</li>
+            <li>Boto3 S3 docs for AWS object storage operations</li>
+            <li>Azure Blob SDK docs for Python storage wrappers</li>
+            <li>Requests docs for REST API clients</li>
+            <li>Psycopg docs for PostgreSQL access</li>
+            <li>Temporal Python docs for workflow and activity testing</li>
+          </ul>
+        `
+      }
+    };
+
+    function openModal(key) {
+      const item = modalContent[key];
+      if (!item) return;
+      document.getElementById('modalTitle').innerHTML = item.title;
+      document.getElementById('modalBody').innerHTML = item.body;
+      document.getElementById('modalBackdrop').classList.remove('hidden');
+      document.getElementById('modalContainer').classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modalBackdrop').classList.add('hidden');
+      document.getElementById('modalContainer').classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    document.getElementById('modalBackdrop').addEventListener('click', closeModal);
+
+    function copyCode(id) {
+      const text = document.getElementById(id).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const button = event.target;
+        const old = button.innerText;
+        button.innerText = 'Copied';
+        setTimeout(() => button.innerText = old, 1400);
+      });
+    }
+
+    const themeToggle = document.getElementById('themeToggle');
+    const root = document.documentElement;
+    const storedTheme = localStorage.getItem('tutorial-theme');
+    if (storedTheme === 'dark') root.classList.add('dark');
+
+    themeToggle.addEventListener('click', () => {
+      root.classList.toggle('dark');
+      localStorage.setItem('tutorial-theme', root.classList.contains('dark') ? 'dark' : 'light');
+    });
+  </script>
+</body>
+</html>
