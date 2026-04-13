@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Failure Point Diagram Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .grid-bg {
+      background-image:
+        linear-gradient(to right, rgba(148,163,184,0.15) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148,163,184,0.15) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .node-selected { outline: 3px solid rgb(59 130 246 / 0.85); outline-offset: 2px; }
+    .line-selected { stroke: rgb(37 99 235); stroke-width: 3; }
+    .handle { cursor: crosshair; }
+    .dragging { opacity: 0.75; }
+    .print-only { display: none; }
+    @media print {
+      body * { visibility: hidden !important; }
+      #printArea, #printArea * { visibility: visible !important; }
+      #printArea { position: absolute; inset: 0; background: white; color: black; padding: 16px; }
+      .print-only { display: block; }
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-100 text-slate-900">
+  <div class="h-full flex flex-col">
+    <header class="bg-slate-900 text-white px-4 py-3 shadow-lg">
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h1 class="text-2xl font-bold">Failure Point Diagram Tool</h1>
+          <p class="text-slate-300 text-sm">Map services, connections, failure points, and recovery strategies.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="newBtn" class="rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600">New</button>
+          <button id="saveBtn" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500">Save</button>
+          <button id="exportYamlBtn" class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold hover:bg-indigo-500">Export YAML</button>
+          <button id="importYamlBtn" class="rounded-xl bg-violet-600 px-3 py-2 text-sm font-semibold hover:bg-violet-500">Import YAML</button>
+          <button id="exportSvgBtn" class="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold hover:bg-sky-500">Export SVG</button>
+          <button id="exportPngBtn" class="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-semibold hover:bg-cyan-500">Export Image</button>
+          <button id="printBtn" class="rounded-xl bg-amber-600 px-3 py-2 text-sm font-semibold hover:bg-amber-500">Print</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_340px] gap-0">
+      <aside class="border-r border-slate-200 bg-white p-4 overflow-auto">
+        <div class="mb-4">
+          <h2 class="text-lg font-bold">Palette</h2>
+          <p class="text-sm text-slate-500">Drag items onto the canvas.</p>
+        </div>
+        <div id="palette" class="grid grid-cols-2 gap-3"></div>
+
+        <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <h3 class="font-bold">How to use</h3>
+          <div class="mt-2 space-y-2 text-sm text-slate-600">
+            <p>• Drag a component to the canvas.</p>
+            <p>• Click a node to edit title, failure notes, and recovery steps.</p>
+            <p>• Shift+Click two nodes to create a connection.</p>
+            <p>• Click a line label to edit connection details.</p>
+            <p>• Saved automatically to local storage.</p>
+          </div>
+        </div>
+      </aside>
+
+      <main class="relative min-h-0 bg-slate-200">
+        <div class="absolute top-3 left-3 z-20 flex flex-wrap gap-2 rounded-2xl bg-white/90 p-2 shadow-lg backdrop-blur">
+          <button id="fitBtn" class="rounded-lg bg-slate-800 text-white px-3 py-2 text-sm font-semibold">Fit View</button>
+          <button id="clearSelectionBtn" class="rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold">Clear Selection</button>
+          <button id="deleteSelectedBtn" class="rounded-lg bg-rose-600 text-white px-3 py-2 text-sm font-semibold">Delete Selected</button>
+          <div class="rounded-lg bg-slate-100 px-3 py-2 text-sm">
+            <span class="font-semibold">Tip:</span> Shift+Click two nodes to connect.
+          </div>
+        </div>
+
+        <div id="canvasWrap" class="h-full w-full overflow-auto grid-bg">
+          <svg id="diagramSvg" class="min-w-[1800px] min-h-[1200px] w-[1800px] h-[1200px] block"></svg>
+        </div>
+      </main>
+
+      <aside class="border-l border-slate-200 bg-white p-4 overflow-auto">
+        <div class="mb-4">
+          <h2 class="text-lg font-bold">Details</h2>
+          <p class="text-sm text-slate-500">Edit the selected node or connection.</p>
+        </div>
+
+        <div id="emptyDetails" class="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+          Select a node or connection to edit name, purpose, failure points, recovery plan, and notes.
+        </div>
+
+        <form id="nodeForm" class="hidden space-y-4">
+          <div class="rounded-2xl bg-slate-50 p-4 border border-slate-200">
+            <div class="text-sm font-semibold uppercase tracking-wide text-slate-500">Node</div>
+            <div class="mt-3 space-y-3">
+              <label class="block">
+                <span class="text-sm font-semibold">Title</span>
+                <input id="nodeTitle" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Type</span>
+                <input id="nodeType" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" readonly />
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Short label</span>
+                <input id="nodeLabel" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Description</span>
+                <textarea id="nodeDescription" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Failure points</span>
+                <textarea id="nodeFailure" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="What can fail here?"></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Recovery handling</span>
+                <textarea id="nodeRecovery" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Retries, circuit breaker, fallback, alerts, restore steps..."></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Gap notes</span>
+                <textarea id="nodeGap" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
+              </label>
+            </div>
+          </div>
+        </form>
+
+        <form id="connectionForm" class="hidden space-y-4">
+          <div class="rounded-2xl bg-slate-50 p-4 border border-slate-200">
+            <div class="text-sm font-semibold uppercase tracking-wide text-slate-500">Connection</div>
+            <div class="mt-3 space-y-3">
+              <label class="block">
+                <span class="text-sm font-semibold">Label on line</span>
+                <input id="connLabel" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Description</span>
+                <textarea id="connDescription" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Failure points</span>
+                <textarea id="connFailure" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Timeout, auth failure, network cut, queue backlog..."></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Recovery handling</span>
+                <textarea id="connRecovery" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Gap notes</span>
+                <textarea id="connGap" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
+              </label>
+            </div>
+          </div>
+        </form>
+
+        <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div class="font-semibold text-slate-800">Storage</div>
+          <p class="mt-1">Layouts are stored in your browser using local storage.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <input id="fileInput" type="file" accept=".yml,.yaml,text/yaml,text/plain" class="hidden" />
+
+  <div id="printArea" class="print-only"></div>
+
+  <script>
+    const STORAGE_KEY = 'failure-point-diagram-tool-v1';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    const paletteItems = [
+      { type: 'database', label: 'Database', icon: '🗄️' },
+      { type: 'auth', label: 'Auth Security', icon: '🔐' },
+      { type: 'elasticsearch', label: 'Elastic Search', icon: '🔎' },
+      { type: 'temporal', label: 'Temporal IO', icon: '⏱️' },
+      { type: 'postgres', label: 'Postgres DB', icon: '🐘' },
+      { type: 'network', label: 'Network', icon: '🌐' },
+      { type: 's3', label: 'AWS S3', icon: '🪣' },
+      { type: 'text', label: 'Custom Text', icon: '📝' }
+    ];
+
+    const defaultState = {
+      nodes: [],
+      connections: [],
+      meta: {
+        title: 'Failure Point Diagram',
+        version: 1
+      }
+    };
+
+    let state = loadState();
+    let selected = { type: null, id: null };
+    let connectionStartNodeId = null;
+    let dragInfo = null;
+
+    const svg = document.getElementById('diagramSvg');
+    const palette = document.getElementById('palette');
+    const fileInput = document.getElementById('fileInput');
+    const printArea = document.getElementById('printArea');
+
+    const emptyDetails = document.getElementById('emptyDetails');
+    const nodeForm = document.getElementById('nodeForm');
+    const connectionForm = document.getElementById('connectionForm');
+
+    const nodeFields = {
+      title: document.getElementById('nodeTitle'),
+      type: document.getElementById('nodeType'),
+      label: document.getElementById('nodeLabel'),
+      description: document.getElementById('nodeDescription'),
+      failure: document.getElementById('nodeFailure'),
+      recovery: document.getElementById('nodeRecovery'),
+      gap: document.getElementById('nodeGap')
+    };
+
+    const connFields = {
+      label: document.getElementById('connLabel'),
+      description: document.getElementById('connDescription'),
+      failure: document.getElementById('connFailure'),
+      recovery: document.getElementById('connRecovery'),
+      gap: document.getElementById('connGap')
+    };
+
+    init();
+
+    function init() {
+      renderPalette();
+      render();
+      bindToolbar();
+      bindForms();
+      svg.addEventListener('dragover', onCanvasDragOver);
+      svg.addEventListener('drop', onCanvasDrop);
+      svg.addEventListener('mousedown', () => clearSelectionIfCanvasClicked(event));
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    function renderPalette() {
+      palette.innerHTML = '';
+      paletteItems.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'rounded-2xl border border-slate-200 bg-white p-3 shadow-sm cursor-grab hover:shadow-md transition';
+        el.draggable = true;
+        el.dataset.type = item.type;
+        el.innerHTML = `
+          <div class="text-3xl">${item.icon}</div>
+          <div class="mt-2 font-semibold text-sm">${item.label}</div>
+          <div class="text-xs text-slate-500">Drag to canvas</div>
+        `;
+        el.addEventListener('dragstart', e => {
+          e.dataTransfer.setData('text/plain', item.type);
+          e.dataTransfer.effectAllowed = 'copy';
+        });
+        palette.appendChild(el);
+      });
+    }
+
+    function bindToolbar() {
+      document.getElementById('newBtn').addEventListener('click', () => {
+        if (!confirm('Clear the current diagram?')) return;
+        state = structuredClone(defaultState);
+        selected = { type: null, id: null };
+        connectionStartNodeId = null;
+        saveState();
+        render();
+      });
+
+      document.getElementById('saveBtn').addEventListener('click', () => {
+        saveState();
+        alert('Diagram saved to local storage.');
+      });
+
+      document.getElementById('exportYamlBtn').addEventListener('click', exportYaml);
+      document.getElementById('importYamlBtn').addEventListener('click', () => fileInput.click());
+      document.getElementById('exportSvgBtn').addEventListener('click', exportSvg);
+      document.getElementById('exportPngBtn').addEventListener('click', exportPng);
+      document.getElementById('printBtn').addEventListener('click', printDiagram);
+      document.getElementById('fitBtn').addEventListener('click', fitView);
+      document.getElementById('clearSelectionBtn').addEventListener('click', () => {
+        selected = { type: null, id: null };
+        connectionStartNodeId = null;
+        render();
+      });
+      document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelected);
+
+      fileInput.addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          importYamlText(text);
+        } catch (err) {
+          alert('Failed to import YAML: ' + err.message);
+        }
+        e.target.value = '';
+      });
+    }
+
+    function bindForms() {
+      Object.entries(nodeFields).forEach(([key, el]) => {
+        el.addEventListener('input', () => {
+          const node = getSelectedNode();
+          if (!node) return;
+          node[key] = el.value;
+          if (key === 'title' && !node.label) node.label = el.value;
+          saveState();
+          render();
+        });
+      });
+
+      Object.entries(connFields).forEach(([key, el]) => {
+        el.addEventListener('input', () => {
+          const conn = getSelectedConnection();
+          if (!conn) return;
+          conn[key] = el.value;
+          saveState();
+          render();
+        });
+      });
+    }
+
+    function onCanvasDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+
+    function onCanvasDrop(e) {
+      e.preventDefault();
+      const type = e.dataTransfer.getData('text/plain');
+      if (!type) return;
+      const point = getSvgPoint(e.clientX, e.clientY);
+      addNode(type, point.x, point.y);
+    }
+
+    function addNode(type, x, y) {
+      const paletteItem = paletteItems.find(p => p.type === type);
+      const id = crypto.randomUUID();
+      const title = paletteItem?.label || 'Item';
+      const label = type === 'text' ? 'Text' : title;
+      state.nodes.push({
+        id,
+        type,
+        title,
+        label,
+        icon: paletteItem?.icon || '⬜',
+        x,
+        y,
+        width: 170,
+        height: 92,
+        description: '',
+        failure: '',
+        recovery: '',
+        gap: ''
+      });
+      selected = { type: 'node', id };
+      saveState();
+      render();
+    }
+
+    function render() {
+      svg.innerHTML = '';
+      drawDefs();
+
+      const connectionLayer = createSvg('g');
+      const nodeLayer = createSvg('g');
+      svg.appendChild(connectionLayer);
+      svg.appendChild(nodeLayer);
+
+      state.connections.forEach(conn => drawConnection(connectionLayer, conn));
+      state.nodes.forEach(node => drawNode(nodeLayer, node));
+
+      updateDetailsPanel();
+    }
+
+    function drawDefs() {
+      const defs = createSvg('defs');
+      const marker = createSvg('marker');
+      marker.setAttribute('id', 'arrow');
+      marker.setAttribute('viewBox', '0 0 10 10');
+      marker.setAttribute('refX', '9');
+      marker.setAttribute('refY', '5');
+      marker.setAttribute('markerWidth', '7');
+      marker.setAttribute('markerHeight', '7');
+      marker.setAttribute('orient', 'auto-start-reverse');
+      const path = createSvg('path');
+      path.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+      path.setAttribute('fill', '#475569');
+      marker.appendChild(path);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+    }
+
+    function drawNode(layer, node) {
+      const g = createSvg('g');
+      g.dataset.nodeId = node.id;
+      g.classList.add('cursor-move');
+
+      const rect = createSvg('rect');
+      rect.setAttribute('x', node.x);
+      rect.setAttribute('y', node.y);
+      rect.setAttribute('rx', 18);
+      rect.setAttribute('ry', 18);
+      rect.setAttribute('width', node.width);
+      rect.setAttribute('height', node.height);
+      rect.setAttribute('fill', '#ffffff');
+      rect.setAttribute('stroke', selected.type === 'node' && selected.id === node.id ? '#2563eb' : '#94a3b8');
+      rect.setAttribute('stroke-width', selected.type === 'node' && selected.id === node.id ? '3' : '1.5');
+      rect.setAttribute('filter', 'drop-shadow(0px 8px 18px rgba(15,23,42,0.12))');
+      g.appendChild(rect);
+
+      const icon = createSvg('text');
+      icon.setAttribute('x', node.x + 16);
+      icon.setAttribute('y', node.y + 34);
+      icon.setAttribute('font-size', '24');
+      icon.textContent = node.icon;
+      g.appendChild(icon);
+
+      const title = createSvg('text');
+      title.setAttribute('x', node.x + 52);
+      title.setAttribute('y', node.y + 30);
+      title.setAttribute('font-size', '15');
+      title.setAttribute('font-weight', '700');
+      title.setAttribute('fill', '#0f172a');
+      title.textContent = truncate(node.title || node.label || node.type, 20);
+      g.appendChild(title);
+
+      const subtitle = createSvg('text');
+      subtitle.setAttribute('x', node.x + 52);
+      subtitle.setAttribute('y', node.y + 52);
+      subtitle.setAttribute('font-size', '12');
+      subtitle.setAttribute('fill', '#475569');
+      subtitle.textContent = truncate(node.label || '', 24);
+      g.appendChild(subtitle);
+
+      const hint = createSvg('text');
+      hint.setAttribute('x', node.x + 16);
+      hint.setAttribute('y', node.y + 76);
+      hint.setAttribute('font-size', '11');
+      hint.setAttribute('fill', '#64748b');
+      hint.textContent = node.failure ? 'Failure info added' : 'Click for details';
+      g.appendChild(hint);
+
+      const handle = createSvg('circle');
+      handle.setAttribute('cx', node.x + node.width);
+      handle.setAttribute('cy', node.y + node.height / 2);
+      handle.setAttribute('r', '7');
+      handle.setAttribute('fill', '#2563eb');
+      handle.setAttribute('class', 'handle');
+      g.appendChild(handle);
+
+      g.addEventListener('mousedown', e => startNodeDrag(e, node.id));
+      g.addEventListener('click', e => onNodeClick(e, node.id));
+      layer.appendChild(g);
+    }
+
+    function drawConnection(layer, conn) {
+      const from = state.nodes.find(n => n.id === conn.from);
+      const to = state.nodes.find(n => n.id === conn.to);
+      if (!from || !to) return;
+
+      const start = { x: from.x + from.width, y: from.y + from.height / 2 };
+      const end = { x: to.x, y: to.y + to.height / 2 };
+      const dx = Math.max(60, Math.abs(end.x - start.x) * 0.4);
+      const pathData = `M ${start.x} ${start.y} C ${start.x + dx} ${start.y}, ${end.x - dx} ${end.y}, ${end.x} ${end.y}`;
+
+      const g = createSvg('g');
+      g.dataset.connectionId = conn.id;
+
+      const path = createSvg('path');
+      path.setAttribute('d', pathData);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', selected.type === 'connection' && selected.id === conn.id ? '#2563eb' : '#475569');
+      path.setAttribute('stroke-width', selected.type === 'connection' && selected.id === conn.id ? '3.5' : '2.25');
+      path.setAttribute('marker-end', 'url(#arrow)');
+      path.classList.add('cursor-pointer');
+      g.appendChild(path);
+
+      const labelPoint = cubicPoint(start, { x: start.x + dx, y: start.y }, { x: end.x - dx, y: end.y }, end, 0.5);
+      const labelBg = createSvg('rect');
+      const labelText = conn.label || 'connection';
+      const width = Math.max(80, labelText.length * 7.2 + 18);
+      labelBg.setAttribute('x', labelPoint.x - width / 2);
+      labelBg.setAttribute('y', labelPoint.y - 14);
+      labelBg.setAttribute('width', width);
+      labelBg.setAttribute('height', 24);
+      labelBg.setAttribute('rx', 10);
+      labelBg.setAttribute('fill', '#ffffff');
+      labelBg.setAttribute('stroke', '#cbd5e1');
+      labelBg.classList.add('cursor-pointer');
+      g.appendChild(labelBg);
+
+      const text = createSvg('text');
+      text.setAttribute('x', labelPoint.x);
+      text.setAttribute('y', labelPoint.y + 3);
+      text.setAttribute('font-size', '12');
+      text.setAttribute('font-weight', '600');
+      text.setAttribute('fill', '#0f172a');
+      text.setAttribute('text-anchor', 'middle');
+      text.textContent = truncate(labelText, 28);
+      text.classList.add('cursor-pointer');
+      g.appendChild(text);
+
+      [path, labelBg, text].forEach(el => {
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          selected = { type: 'connection', id: conn.id };
+          render();
+        });
+      });
+
+      layer.appendChild(g);
+    }
+
+    function onNodeClick(e, nodeId) {
+      e.stopPropagation();
+      if (e.shiftKey) {
+        if (!connectionStartNodeId) {
+          connectionStartNodeId = nodeId;
+          selected = { type: 'node', id: nodeId };
+          render();
+          return;
+        }
+        if (connectionStartNodeId !== nodeId) {
+          createConnection(connectionStartNodeId, nodeId);
+        }
+        connectionStartNodeId = null;
+        return;
+      }
+      selected = { type: 'node', id: nodeId };
+      render();
+    }
+
+    function createConnection(fromId, toId) {
+      const exists = state.connections.some(c => c.from === fromId && c.to === toId);
+      if (exists) {
+        alert('That connection already exists.');
+        return;
+      }
+      const conn = {
+        id: crypto.randomUUID(),
+        from: fromId,
+        to: toId,
+        label: 'Data Flow',
+        description: '',
+        failure: '',
+        recovery: '',
+        gap: ''
+      };
+      state.connections.push(conn);
+      selected = { type: 'connection', id: conn.id };
+      saveState();
+      render();
+    }
+
+    function startNodeDrag(e, nodeId) {
+      const target = e.target;
+      if (target.tagName === 'circle') return;
+      const node = state.nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      const point = getSvgPoint(e.clientX, e.clientY);
+      dragInfo = {
+        nodeId,
+        offsetX: point.x - node.x,
+        offsetY: point.y - node.y
+      };
+      selected = { type: 'node', id: nodeId };
+      render();
+      window.addEventListener('mousemove', onNodeDrag);
+      window.addEventListener('mouseup', stopNodeDrag);
+    }
+
+    function onNodeDrag(e) {
+      if (!dragInfo) return;
+      const node = state.nodes.find(n => n.id === dragInfo.nodeId);
+      if (!node) return;
+      const point = getSvgPoint(e.clientX, e.clientY);
+      node.x = Math.max(20, point.x - dragInfo.offsetX);
+      node.y = Math.max(20, point.y - dragInfo.offsetY);
+      render();
+    }
+
+    function stopNodeDrag() {
+      if (!dragInfo) return;
+      dragInfo = null;
+      saveState();
+      window.removeEventListener('mousemove', onNodeDrag);
+      window.removeEventListener('mouseup', stopNodeDrag);
+    }
+
+    function clearSelectionIfCanvasClicked(e) {
+      if (e.target === svg) {
+        selected = { type: null, id: null };
+        connectionStartNodeId = null;
+        render();
+      }
+    }
+
+    function deleteSelected() {
+      if (!selected.type || !selected.id) return;
+      if (selected.type === 'node') {
+        state.nodes = state.nodes.filter(n => n.id !== selected.id);
+        state.connections = state.connections.filter(c => c.from !== selected.id && c.to !== selected.id);
+      } else if (selected.type === 'connection') {
+        state.connections = state.connections.filter(c => c.id !== selected.id);
+      }
+      selected = { type: null, id: null };
+      saveState();
+      render();
+    }
+
+    function updateDetailsPanel() {
+      const node = getSelectedNode();
+      const conn = getSelectedConnection();
+
+      if (node) {
+        emptyDetails.classList.add('hidden');
+        nodeForm.classList.remove('hidden');
+        connectionForm.classList.add('hidden');
+        nodeFields.title.value = node.title || '';
+        nodeFields.type.value = node.type || '';
+        nodeFields.label.value = node.label || '';
+        nodeFields.description.value = node.description || '';
+        nodeFields.failure.value = node.failure || '';
+        nodeFields.recovery.value = node.recovery || '';
+        nodeFields.gap.value = node.gap || '';
+        return;
+      }
+
+      if (conn) {
+        emptyDetails.classList.add('hidden');
+        nodeForm.classList.add('hidden');
+        connectionForm.classList.remove('hidden');
+        connFields.label.value = conn.label || '';
+        connFields.description.value = conn.description || '';
+        connFields.failure.value = conn.failure || '';
+        connFields.recovery.value = conn.recovery || '';
+        connFields.gap.value = conn.gap || '';
+        return;
+      }
+
+      emptyDetails.classList.remove('hidden');
+      nodeForm.classList.add('hidden');
+      connectionForm.classList.add('hidden');
+    }
+
+    function getSelectedNode() {
+      return selected.type === 'node' ? state.nodes.find(n => n.id === selected.id) : null;
+    }
+
+    function getSelectedConnection() {
+      return selected.type === 'connection' ? state.connections.find(c => c.id === selected.id) : null;
+    }
+
+    function handleKeyDown(e) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected.type) {
+        const active = document.activeElement;
+        const inInput = active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
+        if (!inInput) {
+          e.preventDefault();
+          deleteSelected();
+        }
+      }
+      if (e.key === 'Escape') {
+        selected = { type: null, id: null };
+        connectionStartNodeId = null;
+        render();
+      }
+    }
+
+    function fitView() {
+      const wrap = document.getElementById('canvasWrap');
+      wrap.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+
+    function exportYaml() {
+      const yaml = toYaml(state);
+      downloadFile('diagram-layout.yml', yaml, 'text/yaml');
+    }
+
+    function importYamlText(text) {
+      const parsed = parseYaml(text);
+      validateImportedState(parsed);
+      state = parsed;
+      selected = { type: null, id: null };
+      connectionStartNodeId = null;
+      saveState();
+      render();
+      alert('YAML diagram imported.');
+    }
+
+    function exportSvg() {
+      const cloned = buildExportSvg();
+      const svgText = new XMLSerializer().serializeToString(cloned);
+      downloadFile('diagram.svg', svgText, 'image/svg+xml;charset=utf-8');
+    }
+
+    function exportPng() {
+      const cloned = buildExportSvg();
+      const svgText = new XMLSerializer().serializeToString(cloned);
+      const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1800;
+        canvas.height = 1200;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(blob2 => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob2);
+          a.download = 'diagram.png';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    function printDiagram() {
+      printArea.innerHTML = '';
+      const title = document.createElement('h1');
+      title.className = 'text-2xl font-bold';
+      title.textContent = state.meta?.title || 'Failure Point Diagram';
+      printArea.appendChild(title);
+
+      const desc = document.createElement('p');
+      desc.className = 'mt-2';
+      desc.textContent = 'Diagram and full descriptions of services, failure points, and recovery handling.';
+      printArea.appendChild(desc);
+
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'mt-4';
+      const svgText = new XMLSerializer().serializeToString(buildExportSvg());
+      imgWrap.innerHTML = svgText;
+      printArea.appendChild(imgWrap);
+
+      const nodeSection = document.createElement('div');
+      nodeSection.className = 'mt-6';
+      nodeSection.innerHTML = '<h2 class="text-xl font-bold">Services</h2>';
+      state.nodes.forEach(node => {
+        const el = document.createElement('div');
+        el.className = 'mt-3 border border-slate-300 p-3 rounded-lg';
+        el.innerHTML = `
+          <div><strong>${escapeHtml(node.title)}</strong> (${escapeHtml(node.type)})</div>
+          <div><strong>Description:</strong> ${escapeHtml(node.description || '-')}</div>
+          <div><strong>Failure points:</strong> ${escapeHtml(node.failure || '-')}</div>
+          <div><strong>Recovery handling:</strong> ${escapeHtml(node.recovery || '-')}</div>
+          <div><strong>Gap notes:</strong> ${escapeHtml(node.gap || '-')}</div>
+        `;
+        nodeSection.appendChild(el);
+      });
+      printArea.appendChild(nodeSection);
+
+      const connSection = document.createElement('div');
+      connSection.className = 'mt-6';
+      connSection.innerHTML = '<h2 class="text-xl font-bold">Connections</h2>';
+      state.connections.forEach(conn => {
+        const from = state.nodes.find(n => n.id === conn.from)?.title || conn.from;
+        const to = state.nodes.find(n => n.id === conn.to)?.title || conn.to;
+        const el = document.createElement('div');
+        el.className = 'mt-3 border border-slate-300 p-3 rounded-lg';
+        el.innerHTML = `
+          <div><strong>${escapeHtml(conn.label || 'Connection')}</strong>: ${escapeHtml(from)} → ${escapeHtml(to)}</div>
+          <div><strong>Description:</strong> ${escapeHtml(conn.description || '-')}</div>
+          <div><strong>Failure points:</strong> ${escapeHtml(conn.failure || '-')}</div>
+          <div><strong>Recovery handling:</strong> ${escapeHtml(conn.recovery || '-')}</div>
+          <div><strong>Gap notes:</strong> ${escapeHtml(conn.gap || '-')}</div>
+        `;
+        connSection.appendChild(el);
+      });
+      printArea.appendChild(connSection);
+      window.print();
+    }
+
+    function buildExportSvg() {
+      const cloned = svg.cloneNode(true);
+      cloned.setAttribute('xmlns', SVG_NS);
+      cloned.setAttribute('viewBox', '0 0 1800 1200');
+      cloned.setAttribute('width', '1800');
+      cloned.setAttribute('height', '1200');
+      const bg = createSvg('rect');
+      bg.setAttribute('x', '0');
+      bg.setAttribute('y', '0');
+      bg.setAttribute('width', '1800');
+      bg.setAttribute('height', '1200');
+      bg.setAttribute('fill', '#ffffff');
+      cloned.insertBefore(bg, cloned.firstChild);
+      return cloned;
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return structuredClone(defaultState);
+        const parsed = JSON.parse(raw);
+        if (!parsed.nodes || !parsed.connections) return structuredClone(defaultState);
+        return parsed;
+      } catch {
+        return structuredClone(defaultState);
+      }
+    }
+
+    function createSvg(name) {
+      return document.createElementNS(SVG_NS, name);
+    }
+
+    function getSvgPoint(clientX, clientY) {
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function cubicPoint(p0, p1, p2, p3, t) {
+      const mt = 1 - t;
+      return {
+        x: mt ** 3 * p0.x + 3 * mt ** 2 * t * p1.x + 3 * mt * t ** 2 * p2.x + t ** 3 * p3.x,
+        y: mt ** 3 * p0.y + 3 * mt ** 2 * t * p1.y + 3 * mt * t ** 2 * p2.y + t ** 3 * p3.y
+      };
+    }
+
+    function truncate(str, max) {
+      return (str || '').length > max ? str.slice(0, max - 1) + '…' : (str || '');
+    }
+
+    function downloadFile(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+    }
+
+    function toYaml(data) {
+      const lines = [];
+      lines.push('meta:');
+      lines.push(`  title: ${yamlScalar(data.meta?.title || 'Failure Point Diagram')}`);
+      lines.push(`  version: ${data.meta?.version ?? 1}`);
+      lines.push('nodes:');
+      data.nodes.forEach(node => {
+        lines.push('  -');
+        for (const key of ['id','type','title','label','icon','x','y','width','height','description','failure','recovery','gap']) {
+          lines.push(`    ${key}: ${yamlScalar(node[key])}`);
+        }
+      });
+      lines.push('connections:');
+      data.connections.forEach(conn => {
+        lines.push('  -');
+        for (const key of ['id','from','to','label','description','failure','recovery','gap']) {
+          lines.push(`    ${key}: ${yamlScalar(conn[key])}`);
+        }
+      });
+      return lines.join('\n');
+    }
+
+    function yamlScalar(value) {
+      if (typeof value === 'number') return String(value);
+      const str = String(value ?? '');
+      if (str.includes('\n')) {
+        return `|\n${str.split('\n').map(line => '      ' + line).join('\n')}`;
+      }
+      return JSON.stringify(str);
+    }
+
+    function parseYaml(text) {
+      const result = { meta: {}, nodes: [], connections: [] };
+      const lines = text.replace(/\r/g, '').split('\n');
+      let section = null;
+      let currentItem = null;
+      let currentKey = null;
+      let blockBuffer = [];
+
+      function flushBlock() {
+        if (currentItem && currentKey && blockBuffer.length) {
+          currentItem[currentKey] = blockBuffer.join('\n');
+          blockBuffer = [];
+          currentKey = null;
+        }
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        if (currentKey && /^\s{6}/.test(line)) {
+          blockBuffer.push(line.replace(/^\s{6}/, ''));
+          continue;
+        } else {
+          flushBlock();
+        }
+
+        if (/^meta:\s*$/.test(line)) { section = 'meta'; continue; }
+        if (/^nodes:\s*$/.test(line)) { section = 'nodes'; continue; }
+        if (/^connections:\s*$/.test(line)) { section = 'connections'; continue; }
+
+        if (/^\s{2}-\s*$/.test(line)) {
+          currentItem = {};
+          if (section === 'nodes') result.nodes.push(currentItem);
+          else if (section === 'connections') result.connections.push(currentItem);
+          continue;
+        }
+
+        const metaMatch = section === 'meta' ? line.match(/^\s{2}([A-Za-z0-9_]+):\s*(.*)$/) : null;
+        if (metaMatch) {
+          result.meta[metaMatch[1]] = parseYamlValue(metaMatch[2]);
+          continue;
+        }
+
+        const itemMatch = line.match(/^\s{4}([A-Za-z0-9_]+):\s*(.*)$/);
+        if (itemMatch && currentItem) {
+          const [, key, raw] = itemMatch;
+          if (raw === '|') {
+            currentKey = key;
+            blockBuffer = [];
+          } else {
+            currentItem[key] = parseYamlValue(raw);
+          }
+        }
+      }
+
+      flushBlock();
+      return result;
+    }
+
+    function parseYamlValue(raw) {
+      const trimmed = raw.trim();
+      if (trimmed === '') return '';
+      if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        try { return JSON.parse(trimmed.replace(/^'/, '"').replace(/'$/, '"')); } catch { return trimmed.slice(1, -1); }
+      }
+      return trimmed;
+    }
+
+    function validateImportedState(data) {
+      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.connections)) {
+        throw new Error('Invalid YAML structure. Expected meta, nodes, and connections.');
+      }
+      data.meta = data.meta || { title: 'Failure Point Diagram', version: 1 };
+      data.nodes = data.nodes.map(n => ({
+        id: n.id || crypto.randomUUID(),
+        type: n.type || 'text',
+        title: n.title || 'Item',
+        label: n.label || '',
+        icon: n.icon || '📝',
+        x: Number(n.x || 100),
+        y: Number(n.y || 100),
+        width: Number(n.width || 170),
+        height: Number(n.height || 92),
+        description: n.description || '',
+        failure: n.failure || '',
+        recovery: n.recovery || '',
+        gap: n.gap || ''
+      }));
+      data.connections = data.connections.map(c => ({
+        id: c.id || crypto.randomUUID(),
+        from: c.from,
+        to: c.to,
+        label: c.label || 'Connection',
+        description: c.description || '',
+        failure: c.failure || '',
+        recovery: c.recovery || '',
+        gap: c.gap || ''
+      }));
+    }
+  </script>
+</body>
+</html>
