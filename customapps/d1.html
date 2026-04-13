@@ -65,7 +65,8 @@
           <h3 class="font-bold">How to use</h3>
           <div class="mt-2 space-y-2 text-sm text-slate-600">
             <p>• Drag a service from the palette to the canvas.</p>
-            <p>• Shift+Click two nodes to create a connection.</p>
+            <p>• Drag from any of a node's four anchor dots to another node to create a connection.</p>
+            <p>• Shift+Click two nodes also creates a connection.</p>
             <p>• Click any node or line to edit details.</p>
             <p>• Use failure templates to quickly model resiliency.</p>
             <p>• Risk level colors show weak areas at a glance.</p>
@@ -85,7 +86,7 @@
           <button id="clearSelectionBtn" class="rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold">Clear Selection</button>
           <button id="deleteSelectedBtn" class="rounded-lg bg-rose-600 text-white px-3 py-2 text-sm font-semibold">Delete Selected</button>
           <div class="rounded-lg bg-slate-100 px-3 py-2 text-sm">
-            <span class="font-semibold">Tip:</span> Shift+Click two nodes to connect.
+            <span class="font-semibold">Tip:</span> Drag from a node's anchor dot to another node to connect. Or Shift+Click two nodes.
           </div>
         </div>
 
@@ -279,6 +280,7 @@
     let selected = { type: null, id: null };
     let connectionStartNodeId = null;
     let dragInfo = null;
+    let connectionDragInfo = null;
     let simulationMode = false;
     let simulationSourceNodeId = null;
 
@@ -432,16 +434,21 @@
       const id = crypto.randomUUID();
       const title = paletteItem?.label || 'Item';
       const label = type === 'text' ? 'Text' : title;
+      const width = 176;
+      const height = 96;
+      // Center the node on the cursor and clamp to canvas bounds
+      const nx = Math.max(20, Math.min(2200 - width - 20, x - width / 2));
+      const ny = Math.max(20, Math.min(1400 - height - 20, y - height / 2));
       state.nodes.push({
         id,
         type,
         title,
         label,
         icon: paletteItem?.icon || '⬜',
-        x,
-        y,
-        width: 176,
-        height: 96,
+        x: nx,
+        y: ny,
+        width,
+        height,
         description: '',
         failure: '',
         recovery: '',
@@ -484,7 +491,7 @@
       marker.setAttribute('orient', 'auto-start-reverse');
       const path = createSvg('path');
       path.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-      path.setAttribute('fill', '#475569');
+      path.setAttribute('fill', 'context-stroke');
       marker.appendChild(path);
       defs.appendChild(marker);
       svg.appendChild(defs);
@@ -561,11 +568,32 @@
         const c = createSvg('circle');
         c.setAttribute('cx', pt.x);
         c.setAttribute('cy', pt.y);
-        c.setAttribute('r', '5');
+        c.setAttribute('r', '6');
         c.setAttribute('fill', '#ffffff');
         c.setAttribute('stroke', riskColor);
         c.setAttribute('stroke-width', '2');
-        c.style.pointerEvents = 'none';
+        c.setAttribute('data-anchor-side', side);
+        c.style.cursor = 'crosshair';
+        c.addEventListener('mouseenter', () => {
+          c.setAttribute('r', '9');
+          c.setAttribute('fill', '#dbeafe');
+          c.setAttribute('stroke', '#2563eb');
+        });
+        c.addEventListener('mouseleave', () => {
+          c.setAttribute('r', '6');
+          c.setAttribute('fill', '#ffffff');
+          c.setAttribute('stroke', riskColor);
+        });
+        c.addEventListener('mousedown', e => {
+          if (simulationMode) return;
+          e.stopPropagation();
+          e.preventDefault();
+          startConnectionDrag(node.id, side, pt);
+        });
+        c.addEventListener('click', e => {
+          // prevent node-select when clicking an anchor
+          e.stopPropagation();
+        });
         g.appendChild(c);
       });
 
@@ -602,8 +630,10 @@
       const hit = createSvg('path');
       hit.setAttribute('d', pathData);
       hit.setAttribute('fill', 'none');
-      hit.setAttribute('stroke', 'transparent');
-      hit.setAttribute('stroke-width', '14');
+      hit.setAttribute('stroke', 'rgba(0,0,0,0)');
+      hit.setAttribute('stroke-width', '18');
+      hit.style.pointerEvents = 'stroke';
+      hit.style.cursor = 'pointer';
       g.appendChild(hit);
 
       const labelPoint = cubicPoint(start, controlPoints.c1, controlPoints.c2, end, 0.5);
@@ -716,8 +746,8 @@
       const node = state.nodes.find(n => n.id === dragInfo.nodeId);
       if (!node) return;
       const point = getSvgPoint(e.clientX, e.clientY);
-      node.x = Math.max(20, point.x - dragInfo.offsetX);
-      node.y = Math.max(20, point.y - dragInfo.offsetY);
+      node.x = Math.max(20, Math.min(2200 - node.width - 20, point.x - dragInfo.offsetX));
+      node.y = Math.max(20, Math.min(1400 - node.height - 20, point.y - dragInfo.offsetY));
       render();
     }
 
@@ -727,6 +757,105 @@
       saveState();
       window.removeEventListener('mousemove', onNodeDrag);
       window.removeEventListener('mouseup', stopNodeDrag);
+    }
+
+    function startConnectionDrag(fromNodeId, fromSide, fromPoint) {
+      connectionStartNodeId = null; // cancel any in-progress shift+click
+      connectionDragInfo = {
+        fromNodeId,
+        fromSide,
+        fromPoint: { x: fromPoint.x, y: fromPoint.y },
+        targetNodeId: null
+      };
+      // Create temp path overlay
+      let tempPath = svg.querySelector('#__tempConnection');
+      if (!tempPath) {
+        tempPath = createSvg('path');
+        tempPath.setAttribute('id', '__tempConnection');
+        tempPath.setAttribute('fill', 'none');
+        tempPath.setAttribute('stroke', '#2563eb');
+        tempPath.setAttribute('stroke-width', '3');
+        tempPath.setAttribute('stroke-dasharray', '6 5');
+        tempPath.setAttribute('marker-end', 'url(#arrow)');
+        tempPath.style.pointerEvents = 'none';
+        svg.appendChild(tempPath);
+      }
+      tempPath.setAttribute('d', `M ${fromPoint.x} ${fromPoint.y} L ${fromPoint.x} ${fromPoint.y}`);
+      window.addEventListener('mousemove', onConnectionDrag);
+      window.addEventListener('mouseup', stopConnectionDrag);
+    }
+
+    function onConnectionDrag(e) {
+      if (!connectionDragInfo) return;
+      const point = getSvgPoint(e.clientX, e.clientY);
+      const tempPath = svg.querySelector('#__tempConnection');
+      if (!tempPath) return;
+
+      const start = connectionDragInfo.fromPoint;
+      const dist = Math.hypot(point.x - start.x, point.y - start.y);
+      const offset = Math.max(40, Math.min(160, dist / 2));
+      const c1 = { x: start.x, y: start.y };
+      const fs = connectionDragInfo.fromSide;
+      if (fs === 'right') c1.x += offset;
+      else if (fs === 'left') c1.x -= offset;
+      else if (fs === 'top') c1.y -= offset;
+      else if (fs === 'bottom') c1.y += offset;
+      const c2 = { x: point.x, y: point.y };
+
+      tempPath.setAttribute('d',
+        `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${point.x} ${point.y}`);
+
+      // Highlight target node under the cursor
+      const target = findNodeAtPoint(point, connectionDragInfo.fromNodeId);
+      const newTargetId = target ? target.id : null;
+      if (newTargetId !== connectionDragInfo.targetNodeId) {
+        // Remove prior highlight
+        if (connectionDragInfo.targetNodeId) {
+          const prev = svg.querySelector(`g[data-node-id="${connectionDragInfo.targetNodeId}"] rect`);
+          if (prev) prev.removeAttribute('data-drop-target');
+        }
+        connectionDragInfo.targetNodeId = newTargetId;
+        if (newTargetId) {
+          const rect = svg.querySelector(`g[data-node-id="${newTargetId}"] rect`);
+          if (rect) {
+            rect.setAttribute('data-drop-target', 'true');
+            rect.setAttribute('stroke', '#2563eb');
+            rect.setAttribute('stroke-width', '5');
+          }
+        }
+      }
+    }
+
+    function stopConnectionDrag(e) {
+      window.removeEventListener('mousemove', onConnectionDrag);
+      window.removeEventListener('mouseup', stopConnectionDrag);
+      const tempPath = svg.querySelector('#__tempConnection');
+      if (tempPath) tempPath.remove();
+      if (!connectionDragInfo) return;
+
+      const point = getSvgPoint(e.clientX, e.clientY);
+      const target = findNodeAtPoint(point, connectionDragInfo.fromNodeId);
+      const fromId = connectionDragInfo.fromNodeId;
+      connectionDragInfo = null;
+      if (target && target.id !== fromId) {
+        createConnection(fromId, target.id);
+      } else {
+        render(); // clear any highlight
+      }
+    }
+
+    function findNodeAtPoint(point, excludeNodeId) {
+      // Search from topmost (last drawn) to bottom
+      for (let i = state.nodes.length - 1; i >= 0; i--) {
+        const n = state.nodes[i];
+        if (n.id === excludeNodeId) continue;
+        const pad = 12; // slight slack so anchor-drop is forgiving
+        if (point.x >= n.x - pad && point.x <= n.x + n.width + pad &&
+            point.y >= n.y - pad && point.y <= n.y + n.height + pad) {
+          return n;
+        }
+      }
+      return null;
     }
 
     function deleteSelected() {
@@ -903,7 +1032,21 @@
     }
 
     function fitView() {
-      document.getElementById('canvasWrap').scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      const wrap = document.getElementById('canvasWrap');
+      if (!state.nodes.length) {
+        wrap.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+        return;
+      }
+      let minX = Infinity, minY = Infinity;
+      state.nodes.forEach(n => {
+        if (n.x < minX) minX = n.x;
+        if (n.y < minY) minY = n.y;
+      });
+      wrap.scrollTo({
+        top: Math.max(0, minY - 40),
+        left: Math.max(0, minX - 40),
+        behavior: 'smooth'
+      });
     }
 
     function getAnchorPoints(node) {
