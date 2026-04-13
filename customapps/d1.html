@@ -10,15 +10,12 @@
     body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .grid-bg {
       background-image:
-        linear-gradient(to right, rgba(148,163,184,0.15) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(148,163,184,0.15) 1px, transparent 1px);
+        linear-gradient(to right, rgba(148,163,184,0.16) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148,163,184,0.16) 1px, transparent 1px);
       background-size: 24px 24px;
     }
-    .node-selected { outline: 3px solid rgb(59 130 246 / 0.85); outline-offset: 2px; }
-    .line-selected { stroke: rgb(37 99 235); stroke-width: 3; }
-    .handle { cursor: crosshair; }
-    .dragging { opacity: 0.75; }
     .print-only { display: none; }
+    textarea { resize: vertical; }
     @media print {
       body * { visibility: hidden !important; }
       #printArea, #printArea * { visibility: visible !important; }
@@ -30,10 +27,10 @@
 <body class="h-full bg-slate-100 text-slate-900">
   <div class="h-full flex flex-col">
     <header class="bg-slate-900 text-white px-4 py-3 shadow-lg">
-      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div class="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <div>
           <h1 class="text-2xl font-bold">Failure Point Diagram Tool</h1>
-          <p class="text-slate-300 text-sm">Map services, connections, failure points, and recovery strategies.</p>
+          <p class="text-slate-300 text-sm">Model services, failure points, connection risks, recovery strategies, and blast radius.</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button id="newBtn" class="rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600">New</button>
@@ -47,7 +44,7 @@
       </div>
     </header>
 
-    <div class="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_340px] gap-0">
+    <div class="flex-1 min-h-0 grid grid-cols-1 2xl:grid-cols-[320px_minmax(0,1fr)_380px]">
       <aside class="border-r border-slate-200 bg-white p-4 overflow-auto">
         <div class="mb-4">
           <h2 class="text-lg font-bold">Palette</h2>
@@ -56,14 +53,29 @@
         <div id="palette" class="grid grid-cols-2 gap-3"></div>
 
         <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <h3 class="font-bold">Failure simulation</h3>
+          <div class="mt-3 space-y-3 text-sm">
+            <button id="simulationModeBtn" class="w-full rounded-xl bg-rose-600 px-3 py-2 font-semibold text-white hover:bg-rose-500">Simulation Mode: Off</button>
+            <button id="clearSimulationBtn" class="w-full rounded-xl bg-slate-200 px-3 py-2 font-semibold hover:bg-slate-300">Clear Simulation</button>
+            <p class="text-slate-600">When simulation mode is on, click a node to simulate a failure. Downstream nodes and connections will be marked as impacted.</p>
+          </div>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <h3 class="font-bold">How to use</h3>
           <div class="mt-2 space-y-2 text-sm text-slate-600">
-            <p>• Drag a component to the canvas.</p>
-            <p>• Click a node to edit title, failure notes, and recovery steps.</p>
+            <p>• Drag a service from the palette to the canvas.</p>
             <p>• Shift+Click two nodes to create a connection.</p>
-            <p>• Click a line label to edit connection details.</p>
-            <p>• Saved automatically to local storage.</p>
+            <p>• Click any node or line to edit details.</p>
+            <p>• Use failure templates to quickly model resiliency.</p>
+            <p>• Risk level colors show weak areas at a glance.</p>
+            <p>• Simulation mode shows blast radius through dependencies.</p>
           </div>
+        </div>
+
+        <div id="simulationSummary" class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 hidden">
+          <h3 class="font-bold">Simulation summary</h3>
+          <div id="simulationSummaryBody" class="mt-2 text-sm text-slate-700"></div>
         </div>
       </aside>
 
@@ -78,7 +90,7 @@
         </div>
 
         <div id="canvasWrap" class="h-full w-full overflow-auto grid-bg">
-          <svg id="diagramSvg" class="min-w-[1800px] min-h-[1200px] w-[1800px] h-[1200px] block"></svg>
+          <svg id="diagramSvg" class="min-w-[2200px] min-h-[1400px] w-[2200px] h-[1400px] block"></svg>
         </div>
       </main>
 
@@ -89,7 +101,7 @@
         </div>
 
         <div id="emptyDetails" class="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
-          Select a node or connection to edit name, purpose, failure points, recovery plan, and notes.
+          Select a node or connection to edit details, risks, failure points, and recovery handling.
         </div>
 
         <form id="nodeForm" class="hidden space-y-4">
@@ -102,11 +114,33 @@
               </label>
               <label class="block">
                 <span class="text-sm font-semibold">Type</span>
-                <input id="nodeType" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" readonly />
+                <input id="nodeType" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-slate-100" readonly />
               </label>
               <label class="block">
                 <span class="text-sm font-semibold">Short label</span>
                 <input id="nodeLabel" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Risk level</span>
+                <select id="nodeRisk" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Failure template</span>
+                <div class="mt-1 flex gap-2">
+                  <select id="nodeTemplate" class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                    <option value="">Select template</option>
+                    <option value="timeouts">Timeouts</option>
+                    <option value="retries">Retries</option>
+                    <option value="dlq">DLQ</option>
+                    <option value="circuit_breaker">Circuit breaker</option>
+                  </select>
+                  <button type="button" id="applyNodeTemplateBtn" class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Apply</button>
+                </div>
               </label>
               <label class="block">
                 <span class="text-sm font-semibold">Description</span>
@@ -118,7 +152,7 @@
               </label>
               <label class="block">
                 <span class="text-sm font-semibold">Recovery handling</span>
-                <textarea id="nodeRecovery" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Retries, circuit breaker, fallback, alerts, restore steps..."></textarea>
+                <textarea id="nodeRecovery" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Retry, backoff, circuit breaker, alerting, restore..."></textarea>
               </label>
               <label class="block">
                 <span class="text-sm font-semibold">Gap notes</span>
@@ -135,6 +169,28 @@
               <label class="block">
                 <span class="text-sm font-semibold">Label on line</span>
                 <input id="connLabel" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Risk level</span>
+                <select id="connRisk" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Failure template</span>
+                <div class="mt-1 flex gap-2">
+                  <select id="connTemplate" class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                    <option value="">Select template</option>
+                    <option value="timeouts">Timeouts</option>
+                    <option value="retries">Retries</option>
+                    <option value="dlq">DLQ</option>
+                    <option value="circuit_breaker">Circuit breaker</option>
+                  </select>
+                  <button type="button" id="applyConnTemplateBtn" class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Apply</button>
+                </div>
               </label>
               <label class="block">
                 <span class="text-sm font-semibold">Description</span>
@@ -165,12 +221,37 @@
   </div>
 
   <input id="fileInput" type="file" accept=".yml,.yaml,text/yaml,text/plain" class="hidden" />
-
   <div id="printArea" class="print-only"></div>
 
   <script>
-    const STORAGE_KEY = 'failure-point-diagram-tool-v1';
+    const STORAGE_KEY = 'failure-point-diagram-tool-v2';
     const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    const RISK_COLORS = {
+      low: '#16a34a',
+      medium: '#ca8a04',
+      high: '#ea580c',
+      critical: '#dc2626'
+    };
+
+    const FAILURE_TEMPLATES = {
+      timeouts: {
+        failure: 'Requests can time out due to latency spikes, external dependency slowness, queue backlog, or database lock contention.',
+        recovery: 'Add request timeouts, retry with bounded exponential backoff, latency monitoring, and alerting on timeout thresholds.'
+      },
+      retries: {
+        failure: 'Transient failures can cause dropped work when there is no safe retry path or retry policy is too weak.',
+        recovery: 'Use retry with exponential backoff, max attempts, idempotent handlers, and clear non-retryable error classification.'
+      },
+      dlq: {
+        failure: 'Poison messages or repeated processing failures can block progress and hide bad events without dead-letter routing.',
+        recovery: 'Send failed items to a dead-letter queue, alert on DLQ growth, support replay tooling, and track root causes.'
+      },
+      circuit_breaker: {
+        failure: 'A failing downstream service can cascade instability upstream and saturate pools when calls keep flowing.',
+        recovery: 'Use a circuit breaker to fail fast, provide fallback behavior, set recovery probes, and alert when breaker opens.'
+      }
+    };
 
     const paletteItems = [
       { type: 'database', label: 'Database', icon: '🗄️' },
@@ -190,7 +271,7 @@
       connections: [],
       meta: {
         title: 'Failure Point Diagram',
-        version: 1
+        version: 2
       }
     };
 
@@ -198,11 +279,15 @@
     let selected = { type: null, id: null };
     let connectionStartNodeId = null;
     let dragInfo = null;
+    let simulationMode = false;
+    let simulationSourceNodeId = null;
 
     const svg = document.getElementById('diagramSvg');
     const palette = document.getElementById('palette');
     const fileInput = document.getElementById('fileInput');
     const printArea = document.getElementById('printArea');
+    const simulationSummary = document.getElementById('simulationSummary');
+    const simulationSummaryBody = document.getElementById('simulationSummaryBody');
 
     const emptyDetails = document.getElementById('emptyDetails');
     const nodeForm = document.getElementById('nodeForm');
@@ -212,6 +297,7 @@
       title: document.getElementById('nodeTitle'),
       type: document.getElementById('nodeType'),
       label: document.getElementById('nodeLabel'),
+      risk: document.getElementById('nodeRisk'),
       description: document.getElementById('nodeDescription'),
       failure: document.getElementById('nodeFailure'),
       recovery: document.getElementById('nodeRecovery'),
@@ -220,6 +306,7 @@
 
     const connFields = {
       label: document.getElementById('connLabel'),
+      risk: document.getElementById('connRisk'),
       description: document.getElementById('connDescription'),
       failure: document.getElementById('connFailure'),
       recovery: document.getElementById('connRecovery'),
@@ -235,7 +322,6 @@
       bindForms();
       svg.addEventListener('dragover', onCanvasDragOver);
       svg.addEventListener('drop', onCanvasDrop);
-      svg.addEventListener('mousedown', () => clearSelectionIfCanvasClicked(event));
       window.addEventListener('keydown', handleKeyDown);
     }
 
@@ -265,6 +351,7 @@
         state = structuredClone(defaultState);
         selected = { type: null, id: null };
         connectionStartNodeId = null;
+        simulationSourceNodeId = null;
         saveState();
         render();
       });
@@ -286,6 +373,10 @@
         render();
       });
       document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelected);
+      document.getElementById('simulationModeBtn').addEventListener('click', toggleSimulationMode);
+      document.getElementById('clearSimulationBtn').addEventListener('click', clearSimulation);
+      document.getElementById('applyNodeTemplateBtn').addEventListener('click', () => applyTemplateToSelected('node'));
+      document.getElementById('applyConnTemplateBtn').addEventListener('click', () => applyTemplateToSelected('connection'));
 
       fileInput.addEventListener('change', async e => {
         const file = e.target.files[0];
@@ -349,12 +440,14 @@
         icon: paletteItem?.icon || '⬜',
         x,
         y,
-        width: 170,
-        height: 92,
+        width: 176,
+        height: 96,
         description: '',
         failure: '',
         recovery: '',
-        gap: ''
+        gap: '',
+        risk: 'low',
+        simulated: 'none'
       });
       selected = { type: 'node', id };
       saveState();
@@ -364,6 +457,7 @@
     function render() {
       svg.innerHTML = '';
       drawDefs();
+      drawCanvasBackground();
 
       const connectionLayer = createSvg('g');
       const nodeLayer = createSvg('g');
@@ -374,6 +468,8 @@
       state.nodes.forEach(node => drawNode(nodeLayer, node));
 
       updateDetailsPanel();
+      updateSimulationSummary();
+      updateSimulationButton();
     }
 
     function drawDefs() {
@@ -394,10 +490,27 @@
       svg.appendChild(defs);
     }
 
+    function drawCanvasBackground() {
+      const bg = createSvg('rect');
+      bg.setAttribute('x', '0');
+      bg.setAttribute('y', '0');
+      bg.setAttribute('width', '2200');
+      bg.setAttribute('height', '1400');
+      bg.setAttribute('fill', 'transparent');
+      bg.addEventListener('click', () => {
+        selected = { type: null, id: null };
+        connectionStartNodeId = null;
+        render();
+      });
+      svg.appendChild(bg);
+    }
+
     function drawNode(layer, node) {
       const g = createSvg('g');
       g.dataset.nodeId = node.id;
-      g.classList.add('cursor-move');
+
+      const riskColor = RISK_COLORS[node.risk || 'low'] || RISK_COLORS.low;
+      const simStyle = getSimulationNodeStyle(node);
 
       const rect = createSvg('rect');
       rect.setAttribute('x', node.x);
@@ -406,51 +519,55 @@
       rect.setAttribute('ry', 18);
       rect.setAttribute('width', node.width);
       rect.setAttribute('height', node.height);
-      rect.setAttribute('fill', '#ffffff');
-      rect.setAttribute('stroke', selected.type === 'node' && selected.id === node.id ? '#2563eb' : '#94a3b8');
-      rect.setAttribute('stroke-width', selected.type === 'node' && selected.id === node.id ? '3' : '1.5');
-      rect.setAttribute('filter', 'drop-shadow(0px 8px 18px rgba(15,23,42,0.12))');
+      rect.setAttribute('fill', simStyle.fill);
+      rect.setAttribute('stroke', selected.type === 'node' && selected.id === node.id ? '#2563eb' : riskColor);
+      rect.setAttribute('stroke-width', selected.type === 'node' && selected.id === node.id ? '4' : '3');
       g.appendChild(rect);
 
       const icon = createSvg('text');
-      icon.setAttribute('x', node.x + 16);
-      icon.setAttribute('y', node.y + 34);
-      icon.setAttribute('font-size', '24');
+      icon.setAttribute('x', node.x + 14);
+      icon.setAttribute('y', node.y + 33);
+      icon.setAttribute('font-size', '22');
       icon.textContent = node.icon;
       g.appendChild(icon);
 
       const title = createSvg('text');
-      title.setAttribute('x', node.x + 52);
-      title.setAttribute('y', node.y + 30);
+      title.setAttribute('x', node.x + 48);
+      title.setAttribute('y', node.y + 29);
       title.setAttribute('font-size', '15');
       title.setAttribute('font-weight', '700');
       title.setAttribute('fill', '#0f172a');
-      title.textContent = truncate(node.title || node.label || node.type, 20);
+      title.textContent = truncate(node.title || node.label || node.type, 22);
       g.appendChild(title);
 
       const subtitle = createSvg('text');
-      subtitle.setAttribute('x', node.x + 52);
-      subtitle.setAttribute('y', node.y + 52);
+      subtitle.setAttribute('x', node.x + 48);
+      subtitle.setAttribute('y', node.y + 50);
       subtitle.setAttribute('font-size', '12');
       subtitle.setAttribute('fill', '#475569');
-      subtitle.textContent = truncate(node.label || '', 24);
+      subtitle.textContent = `${capitalize(node.risk || 'low')} risk`;
       g.appendChild(subtitle);
 
       const hint = createSvg('text');
-      hint.setAttribute('x', node.x + 16);
-      hint.setAttribute('y', node.y + 76);
+      hint.setAttribute('x', node.x + 14);
+      hint.setAttribute('y', node.y + 78);
       hint.setAttribute('font-size', '11');
       hint.setAttribute('fill', '#64748b');
-      hint.textContent = node.failure ? 'Failure info added' : 'Click for details';
+      hint.textContent = getNodeHint(node);
       g.appendChild(hint);
 
-      const handle = createSvg('circle');
-      handle.setAttribute('cx', node.x + node.width);
-      handle.setAttribute('cy', node.y + node.height / 2);
-      handle.setAttribute('r', '7');
-      handle.setAttribute('fill', '#2563eb');
-      handle.setAttribute('class', 'handle');
-      g.appendChild(handle);
+      const anchors = getAnchorPoints(node);
+      Object.entries(anchors).forEach(([side, pt]) => {
+        const c = createSvg('circle');
+        c.setAttribute('cx', pt.x);
+        c.setAttribute('cy', pt.y);
+        c.setAttribute('r', '5');
+        c.setAttribute('fill', '#ffffff');
+        c.setAttribute('stroke', riskColor);
+        c.setAttribute('stroke-width', '2');
+        c.style.pointerEvents = 'none';
+        g.appendChild(c);
+      });
 
       g.addEventListener('mousedown', e => startNodeDrag(e, node.id));
       g.addEventListener('click', e => onNodeClick(e, node.id));
@@ -462,35 +579,46 @@
       const to = state.nodes.find(n => n.id === conn.to);
       if (!from || !to) return;
 
-      const start = { x: from.x + from.width, y: from.y + from.height / 2 };
-      const end = { x: to.x, y: to.y + to.height / 2 };
-      const dx = Math.max(60, Math.abs(end.x - start.x) * 0.4);
-      const pathData = `M ${start.x} ${start.y} C ${start.x + dx} ${start.y}, ${end.x - dx} ${end.y}, ${end.x} ${end.y}`;
+      const anchors = getBestAnchors(from, to);
+      const start = anchors.fromPoint;
+      const end = anchors.toPoint;
+      const controlPoints = getControlPoints(start, end, anchors.fromSide, anchors.toSide);
+      const pathData = `M ${start.x} ${start.y} C ${controlPoints.c1.x} ${controlPoints.c1.y}, ${controlPoints.c2.x} ${controlPoints.c2.y}, ${end.x} ${end.y}`;
 
       const g = createSvg('g');
       g.dataset.connectionId = conn.id;
+      const simStyle = getSimulationConnectionStyle(conn);
+      const riskColor = RISK_COLORS[conn.risk || 'low'] || RISK_COLORS.low;
 
       const path = createSvg('path');
       path.setAttribute('d', pathData);
       path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', selected.type === 'connection' && selected.id === conn.id ? '#2563eb' : '#475569');
-      path.setAttribute('stroke-width', selected.type === 'connection' && selected.id === conn.id ? '3.5' : '2.25');
+      path.setAttribute('stroke', selected.type === 'connection' && selected.id === conn.id ? '#2563eb' : simStyle.stroke);
+      path.setAttribute('stroke-width', selected.type === 'connection' && selected.id === conn.id ? '4' : '3');
+      path.setAttribute('stroke-dasharray', simStyle.dash);
       path.setAttribute('marker-end', 'url(#arrow)');
-      path.classList.add('cursor-pointer');
       g.appendChild(path);
 
-      const labelPoint = cubicPoint(start, { x: start.x + dx, y: start.y }, { x: end.x - dx, y: end.y }, end, 0.5);
-      const labelBg = createSvg('rect');
+      const hit = createSvg('path');
+      hit.setAttribute('d', pathData);
+      hit.setAttribute('fill', 'none');
+      hit.setAttribute('stroke', 'transparent');
+      hit.setAttribute('stroke-width', '14');
+      g.appendChild(hit);
+
+      const labelPoint = cubicPoint(start, controlPoints.c1, controlPoints.c2, end, 0.5);
       const labelText = conn.label || 'connection';
-      const width = Math.max(80, labelText.length * 7.2 + 18);
+      const width = Math.max(90, labelText.length * 7.5 + 20);
+
+      const labelBg = createSvg('rect');
       labelBg.setAttribute('x', labelPoint.x - width / 2);
       labelBg.setAttribute('y', labelPoint.y - 14);
       labelBg.setAttribute('width', width);
       labelBg.setAttribute('height', 24);
       labelBg.setAttribute('rx', 10);
       labelBg.setAttribute('fill', '#ffffff');
-      labelBg.setAttribute('stroke', '#cbd5e1');
-      labelBg.classList.add('cursor-pointer');
+      labelBg.setAttribute('stroke', riskColor);
+      labelBg.setAttribute('stroke-width', '1.5');
       g.appendChild(labelBg);
 
       const text = createSvg('text');
@@ -500,11 +628,19 @@
       text.setAttribute('font-weight', '600');
       text.setAttribute('fill', '#0f172a');
       text.setAttribute('text-anchor', 'middle');
-      text.textContent = truncate(labelText, 28);
-      text.classList.add('cursor-pointer');
+      text.textContent = truncate(labelText, 30);
       g.appendChild(text);
 
-      [path, labelBg, text].forEach(el => {
+      const riskBadge = createSvg('text');
+      riskBadge.setAttribute('x', labelPoint.x);
+      riskBadge.setAttribute('y', labelPoint.y + 20);
+      riskBadge.setAttribute('font-size', '10');
+      riskBadge.setAttribute('fill', simStyle.stroke);
+      riskBadge.setAttribute('text-anchor', 'middle');
+      riskBadge.textContent = capitalize(conn.risk || 'low');
+      g.appendChild(riskBadge);
+
+      [hit, labelBg, text].forEach(el => {
         el.addEventListener('click', e => {
           e.stopPropagation();
           selected = { type: 'connection', id: conn.id };
@@ -517,6 +653,10 @@
 
     function onNodeClick(e, nodeId) {
       e.stopPropagation();
+      if (simulationMode) {
+        runSimulation(nodeId);
+        return;
+      }
       if (e.shiftKey) {
         if (!connectionStartNodeId) {
           connectionStartNodeId = nodeId;
@@ -524,9 +664,7 @@
           render();
           return;
         }
-        if (connectionStartNodeId !== nodeId) {
-          createConnection(connectionStartNodeId, nodeId);
-        }
+        if (connectionStartNodeId !== nodeId) createConnection(connectionStartNodeId, nodeId);
         connectionStartNodeId = null;
         return;
       }
@@ -548,7 +686,9 @@
         description: '',
         failure: '',
         recovery: '',
-        gap: ''
+        gap: '',
+        risk: 'low',
+        simulated: 'none'
       };
       state.connections.push(conn);
       selected = { type: 'connection', id: conn.id };
@@ -557,8 +697,7 @@
     }
 
     function startNodeDrag(e, nodeId) {
-      const target = e.target;
-      if (target.tagName === 'circle') return;
+      if (simulationMode) return;
       const node = state.nodes.find(n => n.id === nodeId);
       if (!node) return;
       const point = getSvgPoint(e.clientX, e.clientY);
@@ -568,7 +707,6 @@
         offsetY: point.y - node.y
       };
       selected = { type: 'node', id: nodeId };
-      render();
       window.addEventListener('mousemove', onNodeDrag);
       window.addEventListener('mouseup', stopNodeDrag);
     }
@@ -591,20 +729,12 @@
       window.removeEventListener('mouseup', stopNodeDrag);
     }
 
-    function clearSelectionIfCanvasClicked(e) {
-      if (e.target === svg) {
-        selected = { type: null, id: null };
-        connectionStartNodeId = null;
-        render();
-      }
-    }
-
     function deleteSelected() {
       if (!selected.type || !selected.id) return;
       if (selected.type === 'node') {
         state.nodes = state.nodes.filter(n => n.id !== selected.id);
         state.connections = state.connections.filter(c => c.from !== selected.id && c.to !== selected.id);
-      } else if (selected.type === 'connection') {
+      } else {
         state.connections = state.connections.filter(c => c.id !== selected.id);
       }
       selected = { type: null, id: null };
@@ -623,10 +753,12 @@
         nodeFields.title.value = node.title || '';
         nodeFields.type.value = node.type || '';
         nodeFields.label.value = node.label || '';
+        nodeFields.risk.value = node.risk || 'low';
         nodeFields.description.value = node.description || '';
         nodeFields.failure.value = node.failure || '';
         nodeFields.recovery.value = node.recovery || '';
         nodeFields.gap.value = node.gap || '';
+        document.getElementById('nodeTemplate').value = '';
         return;
       }
 
@@ -635,16 +767,115 @@
         nodeForm.classList.add('hidden');
         connectionForm.classList.remove('hidden');
         connFields.label.value = conn.label || '';
+        connFields.risk.value = conn.risk || 'low';
         connFields.description.value = conn.description || '';
         connFields.failure.value = conn.failure || '';
         connFields.recovery.value = conn.recovery || '';
         connFields.gap.value = conn.gap || '';
+        document.getElementById('connTemplate').value = '';
         return;
       }
 
       emptyDetails.classList.remove('hidden');
       nodeForm.classList.add('hidden');
       connectionForm.classList.add('hidden');
+    }
+
+    function applyTemplateToSelected(kind) {
+      if (kind === 'node') {
+        const node = getSelectedNode();
+        const key = document.getElementById('nodeTemplate').value;
+        if (!node || !key) return;
+        const tpl = FAILURE_TEMPLATES[key];
+        node.failure = tpl.failure;
+        node.recovery = tpl.recovery;
+      } else {
+        const conn = getSelectedConnection();
+        const key = document.getElementById('connTemplate').value;
+        if (!conn || !key) return;
+        const tpl = FAILURE_TEMPLATES[key];
+        conn.failure = tpl.failure;
+        conn.recovery = tpl.recovery;
+      }
+      saveState();
+      render();
+    }
+
+    function toggleSimulationMode() {
+      simulationMode = !simulationMode;
+      if (!simulationMode) clearSimulation();
+      render();
+    }
+
+    function updateSimulationButton() {
+      const btn = document.getElementById('simulationModeBtn');
+      btn.textContent = `Simulation Mode: ${simulationMode ? 'On' : 'Off'}`;
+      btn.className = simulationMode
+        ? 'w-full rounded-xl bg-rose-700 px-3 py-2 font-semibold text-white hover:bg-rose-600'
+        : 'w-full rounded-xl bg-rose-600 px-3 py-2 font-semibold text-white hover:bg-rose-500';
+    }
+
+    function clearSimulation() {
+      simulationSourceNodeId = null;
+      state.nodes.forEach(n => n.simulated = 'none');
+      state.connections.forEach(c => c.simulated = 'none');
+      render();
+    }
+
+    function runSimulation(sourceNodeId) {
+      clearSimulationNoRender();
+      simulationSourceNodeId = sourceNodeId;
+
+      const visitedNodes = new Set();
+      const queue = [sourceNodeId];
+      const depthMap = new Map([[sourceNodeId, 0]]);
+
+      while (queue.length) {
+        const nodeId = queue.shift();
+        if (visitedNodes.has(nodeId)) continue;
+        visitedNodes.add(nodeId);
+        const depth = depthMap.get(nodeId) || 0;
+        const node = state.nodes.find(n => n.id === nodeId);
+        if (node) node.simulated = depth === 0 ? 'failed' : 'impacted';
+
+        state.connections
+          .filter(c => c.from === nodeId)
+          .forEach(conn => {
+            conn.simulated = 'impacted';
+            if (!visitedNodes.has(conn.to)) {
+              if (!depthMap.has(conn.to)) depthMap.set(conn.to, depth + 1);
+              queue.push(conn.to);
+            }
+          });
+      }
+
+      render();
+    }
+
+    function clearSimulationNoRender() {
+      state.nodes.forEach(n => n.simulated = 'none');
+      state.connections.forEach(c => c.simulated = 'none');
+    }
+
+    function updateSimulationSummary() {
+      const source = state.nodes.find(n => n.id === simulationSourceNodeId);
+      const impactedNodes = state.nodes.filter(n => n.simulated === 'impacted');
+      const failedNode = state.nodes.find(n => n.simulated === 'failed');
+      const impactedConnections = state.connections.filter(c => c.simulated === 'impacted');
+
+      if (!source || !failedNode) {
+        simulationSummary.classList.add('hidden');
+        simulationSummaryBody.innerHTML = '';
+        return;
+      }
+
+      simulationSummary.classList.remove('hidden');
+      simulationSummaryBody.innerHTML = `
+        <div><strong>Failed node:</strong> ${escapeHtml(source.title)}</div>
+        <div class="mt-1"><strong>Impacted services:</strong> ${impactedNodes.length}</div>
+        <div class="mt-1"><strong>Impacted connections:</strong> ${impactedConnections.length}</div>
+        <div class="mt-2"><strong>Blast radius:</strong> ${impactedNodes.map(n => escapeHtml(n.title)).join(', ') || 'No downstream impact detected.'}</div>
+      `;
     }
 
     function getSelectedNode() {
@@ -658,7 +889,7 @@
     function handleKeyDown(e) {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.type) {
         const active = document.activeElement;
-        const inInput = active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
+        const inInput = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
         if (!inInput) {
           e.preventDefault();
           deleteSelected();
@@ -672,8 +903,70 @@
     }
 
     function fitView() {
-      const wrap = document.getElementById('canvasWrap');
-      wrap.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      document.getElementById('canvasWrap').scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+
+    function getAnchorPoints(node) {
+      return {
+        top: { x: node.x + node.width / 2, y: node.y },
+        right: { x: node.x + node.width, y: node.y + node.height / 2 },
+        bottom: { x: node.x + node.width / 2, y: node.y + node.height },
+        left: { x: node.x, y: node.y + node.height / 2 }
+      };
+    }
+
+    function getBestAnchors(fromNode, toNode) {
+      const fromAnchors = getAnchorPoints(fromNode);
+      const toAnchors = getAnchorPoints(toNode);
+      let best = null;
+
+      Object.entries(fromAnchors).forEach(([fromSide, fromPoint]) => {
+        Object.entries(toAnchors).forEach(([toSide, toPoint]) => {
+          const dx = fromPoint.x - toPoint.x;
+          const dy = fromPoint.y - toPoint.y;
+          const dist = dx * dx + dy * dy;
+          if (!best || dist < best.dist) {
+            best = { dist, fromSide, toSide, fromPoint, toPoint };
+          }
+        });
+      });
+      return best;
+    }
+
+    function getControlPoints(start, end, fromSide, toSide) {
+      const offset = 80;
+      const c1 = { x: start.x, y: start.y };
+      const c2 = { x: end.x, y: end.y };
+
+      if (fromSide === 'right') c1.x += offset;
+      if (fromSide === 'left') c1.x -= offset;
+      if (fromSide === 'top') c1.y -= offset;
+      if (fromSide === 'bottom') c1.y += offset;
+
+      if (toSide === 'right') c2.x += offset;
+      if (toSide === 'left') c2.x -= offset;
+      if (toSide === 'top') c2.y -= offset;
+      if (toSide === 'bottom') c2.y += offset;
+
+      return { c1, c2 };
+    }
+
+    function getNodeHint(node) {
+      if (node.simulated === 'failed') return 'Simulated failure source';
+      if (node.simulated === 'impacted') return 'Simulated downstream impact';
+      if (node.failure) return 'Failure model added';
+      return 'Click for details';
+    }
+
+    function getSimulationNodeStyle(node) {
+      if (node.simulated === 'failed') return { fill: '#fee2e2' };
+      if (node.simulated === 'impacted') return { fill: '#fef3c7' };
+      return { fill: '#ffffff' };
+    }
+
+    function getSimulationConnectionStyle(conn) {
+      if (conn.simulated === 'impacted') return { stroke: '#dc2626', dash: '10 6' };
+      return { stroke: RISK_COLORS[conn.risk || 'low'] || '#475569', dash: '0' };
     }
 
     function exportYaml() {
@@ -687,6 +980,7 @@
       state = parsed;
       selected = { type: null, id: null };
       connectionStartNodeId = null;
+      simulationSourceNodeId = null;
       saveState();
       render();
       alert('YAML diagram imported.');
@@ -706,8 +1000,8 @@
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 1800;
-        canvas.height = 1200;
+        canvas.width = 2200;
+        canvas.height = 1400;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -733,13 +1027,12 @@
 
       const desc = document.createElement('p');
       desc.className = 'mt-2';
-      desc.textContent = 'Diagram and full descriptions of services, failure points, and recovery handling.';
+      desc.textContent = 'Diagram and full descriptions of services, connections, failure points, recovery handling, and gaps.';
       printArea.appendChild(desc);
 
       const imgWrap = document.createElement('div');
       imgWrap.className = 'mt-4';
-      const svgText = new XMLSerializer().serializeToString(buildExportSvg());
-      imgWrap.innerHTML = svgText;
+      imgWrap.innerHTML = new XMLSerializer().serializeToString(buildExportSvg());
       printArea.appendChild(imgWrap);
 
       const nodeSection = document.createElement('div');
@@ -749,7 +1042,7 @@
         const el = document.createElement('div');
         el.className = 'mt-3 border border-slate-300 p-3 rounded-lg';
         el.innerHTML = `
-          <div><strong>${escapeHtml(node.title)}</strong> (${escapeHtml(node.type)})</div>
+          <div><strong>${escapeHtml(node.title)}</strong> (${escapeHtml(node.type)}) - ${escapeHtml(capitalize(node.risk))} risk</div>
           <div><strong>Description:</strong> ${escapeHtml(node.description || '-')}</div>
           <div><strong>Failure points:</strong> ${escapeHtml(node.failure || '-')}</div>
           <div><strong>Recovery handling:</strong> ${escapeHtml(node.recovery || '-')}</div>
@@ -768,7 +1061,7 @@
         const el = document.createElement('div');
         el.className = 'mt-3 border border-slate-300 p-3 rounded-lg';
         el.innerHTML = `
-          <div><strong>${escapeHtml(conn.label || 'Connection')}</strong>: ${escapeHtml(from)} → ${escapeHtml(to)}</div>
+          <div><strong>${escapeHtml(conn.label || 'Connection')}</strong>: ${escapeHtml(from)} → ${escapeHtml(to)} - ${escapeHtml(capitalize(conn.risk || 'low'))} risk</div>
           <div><strong>Description:</strong> ${escapeHtml(conn.description || '-')}</div>
           <div><strong>Failure points:</strong> ${escapeHtml(conn.failure || '-')}</div>
           <div><strong>Recovery handling:</strong> ${escapeHtml(conn.recovery || '-')}</div>
@@ -783,14 +1076,14 @@
     function buildExportSvg() {
       const cloned = svg.cloneNode(true);
       cloned.setAttribute('xmlns', SVG_NS);
-      cloned.setAttribute('viewBox', '0 0 1800 1200');
-      cloned.setAttribute('width', '1800');
-      cloned.setAttribute('height', '1200');
+      cloned.setAttribute('viewBox', '0 0 2200 1400');
+      cloned.setAttribute('width', '2200');
+      cloned.setAttribute('height', '1400');
       const bg = createSvg('rect');
       bg.setAttribute('x', '0');
       bg.setAttribute('y', '0');
-      bg.setAttribute('width', '1800');
-      bg.setAttribute('height', '1200');
+      bg.setAttribute('width', '2200');
+      bg.setAttribute('height', '1400');
       bg.setAttribute('fill', '#ffffff');
       cloned.insertBefore(bg, cloned.firstChild);
       return cloned;
@@ -806,6 +1099,14 @@
         if (!raw) return structuredClone(defaultState);
         const parsed = JSON.parse(raw);
         if (!parsed.nodes || !parsed.connections) return structuredClone(defaultState);
+        parsed.nodes.forEach(n => {
+          if (!n.risk) n.risk = 'low';
+          if (!n.simulated) n.simulated = 'none';
+        });
+        parsed.connections.forEach(c => {
+          if (!c.risk) c.risk = 'low';
+          if (!c.simulated) c.simulated = 'none';
+        });
         return parsed;
       } catch {
         return structuredClone(defaultState);
@@ -835,6 +1136,11 @@
       return (str || '').length > max ? str.slice(0, max - 1) + '…' : (str || '');
     }
 
+    function capitalize(str) {
+      const s = String(str || '');
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+
     function downloadFile(filename, content, mimeType) {
       const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
@@ -853,18 +1159,18 @@
       const lines = [];
       lines.push('meta:');
       lines.push(`  title: ${yamlScalar(data.meta?.title || 'Failure Point Diagram')}`);
-      lines.push(`  version: ${data.meta?.version ?? 1}`);
+      lines.push(`  version: ${data.meta?.version ?? 2}`);
       lines.push('nodes:');
       data.nodes.forEach(node => {
         lines.push('  -');
-        for (const key of ['id','type','title','label','icon','x','y','width','height','description','failure','recovery','gap']) {
+        for (const key of ['id','type','title','label','icon','x','y','width','height','description','failure','recovery','gap','risk']) {
           lines.push(`    ${key}: ${yamlScalar(node[key])}`);
         }
       });
       lines.push('connections:');
       data.connections.forEach(conn => {
         lines.push('  -');
-        for (const key of ['id','from','to','label','description','failure','recovery','gap']) {
+        for (const key of ['id','from','to','label','description','failure','recovery','gap','risk']) {
           lines.push(`    ${key}: ${yamlScalar(conn[key])}`);
         }
       });
@@ -954,7 +1260,7 @@
       if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.connections)) {
         throw new Error('Invalid YAML structure. Expected meta, nodes, and connections.');
       }
-      data.meta = data.meta || { title: 'Failure Point Diagram', version: 1 };
+      data.meta = data.meta || { title: 'Failure Point Diagram', version: 2 };
       data.nodes = data.nodes.map(n => ({
         id: n.id || crypto.randomUUID(),
         type: n.type || 'text',
@@ -963,12 +1269,14 @@
         icon: n.icon || '📝',
         x: Number(n.x || 100),
         y: Number(n.y || 100),
-        width: Number(n.width || 170),
-        height: Number(n.height || 92),
+        width: Number(n.width || 176),
+        height: Number(n.height || 96),
         description: n.description || '',
         failure: n.failure || '',
         recovery: n.recovery || '',
-        gap: n.gap || ''
+        gap: n.gap || '',
+        risk: n.risk || 'low',
+        simulated: 'none'
       }));
       data.connections = data.connections.map(c => ({
         id: c.id || crypto.randomUUID(),
@@ -978,7 +1286,9 @@
         description: c.description || '',
         failure: c.failure || '',
         recovery: c.recovery || '',
-        gap: c.gap || ''
+        gap: c.gap || '',
+        risk: c.risk || 'low',
+        simulated: 'none'
       }));
     }
   </script>
