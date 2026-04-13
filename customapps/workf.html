@@ -1,11 +1,15 @@
 <!DOCTYPE html>
-
-<html lang="en">
+<html lang="en" class="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Ascend — Workforce Development Platform</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Wait for tailwind CDN then configure dark mode
+  if (typeof tailwind !== 'undefined') { tailwind.config = { darkMode: 'class' }; }
+  else { window.addEventListener('load', () => { if (typeof tailwind !== 'undefined') tailwind.config = { darkMode: 'class' }; }); }
+</script>
 <style>
   body { font-family: 'Inter', system-ui, sans-serif; }
   .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #6d28d9 100%); }
@@ -17,14 +21,20 @@
   @keyframes fade { from{opacity:0; transform: translateY(6px);} to{opacity:1; transform:none;} }
   .skill-pill { background: linear-gradient(90deg, #dbeafe, #ede9fe); }
   .match-bar { background: linear-gradient(90deg, #10b981, #3b82f6); }
+  .dark .skill-pill { background: linear-gradient(90deg, #1e3a8a, #4c1d95); color: #e0e7ff; }
+  .dark body, body.dark { background: #0f172a; color: #e2e8f0; }
+  .wizard-step { transition: all .3s; }
+  .wizard-step.done { background: #10b981; color: white; }
+  .wizard-step.active { background: #3b82f6; color: white; transform: scale(1.15); }
+  .wizard-step.pending { background: #e2e8f0; color: #64748b; }
+  .dark .wizard-step.pending { background: #334155; color: #94a3b8; }
 </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors">
 
 <!-- Header -->
-
 <header class="gradient-bg text-white shadow-xl">
-  <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between flex-wrap gap-3">
     <div class="flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl font-bold">↗</div>
       <div>
@@ -32,9 +42,12 @@
         <p class="text-xs text-blue-200">Workforce Development Platform</p>
       </div>
     </div>
-    <div class="flex gap-2">
-      <button onclick="openModal('uploadModal')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-medium">📎 Upload References</button>
-      <button onclick="resetData()" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-medium">↻ Reset</button>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="startWizard('student')" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-2 rounded-lg text-xs font-medium">🎓 Student Wizard</button>
+      <button onclick="startWizard('employer')" class="bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg text-xs font-medium">🏢 Employer Wizard</button>
+      <button onclick="openModal('uploadModal')" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-xs font-medium">📎 Upload</button>
+      <button onclick="toggleTheme()" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-xs font-medium" id="themeBtn">🌙</button>
+      <button onclick="resetData()" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-xs font-medium">↻</button>
     </div>
   </div>
   <nav class="max-w-7xl mx-auto px-6 pb-4 flex gap-1 overflow-x-auto">
@@ -51,20 +64,19 @@
 <main class="max-w-7xl mx-auto px-6 py-8">
 
   <!-- DASHBOARD -->
-
   <section id="tab-dashboard" class="tab-content">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500">People</p><p id="stat-people" class="text-3xl font-bold text-blue-700">0</p></div>
-      <div class="bg-white rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500">Businesses</p><p id="stat-biz" class="text-3xl font-bold text-purple-700">0</p></div>
-      <div class="bg-white rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500">Open Jobs</p><p id="stat-jobs" class="text-3xl font-bold text-emerald-700">0</p></div>
-      <div class="bg-white rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500">Training Programs</p><p id="stat-train" class="text-3xl font-bold text-amber-600">0</p></div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500 dark:text-slate-400">People</p><p id="stat-people" class="text-3xl font-bold text-blue-700">0</p></div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500 dark:text-slate-400">Businesses</p><p id="stat-biz" class="text-3xl font-bold text-purple-700">0</p></div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500 dark:text-slate-400">Open Jobs</p><p id="stat-jobs" class="text-3xl font-bold text-emerald-700">0</p></div>
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover"><p class="text-xs text-slate-500 dark:text-slate-400">Training Programs</p><p id="stat-train" class="text-3xl font-bold text-amber-600">0</p></div>
     </div>
     <div class="grid md:grid-cols-2 gap-6">
-      <div class="bg-white rounded-xl p-6 shadow">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow">
         <h3 class="font-bold text-lg mb-4">🔥 Top In-Demand Skills</h3>
         <div id="top-skills" class="space-y-3"></div>
       </div>
-      <div class="bg-white rounded-xl p-6 shadow">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow">
         <h3 class="font-bold text-lg mb-4">📢 Recent Activity</h3>
         <div id="activity-feed" class="space-y-2 text-sm"></div>
       </div>
@@ -72,58 +84,52 @@
   </section>
 
   <!-- PEOPLE -->
-
   <section id="tab-people" class="tab-content hidden">
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-2xl font-bold">Talent Pool</h2>
+      <h2 class="text-2xl font-bold dark:text-white">Talent Pool</h2>
       <button onclick="openModal('personModal')" class="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">+ Add Person</button>
     </div>
-    <input id="search-people" oninput="render()" placeholder="Search by name, skill..." class="w-full mb-4 px-4 py-2 rounded-lg border border-slate-300"/>
+    <input id="search-people" oninput="render()" placeholder="Search by name, skill..." class="w-full mb-4 px-4 py-2 rounded-lg border border-slate-300 dark:bg-slate-800 dark:border-slate-600 dark:text-white"/>
     <div id="people-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
   </section>
 
   <!-- BUSINESSES -->
-
   <section id="tab-businesses" class="tab-content hidden">
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-2xl font-bold">Partner Businesses</h2>
+      <h2 class="text-2xl font-bold dark:text-white">Partner Businesses</h2>
       <button onclick="openModal('bizModal')" class="bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-800">+ Add Business</button>
     </div>
     <div id="biz-grid" class="grid md:grid-cols-2 gap-4"></div>
   </section>
 
   <!-- SKILLS -->
-
   <section id="tab-skills" class="tab-content hidden">
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-2xl font-bold">Skills, Training & Certifications</h2>
+      <h2 class="text-2xl font-bold dark:text-white">Skills, Training & Certifications</h2>
       <button onclick="openModal('skillModal')" class="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700">+ Add Program</button>
     </div>
     <div id="skills-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
   </section>
 
   <!-- JOBS -->
-
   <section id="tab-jobs" class="tab-content hidden">
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-2xl font-bold">Job Opportunities</h2>
+      <h2 class="text-2xl font-bold dark:text-white">Job Opportunities</h2>
       <button onclick="openModal('jobModal')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-800">+ Post Job</button>
     </div>
     <div id="jobs-list" class="space-y-3"></div>
   </section>
 
   <!-- BIZDEV -->
-
   <section id="tab-bizdev" class="tab-content hidden">
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-2xl font-bold">Business Development Opportunities</h2>
+      <h2 class="text-2xl font-bold dark:text-white">Business Development Opportunities</h2>
       <button onclick="openModal('bdModal')" class="bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-700">+ Add Opportunity</button>
     </div>
     <div id="bd-grid" class="grid md:grid-cols-2 gap-4"></div>
   </section>
 
   <!-- MATCHES -->
-
   <section id="tab-matches" class="tab-content hidden">
     <h2 class="text-2xl font-bold mb-2">✨ Smart Matches</h2>
     <p class="text-slate-600 mb-5 text-sm">Automated matching of talent to jobs based on skill overlap.</p>
@@ -133,7 +139,6 @@
 </main>
 
 <!-- MODALS -->
-
 <div id="modalRoot"></div>
 
 <script>
@@ -318,19 +323,37 @@ const SEED = {
   ]
 };
 
-const KEY = 'ascendV3';  // bump version to force reload of new seed data
-// Clear any old versions
-['ascendV1','ascendV2'].forEach(k => localStorage.removeItem(k));
-let DB = JSON.parse(localStorage.getItem(KEY)) || structuredClone(SEED);
-// Safety check: if any category is missing or shorter than seed, refresh from seed
-if (!DB.people || DB.people.length < SEED.people.length) {
-  DB = structuredClone(SEED);
+const KEY = 'ascendV5';
+// Safe localStorage wrappers - some browsers/contexts throw on access
+const LS = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){} },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+// Clear all old versions
+['ascendV1','ascendV2','ascendV3','ascendV4'].forEach(k => LS.del(k));
+let DB;
+try {
+  const raw = LS.get(KEY);
+  const stored = raw ? JSON.parse(raw) : null;
+  if (!stored || !stored.people || !stored.businesses || !stored.jobs ||
+      stored.people.length < SEED.people.length ||
+      stored.jobs.length < SEED.jobs.length ||
+      stored.businesses.length < SEED.businesses.length) {
+    DB = JSON.parse(JSON.stringify(SEED));
+    LS.set(KEY, JSON.stringify(DB));
+  } else {
+    DB = stored;
+  }
+} catch(e) {
+  DB = JSON.parse(JSON.stringify(SEED));
+  LS.set(KEY, JSON.stringify(DB));
 }
-const save = () => localStorage.setItem(KEY, JSON.stringify(DB));
+const save = () => LS.set(KEY, JSON.stringify(DB));
 const uid = () => Math.random().toString(36).slice(2,9);
 function logActivity(msg){ DB.activity.unshift({t:new Date().toLocaleString(), msg}); DB.activity = DB.activity.slice(0,15); save(); }
 
-function resetData(){ if(confirm('Reset all data to seed state?')){ DB = structuredClone(SEED); save(); render(); } }
+function resetData(){ if(confirm('Reset all data to seed state?')){ DB = JSON.parse(JSON.stringify(SEED)); save(); render(); } }
 
 // ===================== TABS =====================
 function showTab(name){
@@ -345,55 +368,59 @@ function showTab(name){
 
 // ===================== RENDER =====================
 function render(){
+  const $ = id => document.getElementById(id);
   // stats
-  stat_people.textContent = DB.people.length;
-  stat_biz.textContent = DB.businesses.length;
-  stat_jobs.textContent = DB.jobs.length;
-  stat_train.textContent = DB.skills.length;
+  $('stat-people').textContent = DB.people.length;
+  $('stat-biz').textContent = DB.businesses.length;
+  $('stat-jobs').textContent = DB.jobs.length;
+  $('stat-train').textContent = DB.skills.length;
 
   // top skills
   const skillCount = {};
   DB.jobs.forEach(j=>j.skills.forEach(s=>skillCount[s]=(skillCount[s]||0)+1));
   const top = Object.entries(skillCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const max = Math.max(...top.map(t=>t[1]),1);
-  top_skills.innerHTML = top.map(([s,c])=>`
+  $('top-skills').innerHTML = top.map(([s,c])=>`
     <div><div class="flex justify-between text-sm mb-1"><span class="font-medium">${s}</span><span class="text-slate-500">${c} jobs</span></div>
     <div class="h-2 bg-slate-100 rounded"><div class="h-2 match-bar rounded" style="width:${c/max*100}%"></div></div></div>`).join('');
 
-  activity_feed.innerHTML = DB.activity.length ? DB.activity.map(a=>`<div class="border-l-2 border-blue-500 pl-3 py-1"><p>${a.msg}</p><p class="text-xs text-slate-400">${a.t}</p></div>`).join('') : '<p class="text-slate-400 text-sm">No activity yet.</p>';
+  $('activity-feed').innerHTML = DB.activity.length ? DB.activity.map(a=>`<div class="border-l-2 border-blue-500 pl-3 py-1"><p>${a.msg}</p><p class="text-xs text-slate-400">${a.t}</p></div>`).join('') : '<p class="text-slate-400 text-sm">No activity yet.</p>';
 
   // people
-  const q = (search_people?.value || '').toLowerCase();
-  people_grid.innerHTML = DB.people.filter(p=>!q || (p.name+p.role+p.skills.join(' ')).toLowerCase().includes(q)).map(p=>`
-    <div class="bg-white rounded-xl p-5 shadow card-hover">
+  const searchEl = $('search-people');
+  const q = (searchEl ? searchEl.value : '').toLowerCase();
+  $('people-grid').innerHTML = DB.people.filter(p=>!q || (p.name+p.role+p.skills.join(' ')).toLowerCase().includes(q)).map(p=>`
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover cursor-pointer" onclick="viewPerson('${p.id}')">
       <div class="flex items-center gap-3 mb-3">
         <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center font-bold">${p.name.split(' ').map(n=>n[0]).join('')}</div>
-        <div><h3 class="font-bold">${p.name}</h3><p class="text-xs text-slate-500">${p.role}</p></div>
+        <div><h3 class="font-bold">${p.name}</h3><p class="text-xs text-slate-500 dark:text-slate-400">${p.role}</p></div>
       </div>
-      <p class="text-sm text-slate-600 mb-3">${p.bio}</p>
-      <div class="flex flex-wrap gap-1 mb-2">${p.skills.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full text-slate-700">${s}</span>`).join('')}</div>
-      <p class="text-xs text-slate-500 mb-3">🏅 ${p.certs.join(', ')||'No certs'} · Available: ${p.avail}</p>
-      <div class="flex gap-2">
-        <button onclick="viewMatches('${p.id}')" class="flex-1 bg-blue-50 text-blue-700 text-xs font-medium py-2 rounded hover:bg-blue-100">Find Jobs</button>
-        <button onclick="del('people','${p.id}')" class="bg-red-50 text-red-600 text-xs px-3 rounded hover:bg-red-100">✕</button>
+      <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">${p.bio}</p>
+      <div class="flex flex-wrap gap-1 mb-2">${p.skills.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full">${s}</span>`).join('')}</div>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">🏅 ${p.certs.join(', ')||'No certs'} · Available: ${p.avail}</p>
+      <div class="flex gap-2" onclick="event.stopPropagation()">
+        <button onclick="viewMatches('${p.id}')" class="flex-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-medium py-2 rounded hover:bg-blue-100">Find Jobs</button>
+        <button onclick="requestInfo('${p.id}')" class="flex-1 bg-purple-50 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-medium py-2 rounded hover:bg-purple-100">Request Info</button>
+        <button onclick="del('people','${p.id}')" class="bg-red-50 dark:bg-red-900/40 text-red-600 dark:text-red-300 text-xs px-3 rounded hover:bg-red-100">✕</button>
       </div>
     </div>`).join('') || '<p class="text-slate-500">No people yet.</p>';
 
   // businesses
-  biz_grid.innerHTML = DB.businesses.map(b=>`
-    <div class="bg-white rounded-xl p-5 shadow card-hover">
+  $('biz-grid').innerHTML = DB.businesses.map(b=>`
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover cursor-pointer" onclick="viewBiz('${b.id}')">
       <div class="flex justify-between items-start mb-2">
-        <div><h3 class="font-bold">${b.name}</h3><p class="text-xs text-slate-500">${b.industry} · ${b.size} employees</p></div>
-        <button onclick="del('businesses','${b.id}')" class="text-red-500 hover:bg-red-50 px-2 rounded">✕</button>
+        <div><h3 class="font-bold">${b.name}</h3><p class="text-xs text-slate-500 dark:text-slate-400">${b.industry} · ${b.size} employees</p></div>
+        <button onclick="event.stopPropagation(); del('businesses','${b.id}')" class="text-red-500 hover:bg-red-50 px-2 rounded">✕</button>
       </div>
-      <p class="text-xs text-slate-500 mb-2">Contact: ${b.contact}</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Contact: ${b.contact}</p>
       <p class="text-sm font-medium mb-1">Skill Needs:</p>
-      <div class="flex flex-wrap gap-1">${b.needs.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full">${s}</span>`).join('')}</div>
+      <div class="flex flex-wrap gap-1 mb-3">${b.needs.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full">${s}</span>`).join('')}</div>
+      <button onclick="event.stopPropagation(); proposeMatches('${b.id}')" class="w-full bg-purple-600 text-white text-xs font-medium py-2 rounded hover:bg-purple-700">✨ Propose Matches</button>
     </div>`).join('');
 
   // skills
-  skills_grid.innerHTML = DB.skills.map(s=>`
-    <div class="bg-white rounded-xl p-5 shadow card-hover">
+  $('skills-grid').innerHTML = DB.skills.map(s=>`
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover">
       <div class="flex justify-between items-start mb-2">
         <span class="text-xs px-2 py-1 rounded-full ${s.type==='Certification'?'bg-amber-100 text-amber-800':'bg-blue-100 text-blue-800'}">${s.type}</span>
         <button onclick="del('skills','${s.id}')" class="text-red-500 hover:bg-red-50 px-2 rounded">✕</button>
@@ -409,11 +436,11 @@ function render(){
     </div>`).join('');
 
   // jobs
-  jobs_list.innerHTML = DB.jobs.map(j=>`
-    <div class="bg-white rounded-xl p-5 shadow card-hover flex justify-between items-center">
+  $('jobs-list').innerHTML = DB.jobs.map(j=>`
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover flex justify-between items-center">
       <div class="flex-1">
         <h3 class="font-bold">${j.title}</h3>
-        <p class="text-sm text-slate-600">${j.company} · ${j.type} · ${j.salary}</p>
+        <p class="text-sm text-slate-600 dark:text-slate-300">${j.company} · ${j.type} · ${j.salary}</p>
         <div class="flex flex-wrap gap-1 mt-2">${j.skills.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full">${s}</span>`).join('')}</div>
       </div>
       <div class="flex gap-2">
@@ -423,14 +450,14 @@ function render(){
     </div>`).join('');
 
   // bizdev
-  bd_grid.innerHTML = DB.bizdev.map(b=>`
-    <div class="bg-white rounded-xl p-5 shadow card-hover border-l-4 border-rose-500">
+  $('bd-grid').innerHTML = DB.bizdev.map(b=>`
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover border-l-4 border-rose-500">
       <div class="flex justify-between items-start mb-2">
-        <span class="text-xs px-2 py-1 rounded-full ${b.status==='Open'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800'}">${b.status}</span>
+        <span class="text-xs px-2 py-1 rounded-full ${b.status==='Open'?'bg-emerald-100 text-emerald-800':b.status==='Won'?'bg-blue-100 text-blue-800':'bg-amber-100 text-amber-800'}">${b.status}</span>
         <button onclick="del('bizdev','${b.id}')" class="text-red-500 hover:bg-red-50 px-2 rounded">✕</button>
       </div>
       <h3 class="font-bold mt-2">${b.title}</h3>
-      <p class="text-sm text-slate-600">${b.org}</p>
+      <p class="text-sm text-slate-600 dark:text-slate-300">${b.org}</p>
       <div class="mt-3 text-sm">
         <p>💰 <b>${b.value}</b></p>
         <p>📅 Deadline: ${b.deadline}</p>
@@ -450,10 +477,10 @@ function render(){
     });
   });
   matches.sort((a,b)=>b.pct-a.pct);
-  matches_list.innerHTML = matches.slice(0,20).map(m=>`
-    <div class="bg-white rounded-xl p-5 shadow card-hover">
+  $('matches-list').innerHTML = matches.slice(0,30).map(m=>`
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow card-hover">
       <div class="flex justify-between items-center mb-2">
-        <div><b>${m.p.name}</b> → <b>${m.j.title}</b> <span class="text-xs text-slate-500">@ ${m.j.company}</span></div>
+        <div><b>${m.p.name}</b> → <b>${m.j.title}</b> <span class="text-xs text-slate-500 dark:text-slate-400">@ ${m.j.company}</span></div>
         <span class="font-bold text-lg ${m.pct>=66?'text-emerald-600':m.pct>=33?'text-amber-600':'text-slate-500'}">${m.pct}%</span>
       </div>
       <div class="h-2 bg-slate-100 rounded mb-2"><div class="h-2 match-bar rounded" style="width:${m.pct}%"></div></div>
@@ -476,53 +503,254 @@ const modals = {
     <div id="fileList" class="text-sm space-y-1 max-h-40 overflow-y-auto"></div>`, submit:'Upload', run:()=>{
       const files = document.getElementById('fileInput').files;
       [...files].forEach(f=>DB.refs.push({name:f.name, size:(f.size/1024).toFixed(1)+'KB', date:new Date().toLocaleDateString()}));
-      logActivity(`${files.length} reference(s) uploaded`); save(); alert(`✓ ${files.length} file(s) uploaded.`);
+      logActivity(files.length + ' reference(s) uploaded'); save(); alert(`✓ ${files.length} file(s) uploaded.`);
     }},
   personModal: {title:'Add Person', body:`
-    <input id="f-name" placeholder="Full name" class="w-full mb-2 px-3 py-2 border rounded"/>
-    <input id="f-role" placeholder="Current role" class="w-full mb-2 px-3 py-2 border rounded"/>
-    <input id="f-skills" placeholder="Skills (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded"/>
-    <input id="f-certs" placeholder="Certifications (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded"/>
-    <textarea id="f-bio" placeholder="Bio" class="w-full mb-2 px-3 py-2 border rounded"></textarea>`, submit:'Add', run:()=>{
-
-```
-  DB.people.push({id:uid(), name:f_name.value, role:f_role.value, skills:f_skills.value.split(',').map(s=>s.trim()).filter(Boolean), certs:f_certs.value.split(',').map(s=>s.trim()).filter(Boolean), bio:f_bio.value, avail:'Immediate'});
-  logActivity(`New person added: ${f_name.value}`); save();
-}},
-```
-
-bizModal: {title:‘Add Business’, body:` <input id="b-name" placeholder="Business name" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="b-ind" placeholder="Industry" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="b-needs" placeholder="Skill needs (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="b-size" placeholder="Size (e.g. 50-200)" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="b-contact" placeholder="Contact email" class="w-full mb-2 px-3 py-2 border rounded"/>`, submit:‘Add’, run:()=>{
-DB.businesses.push({id:uid(), name:b_name.value, industry:b_ind.value, needs:b_needs.value.split(’,’).map(s=>s.trim()).filter(Boolean), size:b_size.value, contact:b_contact.value});
-logActivity(`New business: ${b_name.value}`); save();
-}},
-skillModal: {title:‘Add Training / Certification’, body:` <input id="s-name" placeholder="Program name" class="w-full mb-2 px-3 py-2 border rounded"/> <select id="s-type" class="w-full mb-2 px-3 py-2 border rounded"><option>Training</option><option>Certification</option></select> <input id="s-prov" placeholder="Provider" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="s-dur" placeholder="Duration" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="s-cost" placeholder="Cost" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="s-cert" placeholder="Credential awarded" class="w-full mb-2 px-3 py-2 border rounded"/>`, submit:‘Add’, run:()=>{
-DB.skills.push({id:uid(), name:s_name.value, type:s_type.value, provider:s_prov.value, duration:s_dur.value, cost:s_cost.value, cert:s_cert.value});
-logActivity(`New program: ${s_name.value}`); save();
-}},
-jobModal: {title:‘Post Job’, body:` <input id="j-title" placeholder="Job title" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="j-co" placeholder="Company" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="j-skills" placeholder="Required skills (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="j-sal" placeholder="Salary" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="j-type" placeholder="Type (Full-time, Contract...)" class="w-full mb-2 px-3 py-2 border rounded"/>`, submit:‘Post’, run:()=>{
-DB.jobs.push({id:uid(), title:j_title.value, company:j_co.value, skills:j_skills.value.split(’,’).map(s=>s.trim()).filter(Boolean), salary:j_sal.value, type:j_type.value});
-logActivity(`New job: ${j_title.value}`); save();
-}},
-bdModal: {title:‘Add BD Opportunity’, body:` <input id="d-title" placeholder="Opportunity title" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="d-org" placeholder="Organization" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="d-val" placeholder="Value" class="w-full mb-2 px-3 py-2 border rounded"/> <input id="d-dead" type="date" class="w-full mb-2 px-3 py-2 border rounded"/> <select id="d-stat" class="w-full mb-2 px-3 py-2 border rounded"><option>Open</option><option>In Talks</option><option>Won</option><option>Lost</option></select>`, submit:‘Add’, run:()=>{
-DB.bizdev.push({id:uid(), title:d_title.value, org:d_org.value, value:d_val.value, deadline:d_dead.value, status:d_stat.value});
-logActivity(`BD added: ${d_title.value}`); save();
-}},
+    <input id="f-name" placeholder="Full name" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="f-role" placeholder="Current role" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="f-skills" placeholder="Skills (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="f-certs" placeholder="Certifications (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <textarea id="f-bio" placeholder="Bio" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"></textarea>`, submit:'Add', run:()=>{
+      DB.people.push({id:uid(), name:document.getElementById('f-name').value, role:document.getElementById('f-role').value, skills:document.getElementById('f-skills').value.split(',').map(s=>s.trim()).filter(Boolean), certs:document.getElementById('f-certs').value.split(',').map(s=>s.trim()).filter(Boolean), bio:document.getElementById('f-bio').value, avail:'Immediate'});
+      logActivity('New person added: ' + document.getElementById('f-name').value); save();
+    }},
+  bizModal: {title:'Add Business', body:`
+    <input id="b-name" placeholder="Business name" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="b-ind" placeholder="Industry" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="b-needs" placeholder="Skill needs (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="b-size" placeholder="Size (e.g. 50-200)" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="b-contact" placeholder="Contact email" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>`, submit:'Add', run:()=>{
+      DB.businesses.push({id:uid(), name:document.getElementById('b-name').value, industry:document.getElementById('b-ind').value, needs:document.getElementById('b-needs').value.split(',').map(s=>s.trim()).filter(Boolean), size:document.getElementById('b-size').value, contact:document.getElementById('b-contact').value});
+      logActivity('New business: ' + document.getElementById('b-name').value); save();
+    }},
+  skillModal: {title:'Add Training / Certification', body:`
+    <input id="s-name" placeholder="Program name" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <select id="s-type" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"><option>Training</option><option>Certification</option></select>
+    <input id="s-prov" placeholder="Provider" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="s-dur" placeholder="Duration" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="s-cost" placeholder="Cost" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="s-cert" placeholder="Credential awarded" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>`, submit:'Add', run:()=>{
+      DB.skills.push({id:uid(), name:document.getElementById('s-name').value, type:document.getElementById('s-type').value, provider:document.getElementById('s-prov').value, duration:document.getElementById('s-dur').value, cost:document.getElementById('s-cost').value, cert:document.getElementById('s-cert').value});
+      logActivity('New program: ' + document.getElementById('s-name').value); save();
+    }},
+  jobModal: {title:'Post Job', body:`
+    <input id="j-title" placeholder="Job title" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="j-co" placeholder="Company" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="j-skills" placeholder="Required skills (comma-separated)" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="j-sal" placeholder="Salary" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="j-type" placeholder="Type (Full-time, Contract...)" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>`, submit:'Post', run:()=>{
+      DB.jobs.push({id:uid(), title:document.getElementById('j-title').value, company:document.getElementById('j-co').value, skills:document.getElementById('j-skills').value.split(',').map(s=>s.trim()).filter(Boolean), salary:document.getElementById('j-sal').value, type:document.getElementById('j-type').value});
+      logActivity('New job: ' + document.getElementById('j-title').value); save();
+    }},
+  bdModal: {title:'Add BD Opportunity', body:`
+    <input id="d-title" placeholder="Opportunity title" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="d-org" placeholder="Organization" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="d-val" placeholder="Value" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <input id="d-dead" type="date" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/>
+    <select id="d-stat" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"><option>Open</option><option>In Talks</option><option>Won</option><option>Lost</option></select>`, submit:'Add', run:()=>{
+      DB.bizdev.push({id:uid(), title:document.getElementById('d-title').value, org:document.getElementById('d-org').value, value:document.getElementById('d-val').value, deadline:document.getElementById('d-dead').value, status:document.getElementById('d-stat').value});
+      logActivity('BD added: ' + document.getElementById('d-title').value); save();
+    }},
 };
 
 function openModal(key){
-const m = modals[key];
-modalRoot.innerHTML = ` <div class="fixed inset-0 modal-bg flex items-center justify-center z-50 fade-in" onclick="if(event.target===this)closeModal()"> <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl"> <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg">${m.title}</h3><button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl">✕</button></div> <div>${m.body}</div> <div class="flex gap-2 mt-4"> <button onclick="closeModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 py-2 rounded font-medium">Cancel</button> <button onclick="submitModal('${key}')" class="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-2 rounded font-medium">${m.submit}</button> </div> </div> </div>`;
-if(key===‘uploadModal’){
-const list = document.getElementById(‘fileList’);
-list.innerHTML = DB.refs.map(r=>`<div class="flex justify-between bg-slate-50 px-2 py-1 rounded"><span>📄 ${r.name}</span><span class="text-slate-400">${r.size} · ${r.date}</span></div>`).join(’’) || ‘<p class="text-slate-400">No files yet.</p>’;
+  const m = modals[key];
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 modal-bg flex items-center justify-center z-50 fade-in" onclick="if(event.target===this)closeModal()">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+        <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg">${m.title}</h3><button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl">✕</button></div>
+        <div>${m.body}</div>
+        <div class="flex gap-2 mt-4">
+          <button onclick="closeModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 py-2 rounded font-medium">Cancel</button>
+          <button onclick="submitModal('${key}')" class="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-2 rounded font-medium">${m.submit}</button>
+        </div>
+      </div>
+    </div>`;
+  if(key==='uploadModal'){
+    const list = document.getElementById('fileList');
+    list.innerHTML = DB.refs.map(r=>`<div class="flex justify-between bg-slate-50 px-2 py-1 rounded"><span>📄 ${r.name}</span><span class="text-slate-400">${r.size} · ${r.date}</span></div>`).join('') || '<p class="text-slate-400">No files yet.</p>';
+  }
 }
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+function submitModal(key){ try{ modals[key].run(); closeModal(); render(); }catch(e){ alert('Please fill required fields.'); } }
+
+// ===================== THEME =====================
+function toggleTheme(){
+  const html = document.documentElement;
+  const isDark = html.classList.toggle('dark');
+  try { localStorage.setItem('ascendTheme', isDark ? 'dark' : 'light'); } catch(e){}
+  const btn = document.getElementById('themeBtn');
+  if(btn) btn.textContent = isDark ? '☀️' : '🌙';
 }
-function closeModal(){ modalRoot.innerHTML=’’; }
-function submitModal(key){ try{ modals[key].run(); closeModal(); render(); }catch(e){ alert(‘Please fill required fields.’); } }
+(function(){
+  try {
+    const saved = localStorage.getItem('ascendTheme');
+    if(saved === 'dark') { document.documentElement.classList.add('dark'); const b=document.getElementById('themeBtn'); if(b) b.textContent='☀️'; }
+  } catch(e){}
+})();
+
+// ===================== DETAIL POPUPS =====================
+function viewPerson(id){
+  const p = DB.people.find(x=>x.id===id); if(!p) return;
+  const matches = DB.jobs.map(j=>({j, overlap: p.skills.filter(s=>j.skills.includes(s))})).filter(m=>m.overlap.length).sort((a,b)=>b.overlap.length-a.overlap.length).slice(0,3);
+  const gaps = {};
+  DB.jobs.forEach(j=>j.skills.forEach(s=>{ if(!p.skills.includes(s)) gaps[s]=(gaps[s]||0)+1; }));
+  const topGaps = Object.entries(gaps).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  showPopup(`Profile: ${p.name}`, `
+    <div class="space-y-4">
+      <div class="flex items-center gap-4">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center font-bold text-xl">${p.name.split(' ').map(n=>n[0]).join('')}</div>
+        <div><h3 class="font-bold text-lg">${p.name}</h3><p class="text-sm text-slate-500">${p.role} · Available: ${p.avail}</p></div>
+      </div>
+      <p class="text-sm">${p.bio}</p>
+      <div><p class="font-semibold text-sm mb-1">Skills</p><div class="flex flex-wrap gap-1">${p.skills.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full">${s}</span>`).join('')}</div></div>
+      <div><p class="font-semibold text-sm mb-1">Certifications</p><p class="text-sm text-slate-600 dark:text-slate-300">🏅 ${p.certs.join(', ')||'None'}</p></div>
+      <div><p class="font-semibold text-sm mb-1">Top Job Matches</p>${matches.map(m=>`<p class="text-sm">• ${m.j.title} @ ${m.j.company} <span class="text-emerald-600">(${m.overlap.length} skills match)</span></p>`).join('')||'<p class="text-sm text-slate-500">No matches yet.</p>'}</div>
+      <div><p class="font-semibold text-sm mb-1">Skill Gaps to Close</p>${topGaps.map(([s,c])=>`<p class="text-sm">📚 ${s} <span class="text-slate-500">(in ${c} jobs)</span></p>`).join('')||'<p class="text-sm text-slate-500">None</p>'}</div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="requestInfo('${p.id}')" class="flex-1 bg-purple-600 text-white text-sm py-2 rounded">📨 Request More Info</button>
+        <button onclick="viewMatches('${p.id}'); closeModal();" class="flex-1 bg-blue-600 text-white text-sm py-2 rounded">🎯 See All Matches</button>
+      </div>
+    </div>`);
+}
+function requestInfo(id){
+  const p = DB.people.find(x=>x.id===id); if(!p) return;
+  showPopup('Request Additional Info — '+p.name, `
+    <p class="text-sm mb-3">Select info to request from ${p.name}:</p>
+    <div class="space-y-2 text-sm">
+      <label class="flex gap-2"><input type="checkbox" checked/> Updated resume</label>
+      <label class="flex gap-2"><input type="checkbox" checked/> Portfolio / work samples</label>
+      <label class="flex gap-2"><input type="checkbox"/> References (3 professional)</label>
+      <label class="flex gap-2"><input type="checkbox"/> Transcripts / certifications</label>
+      <label class="flex gap-2"><input type="checkbox"/> Background check authorization</label>
+      <label class="flex gap-2"><input type="checkbox"/> Availability calendar</label>
+    </div>
+    <textarea placeholder="Additional notes..." class="w-full mt-3 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"></textarea>
+    <button onclick="logActivity('Info requested from ${p.name}'); alert('✓ Request sent to ${p.name}'); closeModal();" class="mt-3 w-full bg-purple-600 text-white py-2 rounded">Send Request</button>`);
+}
+function viewBiz(id){
+  const b = DB.businesses.find(x=>x.id===id); if(!b) return;
+  const matchedPeople = DB.people.map(p=>({p, overlap: p.skills.filter(s=>b.needs.includes(s))})).filter(m=>m.overlap.length).sort((a,b)=>b.overlap.length-a.overlap.length).slice(0,5);
+  showPopup(`Business: ${b.name}`, `
+    <div class="space-y-4">
+      <div><h3 class="font-bold text-lg">${b.name}</h3><p class="text-sm text-slate-500">${b.industry} · ${b.size} employees</p><p class="text-sm">📧 ${b.contact}</p></div>
+      <div><p class="font-semibold text-sm mb-1">Skills Needed</p><div class="flex flex-wrap gap-1">${b.needs.map(s=>`<span class="skill-pill text-xs px-2 py-1 rounded-full">${s}</span>`).join('')}</div></div>
+      <div><p class="font-semibold text-sm mb-1">Top Candidate Matches</p>${matchedPeople.map(m=>`<p class="text-sm">• ${m.p.name} — ${m.p.role} <span class="text-emerald-600">(${m.overlap.length} skills)</span></p>`).join('')||'<p class="text-sm text-slate-500">No candidates yet.</p>'}</div>
+      <button onclick="proposeMatches('${b.id}')" class="w-full bg-purple-600 text-white py-2 rounded text-sm">✨ Build Candidate Proposal</button>
+    </div>`);
+}
+function proposeMatches(bizId){
+  const b = DB.businesses.find(x=>x.id===bizId); if(!b) return;
+  const matches = DB.people.map(p=>{
+    const overlap = p.skills.filter(s=>b.needs.includes(s));
+    return {p, overlap, pct: Math.round(overlap.length/b.needs.length*100)};
+  }).filter(m=>m.overlap.length).sort((a,b)=>b.pct-a.pct).slice(0,6);
+  showPopup(`Candidate Proposal for ${b.name}`, `
+    <p class="text-sm mb-3">Based on your skill needs (${b.needs.join(', ')}), here are the top candidates:</p>
+    <div class="space-y-3">
+    ${matches.map(m=>`
+      <div class="border border-slate-200 dark:border-slate-600 rounded-lg p-3">
+        <div class="flex justify-between items-center mb-2">
+          <div><b>${m.p.name}</b> <span class="text-xs text-slate-500 dark:text-slate-400">— ${m.p.role}</span></div>
+          <span class="font-bold ${m.pct>=66?'text-emerald-600':m.pct>=33?'text-amber-600':'text-slate-500'}">${m.pct}%</span>
+        </div>
+        <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded mb-2"><div class="h-2 match-bar rounded" style="width:${m.pct}%"></div></div>
+        <p class="text-xs">✓ Matches: ${m.overlap.join(', ')}</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Certs: ${m.p.certs.join(', ')||'None'} · ${m.p.avail}</p>
+      </div>`).join('')}
+    </div>
+    <button onclick="logActivity('Proposal built for ${b.name} with ${matches.length} candidates'); alert('✓ Proposal sent to ${b.contact}'); closeModal();" class="mt-4 w-full bg-emerald-600 text-white py-2 rounded">📤 Send Proposal to ${b.name}</button>`);
+}
+
+function showPopup(title, body){
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 modal-bg flex items-center justify-center z-50 fade-in p-4" onclick="if(event.target===this)closeModal()">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg">${title}</h3><button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xl">✕</button></div>
+        ${body}
+      </div></div>`;
+}
+
+// ===================== WIZARDS =====================
+const WIZ = {
+  student: [
+    {title:'Welcome, Future Graduate! 🎓', body:`<p>This wizard will guide you through:</p><ol class="list-decimal ml-5 mt-2 space-y-1 text-sm"><li>Telling us about yourself</li><li>Listing your current skills</li><li>Discovering what skills you need</li><li>Finding training programs</li><li>Matching to real jobs</li></ol><p class="mt-3 text-sm text-slate-500">Takes ~2 minutes. You can edit later.</p>`},
+    {title:'Step 1: About You', body:`<label class="text-sm">Your Name</label><input id="wz-name" value="Alex Rivera" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/><label class="text-sm">Current/Desired Role</label><input id="wz-role" value="Aspiring Cloud Engineer" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/><label class="text-sm">Brief Bio</label><textarea id="wz-bio" class="w-full px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600">Career changer from hospitality, 6mo self-study in cloud.</textarea>`},
+    {title:'Step 2: Your Current Skills', body:`<p class="text-sm mb-3">Check all skills you have experience with:</p><div id="wz-skills-list" class="grid grid-cols-2 gap-1 text-sm max-h-60 overflow-y-auto"></div>`, onShow:()=>{
+      const skills = ['Python','SQL','Excel','Linux','AWS','Docker','JavaScript','React','Customer Service','Team Leadership','Communication','Problem Solving'];
+      document.getElementById('wz-skills-list').innerHTML = skills.map(s=>`<label class="flex gap-2 p-1"><input type="checkbox" class="wz-skill" value="${s}" ${['Python','SQL','Linux','Communication'].includes(s)?'checked':''}/> ${s}</label>`).join('');
+    }},
+    {title:'Step 3: Target Careers & Gap Analysis', body:`<div id="wz-gap">Analyzing...</div>`, onShow:()=>{
+      const selected = [...document.querySelectorAll('.wz-skill:checked')].map(x=>x.value);
+      const matches = DB.jobs.map(j=>({j, overlap: j.skills.filter(s=>selected.includes(s)), gap: j.skills.filter(s=>!selected.includes(s))})).filter(m=>m.overlap.length).sort((a,b)=>b.overlap.length-a.overlap.length).slice(0,3);
+      document.getElementById('wz-gap').innerHTML = matches.map(m=>`<div class="mb-3 p-3 rounded border dark:border-slate-600"><b>${m.j.title}</b> @ ${m.j.company} <span class="text-xs text-emerald-600">(${m.overlap.length}/${m.j.skills.length} skills)</span><p class="text-xs mt-1">✓ Have: ${m.overlap.join(', ')}</p><p class="text-xs text-amber-600">📚 Need: ${m.gap.join(', ')||'Nothing!'}</p></div>`).join('')||'<p class="text-sm">Select more skills to see matches.</p>';
+    }},
+    {title:'Step 4: Recommended Training', body:`<div id="wz-train">Finding programs...</div>`, onShow:()=>{
+      document.getElementById('wz-train').innerHTML = DB.skills.slice(0,4).map(s=>`<div class="mb-2 p-3 rounded border dark:border-slate-600"><b>${s.name}</b> <span class="text-xs px-2 py-0.5 rounded-full ${s.type==='Certification'?'bg-amber-100 text-amber-800':'bg-blue-100 text-blue-800'}">${s.type}</span><p class="text-xs mt-1">⏱ ${s.duration} · 💵 ${s.cost} · 🏅 ${s.cert}</p><button onclick="alert('✓ Enrolled in '+${JSON.stringify(s.name)})" class="mt-2 bg-amber-600 text-white text-xs px-3 py-1 rounded">Enroll Now</button></div>`).join('');
+    }},
+    {title:'🎉 Profile Ready!', body:`<p class="text-sm">Your profile has been added to the talent pool! Employers can now discover you.</p><div class="mt-3 p-3 bg-emerald-50 dark:bg-emerald-900/30 rounded"><b>Next steps:</b><ul class="text-sm mt-1 list-disc ml-5"><li>Complete enrolled training</li><li>Apply to matched jobs</li><li>Upload resume & references</li></ul></div>`, onFinish:()=>{
+      const name = document.getElementById('wz-name')?.value || 'New Student';
+      const role = document.getElementById('wz-role')?.value || 'Student';
+      const bio = document.getElementById('wz-bio')?.value || '';
+      const skills = [...document.querySelectorAll('.wz-skill:checked')].map(x=>x.value);
+      DB.people.push({id:uid(), name, role, skills, certs:[], bio, avail:'Immediate'});
+      logActivity('Student wizard completed: '+name); save();
+    }}
+  ],
+  employer: [
+    {title:'Welcome, Employer! 🏢', body:`<p>This wizard helps you:</p><ol class="list-decimal ml-5 mt-2 space-y-1 text-sm"><li>Define your business & needs</li><li>Specify required skills</li><li>Review candidate matches</li><li>Evaluate fit scores</li><li>Build & send proposals</li></ol>`},
+    {title:'Step 1: Your Business', body:`<label class="text-sm">Company Name</label><input id="wz-bname" value="Horizon Tech Solutions" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/><label class="text-sm">Industry</label><input id="wz-bind" value="Tech / SaaS" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/><label class="text-sm">Size</label><select id="wz-bsize" class="w-full px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"><option>1-10</option><option selected>10-50</option><option>50-200</option><option>200+</option></select>`},
+    {title:'Step 2: Role & Skills Needed', body:`<label class="text-sm">Role Title</label><input id="wz-brole" value="Cloud Platform Engineer" class="w-full mb-2 px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600"/><p class="text-sm mb-2">Select required skills:</p><div id="wz-bskills" class="grid grid-cols-2 gap-1 text-sm max-h-48 overflow-y-auto"></div>`, onShow:()=>{
+      const all = [...new Set(DB.jobs.flatMap(j=>j.skills))].sort();
+      document.getElementById('wz-bskills').innerHTML = all.map(s=>`<label class="flex gap-2 p-1"><input type="checkbox" class="wz-bneed" value="${s}" ${['AWS','Python','Terraform','Kubernetes'].includes(s)?'checked':''}/> ${s}</label>`).join('');
+    }},
+    {title:'Step 3: Candidate Review', body:`<div id="wz-candidates">Searching...</div>`, onShow:()=>{
+      const needs = [...document.querySelectorAll('.wz-bneed:checked')].map(x=>x.value);
+      const matches = DB.people.map(p=>{ const overlap = p.skills.filter(s=>needs.includes(s)); return {p, overlap, pct: needs.length?Math.round(overlap.length/needs.length*100):0}; }).filter(m=>m.overlap.length).sort((a,b)=>b.pct-a.pct).slice(0,5);
+      document.getElementById('wz-candidates').innerHTML = matches.map(m=>`<div class="mb-2 p-3 rounded border dark:border-slate-600"><div class="flex justify-between"><b>${m.p.name}</b> <span class="font-bold ${m.pct>=66?'text-emerald-600':'text-amber-600'}">${m.pct}%</span></div><p class="text-xs text-slate-500 dark:text-slate-400">${m.p.role} · ${m.p.avail}</p><p class="text-xs mt-1">✓ ${m.overlap.join(', ')}</p></div>`).join('')||'<p class="text-sm">No matches. Broaden skill requirements.</p>';
+    }},
+    {title:'Step 4: Build Proposal', body:`<p class="text-sm mb-2">Your proposal will include:</p><div class="space-y-2 text-sm"><label class="flex gap-2"><input type="checkbox" checked/> Top 5 ranked candidates</label><label class="flex gap-2"><input type="checkbox" checked/> Skill match percentages</label><label class="flex gap-2"><input type="checkbox" checked/> Availability timelines</label><label class="flex gap-2"><input type="checkbox"/> Salary benchmarks</label><label class="flex gap-2"><input type="checkbox"/> Training co-sponsorship options</label><label class="flex gap-2"><input type="checkbox"/> Apprenticeship conversion plan</label></div>`},
+    {title:'🚀 Proposal Ready!', body:`<p class="text-sm">Your business has been added and the proposal is drafted.</p><div class="mt-3 p-3 bg-emerald-50 dark:bg-emerald-900/30 rounded text-sm"><b>Included:</b><ul class="list-disc ml-5 mt-1"><li>Ranked candidate shortlist</li><li>Skill-match analytics</li><li>Next steps for interviews</li></ul></div>`, onFinish:()=>{
+      const name = document.getElementById('wz-bname')?.value || 'New Business';
+      const industry = document.getElementById('wz-bind')?.value || '';
+      const size = document.getElementById('wz-bsize')?.value || '10-50';
+      const needs = [...document.querySelectorAll('.wz-bneed:checked')].map(x=>x.value);
+      DB.businesses.push({id:uid(), name, industry, needs, size, contact:'hr@'+name.toLowerCase().replace(/\s+/g,'')+'.com'});
+      logActivity('Employer wizard completed: '+name); save();
+    }}
+  ]
+};
+let wizState = {type:null, step:0};
+function startWizard(type){ wizState = {type, step:0}; renderWizard(); }
+function renderWizard(){
+  const steps = WIZ[wizState.type];
+  const s = steps[wizState.step];
+  const dots = steps.map((_,i)=>`<div class="wizard-step ${i<wizState.step?'done':i===wizState.step?'active':'pending'} w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">${i<wizState.step?'✓':i+1}</div>`).join('<div class="flex-1 h-0.5 bg-slate-200 dark:bg-slate-600 self-center"></div>');
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 modal-bg flex items-center justify-center z-50 fade-in p-4" onclick="if(event.target===this)closeModal()">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center gap-1 mb-4">${dots}</div>
+        <h3 class="font-bold text-lg mb-3">${s.title}</h3>
+        <div>${s.body}</div>
+        <div class="flex gap-2 mt-5">
+          <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded">Cancel</button>
+          ${wizState.step>0?`<button onclick="wizState.step--; renderWizard()" class="px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded">← Back</button>`:''}
+          <button onclick="wizNext()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded font-medium">${wizState.step===steps.length-1?'Finish 🎉':'Next →'}</button>
+        </div>
+      </div></div>`;
+  if(s.onShow) setTimeout(s.onShow,50);
+}
+function wizNext(){
+  const steps = WIZ[wizState.type];
+  if(wizState.step === steps.length-1){
+    if(steps[wizState.step].onFinish) steps[wizState.step].onFinish();
+    closeModal(); render();
+    alert('✅ Wizard complete! Check the '+(wizState.type==='student'?'People':'Businesses')+' tab.');
+  } else { wizState.step++; renderWizard(); }
+}
 
 // ===================== INIT =====================
 render();
 </script>
-
 </body>
 </html>
