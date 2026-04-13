@@ -257,6 +257,8 @@
     };
 
     const paletteItems = [
+      { type: 'heading', label: 'Heading', icon: '🏷️' },
+      { type: 'note', label: 'Note / Callout', icon: '💬' },
       { type: 'external_client', label: 'External Client', icon: '👥' },
       { type: 'frontend_ui', label: 'Frontend UI', icon: '🖥️' },
       { type: 'database', label: 'Database', icon: '🗄️' },
@@ -456,10 +458,11 @@
     function addNode(type, x, y) {
       const paletteItem = paletteItems.find(p => p.type === type);
       const id = crypto.randomUUID();
-      const title = paletteItem?.label || 'Item';
-      const label = type === 'text' ? 'Text' : title;
-      const width = 176;
-      const height = 96;
+      const isText = type === 'heading' || type === 'note';
+      const title = isText ? (type === 'heading' ? 'Section Heading' : 'Click to edit note') : (paletteItem?.label || 'Item');
+      const label = type === 'text' ? 'Text' : (paletteItem?.label || 'Item');
+      const width = isText ? 240 : 176;
+      const height = isText ? (type === 'heading' ? 48 : 32) : 96;
       // Center the node on the cursor and clamp to canvas bounds
       const nx = Math.max(20, Math.min(2200 - width - 20, x - width / 2));
       const ny = Math.max(20, Math.min(1400 - height - 20, y - height / 2));
@@ -539,6 +542,52 @@
     function drawNode(layer, node) {
       const g = createSvg('g');
       g.dataset.nodeId = node.id;
+
+      // Text-only nodes (heading / callout note) — no box, no anchors
+      if (node.type === 'heading' || node.type === 'note') {
+        const isHeading = node.type === 'heading';
+        const fontSize = isHeading ? 28 : 15;
+        const fontWeight = isHeading ? '700' : '500';
+        const fill = isHeading ? '#0f172a' : '#334155';
+        const text = node.title || (isHeading ? 'Heading' : 'Note');
+
+        // Estimate width & height for drag bounds and selection outline
+        const charW = isHeading ? 15 : 7.5;
+        const estWidth = Math.max(80, text.length * charW + 16);
+        const estHeight = fontSize + 14;
+        node.width = estWidth;
+        node.height = estHeight;
+
+        const isSelected = selected.type === 'node' && selected.id === node.id;
+
+        // Transparent hit area so the whole text block is draggable / selectable
+        const hit = createSvg('rect');
+        hit.setAttribute('x', node.x);
+        hit.setAttribute('y', node.y);
+        hit.setAttribute('width', estWidth);
+        hit.setAttribute('height', estHeight);
+        hit.setAttribute('rx', 6);
+        hit.setAttribute('fill', isSelected ? 'rgba(37,99,235,0.08)' : 'rgba(0,0,0,0)');
+        hit.setAttribute('stroke', isSelected ? '#2563eb' : 'transparent');
+        hit.setAttribute('stroke-width', '2');
+        hit.setAttribute('stroke-dasharray', isSelected ? '5 4' : '0');
+        hit.style.cursor = 'move';
+        g.appendChild(hit);
+
+        const t = createSvg('text');
+        t.setAttribute('x', node.x + 8);
+        t.setAttribute('y', node.y + fontSize + 4);
+        t.setAttribute('font-size', fontSize);
+        t.setAttribute('font-weight', fontWeight);
+        t.setAttribute('fill', fill);
+        t.textContent = text;
+        g.appendChild(t);
+
+        g.addEventListener('mousedown', e => startNodeDrag(e, node.id));
+        g.addEventListener('click', e => onNodeClick(e, node.id));
+        layer.appendChild(g);
+        return;
+      }
 
       const riskColor = RISK_COLORS[node.risk || 'low'] || RISK_COLORS.low;
       const simStyle = getSimulationNodeStyle(node);
@@ -931,6 +980,21 @@
         nodeFields.recovery.value = node.recovery || '';
         nodeFields.gap.value = node.gap || '';
         document.getElementById('nodeTemplate').value = '';
+
+        // For heading / note (text-only) nodes, hide fields that don't apply
+        const isText = node.type === 'heading' || node.type === 'note';
+        const hideForText = ['nodeLabel', 'nodeRisk', 'nodeFailure', 'nodeRecovery', 'nodeGap', 'nodeTemplate'];
+        hideForText.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const label = el.closest('label');
+          if (label) label.style.display = isText ? 'none' : '';
+        });
+        // Relabel the Title input so its purpose is clear for text nodes
+        const titleSpan = nodeFields.title.parentElement?.querySelector('span');
+        if (titleSpan) titleSpan.textContent = isText ? (node.type === 'heading' ? 'Heading text' : 'Note text') : 'Title';
+        const descSpan = nodeFields.description.parentElement?.querySelector('span');
+        if (descSpan) descSpan.textContent = isText ? 'Extra text (optional)' : 'Description';
         return;
       }
 
@@ -1224,7 +1288,7 @@
       const nodeSection = document.createElement('div');
       nodeSection.className = 'mt-6';
       nodeSection.innerHTML = '<h2 class="text-xl font-bold">Services</h2>';
-      state.nodes.forEach(node => {
+      state.nodes.filter(n => n.type !== 'heading' && n.type !== 'note').forEach(node => {
         const el = document.createElement('div');
         el.className = 'mt-3 border border-slate-300 p-3 rounded-lg';
         el.innerHTML = `
@@ -1271,7 +1335,7 @@
         critical: '#dc2626', high: '#ea580c', medium: '#ca8a04', low: '#16a34a'
       };
 
-      const nodes = state.nodes.slice();
+      const nodes = state.nodes.filter(n => n.type !== 'heading' && n.type !== 'note');
       const conns = state.connections.slice();
       const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
 
@@ -1590,7 +1654,8 @@
 
     function buildMarkdownReport() {
       const title = state.meta?.title || 'Failure Point Diagram';
-      const nodeById = Object.fromEntries(state.nodes.map(n => [n.id, n]));
+      const reportNodes = state.nodes.filter(n => n.type !== 'heading' && n.type !== 'note');
+      const nodeById = Object.fromEntries(reportNodes.map(n => [n.id, n]));
       const lines = [];
       const cap = (s) => capitalize(s || 'low');
 
@@ -1598,14 +1663,14 @@
       lines.push('');
       lines.push(`_Failure Analysis & Dataflow Report — Generated ${new Date().toLocaleString()}_`);
       lines.push('');
-      lines.push(`**Components:** ${state.nodes.length}  `);
+      lines.push(`**Components:** ${reportNodes.length}  `);
       lines.push(`**Dataflows:** ${state.connections.length}`);
       lines.push('');
 
       lines.push('## Components');
       lines.push('');
-      if (!state.nodes.length) lines.push('_None._');
-      state.nodes.forEach(n => {
+      if (!reportNodes.length) lines.push('_None._');
+      reportNodes.forEach(n => {
         lines.push(`### ${n.icon || ''} ${n.title}`.trim());
         lines.push('');
         lines.push(`- **Type:** ${n.type}`);
