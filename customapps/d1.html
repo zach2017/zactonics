@@ -40,6 +40,7 @@
           <button id="exportSvgBtn" class="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold hover:bg-sky-500">Export SVG</button>
           <button id="exportPngBtn" class="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-semibold hover:bg-cyan-500">Export Image</button>
           <button id="printBtn" class="rounded-xl bg-amber-600 px-3 py-2 text-sm font-semibold hover:bg-amber-500">Print</button>
+          <button id="reportBtn" class="rounded-xl bg-teal-600 px-3 py-2 text-sm font-semibold hover:bg-teal-500">Report</button>
         </div>
       </div>
     </header>
@@ -368,6 +369,7 @@
       document.getElementById('exportSvgBtn').addEventListener('click', exportSvg);
       document.getElementById('exportPngBtn').addEventListener('click', exportPng);
       document.getElementById('printBtn').addEventListener('click', printDiagram);
+      document.getElementById('reportBtn').addEventListener('click', generateReport);
       document.getElementById('fitBtn').addEventListener('click', fitView);
       document.getElementById('clearSelectionBtn').addEventListener('click', () => {
         selected = { type: null, id: null };
@@ -1233,6 +1235,384 @@
       });
       printArea.appendChild(connSection);
       window.print();
+    }
+
+    function generateReport() {
+      if (!state.nodes.length && !state.connections.length) {
+        alert('Add some components and connections to the diagram first.');
+        return;
+      }
+
+      const RISK_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
+      const RISK_LABEL = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+      const RISK_COLOR_CSS = {
+        critical: '#dc2626', high: '#ea580c', medium: '#ca8a04', low: '#16a34a'
+      };
+
+      const nodes = state.nodes.slice();
+      const conns = state.connections.slice();
+      const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+      // Graph analysis: sources (no incoming), sinks (no outgoing), orphans
+      const incoming = new Map(nodes.map(n => [n.id, 0]));
+      const outgoing = new Map(nodes.map(n => [n.id, 0]));
+      conns.forEach(c => {
+        incoming.set(c.to, (incoming.get(c.to) || 0) + 1);
+        outgoing.set(c.from, (outgoing.get(c.from) || 0) + 1);
+      });
+      const sources = nodes.filter(n => incoming.get(n.id) === 0 && outgoing.get(n.id) > 0);
+      const sinks = nodes.filter(n => outgoing.get(n.id) === 0 && incoming.get(n.id) > 0);
+      const orphans = nodes.filter(n => incoming.get(n.id) === 0 && outgoing.get(n.id) === 0);
+
+      // Risk tallies
+      const riskTally = (items) => items.reduce((acc, it) => {
+        const k = it.risk || 'low';
+        acc[k] = (acc[k] || 0) + 1;
+        return acc;
+      }, {});
+      const nodeRisk = riskTally(nodes);
+      const connRisk = riskTally(conns);
+
+      const highRiskNodes = nodes.filter(n => n.risk === 'high' || n.risk === 'critical')
+        .sort((a, b) => (RISK_ORDER[b.risk] || 0) - (RISK_ORDER[a.risk] || 0));
+      const highRiskConns = conns.filter(c => c.risk === 'high' || c.risk === 'critical')
+        .sort((a, b) => (RISK_ORDER[b.risk] || 0) - (RISK_ORDER[a.risk] || 0));
+
+      // Trace each linear flow from every source via BFS to describe data paths
+      function describePaths() {
+        if (!sources.length) return [];
+        const paths = [];
+        sources.forEach(src => {
+          const stack = [{ node: src, path: [src], edges: [] }];
+          const seen = new Set();
+          while (stack.length) {
+            const { node, path, edges } = stack.pop();
+            const outs = conns.filter(c => c.from === node.id);
+            if (!outs.length) {
+              paths.push({ path, edges });
+              continue;
+            }
+            outs.forEach(c => {
+              const next = nodeById[c.to];
+              if (!next) return;
+              const key = path.map(p => p.id).join('>') + '>' + next.id;
+              if (seen.has(key)) {
+                // cycle or revisit — still record termination
+                paths.push({ path: [...path, next], edges: [...edges, c], cycle: true });
+                return;
+              }
+              seen.add(key);
+              if (path.find(p => p.id === next.id)) {
+                paths.push({ path: [...path, next], edges: [...edges, c], cycle: true });
+                return;
+              }
+              stack.push({ node: next, path: [...path, next], edges: [...edges, c] });
+            });
+          }
+        });
+        return paths;
+      }
+      const paths = describePaths();
+
+      // Aggregate failure points / recovery strategies / gaps
+      const aggFailures = [];
+      const aggRecovery = [];
+      const aggGaps = [];
+      nodes.forEach(n => {
+        if (n.failure) aggFailures.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.failure });
+        if (n.recovery) aggRecovery.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.recovery });
+        if (n.gap) aggGaps.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.gap });
+      });
+      conns.forEach(c => {
+        const label = `${nodeById[c.from]?.title || '?'} → ${nodeById[c.to]?.title || '?'}${c.label ? ` (${c.label})` : ''}`;
+        if (c.failure) aggFailures.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.failure });
+        if (c.recovery) aggRecovery.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.recovery });
+        if (c.gap) aggGaps.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.gap });
+      });
+      [aggFailures, aggRecovery, aggGaps].forEach(arr =>
+        arr.sort((a, b) => (RISK_ORDER[b.risk] || 0) - (RISK_ORDER[a.risk] || 0))
+      );
+
+      const now = new Date();
+      const dateStr = now.toLocaleString();
+      const title = state.meta?.title || 'Failure Point Diagram';
+
+      // Helpers
+      const esc = escapeHtml;
+      const riskBadge = (r) => `<span class="risk" style="background:${RISK_COLOR_CSS[r || 'low']}">${esc(RISK_LABEL[r || 'low'] || 'Low')}</span>`;
+      const para = (s) => s ? esc(s).replace(/\n+/g, '</p><p>') : '<em class="muted">Not specified.</em>';
+
+      // Narrative overview sentence
+      const overviewSentence = (() => {
+        const parts = [];
+        parts.push(`This report covers <strong>${nodes.length}</strong> component${nodes.length === 1 ? '' : 's'} and <strong>${conns.length}</strong> dataflow connection${conns.length === 1 ? '' : 's'}.`);
+        if (sources.length) parts.push(`The architecture has <strong>${sources.length}</strong> entry point${sources.length === 1 ? '' : 's'} (${sources.map(n => esc(n.title)).join(', ')}).`);
+        if (sinks.length) parts.push(`It has <strong>${sinks.length}</strong> terminal component${sinks.length === 1 ? '' : 's'} (${sinks.map(n => esc(n.title)).join(', ')}).`);
+        if (orphans.length) parts.push(`<strong>${orphans.length}</strong> component${orphans.length === 1 ? ' is' : 's are'} currently isolated with no connections: ${orphans.map(n => esc(n.title)).join(', ')}.`);
+        const highCount = highRiskNodes.length + highRiskConns.length;
+        if (highCount) parts.push(`<strong>${highCount}</strong> element${highCount === 1 ? '' : 's'} carry high or critical risk and should be prioritized.`);
+        return parts.join(' ');
+      })();
+
+      // Component sections
+      const componentHtml = nodes.map(n => {
+        const inbound = conns.filter(c => c.to === n.id).map(c => nodeById[c.from]?.title).filter(Boolean);
+        const outbound = conns.filter(c => c.from === n.id).map(c => nodeById[c.to]?.title).filter(Boolean);
+        return `
+          <section class="card">
+            <div class="card-head">
+              <h3>${esc(n.icon || '')} ${esc(n.title)} ${riskBadge(n.risk)}</h3>
+              <div class="muted small">Type: ${esc(n.type)} · Short label: ${esc(n.label || '—')}</div>
+            </div>
+            <div class="card-body">
+              <div class="field"><div class="field-label">Description</div><div class="field-body"><p>${para(n.description)}</p></div></div>
+              <div class="field"><div class="field-label">Points of Failure</div><div class="field-body"><p>${para(n.failure)}</p></div></div>
+              <div class="field"><div class="field-label">Recovery Handling</div><div class="field-body"><p>${para(n.recovery)}</p></div></div>
+              <div class="field"><div class="field-label">Gap Notes</div><div class="field-body"><p>${para(n.gap)}</p></div></div>
+              <div class="field"><div class="field-label">Connectivity</div><div class="field-body">
+                <div class="small"><strong>Inbound from:</strong> ${inbound.length ? inbound.map(esc).join(', ') : '<em class="muted">None</em>'}</div>
+                <div class="small"><strong>Outbound to:</strong> ${outbound.length ? outbound.map(esc).join(', ') : '<em class="muted">None</em>'}</div>
+              </div></div>
+            </div>
+          </section>`;
+      }).join('');
+
+      // Dataflow sections
+      const dataflowHtml = conns.map(c => {
+        const fromN = nodeById[c.from];
+        const toN = nodeById[c.to];
+        const fromTitle = fromN?.title || '(unknown)';
+        const toTitle = toN?.title || '(unknown)';
+        return `
+          <section class="card">
+            <div class="card-head">
+              <h3>${esc(c.label || 'Connection')} ${riskBadge(c.risk)}</h3>
+              <div class="muted small"><strong>${esc(fromTitle)}</strong> → <strong>${esc(toTitle)}</strong></div>
+            </div>
+            <div class="card-body">
+              <div class="field"><div class="field-label">Description</div><div class="field-body"><p>${para(c.description)}</p></div></div>
+              <div class="field"><div class="field-label">Points of Failure</div><div class="field-body"><p>${para(c.failure)}</p></div></div>
+              <div class="field"><div class="field-label">Recovery Handling</div><div class="field-body"><p>${para(c.recovery)}</p></div></div>
+              <div class="field"><div class="field-label">Gap Notes</div><div class="field-body"><p>${para(c.gap)}</p></div></div>
+            </div>
+          </section>`;
+      }).join('');
+
+      // Path narrative
+      const pathsHtml = paths.length
+        ? paths.slice(0, 40).map((p, i) => {
+            const seq = p.path.map(n => `<strong>${esc(n.title)}</strong>`).join(' → ');
+            const cycleNote = p.cycle ? ' <em class="muted">(cycle or revisit detected — path truncated)</em>' : '';
+            const edgeDetails = p.edges.map(e => {
+              const risk = RISK_LABEL[e.risk || 'low'];
+              return `<li>${esc(nodeById[e.from]?.title || '?')} → ${esc(nodeById[e.to]?.title || '?')} via <em>${esc(e.label || 'connection')}</em> — ${risk} risk${e.failure ? `; failure modes: ${esc(truncate(e.failure, 140))}` : ''}</li>`;
+            }).join('');
+            return `
+              <div class="path">
+                <div class="path-head">Path ${i + 1}: ${seq}${cycleNote}</div>
+                ${edgeDetails ? `<ul class="path-edges">${edgeDetails}</ul>` : ''}
+              </div>`;
+          }).join('')
+        : '<p class="muted">No traceable dataflow paths (add connections between components to see end-to-end flows).</p>';
+
+      // Aggregate bullets
+      const makeBullets = (arr) => arr.length
+        ? `<ul class="agg">${arr.map(item => `<li><span class="agg-meta">${riskBadge(item.risk)} <strong>${esc(item.kind)}</strong> · ${esc(item.name)}:</span> ${esc(item.text)}</li>`).join('')}</ul>`
+        : '<p class="muted">None recorded.</p>';
+
+      // Risk summary cards
+      const riskCard = (tally, label) => `
+        <div class="risk-card">
+          <div class="risk-card-title">${label}</div>
+          <div class="risk-row"><span class="risk" style="background:${RISK_COLOR_CSS.critical}">Critical</span><span>${tally.critical || 0}</span></div>
+          <div class="risk-row"><span class="risk" style="background:${RISK_COLOR_CSS.high}">High</span><span>${tally.high || 0}</span></div>
+          <div class="risk-row"><span class="risk" style="background:${RISK_COLOR_CSS.medium}">Medium</span><span>${tally.medium || 0}</span></div>
+          <div class="risk-row"><span class="risk" style="background:${RISK_COLOR_CSS.low}">Low</span><span>${tally.low || 0}</span></div>
+        </div>`;
+
+      const diagramSvgText = new XMLSerializer().serializeToString(buildExportSvg());
+
+      const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>${esc(title)} — Failure Analysis Report</title>
+<style>
+  :root { --border:#e2e8f0; --muted:#64748b; --ink:#0f172a; --bg:#f8fafc; --accent:#0f766e; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; color: var(--ink); background: var(--bg); margin: 0; padding: 32px; line-height: 1.55; }
+  .report { max-width: 980px; margin: 0 auto; background: white; padding: 40px 48px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  header.report-head { border-bottom: 3px solid var(--accent); padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { font-size: 28px; margin: 0 0 6px 0; }
+  h2 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-top: 36px; }
+  h3 { font-size: 17px; margin: 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .toolbar { position: sticky; top: 0; background: white; padding: 12px 0; margin-bottom: 12px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); z-index: 10; }
+  .toolbar button { background: var(--accent); color: white; border: 0; padding: 8px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .toolbar button.secondary { background: #475569; }
+  .overview { background: #f0fdfa; border-left: 4px solid var(--accent); padding: 14px 18px; border-radius: 6px; margin-top: 14px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .stat-num { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .risk-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .risk-card-title { font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+  .risk-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 14px; }
+  .risk { color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-top: 14px; background: white; page-break-inside: avoid; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .card-head h3 { display: flex; align-items: center; gap: 8px; }
+  .card-body { margin-top: 10px; }
+  .field { display: grid; grid-template-columns: 170px 1fr; gap: 10px; padding: 6px 0; border-top: 1px dashed #eef2f7; }
+  .field:first-child { border-top: 0; }
+  .field-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding-top: 2px; }
+  .field-body p { margin: 0 0 6px 0; }
+  .path { border-left: 3px solid var(--accent); padding: 8px 14px; margin: 10px 0; background: #f8fafc; border-radius: 0 6px 6px 0; }
+  .path-head { font-size: 14px; margin-bottom: 4px; }
+  .path-edges { margin: 4px 0 0 18px; padding: 0; font-size: 13px; color: #334155; }
+  .path-edges li { margin: 2px 0; }
+  ul.agg { padding-left: 20px; }
+  ul.agg li { margin-bottom: 8px; }
+  .agg-meta { margin-right: 4px; }
+  .diagram-wrap { margin-top: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: white; }
+  .diagram-wrap svg { width: 100%; height: auto; display: block; }
+  footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+  @media print {
+    body { background: white; padding: 0; }
+    .report { box-shadow: none; padding: 0; max-width: none; }
+    .toolbar { display: none; }
+    h2 { page-break-after: avoid; }
+    .card { page-break-inside: avoid; }
+  }
+</style>
+</head><body>
+<div class="report">
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="secondary" onclick="downloadMd()">Download Markdown</button>
+  </div>
+
+  <header class="report-head">
+    <h1>${esc(title)}</h1>
+    <div class="muted">Failure Analysis &amp; Dataflow Report · Generated ${esc(dateStr)}</div>
+  </header>
+
+  <h2>1. Executive Summary</h2>
+  <div class="overview">${overviewSentence}</div>
+  <div class="summary-grid">
+    <div class="stat"><div class="stat-num">${nodes.length}</div><div class="stat-label">Components</div></div>
+    <div class="stat"><div class="stat-num">${conns.length}</div><div class="stat-label">Dataflows</div></div>
+    <div class="stat"><div class="stat-num">${aggFailures.length}</div><div class="stat-label">Failure Notes</div></div>
+    <div class="stat"><div class="stat-num">${aggGaps.length}</div><div class="stat-label">Known Gaps</div></div>
+  </div>
+  <div class="risk-grid">
+    ${riskCard(nodeRisk, 'Component Risk Distribution')}
+    ${riskCard(connRisk, 'Dataflow Risk Distribution')}
+  </div>
+
+  <h2>2. Architecture Diagram</h2>
+  <div class="diagram-wrap">${diagramSvgText}</div>
+
+  <h2>3. Dataflow Narrative</h2>
+  <p class="muted small">End-to-end paths traced from every entry point through the system. Each path lists the sequence of components and the failure modes noted on each connection.</p>
+  ${pathsHtml}
+
+  <h2>4. High-Risk Elements (Priority Review)</h2>
+  ${highRiskNodes.length || highRiskConns.length ? `
+    ${highRiskNodes.length ? `<h3 class="small" style="margin-top:10px">Components</h3><ul class="agg">${highRiskNodes.map(n => `<li>${riskBadge(n.risk)} <strong>${esc(n.title)}</strong>${n.failure ? ` — ${esc(truncate(n.failure, 200))}` : ''}</li>`).join('')}</ul>` : ''}
+    ${highRiskConns.length ? `<h3 class="small" style="margin-top:10px">Dataflows</h3><ul class="agg">${highRiskConns.map(c => `<li>${riskBadge(c.risk)} <strong>${esc(nodeById[c.from]?.title || '?')} → ${esc(nodeById[c.to]?.title || '?')}</strong> (${esc(c.label || 'connection')})${c.failure ? ` — ${esc(truncate(c.failure, 200))}` : ''}</li>`).join('')}</ul>` : ''}
+  ` : '<p class="muted">No high or critical risk elements flagged.</p>'}
+
+  <h2>5. Components (Detailed)</h2>
+  ${componentHtml || '<p class="muted">No components in the diagram.</p>'}
+
+  <h2>6. Dataflows (Detailed)</h2>
+  ${dataflowHtml || '<p class="muted">No dataflow connections in the diagram.</p>'}
+
+  <h2>7. Consolidated Points of Failure</h2>
+  ${makeBullets(aggFailures)}
+
+  <h2>8. Consolidated Recovery Strategies</h2>
+  ${makeBullets(aggRecovery)}
+
+  <h2>9. Known Gaps &amp; Open Questions</h2>
+  ${makeBullets(aggGaps)}
+
+  <footer>Generated by the Failure Point Diagram Tool · ${esc(dateStr)}</footer>
+</div>
+
+<script>
+  const MD_CONTENT = ${JSON.stringify(buildMarkdownReport())};
+  const MD_FILENAME = ${JSON.stringify((title || 'failure-report').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-report.md')};
+  function downloadMd() {
+    const blob = new Blob([MD_CONTENT], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = MD_FILENAME; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+<\/script>
+</body></html>`;
+
+      const w = window.open('', '_blank');
+      if (!w) {
+        // Popup blocked — fall back to download
+        downloadFile('failure-report.html', html, 'text/html;charset=utf-8');
+        alert('Popup blocked. The report has been downloaded as an HTML file instead.');
+        return;
+      }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    }
+
+    function buildMarkdownReport() {
+      const title = state.meta?.title || 'Failure Point Diagram';
+      const nodeById = Object.fromEntries(state.nodes.map(n => [n.id, n]));
+      const lines = [];
+      const cap = (s) => capitalize(s || 'low');
+
+      lines.push(`# ${title}`);
+      lines.push('');
+      lines.push(`_Failure Analysis & Dataflow Report — Generated ${new Date().toLocaleString()}_`);
+      lines.push('');
+      lines.push(`**Components:** ${state.nodes.length}  `);
+      lines.push(`**Dataflows:** ${state.connections.length}`);
+      lines.push('');
+
+      lines.push('## Components');
+      lines.push('');
+      if (!state.nodes.length) lines.push('_None._');
+      state.nodes.forEach(n => {
+        lines.push(`### ${n.icon || ''} ${n.title}`.trim());
+        lines.push('');
+        lines.push(`- **Type:** ${n.type}`);
+        lines.push(`- **Short label:** ${n.label || '—'}`);
+        lines.push(`- **Risk:** ${cap(n.risk)}`);
+        lines.push(`- **Description:** ${n.description || '_Not specified._'}`);
+        lines.push(`- **Points of Failure:** ${n.failure || '_Not specified._'}`);
+        lines.push(`- **Recovery Handling:** ${n.recovery || '_Not specified._'}`);
+        lines.push(`- **Gap Notes:** ${n.gap || '_Not specified._'}`);
+        lines.push('');
+      });
+
+      lines.push('## Dataflows');
+      lines.push('');
+      if (!state.connections.length) lines.push('_None._');
+      state.connections.forEach(c => {
+        const fromT = nodeById[c.from]?.title || '(unknown)';
+        const toT = nodeById[c.to]?.title || '(unknown)';
+        lines.push(`### ${fromT} → ${toT}: ${c.label || 'Connection'}`);
+        lines.push('');
+        lines.push(`- **Risk:** ${cap(c.risk)}`);
+        lines.push(`- **Description:** ${c.description || '_Not specified._'}`);
+        lines.push(`- **Points of Failure:** ${c.failure || '_Not specified._'}`);
+        lines.push(`- **Recovery Handling:** ${c.recovery || '_Not specified._'}`);
+        lines.push(`- **Gap Notes:** ${c.gap || '_Not specified._'}`);
+        lines.push('');
+      });
+
+      return lines.join('\n');
     }
 
     function buildExportSvg() {
