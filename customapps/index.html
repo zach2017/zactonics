@@ -1,2435 +1,1229 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Custom Apps - Portfolio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
-    <style>
-      @keyframes slideIn {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      .slide-in {
-        animation: slideIn 0.5s ease-out forwards;
-      }
-      .app-card {
-        animation-delay: calc(var(--index) * 0.1s);
-        opacity: 0;
-      }
-      @keyframes gradient {
-        0% {
-          background-position: 0% 50%;
-        }
-        50% {
-          background-position: 100% 50%;
-        }
-        100% {
-          background-position: 0% 50%;
-        }
-      }
-      .animated-gradient {
-        background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-        background-size: 400% 400%;
-        animation: gradient 15s ease infinite;
-      }
-      .hover-lift {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      .hover-lift:hover {
-        transform: translateY(-8px);
-        box-shadow:
-          0 20px 25px -5px rgba(0, 0, 0, 0.1),
-          0 10px 10px -5px rgba(0, 0, 0, 0.04);
-      }
-    </style>
-  </head>
-  <body class="bg-gray-50 min-h-screen">
-    <!-- Header -->
-    <header class="animated-gradient text-white shadow-lg">
-      <div class="container mx-auto px-6 py-8">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <div
-              class="w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center"
-            >
-              <i class="fas fa-code text-2xl"></i>
-            </div>
-            <div>
-              <h1 class="text-3xl font-bold">Custom Apps</h1>
-              <p class="text-white/80 text-sm">
-                Innovative Solutions &amp; Projects
-              </p>
-            </div>
-          </div>
-          <nav class="hidden md:flex space-x-6"></nav>
-        </div>
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Montgomery Downtown — 3D Security Planner</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  [data-theme="dark"] {
+    --ink: #0b0d10; --ink-2: #13171c; --ink-3: #0f1318;
+    --line: #2a313b; --text: #e8ecf1; --muted: #cdd5df; --muted-2: #8a95a5;
+    --amber: #ffb020; --safety: #ff5b2e; --blue: #2b7fff; --mint: #7ef0c8;
+  }
+  [data-theme="light"] {
+    --ink: #f4f1ea; --ink-2: #ffffff; --ink-3: #ebe7dd;
+    --line: #c7bfb0; --text: #1a1f26; --muted: #4a5362; --muted-2: #6a7484;
+    --amber: #c77a00; --safety: #d9441f; --blue: #1c5fd0; --mint: #1f8a6a;
+  }
+  html, body { height:100%; margin:0; background:var(--ink); color:var(--text); font-family:'JetBrains Mono',monospace; overflow:hidden; transition: background .3s, color .3s; }
+  h1,h2,h3,.display { font-family:'Oswald',sans-serif; letter-spacing:0.06em; }
+  canvas { display:block; outline:none; }
+  .crosshair-on::after{ content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;border:1px solid var(--amber);opacity:.75;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:5; }
+  .crosshair-on::before{ content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;background:var(--amber);transform:translate(-50%,-50%);pointer-events:none;z-index:5;border-radius:50%; }
+  .palette-item{ transition: all .12s ease; }
+  .palette-item:hover{ transform: translateY(-2px); }
+  .palette-item.active{ border-color: var(--amber); background: rgba(255,176,32,.12); box-shadow: inset 0 0 0 1px rgba(255,176,32,.35); }
+  [data-theme="light"] .palette-item.active{ background: rgba(199,122,0,.15); box-shadow: inset 0 0 0 1px rgba(199,122,0,.35); }
+  .chip{ border:1px solid var(--line); background:var(--ink-2); color:var(--text); }
+  .btn{ border:1px solid var(--line); background:var(--ink-3); color:var(--text); transition: all .15s; }
+  .btn:hover{ border-color:var(--amber); color:var(--amber); }
+  .btn.on { border-color:var(--amber); color:var(--amber); background: rgba(255,176,32,.10); }
+  [data-theme="light"] .btn.on { background: rgba(199,122,0,.15); }
+  kbd{ font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 6px; border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; background:var(--ink-3); color:var(--muted); }
+  .corner{ position:absolute; width:14px; height:14px; border-color:var(--amber); border-style:solid; border-width:0; pointer-events:none; }
+  .corner.tl{top:-1px;left:-1px;border-top-width:2px;border-left-width:2px;}
+  .corner.tr{top:-1px;right:-1px;border-top-width:2px;border-right-width:2px;}
+  .corner.bl{bottom:-1px;left:-1px;border-bottom-width:2px;border-left-width:2px;}
+  .corner.br{bottom:-1px;right:-1px;border-bottom-width:2px;border-right-width:2px;}
+  .blinker{ animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .scroll-thin::-webkit-scrollbar{width:6px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  #infoCard { transition: opacity .2s, transform .2s; }
+  #infoCard.hidden-card { opacity:0; transform:translateY(8px); pointer-events:none; }
+  .text-amber{color:var(--amber);} .text-mint{color:var(--mint);} .text-muted{color:var(--muted-2);}
+  .bg-ink{background:var(--ink);} .bg-ink-2{background:var(--ink-2);} .border-line{border-color:var(--line);}
+  #toast{ position:absolute; left:50%; top:64px; transform:translateX(-50%); background:var(--ink-2); border:1px solid var(--amber); color:var(--amber); padding:6px 14px; font-size:11px; letter-spacing:.2em; z-index:40; opacity:0; transition:opacity .25s; }
+  #toast.show{ opacity:1; }
+  header { background: var(--ink); border-bottom:1px solid var(--line); }
+  aside { background: var(--ink-2); border-left:1px solid var(--line); }
+</style>
+</head>
+<body class="relative">
+
+<header class="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2">
+      <div class="w-3 h-3 rounded-sm blinker" style="background:var(--amber)"></div>
+      <span class="display text-[13px] tracking-[0.25em] text-amber">MGM • OPS</span>
+    </div>
+    <div class="hidden md:block h-5 w-px" style="background:var(--line)"></div>
+    <div class="hidden md:block">
+      <div class="text-[10px] tracking-[0.25em] text-muted">DOWNTOWN MONTGOMERY — 3D SECURITY PLANNER</div>
+      <div class="text-[11px] text-muted">Capitol · Dexter Ave · Court Square · Riverfront</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-2 text-[11px]">
+    <div class="flex border rounded-sm overflow-hidden border-line">
+      <button id="modeOrbit" class="btn on px-3 py-1.5 tracking-widest">ORBIT</button>
+      <button id="modeWalk" class="btn px-3 py-1.5 tracking-widest border-l border-line">WALK</button>
+      <button id="modeTop" class="btn px-3 py-1.5 tracking-widest border-l border-line">MAP</button>
+    </div>
+    <button id="themeBtn" class="btn px-3 py-1.5 rounded-sm tracking-widest">☾ DARK</button>
+    <div class="chip px-2 py-1 rounded-sm"><span class="text-muted">UNITS</span> <span id="unitCount" class="text-amber font-bold">0</span></div>
+    <div class="chip px-2 py-1 rounded-sm"><span class="text-muted">COORD</span> <span id="coordOut">—</span></div>
+    <button id="loadPreset" class="btn px-3 py-1.5 rounded-sm tracking-widest">PARADE</button>
+    <button id="resetBtn" class="btn px-3 py-1.5 rounded-sm tracking-widest">CLEAR</button>
+  </div>
+</header>
+
+<div id="toast">READY</div>
+
+<main class="absolute inset-0 pt-[52px] flex">
+  <section id="stage" class="relative flex-1">
+    <div id="canvasWrap" class="absolute inset-0"></div>
+    <span class="corner tl"></span><span class="corner tr"></span>
+    <span class="corner bl"></span><span class="corner br"></span>
+
+    <div id="infoCard" class="hidden-card absolute left-4 top-4 z-20 w-[320px] bg-ink-2 border border-line p-4">
+      <span class="corner tl"></span><span class="corner tr"></span>
+      <span class="corner bl"></span><span class="corner br"></span>
+      <div class="flex items-start justify-between mb-2">
+        <div class="text-[10px] tracking-[0.3em] text-amber" id="infoTag">LANDMARK</div>
+        <button onclick="document.getElementById('infoCard').classList.add('hidden-card')" class="text-muted text-xs">✕</button>
       </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="container mx-auto px-6 py-12">
-      <!-- Stats Bar -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-        <div class="bg-white rounded-lg p-4 text-center shadow-sm">
-          <div class="text-3xl font-bold text-indigo-600">14</div>
-          <div class="text-sm text-gray-600">Total Apps</div>
-        </div>
-        <div class="bg-white rounded-lg p-4 text-center shadow-sm">
-          <div class="text-3xl font-bold text-green-600">11</div>
-          <div class="text-sm text-gray-600">Live Apps</div>
-        </div>
-        <div class="bg-white rounded-lg p-4 text-center shadow-sm">
-          <div class="text-3xl font-bold text-purple-600">3</div>
-          <div class="text-sm text-gray-600">In Development</div>
-        </div>
-        <div class="bg-white rounded-lg p-4 text-center shadow-sm">
-          <div class="text-3xl font-bold text-orange-600">AI</div>
-          <div class="text-sm text-gray-600">Powered</div>
-        </div>
+      <h2 id="infoTitle" class="display text-xl mb-2">—</h2>
+      <p id="infoBody" class="text-[12px] leading-relaxed mb-3" style="color:var(--muted)">—</p>
+      <div class="grid grid-cols-2 gap-2 text-[10px]">
+        <div class="chip px-2 py-1 rounded-sm"><span class="text-muted">RISK</span> <span id="infoRisk" class="text-amber">—</span></div>
+        <div class="chip px-2 py-1 rounded-sm"><span class="text-muted">CAPACITY</span> <span id="infoCap">—</span></div>
       </div>
+    </div>
 
-      <!-- Apps Section -->
-      <section id="apps" class="mb-16">
-        <div class="flex items-center justify-between mb-8">
-          <h2 class="text-2xl font-bold text-gray-800 flex items-center">
-            <i class="fas fa-rocket mr-3 text-indigo-600"></i>
-            Live Applications
-          </h2>
-          <span class="text-sm text-gray-500">Production Ready</span>
-        </div>
-
-        <!-- All cards in one unified grid -->
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <!-- Temporal Build Flows -->
-          <div class="app-card slide-in hover-lift" style="--index: 0">
-            <!doctype html>
-            <style>
-              * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-              }
-              body {
-                font-family: var(--font-sans, "Inter", sans-serif);
-                background: transparent;
-                color: var(--color-text-primary);
-              }
-              .card {
-                background: var(--color-background-primary);
-                border: 0.5px solid var(--color-border-tertiary);
-                border-radius: var(--border-radius-lg, 12px);
-                overflow: hidden;
-                max-width: 480px;
-                margin: 0 auto;
-              }
-              .accent-bar {
-                height: 4px;
-                background: linear-gradient(90deg, #7f77dd, #5dcaa5);
-              }
-              .body {
-                padding: 2rem;
-              }
-              .hero {
-                display: flex;
-                align-items: flex-start;
-                gap: 16px;
-                margin-bottom: 1.5rem;
-              }
-              .icon-wrap {
-                flex-shrink: 0;
-                width: 52px;
-                height: 52px;
-                border-radius: 14px;
-                background: var(--color-background-secondary);
-                border: 0.5px solid var(--color-border-tertiary);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .icon-wrap svg {
-                width: 26px;
-                height: 26px;
-                color: #7f77dd;
-                stroke: currentColor;
-                fill: none;
-                stroke-width: 1.6;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-              }
-              h1 {
-                font-size: 18px;
-                font-weight: 500;
-                color: var(--color-text-primary);
-                line-height: 1.3;
-                margin-bottom: 4px;
-              }
-              .sub {
-                font-size: 13px;
-                color: var(--color-text-secondary);
-              }
-              .desc {
-                font-size: 14px;
-                color: var(--color-text-secondary);
-                line-height: 1.7;
-                margin-bottom: 1.5rem;
-              }
-              .pills {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-bottom: 1.75rem;
-              }
-              .pill {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                font-size: 12px;
-                font-weight: 500;
-                padding: 5px 12px;
-                border-radius: 99px;
-                border: 0.5px solid;
-              }
-              .pill-purple {
-                background: #eeedfe;
-                color: #3c3489;
-                border-color: #afa9ec;
-              }
-              .pill-teal {
-                background: #e1f5ee;
-                color: #085041;
-                border-color: #5dcaa5;
-              }
-              .pill-amber {
-                background: #faeeda;
-                color: #633806;
-                border-color: #ef9f27;
-              }
-              .pill-blue {
-                background: #e6f1fb;
-                color: #0c447c;
-                border-color: #85b7eb;
-              }
-              .pill svg {
-                width: 13px;
-                height: 13px;
-                flex-shrink: 0;
-                stroke: currentColor;
-                fill: none;
-                stroke-width: 2;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-              }
-              .divider {
-                border: none;
-                border-top: 0.5px solid var(--color-border-tertiary);
-                margin-bottom: 1.5rem;
-              }
-              .status-area {
-                margin-bottom: 1.25rem;
-                border: 0.5px solid var(--color-border-tertiary);
-                border-radius: var(--border-radius-md, 8px);
-                background: var(--color-background-secondary);
-                padding: 14px 16px;
-                display: none;
-              }
-              .status-row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-size: 13px;
-                font-weight: 500;
-              }
-              .dot {
-                width: 9px;
-                height: 9px;
-                border-radius: 50%;
-                flex-shrink: 0;
-              }
-              .dot-green {
-                background: #1d9e75;
-                box-shadow: 0 0 0 3px #9fe1cb;
-              }
-              .dot-red {
-                background: #d85a30;
-                box-shadow: 0 0 0 3px #f5c4b3;
-              }
-              .dot-spin {
-                border: 2px solid #afa9ec;
-                border-top-color: #7f77dd;
-                border-radius: 50%;
-                animation: spin 0.8s linear infinite;
-              }
-              @keyframes spin {
-                to {
-                  transform: rotate(360deg);
-                }
-              }
-              .status-online {
-                color: #085041;
-              }
-              .status-offline {
-                color: #993c1d;
-              }
-              .status-checking {
-                color: #534ab7;
-              }
-              .progress-wrap {
-                margin-top: 10px;
-              }
-              .progress-track {
-                height: 3px;
-                background: var(--color-border-tertiary);
-                border-radius: 99px;
-                overflow: hidden;
-              }
-              .progress-fill {
-                height: 100%;
-                background: #7f77dd;
-                border-radius: 99px;
-                width: 0%;
-              }
-              .progress-label {
-                font-size: 12px;
-                color: var(--color-text-secondary);
-                margin-top: 6px;
-                display: flex;
-                justify-content: space-between;
-              }
-              .cta-btn {
-                width: 100%;
-                padding: 13px;
-                background: #534ab7;
-                color: #eeedfe;
-                font-size: 14px;
-                font-weight: 500;
-                border: none;
-                border-radius: var(--border-radius-md, 8px);
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                transition:
-                  background 0.15s,
-                  transform 0.1s;
-              }
-              .cta-btn:hover {
-                background: #3c3489;
-              }
-              .cta-btn:active {
-                transform: scale(0.98);
-              }
-              .cta-btn svg {
-                width: 16px;
-                height: 16px;
-                stroke: currentColor;
-                fill: none;
-                stroke-width: 2;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-              }
-              .footnote {
-                text-align: center;
-                font-size: 12px;
-                color: var(--color-text-tertiary, #888);
-                margin-top: 1rem;
-              }
-            </style>
-
-            <div class="card">
-              <div class="accent-bar"></div>
-              <div class="body">
-                <div class="hero">
-                  <div class="icon-wrap">
-                    <svg viewBox="0 0 24 24">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <path d="M8 21h8M12 17v4" />
-                      <path d="M7 7h10M7 11h6" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h1>Local Desktop Document LLM</h1>
-                    <p class="sub">
-                      Your documents. Your machine. Your control.
-                    </p>
-                  </div>
-                </div>
-
-                <p class="desc">
-                  Run a powerful AI document assistant directly on your laptop
-                  or desktop — no cloud, no subscriptions, no token limits. Ask
-                  questions about your own files in plain English, get instant
-                  answers, and keep every byte of data on your machine.
-                </p>
-
-                <div class="pills">
-                  <span class="pill pill-purple">
-                    <svg viewBox="0 0 24 24">
-                      <rect x="3" y="11" width="18" height="11" rx="2" />
-                      <path d="M7 11V7a5 5 0 0110 0v4" />
-                    </svg>
-                    100% private
-                  </span>
-                  <span class="pill pill-teal">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
-                    Data never leaves your device
-                  </span>
-                  <span class="pill pill-amber">
-                    <svg viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M12 8v4l3 3" />
-                    </svg>
-                    No token limits
-                  </span>
-                  <span class="pill pill-blue">
-                    <svg viewBox="0 0 24 24">
-                      <path
-                        d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                      />
-                    </svg>
-                    Upgrade hardware to go faster
-                  </span>
-                </div>
-
-                <hr class="divider" />
-
-                <div id="statusArea" class="status-area">
-                  <div class="status-row">
-                    <div class="dot" id="statusDot"></div>
-                    <span id="statusText"></span>
-                    <span
-                      id="respTime"
-                      style="
-                        margin-left: auto;
-                        font-size: 12px;
-                        color: var(--color-text-secondary);
-                      "
-                    ></span>
-                  </div>
-                  <div
-                    id="progressWrap"
-                    class="progress-wrap"
-                    style="display: none"
-                  >
-                    <div class="progress-track">
-                      <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="progress-label">
-                      <span>Redirecting in <span id="countdown">3</span>s</span>
-                      <button
-                        onclick="cancelRedirect()"
-                        style="
-                          background: none;
-                          border: none;
-                          font-size: 12px;
-                          color: var(--color-text-secondary);
-                          cursor: pointer;
-                          text-decoration: underline;
-                          padding: 0;
-                        "
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <button class="cta-btn" id="mainBtn" onclick="launchService()">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" />
-                    <polygon points="10,8 16,12 10,16" />
-                  </svg>
-                  Try the local document LLM
-                </button>
-
-                <p class="footnote">
-                  Runs on your own hardware &mdash; no data sent to the cloud
-                </p>
-              </div>
-            </div>
-
-            <script>
-              const SERVICE_URL =
-                "http://4554";
-              let redirectTimer = null;
-              let cancelled = false;
-
-              function showStatus(state, extra) {
-                const area = document.getElementById("statusArea");
-                const dot = document.getElementById("statusDot");
-                const text = document.getElementById("statusText");
-                const resp = document.getElementById("respTime");
-                const prog = document.getElementById("progressWrap");
-                area.style.display = "block";
-                dot.className = "dot";
-                prog.style.display = "none";
-                resp.textContent = "";
-                if (state === "checking") {
-                  dot.classList.add("dot-spin");
-                  dot.style.width = "9px";
-                  dot.style.height = "9px";
-                  text.className = "status-checking";
-                  text.textContent = "Checking service…";
-                } else if (state === "online") {
-                  dot.classList.add("dot-green");
-                  text.className = "status-online";
-                  text.textContent = "Service is online";
-                  if (extra) resp.textContent = extra + " ms";
-                  prog.style.display = "block";
-                } else {
-                  dot.classList.add("dot-red");
-                  text.className = "status-offline";
-                  text.textContent = "Service not reachable — is it running?";
-                }
-              }
-
-              function clearRedirect() {
-                if (redirectTimer) {
-                  clearInterval(redirectTimer);
-                  redirectTimer = null;
-                }
-              }
-
-              function cancelRedirect() {
-                cancelled = true;
-                clearRedirect();
-                document.getElementById("progressWrap").style.display = "none";
-                document.getElementById("statusText").textContent =
-                  "Redirect cancelled.";
-              }
-
-              function startCountdown(url) {
-                cancelled = false;
-                let n = 3;
-                document.getElementById("countdown").textContent = n;
-                const fill = document.getElementById("progressFill");
-                fill.style.transition = "none";
-                fill.style.width = "0%";
-                setTimeout(() => {
-                  fill.style.transition = "width 3s linear";
-                  fill.style.width = "100%";
-                }, 50);
-                redirectTimer = setInterval(() => {
-                  if (cancelled) {
-                    clearRedirect();
-                    return;
-                  }
-                  n--;
-                  document.getElementById("countdown").textContent = n;
-                  if (n <= 0) {
-                    clearRedirect();
-                    if (!cancelled) window.open(url, "_blank");
-                  }
-                }, 1000);
-              }
-
-               async function launchService() {
-                clearRedirect();
-                showStatus("checking");
-                const btn = document.getElementById("mainBtn");
-                btn.disabled = true;
-                const t0 = Date.now();
-                let result = "offline"; // "online" | "offline"
-                try {
-                  // Step 1: Try with CORS so we can read the status code
-                  const ctrl = new AbortController();
-                  const tid = setTimeout(() => ctrl.abort(), 5000);
-                  const resp = await fetch(SERVICE_URL, {
-                    method: "GET",
-                    signal: ctrl.signal,
-                    cache: "no-cache",
-                  });
-                  clearTimeout(tid);
-                  // We got a readable response — check status
-                  result = resp.ok ? "online" : "offline";
-                } catch (_) {
-                  // CORS block OR network failure — try no-cors to tell them apart
-                  try {
-                    const ctrl2 = new AbortController();
-                    const tid2 = setTimeout(() => ctrl2.abort(), 5000);
-                    await fetch(SERVICE_URL, {
-                      method: "GET",
-                      mode: "no-cors",
-                      signal: ctrl2.signal,
-                      cache: "no-cache",
-                    });
-                    clearTimeout(tid2);
-                    // no-cors succeeded → server is reachable, just blocking CORS
-                    result = "online";
-                  } catch (_) {
-                    // Both failed → server is truly down
-                    result = "offline";
-                  }
-                }
-                const elapsed = Date.now() - t0;
-                btn.disabled = false;
-                if (result === "online") {
-                  showStatus("online", elapsed);
-                  startCountdown(SERVICE_URL);
-                } else {
-                  showStatus("offline");
-                }
-              }
-            </script>
-          </div>
-
-                  <!-- Temporal Build Flows -->
-          <div class="app-card slide-in hover-lift" style="--index: 0">
-            <a
-              href="/customapps/wfdemo.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-Workforce Development Platform
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Workforce Development Platform</p>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-           <!-- Temporal Build Flows -->
-          <div class="app-card slide-in hover-lift" style="--index: 0">
-            <a
-              href="/customapps/workf.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-Simple Workforce Development Platform
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Simple Workforce Development Platform</p>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Temporal Build Flows -->
-          <div class="app-card slide-in hover-lift" style="--index: 0">
-            <a
-              href="https://temporal-build-flows.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Temporal Build Flows
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Temporal Build Flows</p>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-                 <!-- Temporal Build Flows -->
-          <div class="app-card slide-in hover-lift" style="--index: 0">
-            <a
-              href="/customapps/d1.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-Simple Failure Point Analysis
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Failure Point Analysis</p>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Pitchme Demo Student Game -->
-          <div class="app-card slide-in hover-lift" style="--index: 1">
-            <a
-              href="/customapps/agent.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    AI Agent Builder
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">AI Agent Builder</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-
-          <!-- Pitchme Demo Student Game -->
-          <div class="app-card slide-in hover-lift" style="--index: 1">
-            <a
-              href="/customapps/tutweb101.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                   Static Web Tutorial LLM Demo
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Static Web Tutorial LLM Demo</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-
-           <!-- Pitchme Demo Student Game -->
-          <div class="app-card slide-in hover-lift" style="--index: 1">
-            <a
-              href="https://pictchme.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Pitchme Demo Student Game
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Pitchme Demo Student Game</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-           <!-- Pitchme Demo Student Game -->
-          <div class="app-card slide-in hover-lift" style="--index: 1">
-            <a
-              href="/customapps/mgmsafe.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Montgomery Security Map Demo
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Montgomery Security Map Demo</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-           <!-- Pitchme Demo Student Game -->
-          <div class="app-card slide-in hover-lift" style="--index: 1">
-            <a
-              href="/customapps/pytut101test.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Python Testing Tutorial
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Python Testing Tutorial</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Robot SDK Internet Controlled -->
-          <div class="app-card slide-in hover-lift" style="--index: 2">
-            <a
-              href="https://robotsdk.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-robot text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Robot SDK Internet Controlled
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Robot SDK Internet Controlled</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Temporal Best Practice -->
-          <div class="app-card slide-in hover-lift" style="--index: 3">
-            <a
-              href="/customapps/tempbest.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Temporal Best Practice
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Temporal Best Practice</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-           <!-- Temporal Best Practice -->
-          <div class="app-card slide-in hover-lift" style="--index: 3">
-            <a
-              href="/customapps/zworkflow.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Z -Workflow-Manager
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Z -Workflow-Manager</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-
-          <!-- Demo Fire Restoration Dashboard -->
-          <div class="app-card slide-in hover-lift" style="--index: 4">
-            <a
-              href="https://democleanai.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-fire text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Demo Fire Restoration Dashboard
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Demo for a Restoration Services Company
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- RBAC App -->
-          <div class="app-card slide-in hover-lift" style="--index: 5">
-            <a
-              href="https://rbacsetup.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-network-wired text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Federation with RBAC &amp; SSO Docs
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Azure AD &amp; Keycloak Federation with RBAC &amp; SSO
-                  Enterprise identity management from zero to production. Azure
-                  AD as your IdP, Keycloak as your broker, with role-based
-                  access control and cell-level security.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Music City Itinerary Builder -->
-          <div class="app-card slide-in hover-lift" style="--index: 6">
-            <a
-              href="https://nashtour.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-map-marked text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Music City Itinerary Builder
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Music City Itinerary Builder — select events and activities to
-                  build your perfect Nashville trip.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- $1 Business Adventure -->
-          <div class="app-card slide-in hover-lift" style="--index: 7">
-            <a
-              href="https://startwithadollar.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-dollar text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Your $1 Business Adventure!
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Your $1 Business Adventure! 💰 Let's turn $1 into MORE money!
-                  Track Your Sales! Record every sale you make. Watch your
-                  profit grow!
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-           <!-- Team Hockey -->
-          <div class="app-card slide-in hover-lift" style="--index: 8">
-            <a
-              href="/customapps/elastic.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-hockey-puck text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Elastic Search Tutorial
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Elastic Search Tutorial
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Team Hockey -->
-          <div class="app-card slide-in hover-lift" style="--index: 8">
-            <a
-              href="https://hockeyteambuilding.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-hockey-puck text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    TEAM HOCKEY ⚡ Online Multiplayer Arena
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  TEAM HOCKEY ⚡ Online Multiplayer Arena
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- SecureDoc Portal -->
-          <div class="app-card slide-in hover-lift" style="--index: 9">
-            <a
-              href="https://docviewer-poc.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-book text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    SecureDoc Portal
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  A smart document management app that bridges the gap between
-                  your files and the physical world. Designed for teams that
-                  manage assets across multiple sites, it replaces messy folder
-                  structures with a powerful, location-aware search engine.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Prompt Craft -->
-          <div class="app-card slide-in hover-lift" style="--index: 10">
-            <a
-              href="https://prompt101-zac.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Prompt Craft
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Master the art of communicating with AI. Write prompts that
-                  get results.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Interview Prep -->
-          <div class="app-card slide-in hover-lift" style="--index: 11">
-            <a
-              href="https://interviewprep-neon.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-brain text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Interview Prep
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">Master the art of interviews.</p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >AI Learning</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Skills Development</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Interactive</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Education</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  Launch App
-                  <i
-                    class="fas fa-external-link-alt ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Proxi Guide -->
-          <div class="app-card slide-in hover-lift" style="--index: 12">
-            <a
-              href="/customapps/proxiguide.html"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"
-              >
-                <img
-                  class="h-48"
-                  src="/customapps/tour01.png"
-                  alt="proxi guide flow"
-                />
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Proxi Guide
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Deliver self-guided tours, proximity notifications, and
-                  location-based content through Bluetooth beacon technology.
-                  Perfect for museums, events, and business associations.
-                </p>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  View Details
-                  <i
-                    class="fas fa-arrow-right ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Museum Beacon App -->
-          <div class="app-card slide-in hover-lift" style="--index: 13">
-            <a
-              href="/customapps/oldtownbeacon.html"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-broadcast-tower text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Museum Beacon App
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Interactive museum guide using Bluetooth beacon technology for
-                  Old Town Montgomery historic sites.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Swift</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >SwiftUI</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Bluetooth</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >iBeacon</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  View Details
-                  <i
-                    class="fas fa-arrow-right ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- MAESTRO App -->
-          <div class="app-card slide-in hover-lift" style="--index: 14">
-            <a
-              href="/customapps/aosec.html"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-briefcase text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    MAESTRO (Multi-Agent Environment, Security, Threat, Risk,
-                    and Outcome) App
-                  </h3>
-                  <span
-                    class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  MAESTRO is built around a seven-layer reference architecture
-                  that decomposes the complex AI agent ecosystem into distinct
-                  functional layers.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Swift</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >SwiftUI</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Bluetooth</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >iBeacon</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  View Details
-                  <i
-                    class="fas fa-briefcase ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Custom Diagram App -->
-          <div class="app-card slide-in hover-lift" style="--index: 15">
-            <a
-              href="/customapps/diagrams.html"
-              class="block bg-white rounded-xl shadow-md overflow-hidden group"
-            >
-              <div
-                class="h-48 bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center"
-              >
-                <i
-                  class="fas fa-diagram-project text-white text-5xl group-hover:scale-110 transition-transform"
-                ></i>
-              </div>
-              <div class="p-6">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-xl font-semibold text-gray-800">
-                    Custom Diagram App
-                  </h3>
-                  <span
-                    class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
-                    >Live</span
-                  >
-                </div>
-                <p class="text-gray-600 mb-4">
-                  Design clean <strong>flow charts</strong> and
-                  <strong>state diagrams</strong> in minutes. Drag-and-drop
-                  nodes, snap-to-grid connectors, auto-layout, and reusable
-                  templates. Export to <em>PNG/SVG</em>, copy as
-                  Markdown/Mermaid, and embed in docs or wikis.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-4">
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Flow Charts</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >State Diagrams</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >SVG/PNG Export</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Mermaid Markdown</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Snap-to-Grid</span
-                  >
-                  <span
-                    class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                    >Auto-Layout</span
-                  >
-                </div>
-                <div class="flex items-center text-indigo-600 font-medium">
-                  View Details
-                  <i
-                    class="fas fa-diagram-project ml-2 group-hover:translate-x-2 transition-transform"
-                  ></i>
-                </div>
-              </div>
-            </a>
-          </div>
-        </div>
-        <!-- end unified grid -->
-      </section>
-      <!-- end #apps -->
-
-      <!-- Running Ollama with Claude Code / Qwen Coder Locally Section -->
-      <section id="ollama" class="mb-16">
-        <div class="flex items-center justify-between mb-8">
-          <h2 class="text-2xl font-bold text-gray-800 flex items-center">
-            <i class="fas fa-terminal mr-3 text-emerald-600"></i>
-            Running Ollama with Claude Code &amp; Qwen Coder Locally
-          </h2>
-          <span class="text-sm text-gray-500">Local AI Coding</span>
-        </div>
-
-        <div class="grid md:grid-cols-2 gap-6">
-          <!-- Card 1: Claude Code + Ollama -->
-          <div class="bg-white rounded-xl shadow-md overflow-hidden hover-lift">
-            <div
-              class="h-48 bg-gradient-to-br from-orange-500 via-amber-600 to-yellow-500 flex flex-col items-center justify-center relative"
-            >
-              <div class="flex items-center space-x-4">
-                <i class="fas fa-laptop-code text-white text-5xl"></i>
-                <i class="fas fa-plus text-white/60 text-2xl"></i>
-                <i class="fas fa-terminal text-white text-5xl"></i>
-              </div>
-              <div class="flex space-x-2 mt-4">
-                <span
-                  class="bg-white/20 backdrop-blur text-white text-xs px-3 py-1 rounded-full"
-                >
-                  <i class="fas fa-microchip mr-1"></i> Local
-                </span>
-                <span
-                  class="bg-white/20 backdrop-blur text-white text-xs px-3 py-1 rounded-full"
-                >
-                  <i class="fas fa-bolt mr-1"></i> Fast
-                </span>
-                <span
-                  class="bg-white/20 backdrop-blur text-white text-xs px-3 py-1 rounded-full"
-                >
-                  <i class="fas fa-lock mr-1"></i> Private
-                </span>
-              </div>
-            </div>
-            <div class="p-6">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xl font-semibold text-gray-800">
-                  Claude Code + Ollama
-                </h3>
-                <span
-                  class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full"
-                >
-                  <i class="fas fa-circle text-emerald-500 text-[8px] mr-1"></i>
-                  Ready
-                </span>
-              </div>
-              <p class="text-gray-600 mb-4">
-                Use Custom App's Claude Code CLI with Ollama as a local backend.
-                Get agentic coding assistance — file editing, terminal commands,
-                and project-wide refactoring — powered by models running
-                entirely on your machine. Zero API costs, full privacy.
-              </p>
-              <div
-                class="bg-gray-900 rounded-lg p-4 mb-4 font-mono text-sm space-y-2"
-              >
-                <div class="flex items-start">
-                  <span class="text-emerald-400 mr-2 select-none">$</span>
-                  <span class="text-gray-300"
-                    >npm install -g @Custom App-ai/claude-code</span
-                  >
-                </div>
-                <div class="flex items-start">
-                  <span class="text-emerald-400 mr-2 select-none">$</span>
-                  <span class="text-gray-300"
-                    >ollama pull qwen2.5-coder:7b</span
-                  >
-                </div>
-                <div class="flex items-start">
-                  <span class="text-emerald-400 mr-2 select-none">$</span>
-                  <span class="text-gray-300"
-                    >Custom App_BASE_URL=http://localhost:11434 \</span
-                  >
-                </div>
-                <div class="flex items-start">
-                  <span class="text-emerald-400 mr-2 select-none">&nbsp;</span>
-                  <span class="text-gray-300"
-                    >claude --model qwen2.5-coder:7b</span
-                  >
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-2 mb-4">
-                <span
-                  class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-cogs mr-1"></i>Claude Code CLI
-                </span>
-                <span
-                  class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-robot mr-1"></i>Agentic Coding
-                </span>
-                <span
-                  class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-file-code mr-1"></i>File Editing
-                </span>
-                <span
-                  class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-shield-alt mr-1"></i>Offline
-                </span>
-              </div>
-              <div class="flex space-x-3">
-                <a
-                  href="https://github.com/Custom Apps/claude-code"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition"
-                >
-                  <i class="fab fa-github mr-2"></i>
-                  View on GitHub
-                </a>
-                <a
-                  href="https://ollama.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition"
-                >
-                  <i class="fas fa-download mr-2"></i>
-                  Get Ollama
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- Card 2: Qwen Coder + Ollama -->
-          <div class="bg-white rounded-xl shadow-md overflow-hidden hover-lift">
-            <div
-              class="h-48 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 flex flex-col items-center justify-center relative"
-            >
-              <div class="flex items-center space-x-4">
-                <i class="fas fa-desktop text-white text-5xl"></i>
-                <i class="fas fa-plus text-white/60 text-2xl"></i>
-                <i class="fas fa-code text-white text-5xl"></i>
-              </div>
-              <div class="flex space-x-2 mt-4">
-                <span
-                  class="bg-white/20 backdrop-blur text-white text-xs px-3 py-1 rounded-full"
-                >
-                  <i class="fas fa-feather mr-1"></i> Lightweight
-                </span>
-                <span
-                  class="bg-white/20 backdrop-blur text-white text-xs px-3 py-1 rounded-full"
-                >
-                  <i class="fas fa-tachometer-alt mr-1"></i> 7B Params
-                </span>
-                <span
-                  class="bg-white/20 backdrop-blur text-white text-xs px-3 py-1 rounded-full"
-                >
-                  <i class="fas fa-fire mr-1"></i> Open Source
-                </span>
-              </div>
-            </div>
-            <div class="p-6">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xl font-semibold text-gray-800">
-                  Qwen2.5-Coder — Simple Local Setup
-                </h3>
-                <span
-                  class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full"
-                >
-                  <i class="fas fa-circle text-emerald-500 text-[8px] mr-1"></i>
-                  Ready
-                </span>
-              </div>
-              <p class="text-gray-600 mb-4">
-                Run Alibaba's Qwen2.5-Coder locally via Ollama for fast, private
-                code generation and completion. Supports Python, JavaScript,
-                TypeScript, Go, Rust, and 90+ languages. Perfect for developers
-                who want a lightweight, no-cost coding assistant.
-              </p>
-              <div
-                class="bg-gray-900 rounded-lg p-4 mb-4 font-mono text-sm space-y-2"
-              >
-                <div class="text-gray-500 text-xs mb-1">
-                  # Install &amp; run in 3 commands
-                </div>
-                <div class="flex items-start">
-                  <span class="text-blue-400 mr-2 select-none">$</span>
-                  <span class="text-gray-300"
-                    >ollama pull qwen2.5-coder:7b</span
-                  >
-                </div>
-                <div class="flex items-start">
-                  <span class="text-blue-400 mr-2 select-none">$</span>
-                  <span class="text-gray-300">ollama run qwen2.5-coder:7b</span>
-                </div>
-                <div class="text-gray-500 text-xs mt-1">
-                  # Or use the REST API
-                </div>
-                <div class="flex items-start">
-                  <span class="text-blue-400 mr-2 select-none">$</span>
-                  <span class="text-gray-300"
-                    >curl http://localhost:11434/api/generate \</span
-                  >
-                </div>
-                <div class="flex items-start">
-                  <span class="text-blue-400 mr-2 select-none">&nbsp;</span>
-                  <span class="text-gray-300"
-                    >-d '{"model":"qwen2.5-coder:7b","prompt":"Write a Flask
-                    app"}'</span
-                  >
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-2 mb-4">
-                <span
-                  class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-code mr-1"></i>Code Completion
-                </span>
-                <span
-                  class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-language mr-1"></i>90+ Languages
-                </span>
-                <span
-                  class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-server mr-1"></i>REST API
-                </span>
-                <span
-                  class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded"
-                >
-                  <i class="fas fa-brain mr-1"></i>7B / 14B / 32B
-                </span>
-              </div>
-              <div class="flex space-x-3">
-                <a
-                  href="https://github.com/zactonicsai/codeailocal"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition"
-                >
-                  <i class="fab fa-github mr-2"></i>
-                  View Docker Setup GitHub
-                </a>
-                <a
-                  href="https://ollama.com/library/qwen2.5-coder"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
-                >
-                  <i class="fas fa-download mr-2"></i>
-                  Ollama Library
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Coming Soon Section -->
-      <section id="coming-soon" class="mb-16">
-        <div class="flex items-center justify-between mb-8">
-          <h2 class="text-2xl font-bold text-gray-800 flex items-center">
-            <i class="fas fa-rocket mr-3 text-orange-600"></i>
-            Coming Soon
-          </h2>
-          <span class="text-sm text-gray-500">In Development</span>
-        </div>
-
-        <div class="grid md:grid-cols-2 gap-6">
-          <!-- Reputation Shield -->
-          <div
-            class="bg-white border-2 border-dashed border-indigo-300 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition"
-          >
-            <div class="flex items-start space-x-4">
-              <div
-                class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0"
-              >
-                <i class="fa-solid fa-briefcase text-white text-2xl"></i>
-              </div>
-              <div class="flex-1">
-                <h3 class="text-xl font-bold text-gray-800 mb-2">
-                  Reputation Shield - Insurance for the Digital Age
-                </h3>
-                <p class="text-gray-600 mb-3">
-                  In the Age of AI, Your Reputation is Your Biggest Risk. One
-                  deepfake, one viral lie, or one coordinated attack can destroy
-                  your business overnight. We provide the shield to protect what
-                  you've built. See Your Risk &amp; Get Protected.
-                </p>
-                <div
-                  class="flex items-center text-sm text-indigo-600 font-medium"
-                >
-                  <i class="fa-solid fa-briefcase mr-2"></i>
-                  Expected: Q2 2026 —
-                  <a
-                    class="text-sm font-bold text-red-800 rounded ml-1"
-                    href="https://demoinsurance.vercel.app/"
-                  >
-                    Click here to try — PREVIEW Demo
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- AI Proposal Generator -->
-          <div
-            class="bg-white border-2 border-dashed border-indigo-300 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition"
-          >
-            <div class="flex items-start space-x-4">
-              <div
-                class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0"
-              >
-                <i class="fas fa-robot text-white text-2xl"></i>
-              </div>
-              <div class="flex-1">
-                <h3 class="text-xl font-bold text-gray-800 mb-2">
-                  AI-Powered Proposal Generation
-                </h3>
-                <p class="text-gray-600 mb-3">
-                  Transform RFPs into winning proposals with intelligent skills
-                  matching and gap analysis. Automatically analyze requirements,
-                  match team capabilities, and generate comprehensive proposal
-                  documents.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-3">
-                  <span
-                    class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded"
-                    >GPT-4</span
-                  >
-                  <span
-                    class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded"
-                    >NLP</span
-                  >
-                  <span
-                    class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded"
-                    >Python</span
-                  >
-                  <span
-                    class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded"
-                    >React</span
-                  >
-                </div>
-                <div
-                  class="flex items-center text-sm text-indigo-600 font-medium"
-                >
-                  <i class="fas fa-clock mr-2"></i>
-                  Expected: Q2 2026 —
-                  <a
-                    class="text-sm font-bold text-red-800 rounded ml-1"
-                    href="/proposaldemo.html"
-                  >
-                    Click here to try — PREVIEW Demo
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- SRE Analysis System -->
-          <div
-            class="bg-white border-2 border-dashed border-green-300 rounded-xl p-6 hover:border-green-500 hover:shadow-lg transition"
-          >
-            <div class="flex items-start space-x-4">
-              <div
-                class="w-14 h-14 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center flex-shrink-0"
-              >
-                <i class="fas fa-chart-line text-white text-2xl"></i>
-              </div>
-              <div class="flex-1">
-                <h3 class="text-xl font-bold text-gray-800 mb-2">
-                  SRE Analysis System
-                </h3>
-                <p class="text-gray-600 mb-3">
-                  Comprehensive configuration and monitoring app for Site
-                  Reliability Engineering. Real-time system health monitoring,
-                  automated incident response, and predictive analytics for
-                  infrastructure optimization.
-                </p>
-                <div class="flex flex-wrap gap-2 mb-3">
-                  <span
-                    class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded"
-                    >Kubernetes</span
-                  >
-                  <span
-                    class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded"
-                    >Prometheus</span
-                  >
-                  <span
-                    class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded"
-                    >Grafana</span
-                  >
-                  <span
-                    class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded"
-                    >Go</span
-                  >
-                </div>
-                <div
-                  class="flex items-center text-sm text-green-600 font-medium"
-                >
-                  <i class="fas fa-clock mr-2"></i>
-                  Expected: Q3 2026 —
-                  <a
-                    class="text-sm font-bold text-red-800 rounded ml-1"
-                    href="https://sreresilienceplans.vercel.app/"
-                  >
-                    Click here to try — PREVIEW Demo
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Quick Links Section -->
-      <section class="bg-gray-100 rounded-2xl p-8">
-        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-          <i class="fas fa-link mr-3 text-gray-600"></i>
-          Quick Links &amp; Resources
-        </h2>
-        <div class="grid md:grid-cols-3 gap-4">
-          <a
-            href="beach.html"
-            class="flex items-center space-x-3 bg-white p-4 rounded-lg hover:shadow-md transition group"
-          >
-            <i class="fas fa-broadcast-tower text-indigo-600 text-xl"></i>
-            <span class="text-gray-700 group-hover:text-indigo-600 transition"
-              >Museum Beacon Landing Page</span
-            >
-          </a>
-          <a
-            href="#"
-            class="flex items-center space-x-3 bg-white p-4 rounded-lg hover:shadow-md transition group"
-          >
-            <i class="fab fa-github text-gray-600 text-xl"></i>
-            <span class="text-gray-700 group-hover:text-gray-900 transition"
-              >GitHub Repository</span
-            >
-          </a>
-          <a
-            href="#"
-            class="flex items-center space-x-3 bg-white p-4 rounded-lg hover:shadow-md transition group"
-          >
-            <i class="fas fa-book text-green-600 text-xl"></i>
-            <span class="text-gray-700 group-hover:text-green-600 transition"
-              >Documentation</span
-            >
-          </a>
-          <a
-            href="#"
-            class="flex items-center space-x-3 bg-white p-4 rounded-lg hover:shadow-md transition group"
-          >
-            <i class="fas fa-code-branch text-purple-600 text-xl"></i>
-            <span class="text-gray-700 group-hover:text-purple-600 transition"
-              >API Reference</span
-            >
-          </a>
-          <a
-            href="#"
-            class="flex items-center space-x-3 bg-white p-4 rounded-lg hover:shadow-md transition group"
-          >
-            <i class="fas fa-envelope text-orange-600 text-xl"></i>
-            <span class="text-gray-700 group-hover:text-orange-600 transition"
-              >Contact Support</span
-            >
-          </a>
-          <a
-            href="#"
-            class="flex items-center space-x-3 bg-white p-4 rounded-lg hover:shadow-md transition group"
-          >
-            <i class="fas fa-blog text-blue-600 text-xl"></i>
-            <span class="text-gray-700 group-hover:text-blue-600 transition"
-              >Developer Blog</span
-            >
-          </a>
-        </div>
-      </section>
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-8 mt-16">
-      <div class="container mx-auto px-6">
-        <div class="flex flex-col md:flex-row justify-between items-center">
-          <div class="mb-4 md:mb-0">
-            <div class="flex items-center space-x-2 mb-2">
-              <i class="fas fa-code text-indigo-400"></i>
-              <span class="font-semibold text-lg">Custom Apps</span>
-            </div>
-            <p class="text-gray-400 text-sm">
-              Building innovative solutions for tomorrow
-            </p>
-          </div>
-          <div class="flex space-x-6">
-            <a href="#" class="text-gray-400 hover:text-white transition">
-              <i class="fab fa-twitter text-xl"></i>
-            </a>
-            <a href="#" class="text-gray-400 hover:text-white transition">
-              <i class="fab fa-linkedin text-xl"></i>
-            </a>
-            <a href="#" class="text-gray-400 hover:text-white transition">
-              <i class="fab fa-github text-xl"></i>
-            </a>
-            <a href="#" class="text-gray-400 hover:text-white transition">
-              <i class="fab fa-discord text-xl"></i>
-            </a>
-          </div>
-        </div>
-        <div
-          class="border-t border-gray-700 mt-6 pt-6 text-center text-gray-400 text-sm"
-        >
-          <p>
-            &copy; 2024 Custom Apps. All rights reserved. |
-            <a href="#" class="hover:text-white transition">Privacy Policy</a> |
-            <a href="#" class="hover:text-white transition">Terms of Service</a>
-          </p>
-        </div>
+    <div class="absolute left-4 bottom-4 z-10 text-[10px] tracking-[0.25em] space-y-1 pointer-events-none text-muted">
+      <div class="flex gap-3">
+        <span><span class="inline-block w-2 h-2 mr-1" style="background:var(--amber)"></span>LANDMARK</span>
+        <span><span class="inline-block w-2 h-2 mr-1" style="background:var(--mint)"></span>CLICKABLE</span>
+        <span><span class="inline-block w-2 h-2 mr-1" style="background:var(--blue)"></span>WATER</span>
       </div>
-    </footer>
+    </div>
 
-    <script>
-      // Add slide-in animation when cards come into view
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("slide-in");
-          }
-        });
-      });
+    <div id="selIndicator" class="absolute right-4 bottom-4 z-10 chip px-3 py-2 text-[11px] tracking-widest">
+      <span class="text-muted">TOOL →</span> <span id="selName" class="text-amber">—</span>
+      <span class="ml-2 text-muted" id="selRot">0°</span>
+    </div>
 
-      document.querySelectorAll(".app-card").forEach((card) => {
-        observer.observe(card);
-      });
-    </script>
-  </body>
+    <div id="modeHint" class="absolute left-1/2 -translate-x-1/2 bottom-4 z-10 chip px-3 py-1.5 text-[10px] tracking-[0.3em]">
+      ORBIT · DRAG rotate · SHIFT+DRAG pan · SCROLL zoom
+    </div>
+  </section>
+
+  <aside class="w-[300px] flex flex-col">
+    <div class="px-4 py-3 border-b border-line">
+      <div class="text-[10px] tracking-[0.3em] text-muted">PALETTE</div>
+      <div class="display text-xl text-amber">SECURITY ASSETS</div>
+    </div>
+    <div id="palette" class="flex-1 overflow-y-auto scroll-thin p-3 space-y-2"></div>
+    <div class="p-3 border-t border-line space-y-2">
+      <div class="text-[10px] tracking-[0.3em] text-muted">OPTIONS</div>
+      <label class="flex items-center justify-between text-[11px]"><span>Snap to 2m grid</span><input id="snap" type="checkbox" checked></label>
+      <label class="flex items-center justify-between text-[11px]"><span>Show grid</span><input id="gridToggle" type="checkbox" checked></label>
+      <div class="text-[10px] leading-relaxed pt-2 text-muted">
+        <div><kbd>R</kbd> rotate · <kbd>X</kbd> undo</div>
+        <div class="mt-1">Walk: <kbd>WASD</kbd> · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump</div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const T = THREE;
+
+/* ---------- THEMES ---------- */
+const THEMES = {
+  dark: {
+    bg:0x0d1117, fogNear:140, fogFar:400,
+    ground:0x151a20, gridMajor:0x2a313b, gridMinor:0x1a1f26,
+    street:0x1e242b, side:0x343a42, stripe:0xffd400,
+    river:0x1a3c4a, riverEmit:0x0a1a28, lawn:0x2a4a28,
+    hemi:[0xffe7c2,0x1a2230,0.55], sun:[0xffd9a0,1.1], amb:[0x334455,0.25],
+    bldgPalette:[0x3a4250,0x424a58,0x544a3a,0x4a4038,0x36404a,0x524840,0x3e4a42],
+    capStone:0xe8e4d4, capTrim:0xf2eede, dome:0xf4efe0,
+    winLit:0xffc97a, winDark:0x0d1117
+  },
+  light: {
+    bg:0xdcd7c9, fogNear:160, fogFar:500,
+    ground:0xd0c9b8, gridMajor:0xa89e89, gridMinor:0xc1b8a4,
+    street:0x6a6558, side:0x9a9380, stripe:0xe5c100,
+    river:0x6ea8c7, riverEmit:0x204a66, lawn:0x7ca562,
+    hemi:[0xfff7e0,0x8a8575,0.9], sun:[0xffffff,1.2], amb:[0xffffff,0.5],
+    bldgPalette:[0xc9bfae,0xb8aa8f,0xd8ccb2,0xa89b80,0xbdb09a,0xc5b595,0xaa9e85],
+    capStone:0xf5f0e0, capTrim:0xfffaea, dome:0xffffff,
+    winLit:0x8fb3d9, winDark:0x3a4454
+  }
+};
+let currentTheme = 'dark';
+const th = () => THEMES[currentTheme];
+
+/* ---------- RENDERER / SCENE ---------- */
+const wrap = document.getElementById('canvasWrap');
+const scene = new T.Scene();
+const camera = new T.PerspectiveCamera(60, wrap.clientWidth/wrap.clientHeight, 0.1, 2000);
+const renderer = new T.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+wrap.appendChild(renderer.domElement);
+
+scene.background = new T.Color(th().bg);
+scene.fog = new T.Fog(th().bg, th().fogNear, th().fogFar);
+
+const hemi = new T.HemisphereLight(...th().hemi); scene.add(hemi);
+const sun = new T.DirectionalLight(...th().sun);
+sun.position.set(80,140,60); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-180; sun.shadow.camera.right=180;
+sun.shadow.camera.top=180; sun.shadow.camera.bottom=-180;
+sun.shadow.camera.near=1; sun.shadow.camera.far=400;
+sun.shadow.bias=-0.0005;
+scene.add(sun);
+const amb = new T.AmbientLight(...th().amb); scene.add(amb);
+
+const ground = new T.Mesh(new T.PlaneGeometry(600,600), new T.MeshStandardMaterial({ color:th().ground, roughness:1 }));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true;
+scene.add(ground);
+
+const gridHelper = new T.GridHelper(600, 300, th().gridMajor, th().gridMinor);
+gridHelper.position.y = 0.01;
+scene.add(gridHelper);
+
+/* ---------- ORBIT ---------- */
+const orbit = {
+  target:new T.Vector3(), theta:Math.atan2(90,140),
+  phi:Math.acos(110/Math.hypot(90,110,140)),
+  radius:Math.hypot(90,110,140),
+  minRadius:25, maxRadius:320, minPhi:0.02, maxPhi:Math.PI/2-0.02,
+  enabled:true,
+  update(){
+    this.phi = Math.max(this.minPhi, Math.min(this.maxPhi, this.phi));
+    this.radius = Math.max(this.minRadius, Math.min(this.maxRadius, this.radius));
+    const x = this.target.x + this.radius*Math.sin(this.phi)*Math.sin(this.theta);
+    const y = this.target.y + this.radius*Math.cos(this.phi);
+    const z = this.target.z + this.radius*Math.sin(this.phi)*Math.cos(this.theta);
+    camera.position.set(x,y,z); camera.lookAt(this.target);
+  },
+  setView(pos, tgt){
+    this.target.copy(tgt);
+    const dx=pos.x-tgt.x, dy=pos.y-tgt.y, dz=pos.z-tgt.z;
+    this.radius = Math.hypot(dx,dy,dz);
+    this.theta = Math.atan2(dx,dz);
+    this.phi = Math.acos(dy/this.radius);
+    this.update();
+  }
+};
+orbit.update();
+
+let orbitDragging=false, lastMX=0, lastMY=0, dragButton=0, mouseDownPos=null;
+renderer.domElement.addEventListener('mousedown', e => {
+  mouseDownPos = { x:e.clientX, y:e.clientY };
+  if (!orbit.enabled) return;
+  orbitDragging = true; lastMX=e.clientX; lastMY=e.clientY; dragButton=e.button;
+});
+window.addEventListener('mouseup', () => { orbitDragging=false; });
+window.addEventListener('mousemove', e => {
+  if (!orbitDragging || !orbit.enabled) return;
+  const dx=e.clientX-lastMX, dy=e.clientY-lastMY;
+  lastMX=e.clientX; lastMY=e.clientY;
+  if (dragButton===2 || e.shiftKey) {
+    const s = orbit.radius*0.0015;
+    const ax = new T.Vector3(Math.cos(orbit.theta),0,-Math.sin(orbit.theta));
+    const az = new T.Vector3(Math.sin(orbit.theta),0,Math.cos(orbit.theta));
+    orbit.target.addScaledVector(ax, -dx*s);
+    orbit.target.addScaledVector(az,  dy*s);
+  } else {
+    orbit.theta -= dx*0.005; orbit.phi -= dy*0.005;
+  }
+  orbit.update();
+});
+renderer.domElement.addEventListener('wheel', e => {
+  if (!orbit.enabled) return;
+  e.preventDefault();
+  orbit.radius *= (1 + Math.sign(e.deltaY)*0.1);
+  orbit.update();
+}, { passive:false });
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+function wasDrag(e){ return mouseDownPos && Math.hypot(e.clientX-mouseDownPos.x, e.clientY-mouseDownPos.y) > 4; }
+
+/* ---------- CLICKABLES ---------- */
+const clickables = [];
+function registerClickable(obj, info){
+  obj.userData.clickInfo = info;
+  obj.traverse(c => { if (c.isMesh){ c.userData.clickInfo = info; clickables.push(c); }});
+}
+
+/* ---------- STREETS ---------- */
+const streetMats = {
+  road: new T.MeshStandardMaterial({ color:th().street, roughness:1 }),
+  side: new T.MeshStandardMaterial({ color:th().side, roughness:1 }),
+  stripe: new T.MeshBasicMaterial({ color:th().stripe })
+};
+function makeRoad(x,z,w,len,horizontal=true){
+  const g = new T.Group();
+  const sx = horizontal?len:w, sz = horizontal?w:len;
+  const road = new T.Mesh(new T.PlaneGeometry(sx,sz), streetMats.road);
+  road.rotation.x = -Math.PI/2; road.receiveShadow = true;
+  g.add(road);
+  const sw1 = new T.Mesh(new T.BoxGeometry(horizontal?len:2, 0.2, horizontal?2:len), streetMats.side);
+  sw1.position.y = 0.1;
+  if (horizontal) sw1.position.z = -w/2-1; else sw1.position.x = -w/2-1;
+  sw1.receiveShadow = true; g.add(sw1);
+  const sw2 = sw1.clone();
+  if (horizontal) sw2.position.z = w/2+1; else sw2.position.x = w/2+1;
+  g.add(sw2);
+  const sc = Math.floor(len/4);
+  for (let i=0;i<sc;i++){
+    const s = new T.Mesh(new T.PlaneGeometry(1.6,0.2), streetMats.stripe);
+    s.rotation.x = -Math.PI/2; s.position.y = 0.02;
+    const pos = -len/2+2+i*4;
+    if (horizontal) s.position.x = pos; else { s.rotation.z = Math.PI/2; s.position.z = pos; }
+    g.add(s);
+  }
+  g.position.set(x,0.01,z);
+  return g;
+}
+scene.add(makeRoad(0,0,12,260,true));
+scene.add(makeRoad(0,36,10,260,true));
+scene.add(makeRoad(0,-36,10,260,true));
+scene.add(makeRoad(0,-80,14,260,true));
+[-100,-60,-20,20,60,100].forEach(x => scene.add(makeRoad(x,-20,8,200,false)));
+
+/* ---------- BUILDINGS ---------- */
+const bldgGroup = new T.Group(); scene.add(bldgGroup);
+const BLDG_NAMES = [
+  { name:"RSA Tower", desc:"Montgomery's tallest office building. Mixed-use high-rise.", risk:"HIGH", cap:"2,400" },
+  { name:"Renaissance Hotel", desc:"Convention center and hotel. High foot-traffic.", risk:"MED", cap:"1,800" },
+  { name:"Federal Courthouse", desc:"Federal building. Hardened perimeter for events.", risk:"HIGH", cap:"600" },
+  { name:"City Hall Annex", desc:"Municipal offices.", risk:"LOW", cap:"400" },
+  { name:"Union Station", desc:"Historic train depot, now event venue.", risk:"MED", cap:"1,200" },
+  { name:"Kress Building", desc:"Historic retail; ground-floor cafés on Dexter.", risk:"LOW", cap:"300" },
+  { name:"Montgomery Advertiser", desc:"Newspaper offices. Media staging candidate.", risk:"LOW", cap:"250" },
+  { name:"Bell Building", desc:"Mixed-use historic tower with residential floors.", risk:"MED", cap:"500" },
+  { name:"Whitley Hotel", desc:"Boutique hotel, small footprint.", risk:"LOW", cap:"180" },
+  { name:"Commerce Center", desc:"Office tower with ground-floor retail.", risk:"MED", cap:"900" },
+  { name:"First Baptist Dexter Ave.", desc:"Historic church, civil-rights landmark.", risk:"HIGH", cap:"800" },
+  { name:"Rosa Parks Museum", desc:"Civil-rights museum. Pedestrian approach only.", risk:"MED", cap:"500" }
+];
+function buildingOn(x,z,w,d,hMin,hMax,tintIdx,info){
+  const h = hMin + Math.random()*(hMax-hMin);
+  const pal = th().bldgPalette;
+  const c = pal[tintIdx!=null ? tintIdx%pal.length : Math.floor(Math.random()*pal.length)];
+  const mat = new T.MeshStandardMaterial({ color:c, roughness:0.85, metalness:0.08 });
+  const mesh = new T.Mesh(new T.BoxGeometry(w,h,d), mat);
+  mesh.position.set(x, h/2, z);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.userData.origColor = c;
+  bldgGroup.add(mesh);
+
+  const rows = Math.max(2, Math.floor(h/2.4));
+  const cols = Math.max(2, Math.floor(w/2));
+  const colsD = Math.max(2, Math.floor(d/2));
+  function addFace(plane, axis){
+    for (let r=0;r<rows;r++){
+      for (let cc=0;cc<(axis==='z'?cols:colsD);cc++){
+        if (Math.random()>0.6) continue;
+        const lit = Math.random()>0.4;
+        const win = new T.Mesh(new T.PlaneGeometry(0.6,0.9),
+          new T.MeshBasicMaterial({ color: lit?th().winLit:th().winDark }));
+        if (axis==='z'){
+          win.position.set(x-w/2+1+cc*2, 1.2+r*2.4, plane);
+          if (plane<0) win.rotation.y = Math.PI;
+        } else {
+          win.position.set(plane, 1.2+r*2.4, z-d/2+1+cc*2);
+          win.rotation.y = plane>0 ? -Math.PI/2 : Math.PI/2;
+        }
+        bldgGroup.add(win);
+      }
+    }
+  }
+  addFace(z+d/2+0.01,'z'); addFace(z-d/2-0.01,'z');
+  addFace(x+w/2+0.01,'x'); addFace(x-w/2-0.01,'x');
+
+  const roof = new T.Mesh(new T.BoxGeometry(w*0.4,1,d*0.4), new T.MeshStandardMaterial({ color:0x22282f }));
+  roof.position.set(x, h+0.5, z); bldgGroup.add(roof);
+
+  if (info) registerClickable(mesh, info);
+  return mesh;
+}
+// Dexter-adjacent blocks (z=-18 north side, z=+18 south side) are reserved
+// for named landmarks from the real downtown-Montgomery list.
+const blocks = [
+  [-80,-58,30,12],[-40,-58,30,12],[0,-58,30,12],[40,-58,30,12],[80,-58,30,12]
+];
+let nameIdx = 0;
+blocks.forEach(([bx,bz,bw,bd]) => {
+  const n = 1 + Math.floor(Math.random()*2);
+  for (let i=0;i<n;i++){
+    const w = 7+Math.random()*8, d = 6+Math.random()*5;
+    const x = bx + (Math.random()-0.5)*(bw-w);
+    const z = bz + (Math.random()-0.5)*(bd-d);
+    const hMin = 8+Math.random()*6, hMax = hMin+6+Math.random()*20;
+    buildingOn(x,z,w,d,hMin,hMax,i, BLDG_NAMES[nameIdx++ % BLDG_NAMES.length]);
+  }
+});
+
+/* ---------- CAPITOL ---------- */
+const capitol = new T.Group();
+const capBase = new T.Mesh(new T.BoxGeometry(30,12,20), new T.MeshStandardMaterial({ color:th().capStone, roughness:0.8 }));
+capBase.position.y=6; capBase.castShadow=true; capBase.receiveShadow=true;
+capitol.add(capBase);
+const capSteps = new T.Mesh(new T.BoxGeometry(18,1.5,6), new T.MeshStandardMaterial({ color:th().capTrim }));
+capSteps.position.set(0, 0.75, 13);
+capSteps.castShadow = true; capSteps.receiveShadow = true;
+capitol.add(capSteps);
+for (let i=-5;i<=5;i+=2){
+  const col = new T.Mesh(new T.CylinderGeometry(0.45,0.45,9,14), new T.MeshStandardMaterial({ color:th().capTrim }));
+  col.position.set(i*2.2,5.5,10.3); col.castShadow=true;
+  capitol.add(col);
+}
+const portico = new T.Mesh(new T.BoxGeometry(26,1.5,3), new T.MeshStandardMaterial({ color:th().capStone }));
+portico.position.set(0,10.5,11); capitol.add(portico);
+const pediment = new T.Mesh(new T.ConeGeometry(13,3,4,1), new T.MeshStandardMaterial({ color:th().capTrim }));
+pediment.rotation.y=Math.PI/4; pediment.scale.set(1,1,0.12); pediment.position.set(0,13,11);
+capitol.add(pediment);
+const drum = new T.Mesh(new T.CylinderGeometry(5,5.5,3,24), new T.MeshStandardMaterial({ color:th().capStone }));
+drum.position.y=13.5; capitol.add(drum);
+const dome = new T.Mesh(new T.SphereGeometry(5,24,24,0,Math.PI*2,0,Math.PI/2), new T.MeshStandardMaterial({ color:th().dome, roughness:0.6 }));
+dome.position.y=15; dome.castShadow=true; capitol.add(dome);
+const cupola = new T.Mesh(new T.CylinderGeometry(1.2,1.4,2,16), new T.MeshStandardMaterial({ color:th().capStone }));
+cupola.position.y=20.5; capitol.add(cupola);
+const spire = new T.Mesh(new T.ConeGeometry(0.4,4,12), new T.MeshStandardMaterial({ color:0xc9b574, metalness:0.5 }));
+spire.position.y=23.5; capitol.add(spire);
+capitol.position.set(115,0,0); scene.add(capitol);
+registerClickable(capitol, { tag:"LANDMARK", title:"Alabama State Capitol", desc:"Seat of Alabama state government since 1851. High-profile public events; lawn hosts rallies and ceremonies.", risk:"CRITICAL", cap:"5,000 (lawn)" });
+
+const lawn = new T.Mesh(new T.PlaneGeometry(46,64), new T.MeshStandardMaterial({ color:th().lawn, roughness:1 }));
+lawn.rotation.x = -Math.PI/2; lawn.position.set(115,0.03,0); lawn.receiveShadow=true;
+scene.add(lawn);
+
+/* ---------- COURT SQUARE ---------- */
+const courtSquare = new T.Group();
+const plaza = new T.Mesh(new T.CircleGeometry(12,32), new T.MeshStandardMaterial({ color:0x3a3530, roughness:1 }));
+plaza.rotation.x = -Math.PI/2; plaza.position.y=0.04;
+courtSquare.add(plaza);
+const basinOuter = new T.Mesh(new T.CylinderGeometry(5.5,6,1.2,32), new T.MeshStandardMaterial({ color:0x5a5248, roughness:0.6 }));
+basinOuter.position.y=0.6; basinOuter.castShadow=true;
+courtSquare.add(basinOuter);
+const water = new T.Mesh(new T.CylinderGeometry(5,5,0.2,32), new T.MeshStandardMaterial({ color:0x2b7fff, roughness:0.2, metalness:0.4, emissive:0x0a2a50, emissiveIntensity:0.3 }));
+water.position.y=1.1; courtSquare.add(water);
+const pedestalM = new T.Mesh(new T.CylinderGeometry(0.9,1.1,3.5,16), new T.MeshStandardMaterial({ color:0x6a5e4e }));
+pedestalM.position.y=3; courtSquare.add(pedestalM);
+const hebe = new T.Mesh(new T.ConeGeometry(0.6,2.2,12), new T.MeshStandardMaterial({ color:0x8a7c66 }));
+hebe.position.y=6; courtSquare.add(hebe);
+courtSquare.position.set(-100,0,0); scene.add(courtSquare);
+registerClickable(courtSquare, { tag:"LANDMARK", title:"Court Square Fountain", desc:"Historic plaza at the west end of Dexter Avenue. Six converging streets.", risk:"HIGH", cap:"3,500" });
+
+/* ---------- DEXTER AVENUE NAMED LANDMARKS ----------
+   Coordinate system reminder:
+     +X = EAST (Capitol end)    -X = WEST (Court Square end)
+     -Z = NORTH SIDE of Dexter  +Z = SOUTH SIDE of Dexter
+   Street blocks: Dexter=z0 · north-side building row ~ z=-22 · south-side row ~ z=+22
+*/
+
+// Shared helper: named labeled building with custom dimensions + color + facade detail
+function namedBuilding(x, z, w, d, h, color, roofColor, info, opts={}){
+  const mat = new T.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 });
+  const mesh = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+  mesh.position.set(x, h/2, z);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.userData.origColor = color;
+  scene.add(mesh);
+
+  // decorative roof cap / cornice
+  const roof = new T.Mesh(
+    new T.BoxGeometry(w + 0.4, 0.6, d + 0.4),
+    new T.MeshStandardMaterial({ color: roofColor || 0x2a2f36 })
+  );
+  roof.position.set(x, h + 0.3, z); roof.castShadow = true;
+  scene.add(roof);
+
+  // window rows (front face = facing Dexter, so toward z=0)
+  const front = z < 0 ? z + d/2 + 0.01 : z - d/2 - 0.01;
+  const rotFront = z < 0 ? 0 : Math.PI;
+  const rows = Math.max(2, Math.floor(h / 2.4));
+  const cols = Math.max(2, Math.floor(w / 2));
+  for (let r = 0; r < rows; r++) {
+    for (let cc = 0; cc < cols; cc++) {
+      if (Math.random() > 0.7) continue;
+      const lit = Math.random() > 0.35;
+      const win = new T.Mesh(
+        new T.PlaneGeometry(0.7, 1.0),
+        new T.MeshBasicMaterial({ color: lit ? th().winLit : th().winDark })
+      );
+      win.position.set(x - w/2 + 1 + cc*2, 1.4 + r*2.4, front);
+      win.rotation.y = rotFront;
+      scene.add(win);
+    }
+  }
+
+  // optional ground-floor entrance awning facing Dexter
+  if (opts.awning) {
+    const aw = new T.Mesh(
+      new T.BoxGeometry(Math.min(w*0.3, 4), 0.2, 1.5),
+      new T.MeshStandardMaterial({ color: opts.awning })
+    );
+    aw.position.set(x, 3.2, front + (z < 0 ? 0.8 : -0.8));
+    scene.add(aw);
+  }
+
+  registerClickable(mesh, info);
+  return mesh;
+}
+
+/* --- NORTH SIDE of Dexter (z = -22) --- */
+
+// Dexter Avenue King Memorial Baptist Church (454 Dexter, NORTH side, east portion)
+// National Historic Landmark — MLK Jr. pastored here 1954-1960
+const church = new T.Group();
+const chBody = new T.Mesh(new T.BoxGeometry(13, 9, 16), new T.MeshStandardMaterial({ color: 0xa43a28, roughness: 0.95 }));
+chBody.position.y = 4.5; chBody.castShadow = true; chBody.receiveShadow = true;
+church.add(chBody);
+// Stone base
+const chBase = new T.Mesh(new T.BoxGeometry(14, 1.2, 17), new T.MeshStandardMaterial({ color: 0x9a8e78 }));
+chBase.position.y = 0.6; church.add(chBase);
+// Gabled roof
+const chRoof = new T.Mesh(new T.ConeGeometry(9.5, 3.2, 4), new T.MeshStandardMaterial({ color: 0x3a2216 }));
+chRoof.rotation.y = Math.PI/4; chRoof.position.y = 10.6; chRoof.scale.set(1, 1, 1.2);
+church.add(chRoof);
+// Steeple (iconic tall bell tower on the front/south-facing side toward Dexter)
+const steepleBase = new T.Mesh(new T.BoxGeometry(3.5, 7, 3.5), new T.MeshStandardMaterial({ color: 0xa43a28 }));
+steepleBase.position.set(0, 12.5, 6); church.add(steepleBase);
+const steepleMid = new T.Mesh(new T.BoxGeometry(2.6, 3, 2.6), new T.MeshStandardMaterial({ color: 0x9a3424 }));
+steepleMid.position.set(0, 17.5, 6); church.add(steepleMid);
+const steepleTop = new T.Mesh(new T.ConeGeometry(2.2, 5, 4), new T.MeshStandardMaterial({ color: 0x3a2216 }));
+steepleTop.rotation.y = Math.PI/4;
+steepleTop.position.set(0, 21.5, 6); church.add(steepleTop);
+const cross = new T.Mesh(new T.BoxGeometry(0.18, 1.5, 0.18), new T.MeshStandardMaterial({ color: 0xc9b574, metalness: 0.6 }));
+cross.position.set(0, 25, 6); church.add(cross);
+const crossArm = new T.Mesh(new T.BoxGeometry(0.8, 0.18, 0.18), new T.MeshStandardMaterial({ color: 0xc9b574, metalness: 0.6 }));
+crossArm.position.set(0, 25.3, 6); church.add(crossArm);
+// Arched window on front
+const archWin = new T.Mesh(
+  new T.PlaneGeometry(2.5, 4),
+  new T.MeshBasicMaterial({ color: 0xd9a94a })
+);
+archWin.position.set(0, 6, 8.05);
+church.add(archWin);
+// Historical marker out front
+const marker = new T.Mesh(
+  new T.BoxGeometry(0.6, 1.8, 0.15),
+  new T.MeshStandardMaterial({ color: 0x3a2a1a })
+);
+marker.position.set(-5, 0.9, 9); church.add(marker);
+church.position.set(78, 0, 22);  // SOUTH side of Dexter, just WEST of the Federal/Judicial complex
+// Flip the steeple to front the Dexter-facing (north) side of the church
+church.rotation.y = Math.PI;
+scene.add(church);
+registerClickable(church, {
+  tag: "HISTORIC LANDMARK",
+  title: "Dexter Avenue King Memorial Baptist Church",
+  desc: "454 Dexter Ave · National Historic Landmark. Dr. Martin Luther King Jr. served as pastor 1954-1960; the Montgomery Bus Boycott was organized here. Sits just west of the Federal / Judicial complex on the Capitol end of Dexter.",
+  risk: "HIGH",
+  cap: "400"
+});
+
+// RSA Dexter Avenue Building (modern office, near Capitol, NORTH side)
+namedBuilding(
+  95, -22, 20, 14, 34,
+  0x4a5668, 0x2a2f36,
+  {
+    tag: "OFFICE",
+    title: "RSA Dexter Avenue Building",
+    desc: "Retirement Systems of Alabama office tower on the north side of Dexter, adjacent to the Capitol complex. State-office foot traffic during business hours.",
+    risk: "MED",
+    cap: "1,600"
+  },
+  { awning: 0x1a2030 }
+);
+
+// Jesus City Church (near Dexter & McDonough, NORTH side)
+// McDonough crosses Dexter at roughly x = -20 in our grid (mid-corridor cross street)
+const jcc = new T.Group();
+const jccBody = new T.Mesh(new T.BoxGeometry(8, 6, 10), new T.MeshStandardMaterial({ color: 0xe8dfc8, roughness: 0.9 }));
+jccBody.position.y = 3; jccBody.castShadow = true; jccBody.receiveShadow = true;
+jcc.add(jccBody);
+const jccRoof = new T.Mesh(new T.ConeGeometry(6, 2, 4), new T.MeshStandardMaterial({ color: 0x5a4030 }));
+jccRoof.rotation.y = Math.PI/4; jccRoof.position.y = 7; jccRoof.scale.set(1,1,1.2);
+jcc.add(jccRoof);
+const jccCross = new T.Mesh(new T.BoxGeometry(0.12, 1.0, 0.12), new T.MeshStandardMaterial({ color: 0x3a2a1a }));
+jccCross.position.set(0, 8.5, 0); jcc.add(jccCross);
+jcc.position.set(-24, 0, -22);
+scene.add(jcc);
+registerClickable(jcc, {
+  tag: "CHURCH",
+  title: "Jesus City Church",
+  desc: "Small congregational church near the Dexter & McDonough intersection, NORTH side of Dexter. Low foot-traffic during weekdays.",
+  risk: "LOW",
+  cap: "180"
+});
+
+// Historic commercial infill (north side, west of King Memorial)
+namedBuilding(
+  40, -22, 14, 11, 14,
+  0xb89a6e, 0x4a3a22,
+  {
+    tag: "HISTORIC",
+    title: "Dexter Commercial Row (historic)",
+    desc: "Part of the ~27 contributing buildings in the Court Square–Dexter Historic District. Late-19th-century commercial storefronts.",
+    risk: "LOW",
+    cap: "200"
+  }
+);
+namedBuilding(
+  4, -22, 16, 11, 13,
+  0x9a8866, 0x4a3a22,
+  {
+    tag: "HISTORIC",
+    title: "Dexter Commercial Row (historic)",
+    desc: "Contributing building, Court Square–Dexter Historic District. Mixed commercial ground floor.",
+    risk: "LOW",
+    cap: "220"
+  }
+);
+namedBuilding(
+  -55, -22, 14, 10, 12,
+  0xa99480, 0x3a2f22,
+  {
+    tag: "HISTORIC",
+    title: "Dexter Commercial Row (historic)",
+    desc: "Contributing building near Court Square end of the Dexter Historic District.",
+    risk: "LOW",
+    cap: "180"
+  }
+);
+
+/* --- SOUTH SIDE of Dexter (z = +22) --- */
+
+// Alabama Judicial Building / Supreme Court of Alabama (south side, near Capitol)
+namedBuilding(
+  95, 22, 22, 16, 22,
+  0xd8d2be, 0xc9bfae,
+  {
+    tag: "STATE GOV",
+    title: "Alabama Judicial Building",
+    desc: "Houses the Supreme Court of Alabama, Court of Civil Appeals, and Court of Criminal Appeals. South side of Dexter, facing the Capitol complex. Hardened perimeter expected for events.",
+    risk: "HIGH",
+    cap: "800"
+  },
+  { awning: 0x9a8870 }
+);
+
+// Alabama Power Building (south side, mid-Dexter)
+namedBuilding(
+  35, 22, 18, 14, 28,
+  0x3a4a5a, 0x1e2a38,
+  {
+    tag: "UTILITY",
+    title: "Alabama Power Building",
+    desc: "Corporate offices for Alabama Power on the south side of Dexter. Mid-corridor between Capitol and Court Square. Ground-floor lobby accessible to public during business hours.",
+    risk: "MED",
+    cap: "1,200"
+  },
+  { awning: 0x202a38 }
+);
+
+// Winter Building (1841, south side near Court Square — historic)
+// Telegram authorizing attack on Fort Sumter was sent from this building in 1861
+namedBuilding(
+  -75, 22, 15, 12, 14,
+  0xc9a878, 0x6a4a2a,
+  {
+    tag: "HISTORIC · 1841",
+    title: "Winter Building",
+    desc: "Built 1841. Site from which the telegram authorizing the attack on Fort Sumter was sent in April 1861, commencing the Civil War. Italianate-style; south side near Court Square.",
+    risk: "MED",
+    cap: "150"
+  },
+  { awning: 0x4a3a22 }
+);
+
+// Additional contributing buildings (south side)
+namedBuilding(
+  -30, 22, 14, 11, 12,
+  0xb89e7a, 0x4a3a22,
+  {
+    tag: "HISTORIC",
+    title: "Dexter Commercial Row (historic)",
+    desc: "Part of the Court Square–Dexter Historic District, south side. Ground-floor retail, upper-floor offices.",
+    risk: "LOW",
+    cap: "170"
+  }
+);
+namedBuilding(
+  0, 22, 13, 10, 12,
+  0xa89478, 0x4a3a22,
+  {
+    tag: "HISTORIC",
+    title: "Dexter Commercial Row (historic)",
+    desc: "Contributing building, south side of Dexter, mid-corridor.",
+    risk: "LOW",
+    cap: "160"
+  }
+);
+// (South-side slot at x=70 vacated — reserved for King Memorial Church @ x=78)
+namedBuilding(
+  62, -22, 12, 10, 14,
+  0x968874, 0x3a2a1a,
+  {
+    tag: "HISTORIC",
+    title: "Dexter Commercial Row (historic)",
+    desc: "Contributing building, north side of Dexter, across from the King Memorial Church.",
+    risk: "LOW",
+    cap: "180"
+  }
+);
+
+/* ---------- RIVER + AMPHITHEATER ---------- */
+const river = new T.Mesh(new T.PlaneGeometry(280,34), new T.MeshStandardMaterial({ color:th().river, roughness:0.3, metalness:0.4, emissive:th().riverEmit, emissiveIntensity:0.4 }));
+river.rotation.x = -Math.PI/2; river.position.set(0,0.02,-105); river.receiveShadow=true;
+scene.add(river);
+const bank = new T.Mesh(new T.BoxGeometry(280,1.2,4), new T.MeshStandardMaterial({ color:0x4a4034, roughness:1 }));
+bank.position.set(0,0.6,-90); bank.castShadow=true; scene.add(bank);
+
+const amph = new T.Group();
+for (let i=0;i<5;i++){
+  const ring = new T.Mesh(new T.TorusGeometry(6+i*1.5, 0.4, 6, 24, Math.PI), new T.MeshStandardMaterial({ color:0x6a5e4e }));
+  ring.position.y = 0.4+i*0.4; ring.rotation.x = -Math.PI/2;
+  amph.add(ring);
+}
+amph.position.set(0,0,-75); scene.add(amph);
+registerClickable(amph, { tag:"VENUE", title:"Riverfront Amphitheater", desc:"Outdoor riverside venue. Marine perimeter required.", risk:"MED", cap:"7,500" });
+
+/* ---------- DECOR ---------- */
+function tree(x,z){
+  const trunk = new T.Mesh(new T.CylinderGeometry(0.18,0.24,2,6), new T.MeshStandardMaterial({ color:0x3b2a1a }));
+  trunk.position.set(x,1,z); trunk.castShadow=true;
+  const leaves = new T.Mesh(new T.SphereGeometry(1.4,10,10), new T.MeshStandardMaterial({ color:0x2d5a34, roughness:1 }));
+  leaves.position.set(x,2.8,z); leaves.castShadow=true;
+  scene.add(trunk); scene.add(leaves);
+}
+for (let x=-90;x<=105;x+=10){ if (Math.abs(x)<10) continue; tree(x,7.5); tree(x,-7.5); }
+for (let i=0;i<8;i++) tree(110+(Math.random()-0.5)*18, (Math.random()-0.5)*30);
+
+function lamp(x,z){
+  const g = new T.Group();
+  const pole = new T.Mesh(new T.CylinderGeometry(0.08,0.1,4,8), new T.MeshStandardMaterial({ color:0x222 }));
+  pole.position.y=2; g.add(pole);
+  const head = new T.Mesh(new T.SphereGeometry(0.3,10,10), new T.MeshBasicMaterial({ color:0xffc97a }));
+  head.position.y=4.1; g.add(head);
+  g.position.set(x,0,z); scene.add(g);
+}
+for (let x=-120;x<=120;x+=20){ lamp(x,8); lamp(x,-8); }
+
+/* ---------- LABELS ---------- */
+function makeLabel(text, color='#ffb020'){
+  const c = document.createElement('canvas'); c.width=512; c.height=128;
+  const g = c.getContext('2d');
+  g.fillStyle='rgba(11,13,16,0.88)'; g.fillRect(0,0,512,128);
+  g.strokeStyle=color; g.lineWidth=4; g.strokeRect(4,4,504,120);
+  g.fillStyle=color; g.font='bold 56px Oswald,sans-serif';
+  g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(text,256,64);
+  const tex = new T.CanvasTexture(c);
+  const sp = new T.Sprite(new T.SpriteMaterial({ map:tex, transparent:true, depthTest:false }));
+  sp.scale.set(14,3.5,1);
+  return sp;
+}
+const lbls = [
+  [makeLabel('STATE CAPITOL'),                  115, 30,   0],
+  [makeLabel('JUDICIAL BLDG',    '#d8d2be'),     95, 26,  22],
+  [makeLabel('RSA DEXTER',       '#8aa8d0'),     95, 40, -22],
+  [makeLabel('KING MEMORIAL',    '#ff5b2e'),     78, 30,  22],
+  [makeLabel('JESUS CITY CH.',   '#d9a94a'),    -24, 12, -22],
+  [makeLabel('ALABAMA POWER',    '#7ec8ff'),     35, 34,  22],
+  [makeLabel('WINTER BLDG 1841', '#c9a878'),    -75, 20,  22],
+  [makeLabel('COURT SQUARE',     '#7ef0c8'),   -100, 12,   0],
+  [makeLabel('ALABAMA RIVER',    '#2b7fff'),      0,  8,-105],
+  [makeLabel('DEXTER AVE'),                       0, 18,   0],
+  [makeLabel('N ↑',              '#7ef0c8'),      0, 14, -38],
+  [makeLabel('S ↓',              '#ff5b2e'),      0, 14,  38]
+];
+lbls.forEach(([s,x,y,z]) => { s.position.set(x,y,z); scene.add(s); });
+
+/* ---------- ASSET BUILDERS ---------- */
+function assetBarrier(){
+  const g = new T.Group();
+  const base = new T.Mesh(new T.BoxGeometry(2.4,0.5,0.6), new T.MeshStandardMaterial({ color:0xffffff }));
+  base.position.y=0.25; g.add(base);
+  for (let i=-1;i<=1;i++){
+    const s = new T.Mesh(new T.BoxGeometry(0.6,0.5,0.62), new T.MeshStandardMaterial({ color:0xff5b2e }));
+    s.position.set(i*0.8,0.25,0); g.add(s);
+  }
+  const rail = new T.Mesh(new T.BoxGeometry(2.4,0.1,0.1), new T.MeshStandardMaterial({ color:0x111 }));
+  rail.position.y=0.9; g.add(rail);
+  g.traverse(o => { if (o.isMesh) o.castShadow=true; });
+  return g;
+}
+function assetCone(){
+  const g = new T.Group();
+  const c = new T.Mesh(new T.ConeGeometry(0.3,0.9,16), new T.MeshStandardMaterial({ color:0xff5b2e }));
+  c.position.y=0.45; g.add(c);
+  const ring = new T.Mesh(new T.TorusGeometry(0.18,0.03,8,24), new T.MeshStandardMaterial({ color:0xffffff }));
+  ring.rotation.x=Math.PI/2; ring.position.y=0.55; g.add(ring);
+  const base = new T.Mesh(new T.BoxGeometry(0.6,0.05,0.6), new T.MeshStandardMaterial({ color:0x111 }));
+  base.position.y=0.025; g.add(base);
+  g.traverse(o => { if (o.isMesh) o.castShadow=true; });
+  return g;
+}
+function assetPoliceTag(){
+  const g = new T.Group();
+  const post = new T.Mesh(new T.CylinderGeometry(0.05,0.05,2.2,8), new T.MeshStandardMaterial({ color:0x202020 }));
+  post.position.y=1.1; g.add(post);
+  const sign = new T.Mesh(new T.BoxGeometry(1.6,0.5,0.06), new T.MeshStandardMaterial({ color:0x0b2a6b }));
+  sign.position.y=2.0; g.add(sign);
+  const c = document.createElement('canvas'); c.width=256; c.height=80;
+  const gx = c.getContext('2d');
+  gx.fillStyle='#0b2a6b'; gx.fillRect(0,0,256,80);
+  gx.strokeStyle='#ffd400'; gx.lineWidth=6; gx.strokeRect(4,4,248,72);
+  gx.fillStyle='#ffd400'; gx.font='bold 44px Oswald,sans-serif';
+  gx.textAlign='center'; gx.textBaseline='middle';
+  gx.fillText('POLICE',128,40);
+  const tex = new T.CanvasTexture(c);
+  const face = new T.Mesh(new T.PlaneGeometry(1.55,0.48), new T.MeshBasicMaterial({ map:tex }));
+  face.position.set(0,2.0,0.035); g.add(face);
+  const faceB = face.clone(); faceB.position.z=-0.035; faceB.rotation.y=Math.PI; g.add(faceB);
+  const light = new T.Mesh(new T.SphereGeometry(0.1,8,8), new T.MeshBasicMaterial({ color:0x2b7fff }));
+  light.position.y=2.35; g.add(light);
+  g.userData.flash = light;
+  g.traverse(o => { if (o.isMesh) o.castShadow=true; });
+  return g;
+}
+function assetOfficer(){
+  const g = new T.Group();
+  const body = new T.Mesh(new T.CylinderGeometry(0.25,0.3,1.2,10), new T.MeshStandardMaterial({ color:0x0b2a6b }));
+  body.position.y=0.6; g.add(body);
+  const head = new T.Mesh(new T.SphereGeometry(0.22,12,12), new T.MeshStandardMaterial({ color:0xd8b89a }));
+  head.position.y=1.4; g.add(head);
+  const cap = new T.Mesh(new T.CylinderGeometry(0.24,0.24,0.12,12), new T.MeshStandardMaterial({ color:0x0a1f4e }));
+  cap.position.y=1.6; g.add(cap);
+  const badge = new T.Mesh(new T.BoxGeometry(0.12,0.12,0.05), new T.MeshStandardMaterial({ color:0xffd400 }));
+  badge.position.set(0,1.0,0.3); g.add(badge);
+  const ring = new T.Mesh(new T.TorusGeometry(0.5,0.03,6,20), new T.MeshBasicMaterial({ color:0x2b7fff }));
+  ring.rotation.x=Math.PI/2; ring.position.y=0.02; g.add(ring);
+  g.traverse(o => { if (o.isMesh) o.castShadow=true; });
+  return g;
+}
+function assetTape(){
+  const g = new T.Group();
+  const pm = new T.MeshStandardMaterial({ color:0x1a1a1a });
+  const p1 = new T.Mesh(new T.CylinderGeometry(0.05,0.05,1.2,8), pm);
+  p1.position.set(-1.5,0.6,0); g.add(p1);
+  const p2 = p1.clone(); p2.position.x=1.5; g.add(p2);
+  const c = document.createElement('canvas'); c.width=512; c.height=48;
+  const gx = c.getContext('2d');
+  gx.fillStyle='#ffd400'; gx.fillRect(0,0,512,48);
+  gx.fillStyle='#000'; gx.font='bold 20px Oswald,sans-serif';
+  for (let i=0;i<4;i++) gx.fillText('POLICE LINE — DO NOT CROSS',64+i*128,30);
+  const tex = new T.CanvasTexture(c);
+  const tape = new T.Mesh(new T.PlaneGeometry(3,0.18), new T.MeshBasicMaterial({ map:tex, side:T.DoubleSide }));
+  tape.position.y=1.0; g.add(tape);
+  g.traverse(o => { if (o.isMesh) o.castShadow=true; });
+  return g;
+}
+function assetKRail(){
+  const g = new T.Group();
+  const shape = new T.Shape();
+  shape.moveTo(-0.4,0); shape.lineTo(0.4,0); shape.lineTo(0.25,0.3);
+  shape.lineTo(0.18,0.8); shape.lineTo(-0.18,0.8); shape.lineTo(-0.25,0.3); shape.lineTo(-0.4,0);
+  const geo = new T.ExtrudeGeometry(shape, { depth:3, bevelEnabled:false });
+  geo.rotateY(Math.PI/2); geo.translate(0,0,-1.5);
+  const m = new T.Mesh(geo, new T.MeshStandardMaterial({ color:0x9aa0a6, roughness:1 }));
+  m.castShadow=true; m.receiveShadow=true; g.add(m);
+  return g;
+}
+function assetCheckpoint(){
+  const g = new T.Group();
+  const tent = new T.Mesh(new T.BoxGeometry(3,0.1,3), new T.MeshStandardMaterial({ color:0xffb020 }));
+  tent.position.y=2.3; g.add(tent);
+  [[-1.4,-1.4],[1.4,-1.4],[-1.4,1.4],[1.4,1.4]].forEach(([x,z]) => {
+    const p = new T.Mesh(new T.CylinderGeometry(0.05,0.05,2.3,8), new T.MeshStandardMaterial({ color:0x222 }));
+    p.position.set(x,1.15,z); g.add(p);
+  });
+  const table = new T.Mesh(new T.BoxGeometry(2.4,0.1,0.8), new T.MeshStandardMaterial({ color:0x333 }));
+  table.position.y=0.9; g.add(table);
+  g.traverse(o => { if (o.isMesh) o.castShadow=true; });
+  return g;
+}
+function assetCamera(){
+  const g = new T.Group();
+  const pole = new T.Mesh(new T.CylinderGeometry(0.08,0.08,3.5,8), new T.MeshStandardMaterial({ color:0x333 }));
+  pole.position.y=1.75; g.add(pole);
+  const arm = new T.Mesh(new T.BoxGeometry(0.8,0.08,0.08), new T.MeshStandardMaterial({ color:0x333 }));
+  arm.position.set(0.4,3.3,0); g.add(arm);
+  const cam = new T.Mesh(new T.BoxGeometry(0.35,0.25,0.5), new T.MeshStandardMaterial({ color:0x111 }));
+  cam.position.set(0.8,3.3,0); g.add(cam);
+  const lens = new T.Mesh(new T.CylinderGeometry(0.08,0.08,0.15,12), new T.MeshBasicMaterial({ color:0xff3030 }));
+  lens.rotation.z=Math.PI/2; lens.position.set(1.05,3.3,0); g.add(lens);
+  g.userData.flash = lens;
+  return g;
+}
+function assetStage(){
+  const g = new T.Group();
+  const deck = new T.Mesh(new T.BoxGeometry(8,0.6,5), new T.MeshStandardMaterial({ color:0x2a2a2a }));
+  deck.position.y=0.3; g.add(deck);
+  const backdrop = new T.Mesh(new T.BoxGeometry(8,4,0.2), new T.MeshStandardMaterial({ color:0x0b2a6b }));
+  backdrop.position.set(0,2.6,-2.4); g.add(backdrop);
+  for (let i=-1;i<=1;i+=2){
+    const tr = new T.Mesh(new T.BoxGeometry(0.2,4.5,0.2), new T.MeshStandardMaterial({ color:0x111 }));
+    tr.position.set(i*3.8,2.5,2.3); g.add(tr);
+  }
+  g.traverse(o => { if (o.isMesh){ o.castShadow=true; o.receiveShadow=true; }});
+  return g;
+}
+
+const ASSETS = {
+  barrier:    { name:'Crowd Barrier',   icon:'▬▬▬', build:assetBarrier,    color:'#ff5b2e' },
+  krail:      { name:'Concrete K-Rail', icon:'◤◥',  build:assetKRail,      color:'#9aa0a6' },
+  tape:       { name:'Police Tape',     icon:'═══', build:assetTape,       color:'#ffd400' },
+  police:     { name:'Police Sign',     icon:'⚑',   build:assetPoliceTag,  color:'#2b7fff' },
+  officer:    { name:'Officer Post',    icon:'◉',   build:assetOfficer,    color:'#2b7fff' },
+  checkpoint: { name:'Checkpoint',      icon:'◫',   build:assetCheckpoint, color:'#ffb020' },
+  camera:     { name:'CCTV Camera',     icon:'◈',   build:assetCamera,     color:'#ff3030' },
+  cone:       { name:'Traffic Cone',    icon:'▲',   build:assetCone,       color:'#ff5b2e' },
+  stage:      { name:'Event Stage',     icon:'◼',   build:assetStage,      color:'#0b2a6b' }
+};
+
+/* ---------- STATE (declared BEFORE functions that use it) ---------- */
+let selected = 'barrier';
+let placeRotation = 0;
+let ghost = null;
+const placed = [];
+const placedGroup = new T.Group(); scene.add(placedGroup);
+
+/* ---------- PALETTE ---------- */
+const palette = document.getElementById('palette');
+Object.entries(ASSETS).forEach(([key,a]) => {
+  const el = document.createElement('button');
+  el.className = 'palette-item w-full text-left px-3 py-3 border border-line bg-ink rounded-sm flex items-center gap-3';
+  el.dataset.key = key;
+  el.innerHTML = `
+    <div class="w-9 h-9 flex items-center justify-center text-lg" style="color:${a.color};border:1px solid ${a.color}55;background:${a.color}1a">${a.icon}</div>
+    <div class="flex-1">
+      <div class="text-[12px] tracking-widest">${a.name.toUpperCase()}</div>
+      <div class="text-[10px] text-muted">click map to place</div>
+    </div>`;
+  el.addEventListener('click', () => selectTool(key));
+  palette.appendChild(el);
+});
+
+function buildGhost(){
+  if (ghost) scene.remove(ghost);
+  ghost = ASSETS[selected].build();
+  ghost.traverse(o => {
+    if (o.isMesh && o.material){
+      o.material = o.material.clone();
+      o.material.transparent = true;
+      o.material.opacity = 0.55;
+    }
+  });
+  ghost.rotation.y = placeRotation;
+  ghost.visible = false;
+  scene.add(ghost);
+}
+function selectTool(k){
+  selected = k;
+  [...palette.children].forEach(c => c.classList.toggle('active', c.dataset.key===k));
+  document.getElementById('selName').textContent = ASSETS[k].name.toUpperCase();
+  buildGhost();
+}
+selectTool('barrier');
+
+/* ---------- MODES ---------- */
+let mode = 'orbit';
+const stage = document.getElementById('stage');
+const btnOrbit = document.getElementById('modeOrbit');
+const btnWalk = document.getElementById('modeWalk');
+const btnTop = document.getElementById('modeTop');
+const hint = document.getElementById('modeHint');
+let yaw=0, pitch=0, pointerLocked=false;
+
+function setMode(m){
+  mode = m;
+  btnOrbit.classList.toggle('on', m==='orbit');
+  btnWalk.classList.toggle('on',  m==='walk');
+  btnTop.classList.toggle('on',   m==='top');
+  stage.classList.toggle('crosshair-on', m==='walk');
+  if (m==='orbit'){
+    orbit.enabled = true;
+    orbit.maxPhi = Math.PI/2-0.02;
+    orbit.setView(new T.Vector3(90,110,140), new T.Vector3(0,0,0));
+    hint.textContent='ORBIT · DRAG rotate · SHIFT+DRAG pan · SCROLL zoom · CLICK buildings';
+    if (document.pointerLockElement) document.exitPointerLock();
+  } else if (m==='walk'){
+    orbit.enabled = false;
+    camera.position.set(0,1.7,30); yaw=0; pitch=0;
+    hint.textContent='WALK · WASD · MOUSE look · CLICK place · R rotate · X undo · ESC release';
+    renderer.domElement.requestPointerLock();
+  } else {
+    orbit.enabled = true;
+    orbit.maxPhi = 0.3;
+    orbit.setView(new T.Vector3(0,220,0.1), new T.Vector3(0,0,0));
+    hint.textContent='MAP · TOP-DOWN · SCROLL zoom · CLICK place asset';
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+}
+btnOrbit.addEventListener('click', () => setMode('orbit'));
+btnWalk.addEventListener('click', () => setMode('walk'));
+btnTop.addEventListener('click', () => setMode('top'));
+
+/* ---------- KEYBOARD ---------- */
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code==='KeyR'){
+    placeRotation += Math.PI/4; placeRotation %= Math.PI*2;
+    document.getElementById('selRot').textContent = Math.round(placeRotation*180/Math.PI)+'°';
+    if (ghost) ghost.rotation.y = placeRotation;
+  }
+  if (e.code==='KeyX'){
+    const last = placed.pop();
+    if (last){ placedGroup.remove(last.group); updateCount(); }
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === renderer.domElement;
+});
+document.addEventListener('mousemove', e => {
+  if (!pointerLocked || mode!=='walk') return;
+  yaw -= e.movementX*0.0025;
+  pitch -= e.movementY*0.0025;
+  pitch = Math.max(-Math.PI/2+0.1, Math.min(Math.PI/2-0.1, pitch));
+});
+
+/* ---------- RAYCAST ---------- */
+const raycaster = new T.Raycaster();
+const pointerNDC = new T.Vector2(0,0);
+let hovered = null;
+
+renderer.domElement.addEventListener('mousemove', e => {
+  const r = renderer.domElement.getBoundingClientRect();
+  pointerNDC.x = ((e.clientX-r.left)/r.width)*2-1;
+  pointerNDC.y = -((e.clientY-r.top)/r.height)*2+1;
+});
+
+function updateHover(){
+  if (mode==='walk'){
+    const dir = new T.Vector3(-Math.sin(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw)*Math.cos(pitch));
+    raycaster.set(camera.position, dir);
+  } else {
+    raycaster.setFromCamera(pointerNDC, camera);
+  }
+  const hits = raycaster.intersectObjects(clickables, false);
+  const hit = hits.length ? hits[0].object : null;
+  if (hit !== hovered){
+    if (hovered && hovered.material){
+      if (hovered.userData.origColor !== undefined) hovered.material.color.setHex(hovered.userData.origColor);
+      if (hovered.material.emissive) hovered.material.emissive.setHex(0x000000);
+    }
+    hovered = hit;
+    if (hovered && hovered.material){
+      if (hovered.userData.origColor === undefined && hovered.material.color)
+        hovered.userData.origColor = hovered.material.color.getHex();
+      if (hovered.material.emissive){
+        hovered.material.emissive.setHex(0x7ef0c8);
+        hovered.material.emissiveIntensity = 0.3;
+      }
+    }
+    renderer.domElement.style.cursor = hit ? 'pointer' : '';
+  }
+}
+
+/* ---------- CLICK ---------- */
+renderer.domElement.addEventListener('click', e => {
+  if (mode!=='walk' && wasDrag(e)){ mouseDownPos=null; return; }
+  mouseDownPos = null;
+  if (mode==='walk' && !pointerLocked){ renderer.domElement.requestPointerLock(); return; }
+  if (mode!=='walk'){
+    raycaster.setFromCamera(pointerNDC, camera);
+    const hits = raycaster.intersectObjects(clickables, false);
+    if (hits.length){ const info = hits[0].object.userData.clickInfo; if (info){ showInfo(info); return; }}
+  } else {
+    const dir = new T.Vector3(-Math.sin(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw)*Math.cos(pitch));
+    raycaster.set(camera.position, dir);
+    const hits = raycaster.intersectObjects(clickables, false);
+    if (hits.length && hits[0].distance<40){ const info = hits[0].object.userData.clickInfo; if (info){ showInfo(info); return; }}
+  }
+  placeAtGhost();
+});
+
+function showInfo(info){
+  document.getElementById('infoTag').textContent = info.tag || 'INFO';
+  document.getElementById('infoTitle').textContent = info.title || '—';
+  document.getElementById('infoBody').textContent = info.desc || '—';
+  document.getElementById('infoRisk').textContent = info.risk || '—';
+  document.getElementById('infoCap').textContent = info.cap || '—';
+  const r = (info.risk||'').toUpperCase();
+  document.getElementById('infoRisk').style.color =
+    r==='CRITICAL'?'#ff3030': r==='HIGH'?'#ff5b2e': r==='MED'?'#ffb020':'#7ef0c8';
+  document.getElementById('infoCard').classList.remove('hidden-card');
+}
+function placeAtGhost(){
+  if (!ghost || !ghost.visible) return;
+  placeAsset(selected, ghost.position.x, ghost.position.z, placeRotation);
+}
+function placeAsset(type, x, z, rot=0){
+  const g = ASSETS[type].build();
+  g.position.set(x, 0, z);
+  g.rotation.y = rot;
+  placedGroup.add(g);
+  placed.push({ group:g, type, rotation:rot });
+  updateCount();
+}
+function updateCount(){ document.getElementById('unitCount').textContent = placed.length; }
+function clearAll(){
+  placed.forEach(p => placedGroup.remove(p.group));
+  placed.length = 0; updateCount();
+}
+document.getElementById('resetBtn').addEventListener('click', clearAll);
+document.getElementById('gridToggle').addEventListener('change', e => { gridHelper.visible = e.target.checked; });
+
+/* ---------- GHOST POSITIONING ---------- */
+function positionGhost(){
+  if (!ghost) return;
+  let origin, dir;
+  if (mode==='walk'){
+    origin = camera.position.clone();
+    dir = new T.Vector3(-Math.sin(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw)*Math.cos(pitch));
+  } else {
+    raycaster.setFromCamera(pointerNDC, camera);
+    origin = raycaster.ray.origin; dir = raycaster.ray.direction;
+  }
+  if (dir.y > -0.001){ ghost.visible = false; return; }
+  const tt = -origin.y/dir.y;
+  if (tt<=0 || tt>500){ ghost.visible=false; return; }
+  let px = origin.x + dir.x*tt, pz = origin.z + dir.z*tt;
+  if (document.getElementById('snap').checked){
+    px = Math.round(px/2)*2; pz = Math.round(pz/2)*2;
+  }
+  ghost.position.set(px, 0, pz);
+  ghost.visible = true;
+  document.getElementById('coordOut').textContent = `${px.toFixed(0)}, ${pz.toFixed(0)}`;
+}
+
+/* ---------- THEME TOGGLE ---------- */
+function applyTheme(name){
+  currentTheme = name;
+  document.documentElement.setAttribute('data-theme', name);
+  document.getElementById('themeBtn').textContent = name==='dark' ? '☾ DARK' : '☀ LIGHT';
+  const t = th();
+  scene.background = new T.Color(t.bg);
+  scene.fog = new T.Fog(t.bg, t.fogNear, t.fogFar);
+  ground.material.color.setHex(t.ground);
+  gridHelper.material.color.setHex(t.gridMajor);
+  hemi.color.setHex(t.hemi[0]); hemi.groundColor.setHex(t.hemi[1]); hemi.intensity = t.hemi[2];
+  sun.color.setHex(t.sun[0]); sun.intensity = t.sun[1];
+  amb.color.setHex(t.amb[0]); amb.intensity = t.amb[1];
+  streetMats.road.color.setHex(t.street);
+  streetMats.side.color.setHex(t.side);
+  streetMats.stripe.color.setHex(t.stripe);
+  river.material.color.setHex(t.river);
+  river.material.emissive.setHex(t.riverEmit);
+  lawn.material.color.setHex(t.lawn);
+}
+document.getElementById('themeBtn').addEventListener('click', () => {
+  applyTheme(currentTheme==='dark' ? 'light' : 'dark');
+});
+
+/* ---------- PARADE PRESET JSON ---------- */
+const PARADE_PRESET = {
+  name: "Dexter Avenue Parade · Spring Ceremony",
+  assets: [
+    { type:'stage', x:-100, z:-18, rot:0 },
+    ...Array.from({length:26}, (_,i) => ({ type:'barrier', x:-85+i*8, z: 7.5, rot:0 })),
+    ...Array.from({length:26}, (_,i) => ({ type:'barrier', x:-85+i*8, z:-7.5, rot:0 })),
+    { type:'officer', x:-60, z: 10 }, { type:'officer', x:-60, z:-10 },
+    { type:'officer', x:-20, z: 10 }, { type:'officer', x:-20, z:-10 },
+    { type:'officer', x: 20, z: 10 }, { type:'officer', x: 20, z:-10 },
+    { type:'officer', x: 60, z: 10 }, { type:'officer', x: 60, z:-10 },
+    { type:'police', x:-60, z:14 }, { type:'police', x:-20, z:14 },
+    { type:'police', x: 20, z:14 }, { type:'police', x: 60, z:14 },
+    { type:'checkpoint', x:-96, z:12 }, { type:'checkpoint', x:96, z:12 },
+    { type:'krail', x:-60, z:-14, rot:Math.PI/2 }, { type:'krail', x:-20, z:-14, rot:Math.PI/2 },
+    { type:'krail', x: 20, z:-14, rot:Math.PI/2 }, { type:'krail', x: 60, z:-14, rot:Math.PI/2 },
+    { type:'camera', x:-100, z:10 }, { type:'camera', x:0, z:10 }, { type:'camera', x:100, z:10 },
+    { type:'tape', x:100, z:12 }, { type:'tape', x:108, z:12 },
+    { type:'tape', x:116, z:12 }, { type:'tape', x:124, z:12 },
+    ...Array.from({length:6}, (_,i) => ({ type:'cone', x:-108+i*2, z:10 })),
+    { type:'officer', x:110, z:10 }, { type:'officer', x:115, z:10 }, { type:'officer', x:120, z:10 }
+  ]
+};
+function loadPreset(preset){
+  clearAll();
+  preset.assets.forEach(a => placeAsset(a.type, a.x, a.z, a.rot||0));
+  showToast(`LOADED · ${preset.name.toUpperCase()} · ${preset.assets.length} ASSETS`);
+}
+document.getElementById('loadPreset').addEventListener('click', () => loadPreset(PARADE_PRESET));
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ---------- LOOP ---------- */
+let verticalVel = 0;
+const clk = new T.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clk.getDelta(), 0.05);
+  if (mode==='walk'){
+    const speed = (keys['ShiftLeft']||keys['ShiftRight']) ? 16 : 8;
+    const fwd = new T.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+    const right = new T.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+    const vel = new T.Vector3();
+    if (keys['KeyW']) vel.add(fwd);
+    if (keys['KeyS']) vel.sub(fwd);
+    if (keys['KeyD']) vel.add(right);
+    if (keys['KeyA']) vel.sub(right);
+    if (vel.lengthSq()>0) vel.normalize().multiplyScalar(speed*dt);
+    camera.position.add(vel);
+    if (keys['Space'] && camera.position.y<=1.71) verticalVel = 6;
+    verticalVel -= 18*dt;
+    camera.position.y += verticalVel*dt;
+    if (camera.position.y<1.7){ camera.position.y=1.7; verticalVel=0; }
+    camera.position.x = Math.max(-140, Math.min(140, camera.position.x));
+    camera.position.z = Math.max(-130, Math.min(130, camera.position.z));
+    const d = new T.Vector3(-Math.sin(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw)*Math.cos(pitch));
+    camera.lookAt(camera.position.clone().add(d));
+  }
+  positionGhost();
+  updateHover();
+  const t = performance.now()*0.005;
+  placed.forEach(p => {
+    if (p.group.userData.flash){
+      const fl = p.group.userData.flash;
+      if (p.type==='police') fl.material.color.setHex(Math.sin(t)>0 ? 0x2b7fff : 0xff3030);
+      else if (p.type==='camera') fl.material.color.setHex(Math.sin(t*2)>0 ? 0xff3030 : 0x220000);
+    }
+  });
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = wrap.clientWidth/wrap.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+});
+
+/* ---------- STARTUP ---------- */
+orbit.setView(new T.Vector3(90,110,140), new T.Vector3(0,0,0));
+loadPreset(PARADE_PRESET);
+</script>
+</body>
 </html>
