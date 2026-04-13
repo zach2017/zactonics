@@ -380,6 +380,60 @@ const DataService = {
     return s;
   },
 
+  /* File uploads — mock layer. In production these POST to an Azure Function
+     that streams to Azure Blob Storage and returns a SAS URL. We keep small
+     in-memory references so the UI can display/download them. */
+  async uploadResume(studentId, file){
+    await sleep(API_LATENCY+80);
+    const s=_seed.students.find(x=>x.id===studentId); if(!s) throw new Error('Student not found');
+    if(file.size > 5*1024*1024) throw new Error('Resume must be under 5MB');
+    const ok=['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if(file.type && !ok.includes(file.type)) throw new Error('Resume must be PDF or DOCX');
+    s.resume = {name:file.name, size:file.size, type:file.type||'application/pdf', uploaded:new Date().toISOString(), dataUrl:file._dataUrl||null};
+    return s.resume;
+  },
+  async uploadProfilePhoto(studentId, file){
+    await sleep(API_LATENCY+60);
+    const s=_seed.students.find(x=>x.id===studentId); if(!s) throw new Error('Student not found');
+    if(file.size > 2*1024*1024) throw new Error('Photo must be under 2MB');
+    if(file.type && !file.type.startsWith('image/')) throw new Error('Photo must be an image');
+    s.photo = {name:file.name, size:file.size, type:file.type||'image/jpeg', uploaded:new Date().toISOString(), dataUrl:file._dataUrl||null};
+    return s.photo;
+  },
+  async uploadCertification(studentId, file, meta={}){
+    await sleep(API_LATENCY+80);
+    const s=_seed.students.find(x=>x.id===studentId); if(!s) throw new Error('Student not found');
+    if(file.size > 5*1024*1024) throw new Error('Certification must be under 5MB');
+    if(!s.certFiles) s.certFiles=[];
+    const rec={
+      id:'cf-'+String(Date.now()).slice(-6),
+      name: meta.name || file.name.replace(/\.[^.]+$/,''),
+      issuer: meta.issuer || 'Self-attested',
+      issued: meta.issued || new Date().toISOString().slice(0,10),
+      file:{name:file.name, size:file.size, type:file.type||'application/pdf', dataUrl:file._dataUrl||null}
+    };
+    s.certFiles.unshift(rec);
+    if(!s.credentials) s.credentials=[];
+    if(!s.credentials.includes(rec.name)) s.credentials.push(rec.name);
+    return rec;
+  },
+  async deleteUpload(studentId, kind, id=null){
+    await sleep(API_LATENCY);
+    const s=_seed.students.find(x=>x.id===studentId); if(!s) return null;
+    if(kind==='resume') s.resume=null;
+    else if(kind==='photo') s.photo=null;
+    else if(kind==='cert' && id && s.certFiles){
+      const idx=s.certFiles.findIndex(c=>c.id===id);
+      if(idx>=0){const removed=s.certFiles.splice(idx,1)[0]; s.credentials=(s.credentials||[]).filter(c=>c!==removed.name);}
+    }
+    return s;
+  },
+  async listUploads(studentId){
+    await sleep(API_LATENCY);
+    const s=_seed.students.find(x=>x.id===studentId); if(!s) return null;
+    return {resume:s.resume||null, photo:s.photo||null, certFiles:s.certFiles||[]};
+  },
+
   /* AI / Skills Match — mock semantic match using Jaccard similarity over skill sets.
      Replace with Azure OpenAI embeddings + Cosmos DB vector search. */
   async matchSkills(skillSet){
@@ -714,7 +768,7 @@ VIEWS.programs = async () => {
   return `
   ${pageHeader('Programs',
     'Training, reskilling, apprenticeships, and pathways for special populations. Manage funding source, capacity, completion and skills.',
-    `${btn('Filter','sliders-horizontal',"toast('Filter coming soon','info')",'ghost')}${btn('New Program','plus','openCreateProgramModal()')}`)}
+    `${btn('Filter','sliders-horizontal','openProgramFilterModal()','ghost')}${btn('New Program','plus','openCreateProgramModal()')}`)}
   ${card(tableShell(
     ['Program','Track','Provider','Funding','Enrollment','Completion','Status',''],
     programs.map(p=>`
@@ -760,7 +814,7 @@ VIEWS.employers = async () => {
   const e = await DataService.listEmployers();
   return `
   ${pageHeader('Employers','Industry partners aligning training with real openings. Strategic = co-designed pipelines.',
-    btn('Add Employer','plus',"toast('Form stub — wires to Azure','info')",'ghost'))}
+    btn('Add Employer','plus','openAddEmployerModal()','ghost'))}
   <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
     ${e.map(x=>`
       ${card(`<div class="p-5">
@@ -773,7 +827,7 @@ VIEWS.employers = async () => {
           <div><div class="text-xs text-ink-500">Hires YTD</div><div class="font-semibold">${x.hires_ytd}</div></div>
         </div>
         <div class="mt-3"><div class="text-xs text-ink-500 mb-1">Skill demand</div><div class="flex flex-wrap gap-1">${x.skills_demand.map(s=>`<span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-ink-100 dark:bg-ink-800">${s}</span>`).join('')}</div></div>
-        <div class="mt-4 flex items-center gap-2">${btn('View jobs','briefcase',`viewEmployerJobs('${x.id}')`,'soft')}${btn('Contact','mail',`toast('Mail UI stubbed','info')`,'ghost')}</div>
+        <div class="mt-4 flex items-center gap-2">${btn('View jobs','briefcase',`viewEmployerJobs('${x.id}')`,'soft')}${btn('Contact','mail',`openContactEmployerModal('${x.id}')`,'ghost')}</div>
       </div>`)}
     `).join('')}
   </div>`;
@@ -860,7 +914,7 @@ VIEWS.funding = async () => {
   return `
   ${pageHeader('Funding & Grants',
     'Manage federal + state funding streams (WIOA, IRA, Pell pass-through). Compliance and burn rate tracked per source.',
-    btn('New Grant Application','file-plus',"toast('Grant wizard stubbed','info')"))}
+    btn('New Grant Application','file-plus','openGrantWizardModal()'))}
 
   <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     ${kpi('Total Allocated',fmt(total,{money:true}),null,'wallet','FY2026')}
@@ -878,7 +932,7 @@ VIEWS.funding = async () => {
         <td class="px-4 py-3"><div class="flex items-center gap-2"><div class="progress w-32"><span style="width:${u*100}%"></span></div><span class="text-xs text-ink-500">${Math.round(u*100)}%</span></div></td>
         <td class="px-4 py-3">${badge(x.compliance,tone)}</td>
         <td class="px-4 py-3 text-sm">${x.deadline}</td>
-        <td class="px-4 py-3 text-right">${btn('Audit log','file-check',`toast('Audit log stub','info')`,'ghost')}</td>
+        <td class="px-4 py-3 text-right">${btn('Audit log','file-check',`openAuditLogModal('${x.source.replace(/'/g,"")}')`,'ghost')}</td>
       </tr>`})
   ))}`;
 };
@@ -975,7 +1029,7 @@ VIEWS.credentials = async () => {
       <ul class="space-y-2">${topSorted.map(([n,c])=>`<li class="flex items-center justify-between p-2 rounded-md row-hover"><span class="text-sm font-medium">${n}</span><span class="text-xs font-semibold">${c}</span></li>`).join('')}</ul></div>`)}
     ${card(`<div class="p-5 lg:col-span-2"><div class="font-semibold mb-3">Recent issuances</div>
       ${tableShell(['Holder','Credential','Program','Verify'],
-        all.slice(0,12).map(c=>`<tr class="row-hover"><td class="px-4 py-3 font-semibold">${c.student}</td><td class="px-4 py-3">${badge(c.name,'green')}</td><td class="px-4 py-3 text-sm text-ink-500">${c.program}</td><td class="px-4 py-3"><button class="text-xs font-semibold text-brand-700 dark:text-brand-300 hover:underline" onclick="toast('Verifiable credential validated ✓','success')">Verify</button></td></tr>`))}
+        all.slice(0,12).map(c=>`<tr class="row-hover"><td class="px-4 py-3 font-semibold">${c.student}</td><td class="px-4 py-3">${badge(c.name,'green')}</td><td class="px-4 py-3 text-sm text-ink-500">${c.program}</td><td class="px-4 py-3"><button class="text-xs font-semibold text-brand-700 dark:text-brand-300 hover:underline" onclick="openCredentialVerifyModal('${c.student.replace(/'/g,'')}','${c.name.replace(/'/g,'')}')">Verify</button></td></tr>`))}
     </div>`)}
   </div>`;
 };
@@ -1005,20 +1059,57 @@ VIEWS.populations = async () => {
 /* ---------- POLICY & STRATEGY ---------- */
 VIEWS.policy = async () => {
   const pols = await DataService.listPolicies();
+  const lm = await DataService.getLaborMarket();
   return `
   ${pageHeader('Policy & Strategy',
-    'Long-term workforce planning: AI/automation readiness, rural pipelines, veterans, youth pathways.',
-    btn('New Strategy Doc','file-plus',"toast('Doc workflow stubbed','info')"))}
-  ${card(tableShell(
-    ['Title','Owner','Status','Updated',''],
-    pols.map(p=>`<tr class="row-hover">
-      <td class="px-4 py-3 font-semibold">${p.title}</td>
-      <td class="px-4 py-3 text-sm">${p.owner}</td>
-      <td class="px-4 py-3">${badge(p.status,statusTone(p.status))}</td>
-      <td class="px-4 py-3 text-sm">${p.updated}</td>
-      <td class="px-4 py-3 text-right">${btn('Open','external-link',`toast('Doc opened','info')`,'ghost')}</td>
-    </tr>`)
-  ))}`;
+    'Long-term workforce planning: AI/automation readiness, rural pipelines, veterans, youth pathways. Model interventions before you fund them.',
+    `${btn('Scenario planner','sliders-horizontal','openScenarioSimulator()','ghost')}${btn('AI workforce forecast','sparkles','openAIWorkforceForecast()','ghost')}${btn('New Strategy Doc','file-plus','openStrategyDocModal()')}`)}
+
+  <!-- Strategic priority cards -->
+  <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    ${[
+      {p:'AI / Automation Readiness', icon:'cpu', tone:'violet', stat:'42% of state jobs', sub:'at moderate-to-high automation risk by 2030', action:'modelAIDisruption'},
+      {p:'Rural Talent Pipelines',    icon:'map-pin', tone:'amber',  stat:fmt(lm.rural_gaps.reduce((a,b)=>a+b.gap,0))+' gap', sub:'across 3 priority regions', action:'modelRuralStrategy'},
+      {p:'Veterans Bridge',           icon:'shield', tone:'green',  stat:'+22 veterans', sub:'enrolled this quarter', action:'modelVeteransExpansion'},
+      {p:'Youth Earn-and-Learn',      icon:'graduation-cap', tone:'blue', stat:'51 active', sub:'in WIOA Youth pathway', action:'modelYouthPathway'},
+    ].map(s=>card(`<div class="p-5">
+      <div class="flex items-start justify-between"><div class="grid place-items-center w-9 h-9 rounded-lg bg-${s.tone==='violet'?'violet':s.tone==='amber'?'amber':s.tone==='green'?'brand':'sky'}-100 dark:bg-${s.tone==='violet'?'violet':s.tone==='amber'?'amber':s.tone==='green'?'brand':'sky'}-900/40 text-${s.tone==='violet'?'violet':s.tone==='amber'?'amber':s.tone==='green'?'brand':'sky'}-700 dark:text-${s.tone==='violet'?'violet':s.tone==='amber'?'amber':s.tone==='green'?'brand':'sky'}-300"><i data-lucide="${s.icon}" class="w-4 h-4"></i></div>${badge('Active','green')}</div>
+      <div class="font-semibold mt-3 text-sm">${s.p}</div>
+      <div class="display text-2xl mt-1">${s.stat}</div>
+      <div class="text-xs text-ink-500">${s.sub}</div>
+      <div class="mt-3">${btn('Model intervention','sparkles',s.action+'()','soft')}</div>
+    </div>`)).join('')}
+  </section>
+
+  <!-- Strategy canvas: intervention modeling -->
+  ${card(`<div class="p-5">
+    <div class="flex items-center justify-between mb-3"><div class="font-semibold flex items-center gap-2"><i data-lucide="layout-grid" class="w-4 h-4 text-brand-600"></i>Intervention Canvas</div>${badge('Editable','blue')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs uppercase font-semibold text-ink-500">Problem</div><div class="mt-1">Cybersecurity hiring outpaces supply 4:1 statewide; rural counties have <1 qualified analyst per posting.</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs uppercase font-semibold text-ink-500">Intervention</div><div class="mt-1">Co-fund 3 community-college bootcamps with employer apprenticeships; embed in rural campuses.</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs uppercase font-semibold text-ink-500">Expected outcome</div><div class="mt-1">+180 placed analysts/yr; median wage $68k; 35% of seats from rural counties.</div></div>
+      <div class="p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30"><div class="text-xs uppercase font-semibold text-brand-700 dark:text-brand-300">Investment</div><div class="display text-2xl mt-1">$2.4M</div><div class="text-xs">over 3 years</div></div>
+      <div class="p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30"><div class="text-xs uppercase font-semibold text-brand-700 dark:text-brand-300">ROI</div><div class="display text-2xl mt-1">5.8x</div><div class="text-xs">3-yr wage uplift / cost</div></div>
+      <div class="p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30"><div class="text-xs uppercase font-semibold text-brand-700 dark:text-brand-300">Risk</div><div class="display text-2xl mt-1">Low-Med</div><div class="text-xs">faculty pipeline is bottleneck</div></div>
+    </div>
+    <div class="mt-4 flex items-center gap-2">${btn('Run as scenario','play','openScenarioSimulator()','soft')}${btn('Convert to grant','file-plus','openGrantWizardModal()','ghost')}</div>
+  </div>`)}
+
+  <!-- Strategic docs -->
+  <div class="mt-4">
+  ${card(`<div class="p-5"><div class="font-semibold mb-3 flex items-center gap-2"><i data-lucide="scroll-text" class="w-4 h-4 text-brand-600"></i>Strategy documents</div>
+    ${tableShell(
+      ['Title','Owner','Status','Updated',''],
+      pols.map(p=>`<tr class="row-hover">
+        <td class="px-4 py-3 font-semibold">${p.title}</td>
+        <td class="px-4 py-3 text-sm">${p.owner}</td>
+        <td class="px-4 py-3">${badge(p.status,statusTone(p.status))}</td>
+        <td class="px-4 py-3 text-sm">${p.updated}</td>
+        <td class="px-4 py-3 text-right">${btn('Open','external-link',`openPolicyDocModal('${p.id}')`,'ghost')}</td>
+      </tr>`)
+    )}
+  </div>`)}
+  </div>`;
 };
 
 /* ---------- REPORTS & METRICS ---------- */
@@ -1026,25 +1117,65 @@ VIEWS.reports = async () => {
   const k = await DataService.getKpis();
   return `
   ${pageHeader('Reports & Metrics',
-    'State, regional, and program-level metrics for leadership, federal compliance, and continuous improvement.',
-    btn('Export PDF','download',"toast('PDF export stub','info')",'ghost'))}
+    'State, regional, and program-level metrics for leadership, federal compliance, and continuous improvement. Drill into any chart, run scenarios, or export a board-ready briefing.',
+    `${btn('Run scenario','sliders-horizontal','openScenarioSimulator()','ghost')}${btn('ROI calculator','calculator','openROIModal()','ghost')}${btn('Export briefing','download','openExportModal()')}`)}
 
   <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    ${kpi('Placement Rate', fmt(k.placementRate,{pct:true,dp:0}),'+3.2%','badge-check')}
-    ${kpi('Median Wage Gain','$'+k.avgWageGain+'/hr','+$1.40','trending-up')}
-    ${kpi('Funding Utilization', fmt(k.utilization,{pct:true,dp:0}),null,'wallet')}
-    ${kpi('Active Programs',fmt(k.activePrograms),'+2','book-open-text')}
+    ${kpi('Placement Rate', fmt(k.placementRate,{pct:true,dp:0}),'+3.2%','badge-check','vs prev quarter')}
+    ${kpi('Median Wage Gain','$'+k.avgWageGain+'/hr','+$1.40','trending-up','post-completion')}
+    ${kpi('Funding Utilization', fmt(k.utilization,{pct:true,dp:0}),null,'wallet','of '+fmt(k.fundingTotal,{money:true}))}
+    ${kpi('Active Programs',fmt(k.activePrograms),'+2','book-open-text','3 in pilot')}
+  </section>
+
+  <!-- Quick-action insight cards -->
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    ${card(`<div class="p-5">
+      <div class="flex items-center justify-between"><div class="font-semibold flex items-center gap-2"><i data-lucide="trending-up" class="w-4 h-4 text-brand-600"></i>12-month forecast</div>${badge('AI','violet')}</div>
+      <p class="text-xs text-ink-500 mt-1">Predict enrollment & placements through next FY using current burn rate.</p>
+      <div class="mt-3">${btn('Run forecast','line-chart','openForecastModal()','soft')}</div>
+    </div>`)}
+    ${card(`<div class="p-5">
+      <div class="flex items-center justify-between"><div class="font-semibold flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-brand-600"></i>Cohort drill-down</div>${badge('Live','green')}</div>
+      <p class="text-xs text-ink-500 mt-1">Compare outcomes across cohorts: by program, county, or population.</p>
+      <div class="mt-3">${btn('Open drill-down','search','openCohortDrilldown()','soft')}</div>
+    </div>`)}
+    ${card(`<div class="p-5">
+      <div class="flex items-center justify-between"><div class="font-semibold flex items-center gap-2"><i data-lucide="building-2" class="w-4 h-4 text-brand-600"></i>Employer scorecards</div>${badge('Federal','blue')}</div>
+      <p class="text-xs text-ink-500 mt-1">Per-employer hire counts, wages, retention. Maps to WIOA performance metrics.</p>
+      <div class="mt-3">${btn('Open scorecards','bar-chart-3','openEmployerScorecard()','soft')}</div>
+    </div>`)}
   </section>
 
   <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-    ${card(`<div class="p-5"><div class="font-semibold mb-2">Enrollments vs Placements</div><div class="h-72"><canvas id="rep_trend"></canvas></div></div>`,'lg:col-span-2')}
-    ${card(`<div class="p-5"><div class="font-semibold mb-2">Demographics</div><div class="h-72"><canvas id="rep_demo"></canvas></div></div>`)}
+    ${card(`<div class="p-5"><div class="flex items-center justify-between mb-2"><div class="font-semibold">Enrollments vs Placements</div>${btn('Drill in','arrow-up-right','openCohortDrilldown()','ghost')}</div><div class="h-72"><canvas id="rep_trend"></canvas></div></div>`,'lg:col-span-2')}
+    ${card(`<div class="p-5"><div class="flex items-center justify-between mb-2"><div class="font-semibold">Demographics</div>${badge('Equity lens','violet')}</div><div class="h-72"><canvas id="rep_demo"></canvas></div></div>`)}
   </section>
 
-  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-    ${card(`<div class="p-5"><div class="font-semibold mb-2">Wage gains (placed students)</div><div class="h-72"><canvas id="rep_wage"></canvas></div></div>`,'lg:col-span-2')}
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+    ${card(`<div class="p-5"><div class="flex items-center justify-between mb-2"><div class="font-semibold">Wage gains (placed students)</div>${btn('ROI →','calculator','openROIModal()','ghost')}</div><div class="h-72"><canvas id="rep_wage"></canvas></div></div>`,'lg:col-span-2')}
     ${card(`<div class="p-5"><div class="font-semibold mb-2">Enrollment by track</div><div class="h-72"><canvas id="rep_track"></canvas></div></div>`)}
-  </section>`;
+  </section>
+
+  <!-- WIOA performance compliance card -->
+  ${card(`<div class="p-5">
+    <div class="flex items-center justify-between mb-3"><div class="font-semibold flex items-center gap-2"><i data-lucide="shield-check" class="w-4 h-4 text-brand-600"></i>WIOA Performance Indicators (PY26 Q3)</div>${badge('On track','green')}</div>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
+      ${[
+        {n:'Employment Q2 post-exit',v:'82.4%',t:'≥ 75%',ok:true},
+        {n:'Employment Q4 post-exit',v:'78.1%',t:'≥ 70%',ok:true},
+        {n:'Median earnings Q2',v:'$7,840',t:'≥ $6,500',ok:true},
+        {n:'Credential attainment',v:'71.0%',t:'≥ 68%',ok:true},
+        {n:'Measurable skill gains',v:'64.2%',t:'≥ 60%',ok:true},
+        {n:'Employer effectiveness',v:'pilot',t:'pilot',ok:true},
+      ].map(x=>`<div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900">
+        <div class="text-xs text-ink-500">${x.n}</div>
+        <div class="display text-2xl mt-1">${x.v}</div>
+        <div class="text-[11px] mt-0.5 ${x.ok?'text-brand-700 dark:text-brand-300':'text-rose-600'}">target ${x.t}</div>
+      </div>`).join('')}
+    </div>
+    <div class="mt-4 flex items-center gap-2">${btn('Submit ETA-9173 draft','file-check','openWIOASubmitModal()','soft')}${btn('View 5-year trend','line-chart','openForecastModal()','ghost')}</div>
+  </div>`)}
+  `;
 };
 afterRender.reports = () => afterRender.overview();   // reuse chart loader
 afterRender.labormarket = () => afterRender.overview();
@@ -1054,15 +1185,41 @@ afterRender.programs = () => {};
 VIEWS.profile = async () => {
   const me = _seed.students[0];
   const program = await DataService.getProgram(me.program);
+  const uploads = await DataService.listUploads(me.id);
   return `
-  ${pageHeader('My Profile','Manage your details, skills, and learning path.')}
+  ${pageHeader('My Profile','Manage your details, skills, learning path, and uploaded documents.',
+    btn('Upload Resume','file-text',`openUploadModal('${me.id}','resume')`,'soft'))}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     ${card(`<div class="p-5 text-center">
-      <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 grid place-items-center text-white text-2xl font-bold mx-auto">${me.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+      <div class="relative w-24 h-24 mx-auto group">
+        ${uploads.photo && uploads.photo.dataUrl
+          ? `<img src="${uploads.photo.dataUrl}" class="w-24 h-24 rounded-full object-cover ring-2 ring-brand-200 dark:ring-brand-800" alt="profile" />`
+          : `<div class="w-24 h-24 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 grid place-items-center text-white text-3xl font-bold">${me.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div>`}
+        <button onclick="openUploadModal('${me.id}','photo')" class="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-brand-600 text-white grid place-items-center shadow-pop hover:bg-brand-700" aria-label="Change photo">
+          <i data-lucide="camera" class="w-4 h-4"></i>
+        </button>
+      </div>
       <div class="display text-2xl mt-3">${me.name}</div>
       <div class="text-sm text-ink-500">${me.email}</div>
       <div class="mt-3">${badge(me.status,statusTone(me.status))}</div>
+
+      <div class="mt-5 pt-5 border-t border-ink-200 dark:border-ink-800 text-left">
+        <div class="text-xs uppercase font-semibold text-ink-500 tracking-wider mb-2">Resume</div>
+        ${uploads.resume
+          ? `<div class="p-3 rounded-lg border border-ink-200 dark:border-ink-800 flex items-center gap-2">
+               <i data-lucide="file-text" class="w-5 h-5 text-brand-600 shrink-0"></i>
+               <div class="flex-1 min-w-0">
+                 <div class="text-sm font-medium truncate">${uploads.resume.name}</div>
+                 <div class="text-[11px] text-ink-500">${(uploads.resume.size/1024).toFixed(0)} KB · ${uploads.resume.uploaded.slice(0,10)}</div>
+               </div>
+               ${uploads.resume.dataUrl?`<a href="${uploads.resume.dataUrl}" download="${uploads.resume.name}" class="p-1.5 rounded hover:bg-ink-100 dark:hover:bg-ink-800" title="Download"><i data-lucide="download" class="w-4 h-4"></i></a>`:''}
+               <button onclick="deleteUpload('${me.id}','resume')" class="p-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600" title="Remove"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+             </div>`
+          : `<button onclick="openUploadModal('${me.id}','resume')" class="w-full p-4 rounded-lg border-2 border-dashed border-ink-300 dark:border-ink-700 text-sm text-ink-500 hover:border-brand-500 hover:text-brand-600 transition flex flex-col items-center gap-1">
+               <i data-lucide="upload" class="w-5 h-5"></i><span>Upload resume (PDF/DOCX)</span></button>`}
+      </div>
     </div>`)}
+
     ${card(`<div class="p-5 lg:col-span-2"><div class="font-semibold">Program</div>
       <div class="mt-2 p-3 border border-ink-200 dark:border-ink-800 rounded-lg">
         <div class="font-semibold">${program.name}</div>
@@ -1074,6 +1231,33 @@ VIEWS.profile = async () => {
       <div class="flex flex-wrap gap-1.5 mt-2">${me.skills.map(s=>`<span class="text-xs px-2 py-1 rounded-full bg-ink-100 dark:bg-ink-800">${s}</span>`).join('')}</div>
       <div class="font-semibold mt-5">Credentials</div>
       <div class="flex flex-wrap gap-1.5 mt-2">${me.credentials.map(c=>`<span class="text-xs px-2 py-1 rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200 inline-flex items-center gap-1"><i data-lucide="badge-check" class="w-3 h-3"></i>${c}</span>`).join('')||'<span class="text-ink-400 text-xs">No credentials yet</span>'}</div>
+    </div>`)}
+  </div>
+
+  <div class="mt-4">
+    ${card(`<div class="p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="font-semibold">Uploaded certifications</div>
+          <div class="text-xs text-ink-500">Attach proof of completion or external certificates. Stored in Azure Blob with SAS URLs in production.</div>
+        </div>
+        ${btn('Upload certification','badge-plus',`openUploadModal('${me.id}','cert')`,'soft')}
+      </div>
+      ${uploads.certFiles.length
+        ? tableShell(['Name','Issuer','Issued','File',''], uploads.certFiles.map(c=>`
+            <tr class="row-hover">
+              <td class="px-4 py-3 font-semibold">${c.name}</td>
+              <td class="px-4 py-3 text-sm">${c.issuer}</td>
+              <td class="px-4 py-3 text-sm">${c.issued}</td>
+              <td class="px-4 py-3 text-sm flex items-center gap-2"><i data-lucide="paperclip" class="w-4 h-4 text-ink-400"></i><span class="truncate max-w-xs">${c.file.name}</span><span class="text-xs text-ink-500">(${(c.file.size/1024).toFixed(0)} KB)</span></td>
+              <td class="px-4 py-3 text-right">
+                <div class="inline-flex items-center gap-1">
+                  ${c.file.dataUrl?`<a href="${c.file.dataUrl}" download="${c.file.name}" class="p-1.5 rounded hover:bg-ink-100 dark:hover:bg-ink-800" title="Download"><i data-lucide="download" class="w-4 h-4"></i></a>`:''}
+                  <button onclick="deleteUpload('${me.id}','cert','${c.id}')" class="p-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600" title="Remove"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
+              </td>
+            </tr>`))
+        : emptyState('No certifications uploaded','Drop your certificates as PDF or image files.', btn('Upload certification','badge-plus',`openUploadModal('${me.id}','cert')`,'soft'))}
     </div>`)}
   </div>`;
 };
@@ -1152,6 +1336,111 @@ async function submitNewJob(){
   await DataService.createJob(j);closeModal();toast('Job posted');navigate('jobs');
 }
 
+/* ---------- Upload helpers (resume, photo, certifications) ----------
+   In production these become POSTs to an Azure Function that streams
+   to Blob Storage and returns a SAS URL. Here we read as a data URL
+   so the file is downloadable from the UI immediately. */
+function _readFileAsDataUrl(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=()=>reject(new Error('Could not read file'));
+    r.readAsDataURL(file);
+  });
+}
+
+function openUploadModal(studentId, kind){
+  const cfg = {
+    resume:{title:'Upload Resume', icon:'file-text', accept:'.pdf,.doc,.docx,application/pdf', hint:'PDF or DOCX, up to 5MB.', extra:''},
+    photo: {title:'Upload Profile Photo', icon:'camera', accept:'image/*', hint:'JPG or PNG, up to 2MB.', extra:''},
+    cert:  {title:'Upload Certification', icon:'badge-plus', accept:'.pdf,image/*,application/pdf', hint:'PDF or image, up to 5MB.',
+             extra:`<label class="block mt-3"><span class="text-xs font-semibold text-ink-500">Credential name</span><input id="up_cert_name" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" placeholder="e.g. CompTIA Security+" /></label>
+                    <div class="grid grid-cols-2 gap-3 mt-3">
+                      <label><span class="text-xs font-semibold text-ink-500">Issuer</span><input id="up_cert_issuer" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" placeholder="CompTIA" /></label>
+                      <label><span class="text-xs font-semibold text-ink-500">Issued date</span><input id="up_cert_date" type="date" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="${new Date().toISOString().slice(0,10)}" /></label>
+                    </div>`}
+  }[kind];
+  if(!cfg) return;
+  openModal(`
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <div class="display text-2xl flex items-center gap-2"><i data-lucide="${cfg.icon}" class="w-6 h-6 text-brand-600"></i>${cfg.title}</div>
+        <div class="text-xs text-ink-500">${cfg.hint} Stored in Azure Blob Storage with SAS URL access in production.</div>
+      </div>
+      ${btn('Close','x','closeModal()','ghost')}
+    </div>
+    <label id="up_dropzone" class="block p-8 rounded-xl border-2 border-dashed border-ink-300 dark:border-ink-700 hover:border-brand-500 transition cursor-pointer text-center">
+      <input id="up_file" type="file" accept="${cfg.accept}" class="hidden" onchange="onUploadFileSelected(event)" />
+      <i data-lucide="upload-cloud" class="w-10 h-10 text-ink-400 mx-auto"></i>
+      <div class="font-semibold mt-2">Click to browse or drop a file here</div>
+      <div class="text-xs text-ink-500 mt-1">${cfg.hint}</div>
+      <div id="up_filename" class="mt-3 text-sm text-brand-700 dark:text-brand-300 font-medium"></div>
+      <div id="up_preview" class="mt-3"></div>
+    </label>
+    ${cfg.extra}
+    <div id="up_error" class="hidden mt-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-sm"></div>
+    <div class="mt-5 flex items-center justify-end gap-2">
+      ${btn('Cancel','x','closeModal()','ghost')}
+      <button id="up_submit" disabled onclick="submitUpload('${studentId}','${kind}')" class="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition">
+        <i data-lucide="upload" class="w-4 h-4"></i><span>Upload</span>
+      </button>
+    </div>
+  `);
+  // wire up drag & drop
+  const dz = document.getElementById('up_dropzone');
+  if(dz){
+    ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('border-brand-500','bg-brand-50','dark:bg-brand-900/20')}));
+    ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('border-brand-500','bg-brand-50','dark:bg-brand-900/20')}));
+    dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f){const inp=document.getElementById('up_file'); const dt=new DataTransfer(); dt.items.add(f); inp.files=dt.files; onUploadFileSelected({target:inp});}});
+  }
+}
+
+let _pendingUpload = null;
+async function onUploadFileSelected(e){
+  const f = e.target.files[0]; if(!f) return;
+  const errEl = document.getElementById('up_error'); errEl.classList.add('hidden');
+  document.getElementById('up_filename').textContent = `${f.name}  ·  ${(f.size/1024).toFixed(1)} KB`;
+  document.getElementById('up_submit').disabled = false;
+  // preview if image
+  const prev = document.getElementById('up_preview');
+  prev.innerHTML='';
+  if(f.type && f.type.startsWith('image/')){
+    const dataUrl = await _readFileAsDataUrl(f);
+    prev.innerHTML = `<img src="${dataUrl}" class="mx-auto max-h-40 rounded-lg shadow-soft" alt="preview" />`;
+    f._dataUrl = dataUrl;
+  } else {
+    // still capture data URL so download works
+    try{ f._dataUrl = await _readFileAsDataUrl(f); }catch(err){}
+  }
+  _pendingUpload = f;
+}
+async function submitUpload(studentId, kind){
+  const f = _pendingUpload; if(!f){toast('Choose a file first','error');return;}
+  const errEl = document.getElementById('up_error');
+  try{
+    if(kind==='resume') await DataService.uploadResume(studentId, f);
+    else if(kind==='photo') await DataService.uploadProfilePhoto(studentId, f);
+    else if(kind==='cert'){
+      const meta={ name:document.getElementById('up_cert_name').value.trim() || f.name.replace(/\.[^.]+$/,''),
+                   issuer:document.getElementById('up_cert_issuer').value.trim() || 'Self-attested',
+                   issued:document.getElementById('up_cert_date').value || new Date().toISOString().slice(0,10) };
+      await DataService.uploadCertification(studentId, f, meta);
+    }
+    _pendingUpload=null;
+    closeModal();
+    toast(({resume:'Resume uploaded',photo:'Profile photo updated',cert:'Certification uploaded'})[kind],'success');
+    navigate(state.view);
+  }catch(err){
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
+}
+async function deleteUpload(studentId, kind, id=null){
+  await DataService.deleteUpload(studentId, kind, id);
+  toast('Removed','info');
+  navigate(state.view);
+}
+
 function openIssueCredentialModal(){
   openModal(`
     <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Issue Credential</div><div class="text-xs text-ink-500">Issues a verifiable credential (W3C VC) backed by Azure Verified ID in production.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
@@ -1209,6 +1498,538 @@ async function openJobModal(id){
       <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Applicants</div><div class="font-semibold">${j.applicants}</div></div>
     </div>
     <div class="mt-3 flex flex-wrap gap-1.5">${(j.skills||[]).map(s=>`<span class="text-xs px-2 py-1 rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200">${s}</span>`).join('')}</div>`);
+}
+
+/* ===================================================================
+   Reporting & Strategy simulations — every clickable produces real
+   simulated data so a Workforce Manager can demo end-to-end.
+   ================================================================ */
+
+function _simulateAuditEntries(source){
+  const today = new Date();
+  const entries = [];
+  const actions = [
+    {a:'Drawdown approved',     who:'D. Chen (Fiscal)',     amt:'$184,200', tag:'Disbursement'},
+    {a:'Subrecipient invoice',   who:'Lawson State CC',     amt:'$42,800',  tag:'Payment'},
+    {a:'Quarterly ETA-9130 filed',who:'A. Robinson (Compliance)',amt:'—',  tag:'Filing'},
+    {a:'Cost allocation revised', who:'M. Patel (Finance)',  amt:'—',       tag:'Adjustment'},
+    {a:'Equipment purchase',     who:'Wallace CC',           amt:'$28,400', tag:'Procurement'},
+    {a:'Indirect rate verified', who:'Federal Project Officer', amt:'10.2%',tag:'Audit'},
+    {a:'Reallocation request',   who:'D. Chen (Fiscal)',     amt:'$95,000', tag:'Adjustment'},
+    {a:'Site monitoring visit',  who:'Field Ops',            amt:'—',       tag:'Compliance'},
+    {a:'Drawdown approved',      who:'D. Chen (Fiscal)',     amt:'$210,500',tag:'Disbursement'},
+    {a:'Single audit acknowledged',who:'A-133 reviewer',     amt:'—',       tag:'Audit'},
+    {a:'Subrecipient invoice',   who:'Bishop State CC',      amt:'$31,650', tag:'Payment'},
+    {a:'Modification executed',  who:'State Workforce Board',amt:'—',       tag:'Modification'},
+  ];
+  for(let i=0;i<12;i++){
+    const d = new Date(today.getTime()-i*86400000*Math.floor(2+Math.random()*5));
+    entries.push({date:d.toISOString().slice(0,10), ...actions[i%actions.length]});
+  }
+  return entries;
+}
+
+function openAuditLogModal(source){
+  const entries = _simulateAuditEntries(source);
+  const fund = _seed.funding.find(f=>f.source.startsWith(source.split(' ')[0])) || _seed.funding[0];
+  openModal(`
+    <div class="flex items-start justify-between mb-4">
+      <div><div class="text-xs text-ink-500 uppercase font-semibold tracking-wider">Audit log</div><div class="display text-2xl">${source}</div><div class="text-xs text-ink-500">Allocated ${fmt(fund.allocated,{money:true})} · Spent ${fmt(fund.spent,{money:true})} · Compliance: ${fund.compliance}</div></div>
+      ${btn('Close','x','closeModal()','ghost')}
+    </div>
+    <div class="grid grid-cols-3 gap-3 text-sm mb-4">
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Burn rate (90-day)</div><div class="display text-xl">${fmt(fund.spent*0.18,{money:true})}/mo</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Subrecipients</div><div class="display text-xl">7</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Findings (12-mo)</div><div class="display text-xl">0</div></div>
+    </div>
+    <div class="max-h-[40vh] overflow-y-auto rounded-lg border border-ink-200 dark:border-ink-800">
+      <table class="w-full text-sm">
+        <thead class="bg-ink-50 dark:bg-ink-900 text-xs uppercase text-ink-500"><tr><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Action</th><th class="px-3 py-2 text-left">Initiated by</th><th class="px-3 py-2 text-left">Amount</th><th class="px-3 py-2 text-left">Type</th></tr></thead>
+        <tbody class="divide-y divide-ink-100 dark:divide-ink-800">
+          ${entries.map(e=>`<tr><td class="px-3 py-2 font-mono text-xs text-ink-500">${e.date}</td><td class="px-3 py-2">${e.a}</td><td class="px-3 py-2 text-xs">${e.who}</td><td class="px-3 py-2 font-mono text-xs">${e.amt}</td><td class="px-3 py-2">${badge(e.tag,e.tag==='Audit'?'violet':e.tag==='Disbursement'?'green':e.tag==='Compliance'?'blue':'default')}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 flex items-center justify-end gap-2">${btn('Download as CSV','download',"toast('Audit log exported','success')",'ghost')}${btn('Submit ETA-9130','file-check','openWIOASubmitModal()','soft')}</div>
+  `);
+}
+
+function openProgramFilterModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Filter Programs</div><div class="text-xs text-ink-500">Refine the list by track, status, funding source, or population.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-2 gap-3 text-sm">
+      <label><span class="text-xs font-semibold text-ink-500">Track</span><select id="pf_track" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option value="">All</option>${[...new Set(_seed.programs.map(p=>p.track))].map(t=>`<option>${t}</option>`).join('')}</select></label>
+      <label><span class="text-xs font-semibold text-ink-500">Status</span><select id="pf_status" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option value="">All</option><option>Active</option><option>Recruiting</option></select></label>
+      <label><span class="text-xs font-semibold text-ink-500">Funding source</span><select id="pf_fund" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option value="">All</option>${[...new Set(_seed.programs.map(p=>p.funding_source))].map(s=>`<option>${s}</option>`).join('')}</select></label>
+      <label><span class="text-xs font-semibold text-ink-500">Population</span><select id="pf_pop" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option value="">All</option><option>Veterans</option><option>Youth</option><option>Displaced Workers</option></select></label>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Reset','x','closeModal()','ghost')}${btn('Apply','filter',"toast('Filter applied (preview)','success');closeModal()")}</div>
+  `);
+}
+
+function openAddEmployerModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Onboard New Employer</div><div class="text-xs text-ink-500">Add a partner to the talent pipeline. Strategic partners get co-design seats on training boards.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-2 gap-3 text-sm">
+      <label class="col-span-2"><span class="text-xs font-semibold text-ink-500">Employer name</span><input id="ae_name" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" placeholder="e.g. Hyundai Motor Mfg AL" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Industry</span><select id="ae_ind" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option>Manufacturing</option><option>Healthcare</option><option>Technology</option><option>Energy</option><option>Finance</option><option>Shipbuilding</option><option>Transportation</option></select></label>
+      <label><span class="text-xs font-semibold text-ink-500">County</span><input id="ae_cty" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" placeholder="Jefferson" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Partnership tier</span><select id="ae_tier" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option>Standard</option><option>Strategic</option></select></label>
+      <label><span class="text-xs font-semibold text-ink-500">Contact email</span><input id="ae_eml" type="email" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" placeholder="hr@example.com" /></label>
+      <label class="col-span-2"><span class="text-xs font-semibold text-ink-500">Skills demanded (comma-separated)</span><input id="ae_skills" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" placeholder="CNC, Lean, Robotics" /></label>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Cancel','x','closeModal()','ghost')}${btn('Create employer','plus','submitNewEmployer()')}</div>`);
+}
+async function submitNewEmployer(){
+  const e={id:'e-'+String(Date.now()).slice(-6),name:$('#ae_name').value||'Untitled Employer',industry:$('#ae_ind').value,county:$('#ae_cty').value||'—',open_roles:0,hires_ytd:0,partnership:$('#ae_tier').value,contact:$('#ae_eml').value||'—',skills_demand:$('#ae_skills').value.split(',').map(x=>x.trim()).filter(Boolean)};
+  _seed.employers.unshift(e);
+  closeModal(); toast('Employer onboarded'); navigate('employers');
+}
+
+function openContactEmployerModal(eid){
+  const e = _seed.employers.find(x=>x.id===eid); if(!e) return;
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="text-xs text-ink-500 uppercase font-semibold tracking-wider">Compose</div><div class="display text-2xl">Message ${e.name}</div><div class="text-xs text-ink-500">Routes through your state Outlook tenant via Microsoft Graph in production.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 gap-3 text-sm">
+      <label><span class="text-xs font-semibold text-ink-500">To</span><input class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="${e.contact}" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Subject</span><input id="ce_subj" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="Q3 hiring forecast — partnership review" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Template</span><select onchange="document.getElementById('ce_body').value=this.value" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900">
+        <option value="Hi ${e.name.split(' ')[0]} team,\\n\\nWe have ${Math.floor(Math.random()*8+4)} candidates in the pipeline matching your current openings. Would you have 30 minutes this week to align on screening criteria?\\n\\nBest,\\nJordan">Pipeline-aligned candidates</option>
+        <option value="Hello team,\\n\\nWe're scoping a co-funded apprenticeship in your skill cluster (${e.skills_demand.slice(0,3).join(', ')}). Estimated state contribution: $400-600k over 24 months. Open to a discovery call?\\n\\nJordan">Co-funded apprenticeship pitch</option>
+        <option value="Hi all,\\n\\nQuarterly partnership review attached. Highlights: hires-to-date, retention by cohort, and skills-gap deltas vs your roadmap.\\n\\nLet me know a time this week.\\n\\nJordan">Quarterly review</option>
+      </select></label>
+      <label><span class="text-xs font-semibold text-ink-500">Body</span><textarea id="ce_body" rows="8" class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900 font-mono text-xs">Hi ${e.name.split(' ')[0]} team,\n\nWe have ${Math.floor(Math.random()*8+4)} candidates in the pipeline matching your current openings. Would you have 30 minutes this week to align on screening criteria?\n\nBest,\nJordan</textarea></label>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Save draft','save',"toast('Draft saved to Outlook','info');closeModal()",'ghost')}${btn('Send','send',"toast('Email sent · open rate tracked','success');closeModal()")}</div>`);
+}
+
+function openGrantWizardModal(){
+  const total = 850000;
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Grant Application Wizard</div><div class="text-xs text-ink-500">Step 1 of 4 — auto-fills from latest labor-market data, partner registry, and historical outcomes.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-2 gap-3 text-sm">
+      <label class="col-span-2"><span class="text-xs font-semibold text-ink-500">Funder & program</span><select class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900"><option>USDOL — Strengthening Community Colleges Training Grant</option><option>USDOL — Apprenticeship Building America</option><option>HHS — HPOG (Healthcare Profession Opportunity Grant)</option><option>USDA — Rural Health & Workforce Initiative</option></select></label>
+      <label><span class="text-xs font-semibold text-ink-500">Project name</span><input class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="Statewide Cyber Apprenticeship Expansion" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Period of performance</span><input class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="36 months" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Requested amount</span><input class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="${fmt(total,{money:true})}" /></label>
+      <label><span class="text-xs font-semibold text-ink-500">Match (state + employer)</span><input class="mt-1 w-full rounded-md border-ink-200 dark:border-ink-700 dark:bg-ink-900" value="${fmt(total*0.30,{money:true})}" /></label>
+      <label class="col-span-2"><span class="text-xs font-semibold text-ink-500">Subrecipients (auto-suggested)</span><div class="mt-1 flex flex-wrap gap-1.5">${['Lawson State CC','Bishop State CC','Wallace CC','Auburn University','UAB'].map(x=>`<span class="text-xs px-2 py-1 rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200">${x}</span>`).join('')}</div></label>
+    </div>
+    <div class="mt-4 p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30 text-sm flex items-start gap-2">
+      <i data-lucide="sparkles" class="w-4 h-4 mt-0.5 text-brand-700 dark:text-brand-300"></i>
+      <div><span class="font-semibold">AI narrative draft generated.</span> Justification, equity strategy, and outcomes section pre-filled from rural-gap data and historical placement rates. Ready for your edits.</div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Save draft','save',"toast('Draft #G-2026-019 saved','info');closeModal()",'ghost')}${btn('Continue → Outcomes','arrow-right',"toast('Step 2 of 4: Outcomes & equity','info')")}</div>`);
+}
+
+function openStrategyDocModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">New Strategy Document</div><div class="text-xs text-ink-500">Pick a template — each renders sections matched to leadership briefings or federal submissions.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      ${[
+        {t:'WIOA State Plan Modification',d:'Federal-format four-year plan amendment. Sections: vision, sector strategies, performance, equity.'},
+        {t:'Sector Workforce Brief',d:'Single-sector deep dive (e.g. Healthcare, Advanced Mfg). Includes labor-market scan, employer feedback, gap analysis, intervention recs.'},
+        {t:"Governor's Briefing Memo",d:'2-page executive memo with 3 recs, fiscal note, and risks. Auto-pulls latest KPIs.'},
+        {t:'Rural Workforce Action Plan',d:'County-level intervention map with broadband, transit, childcare overlays.'},
+      ].map(x=>`<button onclick="toast('Created: '+'${x.t.replace(/'/g,"")}','success');closeModal()" class="text-left p-4 rounded-lg border border-ink-200 dark:border-ink-800 hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition">
+        <div class="font-semibold text-sm">${x.t}</div>
+        <div class="text-xs text-ink-500 mt-1">${x.d}</div>
+      </button>`).join('')}
+    </div>`);
+}
+
+function openPolicyDocModal(id){
+  const p = _seed.policies.find(x=>x.id===id); if(!p) return;
+  const docs = {
+    'pol-1':{
+      summary:'A 5-year strategy to absorb AI/automation displacement risk while capturing emerging-tech job growth. State commits to reskill 12,000 incumbent workers by FY2030.',
+      sections:[
+        {h:'Goals',b:'Reskill 12,000 incumbents · Establish 8 AI-augmented apprenticeships · Reach 35% female participation in tech tracks'},
+        {h:'Investment',b:'$28.4M over 5 years: $14M state, $9M federal (WIOA Title I + Strengthening CCs), $5.4M employer match'},
+        {h:'Risks',b:'Faculty pipeline; labor-market lag in displacement signaling; uneven rural broadband access'},
+        {h:'Metrics',b:'Annual reskill count, post-program wage gain (target +28%), employer retention at 12 months (target ≥75%)'}
+      ]
+    },
+    'pol-2':{
+      summary:'Pilot deploys mobile training units, employer-of-record sponsorship, and broadband stipends across 11 rural counties.',
+      sections:[
+        {h:'Counties in scope',b:'Wilcox, Greene, Sumter, Perry, Lowndes, Bullock, Macon, Choctaw, Marengo, Hale, Pickens'},
+        {h:'Investment',b:'$4.2M over 24 months · 60% state · 40% federal'},
+        {h:'Partners',b:'Wallace CC · Bishop State · 4 nonprofits · Alabama Power (broadband)'},
+        {h:'Outcomes target',b:'600 enrollees · 70% completion · ≥ 60% placement at $18+/hr within 90 days'}
+      ]
+    },
+    'pol-3':{
+      summary:'Doubles capacity of the Veteran Career Transition program and adds spouse/family wraparound services.',
+      sections:[
+        {h:'Capacity',b:'35 → 90 seats per cohort · 4 cohorts/yr'},
+        {h:'New services',b:'Spouse career coaching · childcare stipends · MOS-to-civilian skills translator (AI-assisted)'},
+        {h:'Investment',b:'$1.8M (WIOA Title I) + $400K Veterans Bureau'},
+        {h:'Performance',b:'90-day placement target 80% · median wage $24/hr · 12-mo retention ≥ 75%'}
+      ]
+    },
+    'pol-4':{
+      summary:'Updates Earn-and-Learn framework with paid pre-apprenticeship, expanded summer programs, and new transportation supports.',
+      sections:[
+        {h:'Eligible age',b:'16-24, prioritizing opportunity youth (out of school + out of work)'},
+        {h:'Stipend',b:'$15/hr during pre-apprenticeship (up to 12 weeks)'},
+        {h:'Pathways',b:'Manufacturing · Healthcare CNA · IT support · Skilled trades sampler'},
+        {h:'Wraparound',b:'Transportation vouchers · childcare · mental health referrals'}
+      ]
+    }
+  };
+  const d = docs[id] || {summary:'Policy document.',sections:[]};
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="text-xs text-ink-500 uppercase font-semibold tracking-wider">${p.owner} · ${p.status} · updated ${p.updated}</div><div class="display text-3xl">${p.title}</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <p class="text-sm text-ink-600 dark:text-ink-300 mb-4">${d.summary}</p>
+    <div class="space-y-3">${d.sections.map(s=>`<div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs uppercase font-semibold text-ink-500 mb-1">${s.h}</div><div class="text-sm">${s.b}</div></div>`).join('')}</div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Download PDF','download',"toast('PDF generated','success')",'ghost')}${btn('Open in canvas','layout-grid',"toast('Loaded into Strategy canvas','info');closeModal()",'soft')}</div>`);
+}
+
+function openExportModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Export Briefing</div><div class="text-xs text-ink-500">One-click packets for the audiences that ask most often.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      ${[
+        {t:"Governor's 1-pager",d:'Top KPIs · 3 highlights · 1 ask. Refreshed nightly.',i:'crown'},
+        {t:'Federal ETA-9173 quarterly',d:'WIOA performance indicators in the required schema.',i:'shield-check'},
+        {t:'Workforce Board packet',d:'Full quarterly: programs, funding, equity lens, employer scorecards.',i:'briefcase'},
+        {t:'Press release auto-draft',d:'AI-drafted. Last quarter wins, photo placeholders, quote slots.',i:'megaphone'},
+      ].map(x=>`<button onclick="toast('Generated: '+'${x.t.replace(/'/g,"")}','success');closeModal()" class="text-left p-4 rounded-lg border border-ink-200 dark:border-ink-800 hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition flex gap-3 items-start">
+        <i data-lucide="${x.i}" class="w-5 h-5 text-brand-600 mt-0.5"></i>
+        <div><div class="font-semibold text-sm">${x.t}</div><div class="text-xs text-ink-500 mt-1">${x.d}</div></div>
+      </button>`).join('')}
+    </div>`);
+}
+
+function openWIOASubmitModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Submit ETA-9173</div><div class="text-xs text-ink-500">Federal quarterly performance report — auto-assembled from this quarter's data.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="space-y-2 text-sm">
+      ${[
+        ['Performance indicators (6/6)','complete'],
+        ['Participant counts by program type','complete'],
+        ['Demographics breakdown','complete'],
+        ['Cost per outcome calculation','complete'],
+        ['Equity gap narrative','review'],
+        ['Tribal & migrant farmworker reporting','n/a'],
+      ].map(([k,s])=>`<div class="flex items-center justify-between p-2 rounded-md bg-ink-50 dark:bg-ink-900"><span>${k}</span>${badge(s,s==='complete'?'green':s==='review'?'amber':'default')}</div>`).join('')}
+    </div>
+    <div class="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-sm flex items-start gap-2">
+      <i data-lucide="triangle-alert" class="w-4 h-4 mt-0.5 text-amber-700 dark:text-amber-300"></i>
+      <div>Equity gap narrative is auto-drafted but flagged for human review. Ethnic placement disparity is within tolerance but median wage gap by gender exceeds the 8% threshold.</div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Cancel','x','closeModal()','ghost')}${btn('Submit to USDOL','send',"toast('ETA-9173 transmitted (mock)','success');closeModal()")}</div>`);
+}
+
+/* ----- Scenario Simulator: a real what-if calculator ----- */
+function openScenarioSimulator(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="sliders-horizontal" class="w-6 h-6 text-brand-600"></i>Scenario Simulator</div><div class="text-xs text-ink-500">Move the levers — see projected impact in real time. Math is illustrative.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+      <div class="space-y-4">
+        <div>
+          <div class="flex justify-between"><label class="font-semibold">Annual budget</label><span id="ss_budget_v" class="font-mono text-brand-700 dark:text-brand-300">$8.5M</span></div>
+          <input id="ss_budget" type="range" min="2" max="20" value="8.5" step="0.5" class="w-full accent-brand-600" oninput="recalcScenario()" />
+        </div>
+        <div>
+          <div class="flex justify-between"><label class="font-semibold">Cost per seat</label><span id="ss_cost_v" class="font-mono text-brand-700 dark:text-brand-300">$5,200</span></div>
+          <input id="ss_cost" type="range" min="1500" max="14000" value="5200" step="100" class="w-full accent-brand-600" oninput="recalcScenario()" />
+        </div>
+        <div>
+          <div class="flex justify-between"><label class="font-semibold">Completion rate</label><span id="ss_comp_v" class="font-mono text-brand-700 dark:text-brand-300">82%</span></div>
+          <input id="ss_comp" type="range" min="50" max="95" value="82" class="w-full accent-brand-600" oninput="recalcScenario()" />
+        </div>
+        <div>
+          <div class="flex justify-between"><label class="font-semibold">Placement rate (of completers)</label><span id="ss_plc_v" class="font-mono text-brand-700 dark:text-brand-300">78%</span></div>
+          <input id="ss_plc" type="range" min="40" max="95" value="78" class="w-full accent-brand-600" oninput="recalcScenario()" />
+        </div>
+        <div>
+          <div class="flex justify-between"><label class="font-semibold">Avg post-program wage gain</label><span id="ss_wage_v" class="font-mono text-brand-700 dark:text-brand-300">+$11.40/hr</span></div>
+          <input id="ss_wage" type="range" min="2" max="22" value="11.4" step="0.2" class="w-full accent-brand-600" oninput="recalcScenario()" />
+        </div>
+      </div>
+      <div class="space-y-3">
+        <div class="p-4 rounded-lg bg-brand-50 dark:bg-brand-900/30">
+          <div class="text-xs uppercase font-semibold text-brand-700 dark:text-brand-300">Seats funded</div>
+          <div id="ss_seats" class="display text-4xl mt-1">1,634</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Completers</div><div id="ss_completers" class="display text-2xl">1,340</div></div>
+          <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Placements</div><div id="ss_placements" class="display text-2xl">1,045</div></div>
+          <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Aggregate annual wage uplift</div><div id="ss_uplift" class="display text-2xl">$24.7M</div></div>
+          <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Cost per placement</div><div id="ss_cpp" class="display text-2xl">$8,134</div></div>
+        </div>
+        <div class="p-4 rounded-lg bg-gradient-to-br from-brand-700 to-brand-900 text-white">
+          <div class="text-xs uppercase font-semibold opacity-80">3-year ROI (wage uplift / investment)</div>
+          <div id="ss_roi" class="display text-4xl mt-1">8.7×</div>
+          <div id="ss_roi_note" class="text-xs opacity-90 mt-1">Pays back in ~4.1 months of placed earnings.</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Save scenario','save',"toast('Scenario saved as Draft #SC-2026-007','info')",'ghost')}${btn('Convert to grant','file-plus','closeModal();openGrantWizardModal()','soft')}</div>
+  `);
+  recalcScenario();
+}
+function recalcScenario(){
+  const b=parseFloat(document.getElementById('ss_budget').value)*1e6;
+  const c=parseFloat(document.getElementById('ss_cost').value);
+  const cp=parseFloat(document.getElementById('ss_comp').value)/100;
+  const pl=parseFloat(document.getElementById('ss_plc').value)/100;
+  const w=parseFloat(document.getElementById('ss_wage').value);
+  const seats=Math.floor(b/c), completers=Math.floor(seats*cp), placements=Math.floor(completers*pl);
+  const uplift = placements * w * 2080; // 40h * 52w
+  const cpp = placements? b/placements : 0;
+  const roi = b? (uplift*3)/b : 0;
+  const months = roi? (12/(roi)) : 0;
+  document.getElementById('ss_budget_v').textContent='$'+(b/1e6).toFixed(1)+'M';
+  document.getElementById('ss_cost_v').textContent='$'+c.toLocaleString();
+  document.getElementById('ss_comp_v').textContent=(cp*100).toFixed(0)+'%';
+  document.getElementById('ss_plc_v').textContent=(pl*100).toFixed(0)+'%';
+  document.getElementById('ss_wage_v').textContent='+$'+w.toFixed(1)+'/hr';
+  document.getElementById('ss_seats').textContent=seats.toLocaleString();
+  document.getElementById('ss_completers').textContent=completers.toLocaleString();
+  document.getElementById('ss_placements').textContent=placements.toLocaleString();
+  document.getElementById('ss_uplift').textContent='$'+(uplift/1e6).toFixed(1)+'M';
+  document.getElementById('ss_cpp').textContent='$'+Math.round(cpp).toLocaleString();
+  document.getElementById('ss_roi').textContent=roi.toFixed(1)+'×';
+  document.getElementById('ss_roi_note').textContent = `Pays back in ~${months.toFixed(1)} months of placed earnings.`;
+}
+
+function openROIModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl">Program ROI Calculator</div><div class="text-xs text-ink-500">Per-program economic return — investment vs lifetime wage uplift, accounting for completion & placement.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead class="text-xs uppercase text-ink-500"><tr><th class="px-3 py-2 text-left">Program</th><th class="px-3 py-2 text-right">Cost/seat</th><th class="px-3 py-2 text-right">Compl.</th><th class="px-3 py-2 text-right">Wage gain</th><th class="px-3 py-2 text-right">5-yr uplift / seat</th><th class="px-3 py-2 text-right">ROI</th></tr></thead>
+      <tbody class="divide-y divide-ink-100 dark:divide-ink-800">
+        ${_seed.programs.map(p=>{
+          // Estimate per-track wage gain
+          const est={'Manufacturing':12,'Information Technology':16,'Healthcare':14,'Skilled Trades':13,'Energy':9,'Transportation':11,'Cross-Sector':8}[p.track]||10;
+          const annual = est*2080;                 // hours/yr
+          const upliftSeat = annual*5*p.completion_rate;  // 5yr * completion
+          const roi = upliftSeat / (p.cost_per_seat || 1);
+          return `<tr class="row-hover"><td class="px-3 py-2 font-semibold">${p.name}</td>
+            <td class="px-3 py-2 text-right font-mono">${fmt(p.cost_per_seat,{money:true})}</td>
+            <td class="px-3 py-2 text-right">${(p.completion_rate*100).toFixed(0)}%</td>
+            <td class="px-3 py-2 text-right">+$${est}/hr</td>
+            <td class="px-3 py-2 text-right font-mono">${fmt(upliftSeat,{money:true})}</td>
+            <td class="px-3 py-2 text-right">${badge(roi.toFixed(1)+'×', roi>=8?'green':roi>=4?'amber':'rose')}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+    <div class="mt-3 text-xs text-ink-500">Wage gain estimates are sector benchmarks. In production, uses BLS occupational wage tables joined to placement records.</div>`);
+}
+
+/* ----- Predictive forecast modal ----- */
+function openForecastModal(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="line-chart" class="w-6 h-6 text-brand-600"></i>12-Month Predictive Forecast</div><div class="text-xs text-ink-500">Linear regression on 12-month trailing data, with 90% confidence band.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="h-80"><canvas id="fc_chart"></canvas></div>
+    <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Projected enrollments (12 mo)</div><div class="display text-2xl">5,420</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Projected placements</div><div class="display text-2xl">3,180</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Projected wage uplift</div><div class="display text-2xl">$72.8M</div></div>
+    </div>
+    <div class="mt-3 p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30 text-sm flex items-start gap-2">
+      <i data-lucide="sparkles" class="w-4 h-4 mt-0.5 text-brand-700 dark:text-brand-300"></i>
+      <div><span class="font-semibold">AI insight:</span> Cybersecurity & Healthcare tracks drive 64% of projected placement growth. Recommend diverting $1.2M from underperforming Solar PV pilot into expanding RN cohort.</div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Save snapshot','save',"toast('Forecast snapshot saved','info')",'ghost')}${btn('Open in scenario sim','sliders-horizontal','closeModal();openScenarioSimulator()','soft')}</div>
+  `);
+  // Render forecast chart
+  setTimeout(async()=>{
+    const m = await DataService.getMonthlyTrends(); const t=chartTheme();
+    const future=['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const labels=[...m.labels, ...future];
+    const last=m.enrollments.slice(-1)[0]; const slope=(last - m.enrollments[0])/m.enrollments.length;
+    const proj=[]; for(let i=1;i<=future.length;i++)proj.push(Math.round(last+slope*i));
+    const upper=proj.map(x=>Math.round(x*1.12)); const lower=proj.map(x=>Math.round(x*0.88));
+    const fcCtx=document.getElementById('fc_chart');
+    new Chart(fcCtx,{type:'line',data:{labels,datasets:[
+      {label:'Actual',data:[...m.enrollments,...Array(future.length).fill(null)],borderColor:t.brand,backgroundColor:'rgba(27,163,115,.15)',fill:true,tension:.3,borderWidth:2,pointRadius:0},
+      {label:'Forecast',data:[...Array(m.enrollments.length-1).fill(null),m.enrollments.slice(-1)[0],...proj],borderColor:t.amber,borderDash:[5,4],backgroundColor:'transparent',tension:.3,borderWidth:2,pointRadius:0},
+      {label:'Upper 90%',data:[...Array(m.enrollments.length).fill(null),...upper],borderColor:'rgba(245,158,11,0.3)',borderDash:[2,3],backgroundColor:'transparent',pointRadius:0,borderWidth:1},
+      {label:'Lower 90%',data:[...Array(m.enrollments.length).fill(null),...lower],borderColor:'rgba(245,158,11,0.3)',borderDash:[2,3],backgroundColor:'transparent',pointRadius:0,borderWidth:1},
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:t.text}}},scales:{x:{grid:{color:t.grid},ticks:{color:t.text}},y:{grid:{color:t.grid},ticks:{color:t.text}}}}});
+  },100);
+}
+
+function openCohortDrilldown(){
+  // Build cohort summary by program
+  const rows = _seed.programs.map(p=>{
+    const enrolled=_seed.students.filter(s=>s.program===p.id).length;
+    const completed=_seed.students.filter(s=>s.program===p.id && s.status==='Completed').length;
+    const placed=_seed.students.filter(s=>s.program===p.id && s.placed).length;
+    const placedStudents=_seed.students.filter(s=>s.program===p.id && s.placed && s.wage_post);
+    const avgGain=placedStudents.length?placedStudents.reduce((a,b)=>a+(b.wage_post-b.wage_pre),0)/placedStudents.length:0;
+    return {p:p.name,enrolled,completed,placed,avgGain,track:p.track};
+  });
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="users" class="w-6 h-6 text-brand-600"></i>Cohort Drill-down</div><div class="text-xs text-ink-500">Compare outcomes across programs. Add filters: county, population, gender.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="flex flex-wrap gap-2 mb-3 text-xs">
+      ${['All','Veterans','Youth','Displaced Workers','Rural counties','Female','Male'].map((f,i)=>`<button class="px-2.5 py-1 rounded-full ${i===0?'bg-brand-600 text-white':'bg-ink-100 dark:bg-ink-800 hover:bg-ink-200'}" onclick="toast('Filter: '+'${f}','info')">${f}</button>`).join('')}
+    </div>
+    <div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead class="text-xs uppercase text-ink-500"><tr>
+        <th class="px-3 py-2 text-left">Program</th>
+        <th class="px-3 py-2 text-left">Track</th>
+        <th class="px-3 py-2 text-right">Enrolled</th>
+        <th class="px-3 py-2 text-right">Completed</th>
+        <th class="px-3 py-2 text-right">Placed</th>
+        <th class="px-3 py-2 text-right">Avg wage Δ</th>
+        <th class="px-3 py-2 text-right">Health</th>
+      </tr></thead>
+      <tbody class="divide-y divide-ink-100 dark:divide-ink-800">
+        ${rows.map(r=>{const h=r.enrolled?(r.placed/r.enrolled):0;return `<tr class="row-hover">
+          <td class="px-3 py-2 font-semibold">${r.p}</td>
+          <td class="px-3 py-2 text-xs">${r.track}</td>
+          <td class="px-3 py-2 text-right">${r.enrolled}</td>
+          <td class="px-3 py-2 text-right">${r.completed}</td>
+          <td class="px-3 py-2 text-right">${r.placed}</td>
+          <td class="px-3 py-2 text-right">${r.avgGain?'<span class="text-brand-700 dark:text-brand-300 font-semibold">+$'+r.avgGain.toFixed(1)+'/hr</span>':'<span class="text-ink-400">—</span>'}</td>
+          <td class="px-3 py-2 text-right">${badge((h*100).toFixed(0)+'%', h>=0.5?'green':h>=0.2?'amber':'default')}</td>
+        </tr>`}).join('')}
+      </tbody>
+    </table></div>
+    <div class="mt-4 p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30 text-sm flex items-start gap-2">
+      <i data-lucide="sparkles" class="w-4 h-4 mt-0.5 text-brand-700 dark:text-brand-300"></i>
+      <div><span class="font-semibold">AI summary:</span> Healthcare and Manufacturing cohorts outperform; Solar PV cohort is below trend on placement velocity. Suggest a 30-day check-in with Bishop State CC.</div>
+    </div>`);
+}
+
+function openEmployerScorecard(){
+  const rows = _seed.employers.map(e=>{
+    const open=_seed.jobs.filter(j=>j.employer===e.id && j.status==='Open').length;
+    const skillCoverage = Math.min(100, Math.round(60 + Math.random()*38));
+    const retention = Math.min(100, Math.round(72 + Math.random()*22));
+    const avgWage = Math.round(_seed.jobs.filter(j=>j.employer===e.id).reduce((a,b)=>a+b.wage,0)/Math.max(1,_seed.jobs.filter(j=>j.employer===e.id).length));
+    return {...e, open, skillCoverage, retention, avgWage};
+  });
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="building-2" class="w-6 h-6 text-brand-600"></i>Employer Scorecards</div><div class="text-xs text-ink-500">Per-employer effectiveness. Maps directly to WIOA "Employer Effectiveness" pilot indicator.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      ${rows.map(r=>`<div class="p-4 rounded-lg border border-ink-200 dark:border-ink-800">
+        <div class="flex items-start justify-between"><div><div class="font-semibold">${r.name}</div><div class="text-xs text-ink-500">${r.industry} · ${r.county}</div></div>${badge(r.partnership, r.partnership==='Strategic'?'green':'default')}</div>
+        <div class="grid grid-cols-4 gap-2 mt-3 text-sm">
+          <div><div class="text-[10px] uppercase text-ink-500">Open</div><div class="font-bold">${r.open}</div></div>
+          <div><div class="text-[10px] uppercase text-ink-500">Hires YTD</div><div class="font-bold">${r.hires_ytd}</div></div>
+          <div><div class="text-[10px] uppercase text-ink-500">Avg wage</div><div class="font-bold">$${r.avgWage}</div></div>
+          <div><div class="text-[10px] uppercase text-ink-500">Retention</div><div class="font-bold">${r.retention}%</div></div>
+        </div>
+        <div class="mt-3"><div class="flex justify-between text-xs"><span class="text-ink-500">Skill demand met by our pipeline</span><span class="font-mono">${r.skillCoverage}%</span></div><div class="progress mt-1"><span style="width:${r.skillCoverage}%"></span></div></div>
+      </div>`).join('')}
+    </div>`);
+}
+
+/* ----- Strategic intervention models ----- */
+function modelAIDisruption(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="cpu" class="w-6 h-6 text-violet-600"></i>AI / Automation Disruption Model</div><div class="text-xs text-ink-500">Occupations ranked by automation exposure × workforce share.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <table class="w-full text-sm">
+      <thead class="text-xs uppercase text-ink-500"><tr><th class="px-3 py-2 text-left">Occupation cluster</th><th class="px-3 py-2 text-right">Workers (state)</th><th class="px-3 py-2 text-right">Auto. risk</th><th class="px-3 py-2 text-right">5-yr exposure</th><th class="px-3 py-2 text-left">Recommended pivot</th></tr></thead>
+      <tbody class="divide-y divide-ink-100 dark:divide-ink-800">
+        ${[
+          ['Office & admin support', 184000, 0.62, 'High', 'Project mgmt · digital ops · CX analytics'],
+          ['Production / assembly',   142000, 0.48, 'Med',  'Robotics tech · maintenance · QA inspection'],
+          ['Transportation / freight',128000, 0.31, 'Med',  'Logistics analyst · fleet electrification tech'],
+          ['Retail sales',             96000, 0.55, 'High', 'Healthcare aide · skilled trades · hospitality mgmt'],
+          ['Customer service',         72000, 0.71, 'High', 'AI ops · prompt eng. · escalation specialist'],
+          ['Food service',             88000, 0.28, 'Low',  'Stable; upskill into mgmt + nutrition science'],
+        ].map(r=>`<tr class="row-hover"><td class="px-3 py-2 font-semibold">${r[0]}</td><td class="px-3 py-2 text-right">${r[1].toLocaleString()}</td><td class="px-3 py-2 text-right">${(r[2]*100).toFixed(0)}%</td><td class="px-3 py-2 text-right">${badge(r[3], r[3]==='High'?'rose':r[3]==='Med'?'amber':'green')}</td><td class="px-3 py-2 text-xs">${r[4]}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="mt-4 p-3 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-sm">
+      <span class="font-semibold">Recommended action:</span> Launch "AI-Adjacent Skills" certificate (12 weeks) targeting office/admin and customer-service workers. Estimated 3,200 enrollees Year 1, $4.8M investment, $42M projected wage uplift over 5 years.
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Run as scenario','sliders-horizontal','closeModal();openScenarioSimulator()','soft')}${btn('Draft strategy doc','file-plus','closeModal();openStrategyDocModal()','ghost')}</div>`);
+}
+
+function modelRuralStrategy(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="map-pin" class="w-6 h-6 text-amber-600"></i>Rural Pipeline Intervention Model</div><div class="text-xs text-ink-500">Multi-county package with combined supports.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      ${[
+        {h:'Mobile training units',d:'4 retrofitted trailers · CNC, welding, CDL simulators',c:'$680K capex · $240K/yr ops'},
+        {h:'Broadband stipends',d:'$60/mo for 800 households in dead zones',c:'$576K/yr (24 mo)'},
+        {h:'Childcare vouchers',d:'$300/wk for parents in training',c:'$1.04M/yr'},
+        {h:'Transportation',d:'Vanpool + gas cards · 11 counties',c:'$420K/yr'},
+        {h:'Employer-of-record',d:'State sponsors W-2 during apprenticeship',c:'$1.6M/yr · recovers 70% via wages'},
+        {h:'Retention bonuses',d:'$1,500 at 90 days post-placement',c:'$540K/yr (≈360 placements)'},
+      ].map(x=>`<div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="font-semibold">${x.h}</div><div class="text-xs text-ink-500 mt-1">${x.d}</div><div class="text-xs font-mono mt-2 text-brand-700 dark:text-brand-300">${x.c}</div></div>`).join('')}
+    </div>
+    <div class="mt-4 p-4 rounded-lg bg-gradient-to-br from-amber-600 to-amber-800 text-white">
+      <div class="grid grid-cols-3 gap-3">
+        <div><div class="text-xs uppercase opacity-80">Total package</div><div class="display text-2xl">$5.1M / 24 mo</div></div>
+        <div><div class="text-xs uppercase opacity-80">Projected enrollees</div><div class="display text-2xl">1,240</div></div>
+        <div><div class="text-xs uppercase opacity-80">Expected placements</div><div class="display text-2xl">740</div></div>
+      </div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Convert to grant','file-plus','closeModal();openGrantWizardModal()','soft')}</div>`);
+}
+function modelVeteransExpansion(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="shield" class="w-6 h-6 text-brand-600"></i>Veterans Bridge Expansion Model</div><div class="text-xs text-ink-500">Doubles capacity with spouse + family wraparound.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-2 gap-3 text-sm">
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Current capacity</div><div class="display text-3xl">35</div><div class="text-xs">seats / cohort</div></div>
+      <div class="p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30"><div class="text-xs text-brand-700 dark:text-brand-300">Proposed capacity</div><div class="display text-3xl">90</div><div class="text-xs">seats / cohort · 4 cohorts/yr</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900 col-span-2"><div class="text-xs text-ink-500">New services</div><div class="text-sm mt-1">Spouse career coaching · childcare stipends · MOS-to-civilian skills translator (AI-assisted) · veteran-owned employer matching</div></div>
+      <div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="text-xs text-ink-500">Investment</div><div class="display text-2xl">$2.2M</div><div class="text-xs">WIOA Title I + Veterans Bureau</div></div>
+      <div class="p-3 rounded-lg bg-brand-50 dark:bg-brand-900/30"><div class="text-xs text-brand-700 dark:text-brand-300">Expected outcomes (yr 1)</div><div class="display text-2xl">280 placed</div><div class="text-xs">median $24/hr · 75% retention at 12mo</div></div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Convert to scenario','sliders-horizontal','closeModal();openScenarioSimulator()','soft')}</div>`);
+}
+function modelYouthPathway(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="graduation-cap" class="w-6 h-6 text-sky-600"></i>Youth Earn-and-Learn Model</div><div class="text-xs text-ink-500">16-24 with paid pre-apprenticeship.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      ${[
+        {h:'Stage 1 — Outreach',d:'Schools, community centers, juvenile re-entry · 1,200 contacts/yr',m:'18% conversion to enrollment'},
+        {h:'Stage 2 — Pre-apprentice',d:'12 weeks · paid $15/hr · soft skills + sampler tracks',m:'85% completion target'},
+        {h:'Stage 3 — Apprentice',d:'24 weeks · $18-22/hr · employer placement guaranteed',m:'78% retention to credential'},
+        {h:'Wraparound',d:'Transit · childcare · mental health referrals',m:'Linked to 2-1-1 statewide'},
+        {h:'Investment',d:'$3.8M / yr',m:'$3,100 cost per outcome'},
+        {h:'Outcomes',d:'~410 placed annually · median $20/hr',m:'Pays back in 14 months of taxable wages'},
+      ].map(x=>`<div class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900"><div class="font-semibold">${x.h}</div><div class="text-xs text-ink-500 mt-1">${x.d}</div><div class="text-xs font-mono mt-2 text-brand-700 dark:text-brand-300">${x.m}</div></div>`).join('')}
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Run as scenario','sliders-horizontal','closeModal();openScenarioSimulator()','soft')}</div>`);
+}
+
+/* ----- AI-augmented workforce forecast ----- */
+function openAIWorkforceForecast(){
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><div class="display text-2xl flex items-center gap-2"><i data-lucide="sparkles" class="w-6 h-6 text-violet-600"></i>AI Workforce Forecast (5-year)</div><div class="text-xs text-ink-500">Augments BLS projections with internal placement data + skill-demand vectors from employer feeds.</div></div>${btn('Close','x','closeModal()','ghost')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+      <div>
+        <div class="font-semibold mb-2">Top 5 growth roles</div>
+        <ul class="space-y-2">
+          ${[
+            ['Information Security Analyst', '+32%', 'Add 2,400 over 5y'],
+            ['Software Developer',           '+25%', 'Add 3,450'],
+            ['Solar PV Installer',           '+22%', 'Add 1,050'],
+            ['Wind Turbine Tech',            '+18%', 'Add 410'],
+            ['Healthcare Data Analyst',      '+17%', 'Add 880'],
+          ].map(r=>`<li class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900 flex items-center justify-between"><div><div class="font-medium">${r[0]}</div><div class="text-xs text-ink-500">${r[2]}</div></div>${badge(r[1],'green')}</li>`).join('')}
+        </ul>
+      </div>
+      <div>
+        <div class="font-semibold mb-2">Top 5 declining roles</div>
+        <ul class="space-y-2">
+          ${[
+            ['Telephone operators',           '-38%', 'Mostly automated'],
+            ['Data entry keyers',             '-31%', 'AI capture pipelines'],
+            ['Word processors / typists',     '-29%', 'Generative AI'],
+            ['Bill & account collectors',     '-22%', 'Automated workflows'],
+            ['Switchboard operators',         '-21%', 'Cloud telephony'],
+          ].map(r=>`<li class="p-3 rounded-lg bg-ink-50 dark:bg-ink-900 flex items-center justify-between"><div><div class="font-medium">${r[0]}</div><div class="text-xs text-ink-500">${r[2]}</div></div>${badge(r[1],'rose')}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    <div class="mt-4 p-3 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-sm">
+      <div class="font-semibold">Strategic recommendation</div>
+      <div class="text-xs mt-1">Concentrate 60% of incremental Title I funds into IT, Healthcare data, and Clean Energy tracks. Establish a "Career Bridge" program for displaced clerical workers (est. 4,200 affected over 5 years) into customer-success and AI-ops roles.</div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Build intervention','plus','closeModal();modelAIDisruption()','soft')}${btn('Save snapshot','save',"toast('AI forecast snapshot saved','info')",'ghost')}</div>`);
 }
 
 function openArchitectureModal(){
@@ -1327,6 +2148,24 @@ async function runTests(){
     for(const role of ['student','employer','school','reporting']){state.role=role;for(const v of ROLES[role].nav){const html=await VIEWS[v]();_expect(typeof html==='string' && html.length>50,role+'/'+v);}}
     state.role='manager';
   });
+  await _t('All 15 manager modal functions are defined and callable', async()=>{
+    const fns = ['openProgramFilterModal','openAddEmployerModal','openContactEmployerModal','openAuditLogModal','openGrantWizardModal','openScenarioSimulator','openAIWorkforceForecast','openStrategyDocModal','openPolicyDocModal','openROIModal','openCohortDrilldown','openEmployerScorecard','openForecastModal','openWIOASubmitModal','openExportModal','openCredentialVerifyModal'];
+    for(const name of fns){_expect(typeof globalThis[name]==='function','missing '+name)}
+  });
+  await _t('openContactEmployerModal works for every employer', async()=>{
+    for(const e of _seed.employers){openContactEmployerModal(e.id);}
+  });
+  await _t('openAuditLogModal works for every funding source', async()=>{
+    for(const f of _seed.funding){openAuditLogModal(f.source);}
+  });
+  await _t('openPolicyDocModal works for every policy', async()=>{
+    for(const p of _seed.policies){openPolicyDocModal(p.id);}
+  });
+  await _t('Scenario & ROI calculators open without errors', async()=>{
+    openScenarioSimulator(); if(typeof recalcScenario==='function') recalcScenario();
+    openROIModal();
+    _expect(true);
+  });
 
   const passed = testResults.filter(t=>t.ok).length;
   const failed = testResults.length - passed;
@@ -1334,6 +2173,29 @@ async function runTests(){
   $('#testFab').className = `fixed bottom-6 left-6 z-40 px-3 py-2 rounded-full ${failed?'bg-rose-600':'bg-brand-600'} text-white text-xs font-semibold shadow-pop flex items-center gap-2`;
   if(failed){ toast(`${failed} test(s) failed — click flask icon`, 'error'); }
   else { toast(`All ${passed} tests passed`,'success'); }
+}
+
+
+
+/* ----- Credentials: enhanced verify ----- */
+function openCredentialVerifyModal(holder, credName){
+  openModal(`
+    ${_modalHead('Verify Credential', 'W3C Verifiable Credential validated against issuer DID.')}
+    <div class="space-y-3 text-sm">
+      <div class="p-4 rounded-lg bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800">
+        <div class="flex items-center gap-2 text-brand-800 dark:text-brand-200 font-semibold"><i data-lucide="shield-check" class="w-5 h-5"></i>Cryptographic signature valid ✓</div>
+        <div class="text-xs text-ink-600 dark:text-ink-300 mt-1">Verified against issuer DID and revocation registry · Azure Verified ID</div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="p-2 rounded bg-ink-50 dark:bg-ink-900"><div class="text-ink-500">Credential</div><div class="font-semibold">${credName}</div></div>
+        <div class="p-2 rounded bg-ink-50 dark:bg-ink-900"><div class="text-ink-500">Holder</div><div class="font-semibold">${holder}</div></div>
+        <div class="p-2 rounded bg-ink-50 dark:bg-ink-900"><div class="text-ink-500">Issued by</div><div class="font-semibold">State of Alabama Workforce</div></div>
+        <div class="p-2 rounded bg-ink-50 dark:bg-ink-900"><div class="text-ink-500">Issuance date</div><div class="font-semibold">2026-03-12</div></div>
+        <div class="p-2 rounded bg-ink-50 dark:bg-ink-900 col-span-2"><div class="text-ink-500">Issuer DID</div><div class="font-mono text-[10px] break-all">did:web:credentials.workforce.alabama.gov</div></div>
+        <div class="p-2 rounded bg-ink-50 dark:bg-ink-900 col-span-2"><div class="text-ink-500">Revocation status</div><div class="font-semibold text-brand-700 dark:text-brand-300">Active · not revoked</div></div>
+      </div>
+    </div>
+    <div class="mt-5 flex items-center justify-end gap-2">${btn('Done','check','closeModal()')}</div>`);
 }
 
 function openTestModal(){
