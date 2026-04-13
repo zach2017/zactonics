@@ -611,6 +611,30 @@
       const start = anchors.fromPoint;
       const end = anchors.toPoint;
       const controlPoints = getControlPoints(start, end, anchors.fromSide, anchors.toSide);
+
+      // Fan out parallel connections between the same pair (in either direction)
+      const siblings = state.connections.filter(c =>
+        (c.from === conn.from && c.to === conn.to) ||
+        (c.from === conn.to && c.to === conn.from)
+      );
+      if (siblings.length > 1) {
+        const idx = siblings.findIndex(c => c.id === conn.id);
+        // Center the fan around 0: indices map to offsets -n, ..., 0, ..., +n
+        const spacing = 26;
+        const slot = idx - (siblings.length - 1) / 2;
+        const offset = slot * spacing;
+        // Perpendicular to the start→end vector
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        controlPoints.c1.x += nx * offset;
+        controlPoints.c1.y += ny * offset;
+        controlPoints.c2.x += nx * offset;
+        controlPoints.c2.y += ny * offset;
+      }
+
       const pathData = `M ${start.x} ${start.y} C ${controlPoints.c1.x} ${controlPoints.c1.y}, ${controlPoints.c2.x} ${controlPoints.c2.y}, ${end.x} ${end.y}`;
 
       const g = createSvg('g');
@@ -703,11 +727,6 @@
     }
 
     function createConnection(fromId, toId) {
-      const exists = state.connections.some(c => c.from === fromId && c.to === toId);
-      if (exists) {
-        alert('That connection already exists.');
-        return;
-      }
       const conn = {
         id: crypto.randomUUID(),
         from: fromId,
