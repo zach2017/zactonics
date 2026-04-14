@@ -161,6 +161,10 @@
                 <span class="text-sm font-semibold">Gap notes</span>
                 <textarea id="nodeGap" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
               </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Issue / Story</span>
+                <textarea id="nodeStory" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Sprint story to address gaps. Format: As a [user], I want [goal] so that [benefit]. Acceptance criteria, ticket ID, story points..."></textarea>
+              </label>
             </div>
           </div>
         </form>
@@ -210,6 +214,10 @@
               <label class="block">
                 <span class="text-sm font-semibold">Gap notes</span>
                 <textarea id="connGap" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2"></textarea>
+              </label>
+              <label class="block">
+                <span class="text-sm font-semibold">Issue / Story</span>
+                <textarea id="connStory" rows="4" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Sprint story to address gaps. Format: As a [user], I want [goal] so that [benefit]. Acceptance criteria, ticket ID, story points..."></textarea>
               </label>
             </div>
           </div>
@@ -309,7 +317,8 @@
       description: document.getElementById('nodeDescription'),
       failure: document.getElementById('nodeFailure'),
       recovery: document.getElementById('nodeRecovery'),
-      gap: document.getElementById('nodeGap')
+      gap: document.getElementById('nodeGap'),
+      story: document.getElementById('nodeStory')
     };
 
     const connFields = {
@@ -318,7 +327,8 @@
       description: document.getElementById('connDescription'),
       failure: document.getElementById('connFailure'),
       recovery: document.getElementById('connRecovery'),
-      gap: document.getElementById('connGap')
+      gap: document.getElementById('connGap'),
+      story: document.getElementById('connStory')
     };
 
     init();
@@ -480,6 +490,7 @@
         failure: '',
         recovery: '',
         gap: '',
+        story: '',
         risk: 'low',
         simulated: 'none'
       });
@@ -809,6 +820,7 @@
         failure: '',
         recovery: '',
         gap: '',
+        story: '',
         risk: 'low',
         simulated: 'none'
       };
@@ -979,11 +991,12 @@
         nodeFields.failure.value = node.failure || '';
         nodeFields.recovery.value = node.recovery || '';
         nodeFields.gap.value = node.gap || '';
+        nodeFields.story.value = node.story || '';
         document.getElementById('nodeTemplate').value = '';
 
         // For heading / note (text-only) nodes, hide fields that don't apply
         const isText = node.type === 'heading' || node.type === 'note';
-        const hideForText = ['nodeLabel', 'nodeRisk', 'nodeFailure', 'nodeRecovery', 'nodeGap', 'nodeTemplate'];
+        const hideForText = ['nodeLabel', 'nodeRisk', 'nodeFailure', 'nodeRecovery', 'nodeGap', 'nodeStory', 'nodeTemplate'];
         hideForText.forEach(id => {
           const el = document.getElementById(id);
           if (!el) return;
@@ -1008,6 +1021,7 @@
         connFields.failure.value = conn.failure || '';
         connFields.recovery.value = conn.recovery || '';
         connFields.gap.value = conn.gap || '';
+        connFields.story.value = conn.story || '';
         document.getElementById('connTemplate').value = '';
         return;
       }
@@ -1404,18 +1418,21 @@
       const aggFailures = [];
       const aggRecovery = [];
       const aggGaps = [];
+      const aggStories = [];
       nodes.forEach(n => {
         if (n.failure) aggFailures.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.failure });
         if (n.recovery) aggRecovery.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.recovery });
         if (n.gap) aggGaps.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.gap });
+        if (n.story) aggStories.push({ kind: 'Component', name: n.title, risk: n.risk, text: n.story });
       });
       conns.forEach(c => {
         const label = `${nodeById[c.from]?.title || '?'} → ${nodeById[c.to]?.title || '?'}${c.label ? ` (${c.label})` : ''}`;
         if (c.failure) aggFailures.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.failure });
         if (c.recovery) aggRecovery.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.recovery });
         if (c.gap) aggGaps.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.gap });
+        if (c.story) aggStories.push({ kind: 'Dataflow', name: label, risk: c.risk, text: c.story });
       });
-      [aggFailures, aggRecovery, aggGaps].forEach(arr =>
+      [aggFailures, aggRecovery, aggGaps, aggStories].forEach(arr =>
         arr.sort((a, b) => (RISK_ORDER[b.risk] || 0) - (RISK_ORDER[a.risk] || 0))
       );
 
@@ -1455,6 +1472,7 @@
               <div class="field"><div class="field-label">Points of Failure</div><div class="field-body"><p>${para(n.failure)}</p></div></div>
               <div class="field"><div class="field-label">Recovery Handling</div><div class="field-body"><p>${para(n.recovery)}</p></div></div>
               <div class="field"><div class="field-label">Gap Notes</div><div class="field-body"><p>${para(n.gap)}</p></div></div>
+              <div class="field"><div class="field-label">Issue / Story</div><div class="field-body"><p>${para(n.story)}</p></div></div>
               <div class="field"><div class="field-label">Connectivity</div><div class="field-body">
                 <div class="small"><strong>Inbound from:</strong> ${inbound.length ? inbound.map(esc).join(', ') : '<em class="muted">None</em>'}</div>
                 <div class="small"><strong>Outbound to:</strong> ${outbound.length ? outbound.map(esc).join(', ') : '<em class="muted">None</em>'}</div>
@@ -1480,6 +1498,7 @@
               <div class="field"><div class="field-label">Points of Failure</div><div class="field-body"><p>${para(c.failure)}</p></div></div>
               <div class="field"><div class="field-label">Recovery Handling</div><div class="field-body"><p>${para(c.recovery)}</p></div></div>
               <div class="field"><div class="field-label">Gap Notes</div><div class="field-body"><p>${para(c.gap)}</p></div></div>
+              <div class="field"><div class="field-label">Issue / Story</div><div class="field-body"><p>${para(c.story)}</p></div></div>
             </div>
           </section>`;
       }).join('');
@@ -1536,7 +1555,7 @@
   .toolbar button { background: var(--accent); color: white; border: 0; padding: 8px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
   .toolbar button.secondary { background: #475569; }
   .overview { background: #f0fdfa; border-left: 4px solid var(--accent); padding: 14px 18px; border-radius: 6px; margin-top: 14px; }
-  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 16px; }
   .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
   .stat-num { font-size: 26px; font-weight: 700; color: var(--accent); }
   .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1590,6 +1609,7 @@
     <div class="stat"><div class="stat-num">${conns.length}</div><div class="stat-label">Dataflows</div></div>
     <div class="stat"><div class="stat-num">${aggFailures.length}</div><div class="stat-label">Failure Notes</div></div>
     <div class="stat"><div class="stat-num">${aggGaps.length}</div><div class="stat-label">Known Gaps</div></div>
+    <div class="stat"><div class="stat-num">${aggStories.length}</div><div class="stat-label">Sprint Stories</div></div>
   </div>
   <div class="risk-grid">
     ${riskCard(nodeRisk, 'Component Risk Distribution')}
@@ -1623,6 +1643,13 @@
 
   <h2>9. Known Gaps &amp; Open Questions</h2>
   ${makeBullets(aggGaps)}
+
+  <h2>10. Sprint Backlog (Issues / Stories)</h2>
+  <p class="muted small">Stories defined on components and dataflows to address gaps and reduce risk. Sorted by risk so the highest-impact work surfaces first — copy directly into your sprint planning tool.</p>
+  ${aggStories.length
+    ? `<ol class="agg">${aggStories.map(item => `<li><span class="agg-meta">${riskBadge(item.risk)} <strong>${esc(item.kind)}</strong> · ${esc(item.name)}:</span><div style="margin-top:4px; white-space: pre-wrap;">${esc(item.text)}</div></li>`).join('')}</ol>`
+    : '<p class="muted">No sprint stories have been defined yet. Open any component or dataflow and fill in the "Issue / Story" field to populate the sprint backlog.</p>'
+  }
 
   <footer>Generated by the Failure Point Diagram Tool · ${esc(dateStr)}</footer>
 </div>
@@ -1680,6 +1707,7 @@
         lines.push(`- **Points of Failure:** ${n.failure || '_Not specified._'}`);
         lines.push(`- **Recovery Handling:** ${n.recovery || '_Not specified._'}`);
         lines.push(`- **Gap Notes:** ${n.gap || '_Not specified._'}`);
+        lines.push(`- **Issue / Story:** ${n.story || '_Not specified._'}`);
         lines.push('');
       });
 
@@ -1696,8 +1724,34 @@
         lines.push(`- **Points of Failure:** ${c.failure || '_Not specified._'}`);
         lines.push(`- **Recovery Handling:** ${c.recovery || '_Not specified._'}`);
         lines.push(`- **Gap Notes:** ${c.gap || '_Not specified._'}`);
+        lines.push(`- **Issue / Story:** ${c.story || '_Not specified._'}`);
         lines.push('');
       });
+
+      // Sprint backlog section
+      const stories = [];
+      reportNodes.forEach(n => { if (n.story) stories.push({ kind: 'Component', name: n.title, risk: n.risk || 'low', text: n.story }); });
+      state.connections.forEach(c => {
+        if (!c.story) return;
+        const fromT = nodeById[c.from]?.title || '?';
+        const toT = nodeById[c.to]?.title || '?';
+        stories.push({ kind: 'Dataflow', name: `${fromT} → ${toT}${c.label ? ` (${c.label})` : ''}`, risk: c.risk || 'low', text: c.story });
+      });
+      const RISK_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
+      stories.sort((a, b) => (RISK_ORDER[b.risk] || 0) - (RISK_ORDER[a.risk] || 0));
+
+      lines.push('## Sprint Backlog');
+      lines.push('');
+      if (!stories.length) {
+        lines.push('_No sprint stories defined._');
+      } else {
+        stories.forEach((s, i) => {
+          lines.push(`### Story ${i + 1} — ${cap(s.risk)} risk · ${s.kind}: ${s.name}`);
+          lines.push('');
+          lines.push(s.text);
+          lines.push('');
+        });
+      }
 
       return lines.join('\n');
     }
@@ -1792,14 +1846,14 @@
       lines.push('nodes:');
       data.nodes.forEach(node => {
         lines.push('  -');
-        for (const key of ['id','type','title','label','icon','x','y','width','height','description','failure','recovery','gap','risk']) {
+        for (const key of ['id','type','title','label','icon','x','y','width','height','description','failure','recovery','gap','story','risk']) {
           lines.push(`    ${key}: ${yamlScalar(node[key])}`);
         }
       });
       lines.push('connections:');
       data.connections.forEach(conn => {
         lines.push('  -');
-        for (const key of ['id','from','to','label','description','failure','recovery','gap','risk']) {
+        for (const key of ['id','from','to','label','description','failure','recovery','gap','story','risk']) {
           lines.push(`    ${key}: ${yamlScalar(conn[key])}`);
         }
       });
@@ -1904,6 +1958,7 @@
         failure: n.failure || '',
         recovery: n.recovery || '',
         gap: n.gap || '',
+        story: n.story || '',
         risk: n.risk || 'low',
         simulated: 'none'
       }));
@@ -1916,6 +1971,7 @@
         failure: c.failure || '',
         recovery: c.recovery || '',
         gap: c.gap || '',
+        story: c.story || '',
         risk: c.risk || 'low',
         simulated: 'none'
       }));
