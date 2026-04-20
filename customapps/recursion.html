@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Recursion — A Slow & Steady Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['Fraunces', 'serif'],
+          body: ['Inter', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        }
+      }
+    }
+  };
+</script>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --bg-alt: #ede6d3;
+    --ink: #1a1a1a;
+    --ink-soft: #3d3d3d;
+    --muted: #6b6b6b;
+    --accent: #c1440e;
+    --accent-soft: #e8a87c;
+    --line: #2a2a2a;
+    --paper: #ffffff;
+    --code-bg: #1a1a1a;
+    --code-ink: #f5f1e8;
+    --highlight: #ffd966;
+  }
+  .dark {
+    --bg: #141414;
+    --bg-alt: #1e1e1e;
+    --ink: #f0ebe0;
+    --ink-soft: #c8c2b5;
+    --muted: #8a8578;
+    --accent: #ff6b35;
+    --accent-soft: #ffa870;
+    --line: #3a3a3a;
+    --paper: #1e1e1e;
+    --code-bg: #0a0a0a;
+    --code-ink: #e8e3d5;
+    --highlight: #d4a017;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  .display { font-family: 'Fraunces', serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .paper { background: var(--paper); border: 1px solid var(--line); }
+  .code-block {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  @media (min-width: 640px) { .code-block { font-size: 0.875rem; } }
+  .accent { color: var(--accent); }
+  .accent-bg { background: var(--accent); color: var(--paper); }
+  .bg-alt { background: var(--bg-alt); }
+  .border-ink { border-color: var(--line); }
+  .muted { color: var(--muted); }
+  .soft { color: var(--ink-soft); }
+
+  /* Syntax highlight (lightweight) */
+  .kw { color: #ff9f68; }
+  .str { color: #a3d977; }
+  .num { color: #7fb3ff; }
+  .com { color: #6b6b6b; font-style: italic; }
+  .fn { color: #ffd166; }
+  .ty { color: #c792ea; }
+
+  /* Tab system */
+  .tab-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .tab-btn:hover { background: var(--bg-alt); }
+  .tab-btn.active { background: var(--ink); color: var(--bg); }
+
+  /* Quiz */
+  .quiz-opt {
+    border: 1px solid var(--line);
+    padding: 0.75rem 1rem;
+    background: var(--paper);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+    width: 100%;
+    color: var(--ink);
+    font-size: 0.9rem;
+  }
+  .quiz-opt:hover:not(.correct):not(.wrong) { background: var(--bg-alt); transform: translateX(4px); }
+  .quiz-opt.correct {
+    background: #2d5f3f; color: #e8f5e9; border-color: #2d5f3f;
+  }
+  .dark .quiz-opt.correct {
+    background: #1b4332; color: #b7e4c7; border-color: #2d5f3f;
+  }
+  .quiz-opt.wrong {
+    background: #6d1f1f; color: #ffdad6; border-color: #6d1f1f;
+  }
+  .dark .quiz-opt.wrong {
+    background: #3d0d0d; color: #ffb4ab; border-color: #6d1f1f;
+  }
+
+  /* Section numbering */
+  .section-num {
+    font-family: 'Fraunces', serif;
+    font-weight: 800;
+    font-style: italic;
+    color: var(--accent);
+    font-size: 3rem;
+    line-height: 1;
+  }
+  @media (min-width: 768px) { .section-num { font-size: 4.5rem; } }
+
+  /* SVG theming */
+  .node-rect { fill: var(--paper); stroke: var(--line); stroke-width: 2; }
+  .node-base { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+  .node-text { fill: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; }
+  .node-line { stroke: var(--line); stroke-width: 2; fill: none; }
+  .node-arrow { fill: var(--line); }
+  .node-label { fill: var(--muted); font-family: 'Inter', sans-serif; font-size: 11px; }
+
+  /* Highlight callout */
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--bg-alt);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+
+  /* Step cards */
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Scroll reveal */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .reveal { animation: fadeUp 0.6s ease both; }
+
+  /* Decorative line */
+  .divider-art {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 3rem 0;
+    color: var(--muted);
+  }
+  .divider-art::before, .divider-art::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    background: var(--ink);
+    color: var(--bg);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-primary:hover { transform: translateY(-1px); }
+
+  /* Trace animation */
+  .trace-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: all 0.3s ease;
+  }
+  .trace-line.show { opacity: 1; transform: translateX(0); }
+  .trace-line.active { background: var(--highlight); color: #1a1a1a; border-radius: 4px; }
+
+  /* Table */
+  .big-o-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .big-o-table th, .big-o-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+  }
+  .big-o-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    background: var(--bg-alt);
+  }
+  .big-o-table tr:hover { background: var(--bg-alt); }
+
+  /* Toggle switch */
+  .theme-toggle {
+    width: 52px; height: 28px;
+    background: var(--bg-alt);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .theme-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 22px; height: 22px;
+    background: var(--ink);
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+  }
+  .dark .theme-toggle::after { transform: translateX(24px); }
+
+  /* Key term */
+  .key-term {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  /* Smooth scroll */
+  html { scroll-behavior: smooth; }
+
+  /* TOC link */
+  .toc-link {
+    display: block;
+    padding: 0.5rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    border-bottom: 1px dashed var(--line);
+    transition: all 0.15s ease;
+  }
+  .toc-link:hover { color: var(--accent); padding-left: 0.5rem; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============ HEADER ============ -->
+<header class="border-b border-ink sticky top-0 z-50" style="background: var(--bg); backdrop-filter: blur(8px);">
+  <div class="max-w-6xl mx-auto px-4 md:px-8 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <svg width="28" height="28" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="20" cy="20" r="4" fill="currentColor"/>
+      </svg>
+      <div class="mono text-xs md:text-sm">recursion.guide</div>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="mono text-xs muted hidden md:block">THEME</span>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme"></button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="max-w-6xl mx-auto px-4 md:px-8 pt-12 md:pt-20 pb-8">
+  <div class="mono text-xs muted mb-4">A FIELD GUIDE · NO. 01</div>
+  <h1 class="display text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.95] mb-6">
+    Recursion,<br>
+    <span class="italic" style="color: var(--accent);">slowly.</span>
+  </h1>
+  <p class="text-lg md:text-xl soft max-w-2xl leading-relaxed">
+    A patient, visual tour of how functions call themselves — with code in
+    <strong>Python, Java, and Go</strong>, hand-drawn call trees, quizzes between lessons,
+    and honest notes on performance. No prior experience assumed.
+  </p>
+
+  <div class="mt-8 flex flex-wrap gap-3">
+    <a href="#ch1" class="btn-primary">▸ Start reading</a>
+    <a href="#toc" class="btn-primary" style="background: transparent; color: var(--ink);">View contents</a>
+  </div>
+</section>
+
+<!-- ============ TOC ============ -->
+<section id="toc" class="max-w-6xl mx-auto px-4 md:px-8 py-8">
+  <div class="paper p-6 md:p-8 rounded">
+    <div class="mono text-xs muted mb-4">TABLE OF CONTENTS</div>
+    <div class="grid md:grid-cols-2 gap-x-8">
+      <a href="#ch1" class="toc-link">01 · What is recursion, really?</a>
+      <a href="#ch2" class="toc-link">02 · Anatomy of a recursive function</a>
+      <a href="#ch3" class="toc-link">03 · Your first walkthrough: factorial</a>
+      <a href="#ch4" class="toc-link">04 · The call stack, visualized</a>
+      <a href="#ch5" class="toc-link">05 · Decoding the Fibonacci function</a>
+      <a href="#ch6" class="toc-link">06 · Checkpoint quiz</a>
+      <a href="#ch7" class="toc-link">07 · Performance: when recursion gets slow</a>
+      <a href="#ch8" class="toc-link">08 · Memoization & dynamic programming</a>
+      <a href="#ch9" class="toc-link">09 · Tail recursion across languages</a>
+      <a href="#ch10" class="toc-link">10 · Real-world patterns: trees & divide-and-conquer</a>
+      <a href="#ch11" class="toc-link">11 · Common mistakes & best practices</a>
+      <a href="#ch12" class="toc-link">12 · Final quiz</a>
+    </div>
+  </div>
+</section>
+
+<div class="divider-art"><span class="mono text-xs">§</span></div>
+
+<!-- ============ CHAPTER 1 ============ -->
+<section id="ch1" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">01</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER ONE</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">What is recursion, really?</h2>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-5 gap-8 items-start">
+    <div class="md:col-span-3 space-y-4 text-base md:text-lg leading-relaxed soft">
+      <p>
+        <span class="key-term">Recursion</span> is when a function calls itself to solve a smaller version of the same problem.
+      </p>
+      <p>
+        Think of Russian nesting dolls. Each doll holds a smaller doll inside, which holds an even smaller doll, and so on — until you reach the tiniest one that can't be opened. That smallest doll is where the "unwrapping" stops.
+      </p>
+      <p>
+        In code, a function that calls itself works the same way. Each call tackles a slightly simpler problem, passing the smaller piece "inward." Eventually, we hit a case so simple it can be answered directly — and then everything unwinds back out.
+      </p>
+      <div class="callout">
+        <div class="callout-title">◆ MENTAL MODEL</div>
+        <p class="soft">Every recursive problem has two parts: <strong>"How do I handle the tiniest case?"</strong> and <strong>"How do I turn a big problem into a smaller version of itself?"</strong></p>
+      </div>
+    </div>
+
+    <!-- SVG: Nesting dolls metaphor -->
+    <div class="md:col-span-2 paper p-4 rounded">
+      <div class="mono text-xs muted mb-3">FIG. 1 · NESTED CALLS</div>
+      <svg viewBox="0 0 280 280" class="w-full">
+        <rect x="10" y="10" width="260" height="260" rx="8" class="node-rect"/>
+        <text x="140" y="32" text-anchor="middle" class="node-text">f(4)</text>
+        <rect x="30" y="50" width="220" height="220" rx="6" class="node-rect"/>
+        <text x="140" y="72" text-anchor="middle" class="node-text">f(3)</text>
+        <rect x="50" y="90" width="180" height="180" rx="6" class="node-rect"/>
+        <text x="140" y="112" text-anchor="middle" class="node-text">f(2)</text>
+        <rect x="70" y="130" width="140" height="140" rx="6" class="node-rect"/>
+        <text x="140" y="152" text-anchor="middle" class="node-text">f(1)</text>
+        <rect x="90" y="170" width="100" height="100" rx="6" class="node-base"/>
+        <text x="140" y="225" text-anchor="middle" class="node-text">base case</text>
+        <text x="140" y="245" text-anchor="middle" class="node-label">return 1</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 2 ============ -->
+<section id="ch2" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">02</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER TWO</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Anatomy of a recursive function</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-8 max-w-3xl leading-relaxed">
+    Every recursive function — in every programming language — contains exactly two ingredients. Miss either one and things go badly wrong.
+  </p>
+
+  <div class="grid md:grid-cols-2 gap-6 mb-10">
+    <div class="paper p-6 rounded">
+      <div class="mono text-xs accent mb-2">INGREDIENT 01</div>
+      <h3 class="display text-2xl font-bold mb-3">The base case</h3>
+      <p class="soft mb-4">A condition so simple the function can return an answer <em>without calling itself</em>. This is the "stop" signal.</p>
+      <p class="soft text-sm"><strong>Without it:</strong> infinite recursion. The program calls itself forever until the call stack runs out of memory and crashes. (You'll see <span class="mono text-xs">StackOverflowError</span> in Java, <span class="mono text-xs">RecursionError</span> in Python, or <span class="mono text-xs">fatal error: stack overflow</span> in Go.)</p>
+    </div>
+
+    <div class="paper p-6 rounded">
+      <div class="mono text-xs accent mb-2">INGREDIENT 02</div>
+      <h3 class="display text-2xl font-bold mb-3">The recursive case</h3>
+      <p class="soft mb-4">The part where the function calls itself with a <em>smaller</em> or <em>simpler</em> input, moving toward the base case.</p>
+      <p class="soft text-sm"><strong>Without progress:</strong> if each call doesn't actually get closer to the base case, you again get infinite recursion. "Smaller" must mean something concrete — smaller number, shorter list, fewer nodes, etc.</p>
+    </div>
+  </div>
+
+  <!-- Language tabs: countdown example -->
+  <div class="mb-4">
+    <div class="mono text-xs muted mb-3">THE SIMPLEST POSSIBLE EXAMPLE · COUNTDOWN</div>
+    <p class="soft mb-4">Print numbers from <span class="mono">n</span> down to <span class="mono">1</span>. Look at the base case and the recursive call in each language — the pattern is identical.</p>
+  </div>
+
+  <div class="paper rounded">
+    <div class="flex border-b border-ink">
+      <button class="tab-btn active flex-1 md:flex-none" data-tab="py" data-group="countdown">python</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="java" data-group="countdown">java</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="go" data-group="countdown">go</button>
+    </div>
+
+    <div data-content="countdown-py" class="p-4">
+      <pre class="code-block"><span class="kw">def</span> <span class="fn">countdown</span>(n):
+    <span class="kw">if</span> n &lt;= <span class="num">0</span>:           <span class="com"># ← base case: stop here</span>
+        <span class="kw">return</span>
+    <span class="fn">print</span>(n)
+    <span class="fn">countdown</span>(n - <span class="num">1</span>)   <span class="com"># ← recursive call with smaller input</span>
+
+<span class="fn">countdown</span>(<span class="num">3</span>)  <span class="com"># prints: 3, 2, 1</span></pre>
+    </div>
+
+    <div data-content="countdown-java" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">public</span> <span class="kw">static</span> <span class="ty">void</span> <span class="fn">countdown</span>(<span class="ty">int</span> n) {
+    <span class="kw">if</span> (n &lt;= <span class="num">0</span>) <span class="kw">return</span>;           <span class="com">// ← base case</span>
+    System.out.<span class="fn">println</span>(n);
+    <span class="fn">countdown</span>(n - <span class="num">1</span>);              <span class="com">// ← recursive call</span>
+}
+
+<span class="com">// countdown(3) prints: 3, 2, 1</span></pre>
+    </div>
+
+    <div data-content="countdown-go" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">func</span> <span class="fn">countdown</span>(n <span class="ty">int</span>) {
+    <span class="kw">if</span> n &lt;= <span class="num">0</span> {                   <span class="com">// ← base case</span>
+        <span class="kw">return</span>
+    }
+    fmt.<span class="fn">Println</span>(n)
+    <span class="fn">countdown</span>(n - <span class="num">1</span>)              <span class="com">// ← recursive call</span>
+}
+
+<span class="com">// countdown(3) prints: 3, 2, 1</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 3 ============ -->
+<section id="ch3" class="max-w-6xl mx-auto px-4 md:px-8 py-12 bg-alt">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">03</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER THREE</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Your first walkthrough: factorial</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-8 max-w-3xl leading-relaxed">
+    Factorial is the gentlest recursion to trace by hand. We write <span class="mono">n!</span> (read "n factorial") for the product of all whole numbers from <span class="mono">1</span> up to <span class="mono">n</span>. So <span class="mono">4! = 4 × 3 × 2 × 1 = 24</span>.
+  </p>
+
+  <div class="paper rounded mb-8">
+    <div class="flex border-b border-ink">
+      <button class="tab-btn active flex-1 md:flex-none" data-tab="py" data-group="fact">python</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="java" data-group="fact">java</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="go" data-group="fact">go</button>
+    </div>
+    <div data-content="fact-py" class="p-4">
+      <pre class="code-block"><span class="kw">def</span> <span class="fn">factorial</span>(n):
+    <span class="kw">if</span> n &lt;= <span class="num">1</span>:
+        <span class="kw">return</span> <span class="num">1</span>                    <span class="com"># base case</span>
+    <span class="kw">return</span> n * <span class="fn">factorial</span>(n - <span class="num">1</span>)    <span class="com"># recursive case</span>
+
+<span class="fn">print</span>(<span class="fn">factorial</span>(<span class="num">4</span>))  <span class="com"># 24</span></pre>
+    </div>
+    <div data-content="fact-java" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">public</span> <span class="kw">static</span> <span class="ty">long</span> <span class="fn">factorial</span>(<span class="ty">int</span> n) {
+    <span class="kw">if</span> (n &lt;= <span class="num">1</span>) <span class="kw">return</span> <span class="num">1</span>;              <span class="com">// base case</span>
+    <span class="kw">return</span> n * <span class="fn">factorial</span>(n - <span class="num">1</span>);       <span class="com">// recursive case</span>
+}
+
+System.out.<span class="fn">println</span>(<span class="fn">factorial</span>(<span class="num">4</span>));  <span class="com">// 24</span></pre>
+    </div>
+    <div data-content="fact-go" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">func</span> <span class="fn">factorial</span>(n <span class="ty">int</span>) <span class="ty">int</span> {
+    <span class="kw">if</span> n &lt;= <span class="num">1</span> {
+        <span class="kw">return</span> <span class="num">1</span>                        <span class="com">// base case</span>
+    }
+    <span class="kw">return</span> n * <span class="fn">factorial</span>(n - <span class="num">1</span>)      <span class="com">// recursive case</span>
+}
+
+fmt.<span class="fn">Println</span>(<span class="fn">factorial</span>(<span class="num">4</span>))  <span class="com">// 24</span></pre>
+    </div>
+  </div>
+
+  <!-- Step by step reveal -->
+  <div class="mb-8">
+    <div class="mono text-xs muted mb-3">NOW LET'S TRACE factorial(4) BY HAND</div>
+    <p class="soft mb-6">Press <strong>Next step</strong> and watch what happens. Each line shows what the computer is thinking at that moment.</p>
+
+    <div class="paper p-4 md:p-6 rounded">
+      <div id="factTrace" class="space-y-2 min-h-[320px]">
+        <div class="trace-line show"><span class="muted">&gt;</span> Call <span class="mono">factorial(4)</span></div>
+      </div>
+      <div class="flex gap-2 mt-6 flex-wrap">
+        <button id="factNext" class="btn-primary">▸ Next step</button>
+        <button id="factReset" class="btn-primary" style="background: transparent; color: var(--ink);">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ THE BIG INSIGHT</div>
+    <p class="soft">Notice the two <strong>phases</strong>: first the function keeps calling itself <em>deeper and deeper</em> (the "winding up" phase), suspending each call mid-calculation. Then, once it hits the base case, results <em>unwind back out</em>, each multiplication finally happening on the way back up.</p>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 4: CALL STACK ============ -->
+<section id="ch4" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">04</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER FOUR</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">The call stack, visualized</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-6 max-w-3xl leading-relaxed">
+    Every time a function is called, the computer adds a little "note" to a pile called the <span class="key-term">call stack</span>. The note remembers: which function, which inputs, and where to come back to when done.
+  </p>
+
+  <p class="text-lg soft mb-8 max-w-3xl leading-relaxed">
+    Recursion piles these notes up. <span class="mono">factorial(4)</span> can't finish until <span class="mono">factorial(3)</span> returns, which can't finish until <span class="mono">factorial(2)</span> returns, and so on. When the base case finally returns a real value, the stack <em>unwinds</em> — each function finishes its multiplication, pops off, and hands the answer to the one below it.
+  </p>
+
+  <!-- SVG: call stack -->
+  <div class="paper p-6 rounded mb-8">
+    <div class="mono text-xs muted mb-3">FIG. 2 · THE CALL STACK GROWS, THEN SHRINKS</div>
+    <svg viewBox="0 0 700 340" class="w-full" style="max-width: 100%;">
+      <!-- Growing -->
+      <text x="10" y="20" class="node-label">winding up (calls stack up)</text>
+
+      <rect x="10" y="40" width="120" height="36" class="node-rect"/>
+      <text x="70" y="63" text-anchor="middle" class="node-text">factorial(4)</text>
+
+      <rect x="10" y="80" width="120" height="36" class="node-rect"/>
+      <text x="70" y="103" text-anchor="middle" class="node-text">factorial(3)</text>
+
+      <rect x="10" y="120" width="120" height="36" class="node-rect"/>
+      <text x="70" y="143" text-anchor="middle" class="node-text">factorial(2)</text>
+
+      <rect x="10" y="160" width="120" height="36" class="node-base"/>
+      <text x="70" y="183" text-anchor="middle" class="node-text">factorial(1)</text>
+      <text x="140" y="183" class="node-label">← base case hit!</text>
+
+      <!-- Arrow to unwind -->
+      <path d="M 280 120 L 380 120" class="node-line" marker-end="url(#arr)"/>
+      <text x="300" y="110" class="node-label">returns unwind</text>
+
+      <!-- Unwinding -->
+      <text x="420" y="20" class="node-label">unwinding (returns pop off)</text>
+
+      <rect x="420" y="40" width="160" height="36" class="node-rect"/>
+      <text x="500" y="63" text-anchor="middle" class="node-text">4 × 6 = 24</text>
+
+      <rect x="420" y="80" width="160" height="36" class="node-rect"/>
+      <text x="500" y="103" text-anchor="middle" class="node-text">3 × 2 = 6</text>
+
+      <rect x="420" y="120" width="160" height="36" class="node-rect"/>
+      <text x="500" y="143" text-anchor="middle" class="node-text">2 × 1 = 2</text>
+
+      <rect x="420" y="160" width="160" height="36" class="node-base"/>
+      <text x="500" y="183" text-anchor="middle" class="node-text">returns 1</text>
+
+      <!-- Stack label -->
+      <text x="10" y="230" class="node-label">Stack pointer grows DOWN here →</text>
+      <path d="M 70 245 L 70 300" class="node-line" marker-end="url(#arr)"/>
+      <text x="420" y="230" class="node-label">← then shrinks UP here</text>
+      <path d="M 500 300 L 500 245" class="node-line" marker-end="url(#arr)"/>
+
+      <defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+          <path d="M 0 0 L 8 3 L 0 6 Z" class="node-arrow"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ WHY THIS MATTERS</div>
+    <p class="soft">The call stack has a fixed size limit. Too many nested calls → crash. Python defaults to about 1000 recursion levels. Java's limit depends on thread stack size (typically 512KB–1MB, giving thousands of frames). Go grows the stack dynamically, so it handles deeper recursion but isn't infinite. We'll return to this in Chapter 7.</p>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 5: FIBONACCI ============ -->
+<section id="ch5" class="max-w-6xl mx-auto px-4 md:px-8 py-12 bg-alt">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">05</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER FIVE</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Decoding your Fibonacci function</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-6 max-w-3xl leading-relaxed">
+    Here's the function you asked about, translated into three languages. They all do the same thing:
+  </p>
+
+  <div class="paper rounded mb-8">
+    <div class="flex border-b border-ink">
+      <button class="tab-btn active flex-1 md:flex-none" data-tab="py" data-group="fib">python</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="java" data-group="fib">java</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="go" data-group="fib">go</button>
+    </div>
+    <div data-content="fib-py" class="p-4">
+      <pre class="code-block"><span class="kw">def</span> <span class="fn">f</span>(n):
+    <span class="kw">if</span> n &lt;= <span class="num">1</span>:
+        <span class="kw">return</span> n
+    <span class="kw">return</span> <span class="fn">f</span>(n - <span class="num">1</span>) + <span class="fn">f</span>(n - <span class="num">2</span>)
+
+<span class="fn">print</span>(<span class="fn">f</span>(<span class="num">4</span>))  <span class="com"># 3</span></pre>
+    </div>
+    <div data-content="fib-java" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">public</span> <span class="kw">static</span> <span class="ty">int</span> <span class="fn">f</span>(<span class="ty">int</span> n) {
+    <span class="kw">if</span> (n &lt;= <span class="num">1</span>) <span class="kw">return</span> n;
+    <span class="kw">return</span> <span class="fn">f</span>(n - <span class="num">1</span>) + <span class="fn">f</span>(n - <span class="num">2</span>);
+}
+
+System.out.<span class="fn">println</span>(<span class="fn">f</span>(<span class="num">4</span>));  <span class="com">// 3</span></pre>
+    </div>
+    <div data-content="fib-go" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">func</span> <span class="fn">f</span>(n <span class="ty">int</span>) <span class="ty">int</span> {
+    <span class="kw">if</span> n &lt;= <span class="num">1</span> {
+        <span class="kw">return</span> n
+    }
+    <span class="kw">return</span> <span class="fn">f</span>(n - <span class="num">1</span>) + <span class="fn">f</span>(n - <span class="num">2</span>)
+}
+
+fmt.<span class="fn">Println</span>(<span class="fn">f</span>(<span class="num">4</span>))  <span class="com">// 3</span></pre>
+    </div>
+  </div>
+
+  <!-- Three-step breakdown -->
+  <div class="space-y-4 mb-8">
+    <div class="paper p-5 rounded flex gap-4">
+      <div class="step-num">1</div>
+      <div>
+        <h4 class="display text-xl font-bold mb-2">Identify the base cases</h4>
+        <p class="soft">When <span class="mono">n &lt;= 1</span>, return <span class="mono">n</span>. This means <span class="mono">f(0) = 0</span> and <span class="mono">f(1) = 1</span>. No recursion happens; the function returns immediately. <strong>This is why f(1) returns 1.</strong></p>
+      </div>
+    </div>
+
+    <div class="paper p-5 rounded flex gap-4">
+      <div class="step-num">2</div>
+      <div>
+        <h4 class="display text-xl font-bold mb-2">Identify the recursive case</h4>
+        <p class="soft">For any <span class="mono">n &gt; 1</span>, return <span class="mono">f(n-1) + f(n-2)</span>. Two recursive calls. Each gets smaller, so both are guaranteed to eventually hit the base case.</p>
+      </div>
+    </div>
+
+    <div class="paper p-5 rounded flex gap-4">
+      <div class="step-num">3</div>
+      <div>
+        <h4 class="display text-xl font-bold mb-2">Recognize the pattern</h4>
+        <p class="soft">Each number is the sum of the two before it: <span class="mono">0, 1, 1, 2, 3, 5, 8, 13, 21...</span> — the <strong>Fibonacci sequence</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full call tree SVG -->
+  <div class="paper p-4 md:p-6 rounded mb-8">
+    <div class="mono text-xs muted mb-3">FIG. 3 · THE FULL CALL TREE FOR f(4)</div>
+    <svg viewBox="0 0 640 360" class="w-full">
+      <!-- Level 0 -->
+      <rect x="275" y="10" width="90" height="34" class="node-rect"/>
+      <text x="320" y="32" text-anchor="middle" class="node-text">f(4)</text>
+
+      <!-- Level 1 -->
+      <line x1="320" y1="44" x2="200" y2="80" class="node-line"/>
+      <line x1="320" y1="44" x2="440" y2="80" class="node-line"/>
+
+      <rect x="155" y="80" width="90" height="34" class="node-rect"/>
+      <text x="200" y="102" text-anchor="middle" class="node-text">f(3)</text>
+      <rect x="395" y="80" width="90" height="34" class="node-rect"/>
+      <text x="440" y="102" text-anchor="middle" class="node-text">f(2)</text>
+
+      <!-- Level 2 -->
+      <line x1="200" y1="114" x2="110" y2="150" class="node-line"/>
+      <line x1="200" y1="114" x2="270" y2="150" class="node-line"/>
+      <line x1="440" y1="114" x2="370" y2="150" class="node-line"/>
+      <line x1="440" y1="114" x2="530" y2="150" class="node-line"/>
+
+      <rect x="65" y="150" width="90" height="34" class="node-rect"/>
+      <text x="110" y="172" text-anchor="middle" class="node-text">f(2)</text>
+      <rect x="225" y="150" width="90" height="34" class="node-base"/>
+      <text x="270" y="172" text-anchor="middle" class="node-text">f(1)=1</text>
+      <rect x="325" y="150" width="90" height="34" class="node-base"/>
+      <text x="370" y="172" text-anchor="middle" class="node-text">f(1)=1</text>
+      <rect x="485" y="150" width="90" height="34" class="node-base"/>
+      <text x="530" y="172" text-anchor="middle" class="node-text">f(0)=0</text>
+
+      <!-- Level 3 -->
+      <line x1="110" y1="184" x2="60" y2="220" class="node-line"/>
+      <line x1="110" y1="184" x2="160" y2="220" class="node-line"/>
+
+      <rect x="15" y="220" width="90" height="34" class="node-base"/>
+      <text x="60" y="242" text-anchor="middle" class="node-text">f(1)=1</text>
+      <rect x="115" y="220" width="90" height="34" class="node-base"/>
+      <text x="160" y="242" text-anchor="middle" class="node-text">f(0)=0</text>
+
+      <!-- Sum annotations -->
+      <text x="320" y="300" text-anchor="middle" class="node-text" style="fill: var(--accent);">f(4) = f(3) + f(2) = 2 + 1 = 3</text>
+      <text x="320" y="325" text-anchor="middle" class="node-label">base cases (orange) return immediately</text>
+      <text x="320" y="345" text-anchor="middle" class="node-label">every other call waits for its two children to finish</text>
+    </svg>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ ANSWER</div>
+    <p class="soft"><strong>f(4) returns 3.</strong> Trace back up: the base cases return <span class="mono">1, 1, 1, 0, 1, 0</span>. Adding them up the tree gives <span class="mono">f(2)=1</span>, <span class="mono">f(3)=2</span>, and finally <span class="mono">f(4) = 2 + 1 = 3</span>.</p>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 6: QUIZ 1 ============ -->
+<section id="ch6" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">06</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER SIX · CHECKPOINT</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Quiz break</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-8 max-w-3xl">Four questions. No pressure. Tap an answer — green means right, red means have another look. Explanations appear underneath.</p>
+
+  <div class="space-y-6">
+    <!-- Q1 -->
+    <div class="paper p-5 md:p-6 rounded" data-quiz="q1">
+      <div class="mono text-xs muted mb-2">QUESTION 01</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">What does <span class="mono" style="font-size: 0.9em;">factorial(0)</span> return, using the Chapter 3 code?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-correct="true" data-explain="Correct! 0 satisfies n <= 1, so the base case fires and returns 1. By mathematical convention, 0! is defined as 1.">1</button>
+        <button class="quiz-opt" data-explain="Not quite. The base case is n <= 1, which includes 0. Trace it: factorial(0) hits the if, returns 1.">0</button>
+        <button class="quiz-opt" data-explain="No — that would be if the function only stopped at n == 1 and kept recursing past 0, which would cause infinite recursion and a stack overflow.">crashes with infinite recursion</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="paper p-5 md:p-6 rounded" data-quiz="q2">
+      <div class="mono text-xs muted mb-2">QUESTION 02</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">What happens if you remove the base case from a recursive function?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Nope — without a base case, the function never stops calling itself, and the call stack grows without bound.">It runs faster because there's less code to check.</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Correct. With no stopping condition, the function calls itself forever, piling frames on the call stack until it runs out of space.">The call stack fills up and the program crashes (stack overflow).</button>
+        <button class="quiz-opt" data-explain="Languages don't auto-fill this for you. You must write the base case yourself.">The compiler adds one automatically.</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="paper p-5 md:p-6 rounded" data-quiz="q3">
+      <div class="mono text-xs muted mb-2">QUESTION 03</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">Using the Fibonacci function from Chapter 5, what does <span class="mono" style="font-size: 0.9em;">f(5)</span> return?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Close but no. f(5) = f(4) + f(3) = 3 + 2 = 5. The sequence is 0, 1, 1, 2, 3, 5, 8, so f(5) is the sixth term.">3</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Correct! f(5) = f(4) + f(3) = 3 + 2 = 5. Notice the sequence: f(0)=0, f(1)=1, f(2)=1, f(3)=2, f(4)=3, f(5)=5.">5</button>
+        <button class="quiz-opt" data-explain="That's f(6). f(5) is one step earlier in the sequence.">8</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="paper p-5 md:p-6 rounded" data-quiz="q4">
+      <div class="mono text-xs muted mb-2">QUESTION 04</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">Why does Fibonacci need TWO base cases (n=0 AND n=1) instead of just one?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Not quite — one base case is often enough for simple recursion like factorial. The reason here is specific to how this function recurses.">All recursive functions need two base cases.</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Exactly. Because the recursive case is f(n-1) + f(n-2), if we only stopped at n=0, then f(1) would call f(0) + f(-1), and f(-1) would call f(-2) + f(-3), forever into negatives.">The recursive case calls f(n-1) AND f(n-2), so stopping only at 0 would let f(1) descend into negative numbers forever.</button>
+        <button class="quiz-opt" data-explain="There's no performance reason here — it's a correctness reason.">It makes the function run twice as fast.</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider-art"><span class="mono text-xs">§ § §</span></div>
+
+<!-- ============ CHAPTER 7: PERFORMANCE ============ -->
+<section id="ch7" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">07</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER SEVEN · ADVANCED</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">When recursion gets slow</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-6 max-w-3xl leading-relaxed">
+    The naive Fibonacci function we just wrote is <strong>painfully slow</strong>. Try <span class="mono">f(45)</span> — you might wait 10 seconds. Try <span class="mono">f(50)</span> and you could wait minutes. Why?
+  </p>
+
+  <p class="text-lg soft mb-8 max-w-3xl leading-relaxed">
+    Look at the call tree again. To compute <span class="mono">f(4)</span>, we ended up computing <span class="mono">f(2)</span> twice and <span class="mono">f(1)</span> three times. The redundancy explodes as <span class="mono">n</span> grows. Computing <span class="mono">f(30)</span> makes more than a million calls. Computing <span class="mono">f(50)</span> makes over 20 <em>billion</em>.
+  </p>
+
+  <!-- SVG: redundant calls -->
+  <div class="paper p-4 md:p-6 rounded mb-8">
+    <div class="mono text-xs muted mb-3">FIG. 4 · REDUNDANT WORK HIGHLIGHTED</div>
+    <svg viewBox="0 0 640 300" class="w-full">
+      <rect x="275" y="10" width="90" height="34" class="node-rect"/>
+      <text x="320" y="32" text-anchor="middle" class="node-text">f(5)</text>
+
+      <line x1="320" y1="44" x2="200" y2="80" class="node-line"/>
+      <line x1="320" y1="44" x2="440" y2="80" class="node-line"/>
+
+      <rect x="155" y="80" width="90" height="34" class="node-rect"/>
+      <text x="200" y="102" text-anchor="middle" class="node-text">f(4)</text>
+      <rect x="395" y="80" width="90" height="34" style="fill: #ffd966; stroke: var(--accent);"/>
+      <text x="440" y="102" text-anchor="middle" class="node-text" style="fill: #1a1a1a;">f(3) ①</text>
+
+      <line x1="200" y1="114" x2="110" y2="150" class="node-line"/>
+      <line x1="200" y1="114" x2="290" y2="150" class="node-line"/>
+      <line x1="440" y1="114" x2="400" y2="150" class="node-line"/>
+      <line x1="440" y1="114" x2="490" y2="150" class="node-line"/>
+
+      <rect x="65" y="150" width="90" height="34" style="fill: #ffd966; stroke: var(--accent);"/>
+      <text x="110" y="172" text-anchor="middle" class="node-text" style="fill: #1a1a1a;">f(3) ②</text>
+      <rect x="245" y="150" width="90" height="34" class="node-rect"/>
+      <text x="290" y="172" text-anchor="middle" class="node-text">f(2)</text>
+      <rect x="355" y="150" width="90" height="34" class="node-rect"/>
+      <text x="400" y="172" text-anchor="middle" class="node-text">f(2)</text>
+      <rect x="445" y="150" width="90" height="34" class="node-base"/>
+      <text x="490" y="172" text-anchor="middle" class="node-text">f(1)</text>
+
+      <text x="320" y="230" text-anchor="middle" class="node-text" style="fill: var(--accent);">f(3) is computed TWICE — totally redundant</text>
+      <text x="320" y="255" text-anchor="middle" class="node-label">f(2) gets computed three times in the full tree. f(1) four times.</text>
+      <text x="320" y="275" text-anchor="middle" class="node-label">This redundancy is exponential: O(2ⁿ)</text>
+    </svg>
+  </div>
+
+  <!-- Complexity table -->
+  <div class="mb-8">
+    <div class="mono text-xs muted mb-3">BIG-O COMPLEXITY FOR COMMON RECURSIVE PATTERNS</div>
+    <div class="paper rounded overflow-x-auto">
+      <table class="big-o-table">
+        <thead>
+          <tr>
+            <th>Pattern</th>
+            <th>Time</th>
+            <th>Space (stack)</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Linear (one call)</td>
+            <td class="mono">O(n)</td>
+            <td class="mono">O(n)</td>
+            <td>factorial, countdown, sum of list</td>
+          </tr>
+          <tr>
+            <td>Linear + memo</td>
+            <td class="mono">O(n)</td>
+            <td class="mono">O(n)</td>
+            <td>memoized Fibonacci</td>
+          </tr>
+          <tr>
+            <td>Divide &amp; conquer</td>
+            <td class="mono">O(n log n)</td>
+            <td class="mono">O(log n)</td>
+            <td>merge sort, quicksort avg.</td>
+          </tr>
+          <tr>
+            <td>Binary search</td>
+            <td class="mono">O(log n)</td>
+            <td class="mono">O(log n)</td>
+            <td>searching a sorted array</td>
+          </tr>
+          <tr>
+            <td>Naive double-branching</td>
+            <td class="mono accent">O(2ⁿ)</td>
+            <td class="mono">O(n)</td>
+            <td>naive Fibonacci, naive subset-sum</td>
+          </tr>
+          <tr>
+            <td>Exhaustive permutations</td>
+            <td class="mono accent">O(n!)</td>
+            <td class="mono">O(n)</td>
+            <td>generating all orderings</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ THE RULE OF THUMB</div>
+    <p class="soft">If a recursive function makes <strong>two or more calls</strong> on itself in the recursive case, and those calls can revisit the same subproblem, you probably have an exponential runtime problem. The fix is usually <em>memoization</em> — coming up next.</p>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 8: MEMOIZATION ============ -->
+<section id="ch8" class="max-w-6xl mx-auto px-4 md:px-8 py-12 bg-alt">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">08</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER EIGHT · ADVANCED</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Memoization &amp; dynamic programming</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-6 max-w-3xl leading-relaxed">
+    <span class="key-term">Memoization</span> is a fancy word for a simple idea: <strong>cache the answer to each subproblem the first time you compute it</strong>, so you never redo work. With one line of caching, Fibonacci goes from minutes to microseconds.
+  </p>
+
+  <div class="paper rounded mb-8">
+    <div class="flex border-b border-ink">
+      <button class="tab-btn active flex-1 md:flex-none" data-tab="py" data-group="memo">python</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="java" data-group="memo">java</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="go" data-group="memo">go</button>
+    </div>
+    <div data-content="memo-py" class="p-4">
+      <pre class="code-block"><span class="kw">from</span> functools <span class="kw">import</span> lru_cache
+
+<span class="com"># Idiomatic Python: one decorator, done.</span>
+<span class="com"># lru_cache remembers every (input → output) pair.</span>
+<span class="fn">@lru_cache</span>(maxsize=<span class="kw">None</span>)
+<span class="kw">def</span> <span class="fn">f</span>(n):
+    <span class="kw">if</span> n &lt;= <span class="num">1</span>:
+        <span class="kw">return</span> n
+    <span class="kw">return</span> <span class="fn">f</span>(n - <span class="num">1</span>) + <span class="fn">f</span>(n - <span class="num">2</span>)
+
+<span class="fn">print</span>(<span class="fn">f</span>(<span class="num">100</span>))  <span class="com"># instant — 354224848179261915075</span></pre>
+    </div>
+    <div data-content="memo-java" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">import</span> java.util.HashMap;
+
+<span class="kw">static</span> HashMap&lt;<span class="ty">Integer</span>, <span class="ty">Long</span>&gt; memo = <span class="kw">new</span> <span class="fn">HashMap</span>&lt;&gt;();
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="ty">long</span> <span class="fn">f</span>(<span class="ty">int</span> n) {
+    <span class="kw">if</span> (n &lt;= <span class="num">1</span>) <span class="kw">return</span> n;
+    <span class="kw">if</span> (memo.<span class="fn">containsKey</span>(n)) <span class="kw">return</span> memo.<span class="fn">get</span>(n);  <span class="com">// cache hit</span>
+    <span class="ty">long</span> result = <span class="fn">f</span>(n - <span class="num">1</span>) + <span class="fn">f</span>(n - <span class="num">2</span>);
+    memo.<span class="fn">put</span>(n, result);                             <span class="com">// cache store</span>
+    <span class="kw">return</span> result;
+}
+
+System.out.<span class="fn">println</span>(<span class="fn">f</span>(<span class="num">90</span>));  <span class="com">// instant</span></pre>
+    </div>
+    <div data-content="memo-go" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">var</span> memo = <span class="kw">map</span>[<span class="ty">int</span>]<span class="ty">int</span>{}
+
+<span class="kw">func</span> <span class="fn">f</span>(n <span class="ty">int</span>) <span class="ty">int</span> {
+    <span class="kw">if</span> n &lt;= <span class="num">1</span> {
+        <span class="kw">return</span> n
+    }
+    <span class="kw">if</span> v, ok := memo[n]; ok {
+        <span class="kw">return</span> v                         <span class="com">// cache hit</span>
+    }
+    result := <span class="fn">f</span>(n-<span class="num">1</span>) + <span class="fn">f</span>(n-<span class="num">2</span>)
+    memo[n] = result                    <span class="com">// cache store</span>
+    <span class="kw">return</span> result
+}
+
+fmt.<span class="fn">Println</span>(<span class="fn">f</span>(<span class="num">90</span>))  <span class="com">// instant</span></pre>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4 mb-8">
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">BEFORE MEMO</div>
+      <h4 class="display text-xl font-bold mb-2">O(2ⁿ) time</h4>
+      <p class="soft text-sm">f(45) ≈ 1.8 billion calls. f(50) ≈ 20 billion. f(60) ≈ <em>several hours</em>.</p>
+    </div>
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">AFTER MEMO</div>
+      <h4 class="display text-xl font-bold mb-2">O(n) time</h4>
+      <p class="soft text-sm">f(1000) returns in microseconds. Each <span class="mono">n</span> is computed exactly once.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ BONUS: THE ITERATIVE VERSION</div>
+    <p class="soft mb-3">For Fibonacci specifically, you don't even need recursion. A simple loop uses <strong>constant memory</strong> and is the fastest option:</p>
+    <pre class="code-block"><span class="com"># Python — O(n) time, O(1) space</span>
+<span class="kw">def</span> <span class="fn">f</span>(n):
+    a, b = <span class="num">0</span>, <span class="num">1</span>
+    <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(n):
+        a, b = b, a + b
+    <span class="kw">return</span> a</pre>
+    <p class="soft mt-3 text-sm">Sometimes the best use of recursion is to <em>recognize when not to use it</em>. Learning to translate recursive thinking into iterative code is a core skill.</p>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 9: TAIL RECURSION ============ -->
+<section id="ch9" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">09</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER NINE · ADVANCED</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Tail recursion across languages</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-6 max-w-3xl leading-relaxed">
+    A recursive call is <span class="key-term">tail recursive</span> if it's the <em>very last</em> thing the function does — nothing happens after it returns. Some languages can optimize this into a loop, freeing up stack space.
+  </p>
+
+  <div class="grid md:grid-cols-2 gap-4 mb-6">
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">NOT TAIL RECURSIVE</div>
+      <pre class="code-block" style="font-size: 0.75rem;"><span class="kw">def</span> <span class="fn">factorial</span>(n):
+    <span class="kw">if</span> n &lt;= <span class="num">1</span>: <span class="kw">return</span> <span class="num">1</span>
+    <span class="kw">return</span> n * <span class="fn">factorial</span>(n-<span class="num">1</span>)
+    <span class="com"># ↑ multiplication happens AFTER the return</span></pre>
+    </div>
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">TAIL RECURSIVE</div>
+      <pre class="code-block" style="font-size: 0.75rem;"><span class="kw">def</span> <span class="fn">factorial</span>(n, acc=<span class="num">1</span>):
+    <span class="kw">if</span> n &lt;= <span class="num">1</span>: <span class="kw">return</span> acc
+    <span class="kw">return</span> <span class="fn">factorial</span>(n-<span class="num">1</span>, n*acc)
+    <span class="com"># ↑ the call IS the return. Nothing after.</span></pre>
+    </div>
+  </div>
+
+  <div class="mb-8">
+    <div class="mono text-xs muted mb-3">LANGUAGE SUPPORT — A HARD REALITY</div>
+    <div class="paper rounded overflow-x-auto">
+      <table class="big-o-table">
+        <thead>
+          <tr>
+            <th>Language</th>
+            <th>Tail-call optimization?</th>
+            <th>What to do instead</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Python</td>
+            <td>❌ No (by design — Guido's decision)</td>
+            <td>Use a <span class="mono">while</span> loop for deep recursion</td>
+          </tr>
+          <tr>
+            <td>Java</td>
+            <td>❌ No (JVM doesn't optimize it)</td>
+            <td>Iterative loops, or trampolining as a workaround</td>
+          </tr>
+          <tr>
+            <td>Go</td>
+            <td>❌ Not guaranteed</td>
+            <td>Loops; Go's dynamic stack helps but won't save you at extreme depth</td>
+          </tr>
+          <tr>
+            <td>Scala, Kotlin, Scheme, Haskell</td>
+            <td>✓ Yes (Scala needs <span class="mono">@tailrec</span>, Kotlin <span class="mono">tailrec</span>)</td>
+            <td>Write tail-recursive form freely</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ TAKEAWAY</div>
+    <p class="soft">In Python, Java, and Go, tail recursion gives you <strong>cleaner code</strong> but <strong>no stack savings</strong>. If you need to recurse deeper than ~1000 levels (Python) or many thousands (Java/Go), rewrite as a loop instead. Don't rely on tail-call optimization that isn't there.</p>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 10: REAL WORLD ============ -->
+<section id="ch10" class="max-w-6xl mx-auto px-4 md:px-8 py-12 bg-alt">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">10</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER TEN · ADVANCED</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Real-world patterns</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-8 max-w-3xl leading-relaxed">
+    Fibonacci and factorial are training wheels. In actual code, recursion shines for problems that are <strong>naturally hierarchical</strong>: file systems, JSON, HTML trees, binary search, sorting, compilers, and puzzle-solving.
+  </p>
+
+  <!-- Binary tree SVG -->
+  <div class="paper p-4 md:p-6 rounded mb-8">
+    <div class="mono text-xs muted mb-3">FIG. 5 · A BINARY TREE IS RECURSION MADE VISIBLE</div>
+    <svg viewBox="0 0 600 260" class="w-full">
+      <circle cx="300" cy="30" r="22" class="node-rect"/>
+      <text x="300" y="35" text-anchor="middle" class="node-text">10</text>
+
+      <line x1="285" y1="45" x2="200" y2="90" class="node-line"/>
+      <line x1="315" y1="45" x2="400" y2="90" class="node-line"/>
+
+      <circle cx="200" cy="100" r="22" class="node-rect"/>
+      <text x="200" y="105" text-anchor="middle" class="node-text">5</text>
+      <circle cx="400" cy="100" r="22" class="node-rect"/>
+      <text x="400" y="105" text-anchor="middle" class="node-text">15</text>
+
+      <line x1="185" y1="115" x2="130" y2="160" class="node-line"/>
+      <line x1="215" y1="115" x2="270" y2="160" class="node-line"/>
+      <line x1="385" y1="115" x2="330" y2="160" class="node-line"/>
+      <line x1="415" y1="115" x2="470" y2="160" class="node-line"/>
+
+      <circle cx="130" cy="170" r="22" class="node-base"/>
+      <text x="130" y="175" text-anchor="middle" class="node-text">3</text>
+      <circle cx="270" cy="170" r="22" class="node-base"/>
+      <text x="270" y="175" text-anchor="middle" class="node-text">7</text>
+      <circle cx="330" cy="170" r="22" class="node-base"/>
+      <text x="330" y="175" text-anchor="middle" class="node-text">12</text>
+      <circle cx="470" cy="170" r="22" class="node-base"/>
+      <text x="470" y="175" text-anchor="middle" class="node-text">20</text>
+
+      <text x="300" y="225" text-anchor="middle" class="node-label">Each node is either a leaf (base case) or has children (recursive case).</text>
+      <text x="300" y="245" text-anchor="middle" class="node-label">Sum the tree: sum(node) = node.value + sum(left) + sum(right)</text>
+    </svg>
+  </div>
+
+  <div class="mb-4">
+    <div class="mono text-xs muted mb-3">EXAMPLE: SUM ALL VALUES IN A BINARY TREE</div>
+  </div>
+
+  <div class="paper rounded mb-8">
+    <div class="flex border-b border-ink">
+      <button class="tab-btn active flex-1 md:flex-none" data-tab="py" data-group="tree">python</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="java" data-group="tree">java</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="go" data-group="tree">go</button>
+    </div>
+    <div data-content="tree-py" class="p-4">
+      <pre class="code-block"><span class="kw">class</span> <span class="ty">Node</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, val, left=<span class="kw">None</span>, right=<span class="kw">None</span>):
+        self.val = val
+        self.left = left
+        self.right = right
+
+<span class="kw">def</span> <span class="fn">tree_sum</span>(node):
+    <span class="kw">if</span> node <span class="kw">is</span> <span class="kw">None</span>:
+        <span class="kw">return</span> <span class="num">0</span>                    <span class="com"># base case: empty</span>
+    <span class="kw">return</span> node.val + <span class="fn">tree_sum</span>(node.left) + <span class="fn">tree_sum</span>(node.right)</pre>
+    </div>
+    <div data-content="tree-java" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">class</span> <span class="ty">Node</span> {
+    <span class="ty">int</span> val;
+    <span class="ty">Node</span> left, right;
+}
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="ty">int</span> <span class="fn">treeSum</span>(<span class="ty">Node</span> node) {
+    <span class="kw">if</span> (node == <span class="kw">null</span>) <span class="kw">return</span> <span class="num">0</span>;       <span class="com">// base case</span>
+    <span class="kw">return</span> node.val + <span class="fn">treeSum</span>(node.left) + <span class="fn">treeSum</span>(node.right);
+}</pre>
+    </div>
+    <div data-content="tree-go" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">type</span> <span class="ty">Node</span> <span class="kw">struct</span> {
+    Val         <span class="ty">int</span>
+    Left, Right *<span class="ty">Node</span>
+}
+
+<span class="kw">func</span> <span class="fn">treeSum</span>(n *<span class="ty">Node</span>) <span class="ty">int</span> {
+    <span class="kw">if</span> n == <span class="kw">nil</span> {
+        <span class="kw">return</span> <span class="num">0</span>                         <span class="com">// base case</span>
+    }
+    <span class="kw">return</span> n.Val + <span class="fn">treeSum</span>(n.Left) + <span class="fn">treeSum</span>(n.Right)
+}</pre>
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <div class="mono text-xs muted mb-3">EXAMPLE: BINARY SEARCH (DIVIDE &amp; CONQUER)</div>
+    <p class="soft mb-4 max-w-3xl">Each call cuts the search space in half, so finding an item in a million-element sorted array takes only ~20 comparisons. This is O(log n) — wildly efficient.</p>
+  </div>
+
+  <div class="paper rounded mb-8">
+    <div class="flex border-b border-ink">
+      <button class="tab-btn active flex-1 md:flex-none" data-tab="py" data-group="bs">python</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="java" data-group="bs">java</button>
+      <button class="tab-btn flex-1 md:flex-none" data-tab="go" data-group="bs">go</button>
+    </div>
+    <div data-content="bs-py" class="p-4">
+      <pre class="code-block"><span class="kw">def</span> <span class="fn">binary_search</span>(arr, target, lo=<span class="num">0</span>, hi=<span class="kw">None</span>):
+    <span class="kw">if</span> hi <span class="kw">is</span> <span class="kw">None</span>: hi = <span class="fn">len</span>(arr) - <span class="num">1</span>
+    <span class="kw">if</span> lo &gt; hi:                     <span class="com"># base case: not found</span>
+        <span class="kw">return</span> -<span class="num">1</span>
+    mid = (lo + hi) // <span class="num">2</span>
+    <span class="kw">if</span> arr[mid] == target:         <span class="com"># base case: found</span>
+        <span class="kw">return</span> mid
+    <span class="kw">if</span> target &lt; arr[mid]:
+        <span class="kw">return</span> <span class="fn">binary_search</span>(arr, target, lo, mid - <span class="num">1</span>)
+    <span class="kw">return</span> <span class="fn">binary_search</span>(arr, target, mid + <span class="num">1</span>, hi)</pre>
+    </div>
+    <div data-content="bs-java" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">public</span> <span class="kw">static</span> <span class="ty">int</span> <span class="fn">binarySearch</span>(<span class="ty">int</span>[] arr, <span class="ty">int</span> target, <span class="ty">int</span> lo, <span class="ty">int</span> hi) {
+    <span class="kw">if</span> (lo &gt; hi) <span class="kw">return</span> -<span class="num">1</span>;           <span class="com">// not found</span>
+    <span class="ty">int</span> mid = lo + (hi - lo) / <span class="num">2</span>;
+    <span class="kw">if</span> (arr[mid] == target) <span class="kw">return</span> mid;
+    <span class="kw">if</span> (target &lt; arr[mid])
+        <span class="kw">return</span> <span class="fn">binarySearch</span>(arr, target, lo, mid - <span class="num">1</span>);
+    <span class="kw">return</span> <span class="fn">binarySearch</span>(arr, target, mid + <span class="num">1</span>, hi);
+}</pre>
+    </div>
+    <div data-content="bs-go" class="p-4 hidden">
+      <pre class="code-block"><span class="kw">func</span> <span class="fn">binarySearch</span>(arr []<span class="ty">int</span>, target, lo, hi <span class="ty">int</span>) <span class="ty">int</span> {
+    <span class="kw">if</span> lo &gt; hi {
+        <span class="kw">return</span> -<span class="num">1</span>                          <span class="com">// not found</span>
+    }
+    mid := lo + (hi-lo)/<span class="num">2</span>
+    <span class="kw">if</span> arr[mid] == target {
+        <span class="kw">return</span> mid
+    }
+    <span class="kw">if</span> target &lt; arr[mid] {
+        <span class="kw">return</span> <span class="fn">binarySearch</span>(arr, target, lo, mid-<span class="num">1</span>)
+    }
+    <span class="kw">return</span> <span class="fn">binarySearch</span>(arr, target, mid+<span class="num">1</span>, hi)
+}</pre>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <div class="paper p-4 rounded">
+      <div class="mono text-xs accent mb-2">▸ WHERE YOU'LL SEE IT</div>
+      <p class="soft text-sm"><strong>File systems.</strong> Walking every file in every subdirectory is naturally recursive.</p>
+    </div>
+    <div class="paper p-4 rounded">
+      <div class="mono text-xs accent mb-2">▸ WHERE YOU'LL SEE IT</div>
+      <p class="soft text-sm"><strong>Parsers &amp; compilers.</strong> JSON, HTML, and programming languages all have nested grammar.</p>
+    </div>
+    <div class="paper p-4 rounded">
+      <div class="mono text-xs accent mb-2">▸ WHERE YOU'LL SEE IT</div>
+      <p class="soft text-sm"><strong>Backtracking.</strong> Sudoku, maze solvers, N-queens — try, fail, undo, try again.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 11: BEST PRACTICES ============ -->
+<section id="ch11" class="max-w-6xl mx-auto px-4 md:px-8 py-12">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">11</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER ELEVEN</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Mistakes &amp; best practices</h2>
+    </div>
+  </div>
+
+  <div class="space-y-4 mb-8">
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">✗ MISTAKE 01</div>
+      <h4 class="display text-xl font-bold mb-2">Forgetting the base case</h4>
+      <p class="soft text-sm">Always write the base case <strong>first</strong>, before the recursive call. If you can't state the base case out loud, you don't yet understand the problem.</p>
+    </div>
+
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">✗ MISTAKE 02</div>
+      <h4 class="display text-xl font-bold mb-2">Recursive call doesn't shrink the input</h4>
+      <p class="soft text-sm">Make sure every recursive call is on a <em>strictly smaller</em> problem. Passing the same value, or one that's just as complex, means you'll never terminate.</p>
+    </div>
+
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">✗ MISTAKE 03</div>
+      <h4 class="display text-xl font-bold mb-2">Recomputing the same subproblem</h4>
+      <p class="soft text-sm">If your call tree has <em>repeats</em> (like naive Fibonacci), you need memoization or an iterative rewrite. Don't accept exponential runtime when a cache makes it linear.</p>
+    </div>
+
+    <div class="paper p-5 rounded">
+      <div class="mono text-xs accent mb-2">✗ MISTAKE 04</div>
+      <h4 class="display text-xl font-bold mb-2">Using recursion on deep structures in Python</h4>
+      <p class="soft text-sm">Python's default recursion limit is 1000. Walking a list of 10,000 elements recursively crashes. Use a loop, or <span class="mono">sys.setrecursionlimit()</span> carefully if you truly need it.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">◆ BEST PRACTICE CHECKLIST</div>
+    <ul class="soft space-y-2 mt-3 text-sm list-none">
+      <li>☐ Write the base case first.</li>
+      <li>☐ Verify each recursive call reduces the input.</li>
+      <li>☐ Ask: could this be iterative? (If it's naturally linear, yes — prefer a loop.)</li>
+      <li>☐ Ask: do my subproblems overlap? (If yes, memoize.)</li>
+      <li>☐ Check the maximum depth. For inputs bigger than a few thousand, an iterative version is safer.</li>
+      <li>☐ Test edge cases: empty input, size 1, very deep input.</li>
+      <li>☐ Use recursion where it <em>clarifies</em> the algorithm (trees, divide-and-conquer, parsing). Skip it where it obscures.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ CHAPTER 12: FINAL QUIZ ============ -->
+<section id="ch12" class="max-w-6xl mx-auto px-4 md:px-8 py-12 bg-alt">
+  <div class="flex items-start gap-4 md:gap-6 mb-8">
+    <div class="section-num">12</div>
+    <div>
+      <div class="mono text-xs muted mb-2">CHAPTER TWELVE · FINAL</div>
+      <h2 class="display text-3xl md:text-5xl font-bold leading-tight">Final quiz</h2>
+    </div>
+  </div>
+
+  <p class="text-lg soft mb-8 max-w-3xl">Five questions covering the whole guide. Feel free to scroll back if you want to check your thinking before answering.</p>
+
+  <div class="space-y-6">
+    <div class="paper p-5 md:p-6 rounded" data-quiz="fq1">
+      <div class="mono text-xs muted mb-2">QUESTION 01</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">What is the Big-O time complexity of the <em>naive</em> recursive Fibonacci?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Too fast — that would be the memoized or iterative version.">O(n)</button>
+        <button class="quiz-opt" data-explain="Close, but that's the pattern for divide-and-conquer like merge sort. Fibonacci revisits subproblems, which is worse.">O(n log n)</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Right. Each call spawns two more, and most subproblems are recomputed many times — leading to exponential growth.">O(2ⁿ)</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <div class="paper p-5 md:p-6 rounded" data-quiz="fq2">
+      <div class="mono text-xs muted mb-2">QUESTION 02</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">Which of these is a tail-recursive function?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Not tail recursive — the multiplication (n * ...) happens AFTER the recursive call returns.">return n * fact(n - 1)</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Yes. The recursive call IS the return value; nothing else happens after it.">return fact(n - 1, acc * n)</button>
+        <button class="quiz-opt" data-explain="Two calls, neither is the 'last' thing in a pure sense — definitely not tail recursive.">return fib(n - 1) + fib(n - 2)</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <div class="paper p-5 md:p-6 rounded" data-quiz="fq3">
+      <div class="mono text-xs muted mb-2">QUESTION 03</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">Why is binary search O(log n)?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="It doesn't — it only looks at a portion each call, throwing away half the remaining space.">Because it visits every element.</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Yes. Halving at each step means the number of steps to reach size 1 is log₂(n) — about 20 for a million items.">Because each recursive call eliminates half the remaining search space.</button>
+        <button class="quiz-opt" data-explain="Memoization doesn't apply here — binary search doesn't revisit subproblems.">Because it uses memoization.</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <div class="paper p-5 md:p-6 rounded" data-quiz="fq4">
+      <div class="mono text-xs muted mb-2">QUESTION 04</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">In Python, Java, and Go, can you rely on tail-call optimization?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Unfortunately not — none of these three languages guarantee TCO.">Yes, all three optimize tail calls automatically.</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Right. None of the three guarantee it. For deep recursion in these languages, rewrite as a loop.">No — none of them guarantee tail-call optimization.</button>
+        <button class="quiz-opt" data-explain="Java's JVM notably does not perform TCO. Check the comparison table again.">Only Java does.</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+
+    <div class="paper p-5 md:p-6 rounded" data-quiz="fq5">
+      <div class="mono text-xs muted mb-2">QUESTION 05</div>
+      <h3 class="display text-xl md:text-2xl font-bold mb-4">When should you prefer a loop over recursion?</h3>
+      <div class="space-y-2">
+        <button class="quiz-opt" data-explain="Recursion isn't always slower — for tree-shaped data, it's often the cleanest and fastest way.">Always — recursion is always slower.</button>
+        <button class="quiz-opt" data-correct="true" data-explain="Exactly. Use iteration when the structure is naturally sequential. Save recursion for hierarchical problems where it genuinely simplifies the code.">When the problem is naturally linear and recursion offers no clarity benefit, or when recursion depth would risk a stack overflow.</button>
+        <button class="quiz-opt" data-explain="Recursion isn't harder in Python specifically — the issue is the recursion limit, not the style itself.">Only in Python.</button>
+      </div>
+      <div class="mt-4 hidden soft text-sm quiz-explain"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CLOSING ============ -->
+<section class="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24 text-center">
+  <div class="mono text-xs muted mb-6">END OF GUIDE</div>
+  <h2 class="display text-4xl md:text-6xl font-bold leading-tight mb-6">
+    You made it.
+  </h2>
+  <p class="text-lg soft max-w-xl mx-auto mb-8 leading-relaxed">
+    You now have the mental models, the vocabulary, and the language-agnostic patterns to read and write recursive code confidently. Go break some problems into smaller ones.
+  </p>
+  <div class="mono text-xs muted">
+    ◆ ◆ ◆
+  </div>
+</section>
+
+<footer class="border-t border-ink mt-12">
+  <div class="max-w-6xl mx-auto px-4 md:px-8 py-8 flex flex-col md:flex-row gap-4 justify-between items-center mono text-xs muted">
+    <div>recursion.guide · a field guide in one page</div>
+    <div>f(you) = you + learn_more(you - 1)</div>
+  </div>
+</footer>
+
+<script>
+/* ============ THEME TOGGLE ============ */
+const themeBtn = document.getElementById('themeToggle');
+const stored = localStorage.getItem('theme');
+// Default to dark if user prefers it, otherwise light
+if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  document.documentElement.classList.add('dark');
+}
+themeBtn.addEventListener('click', () => {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+});
+
+/* ============ TAB SWITCHER ============ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const group = btn.dataset.group;
+    const tab = btn.dataset.tab;
+    // Deactivate all tabs in this group
+    document.querySelectorAll(`.tab-btn[data-group="${group}"]`).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Hide all content for this group
+    document.querySelectorAll(`[data-content^="${group}-"]`).forEach(c => c.classList.add('hidden'));
+    // Show the picked content
+    const target = document.querySelector(`[data-content="${group}-${tab}"]`);
+    if (target) target.classList.remove('hidden');
+  });
+});
+
+/* ============ QUIZ LOGIC ============ */
+document.querySelectorAll('[data-quiz]').forEach(quiz => {
+  const options = quiz.querySelectorAll('.quiz-opt');
+  const explainBox = quiz.querySelector('.quiz-explain');
+  options.forEach(opt => {
+    opt.addEventListener('click', () => {
+      // Disable further clicks once any option clicked
+      const alreadyAnswered = quiz.dataset.answered === 'true';
+      if (alreadyAnswered) return;
+
+      if (opt.dataset.correct === 'true') {
+        opt.classList.add('correct');
+        quiz.dataset.answered = 'true';
+        // Grey out others
+        options.forEach(o => { if (o !== opt) o.style.opacity = '0.5'; });
+      } else {
+        opt.classList.add('wrong');
+        // Don't mark as answered — let them try again
+      }
+
+      if (explainBox) {
+        explainBox.textContent = opt.dataset.explain || '';
+        explainBox.classList.remove('hidden');
+      }
+    });
+  });
+});
+
+/* ============ FACTORIAL TRACE ANIMATION ============ */
+const traceSteps = [
+  { text: '→ Call factorial(4) — n is 4, not ≤ 1, so we need n × factorial(3)', indent: 0 },
+  { text: '  → Call factorial(3) — n is 3, not ≤ 1, so we need n × factorial(2)', indent: 1 },
+  { text: '    → Call factorial(2) — n is 2, not ≤ 1, so we need n × factorial(1)', indent: 2 },
+  { text: '      → Call factorial(1) — n IS ≤ 1, BASE CASE — return 1', indent: 3, base: true },
+  { text: '    ← factorial(2) receives 1, computes 2 × 1 = 2, returns 2', indent: 2 },
+  { text: '  ← factorial(3) receives 2, computes 3 × 2 = 6, returns 6', indent: 1 },
+  { text: '← factorial(4) receives 6, computes 4 × 6 = 24, returns 24', indent: 0 },
+  { text: '✓ Final answer: 24', indent: 0, done: true },
+];
+
+const traceEl = document.getElementById('factTrace');
+const nextBtn = document.getElementById('factNext');
+const resetBtn = document.getElementById('factReset');
+let traceIndex = 0;
+
+function renderTraceStep() {
+  if (traceIndex >= traceSteps.length) {
+    nextBtn.textContent = '✓ Done';
+    nextBtn.disabled = true;
+    return;
+  }
+  const step = traceSteps[traceIndex];
+  const line = document.createElement('div');
+  line.className = 'trace-line show active';
+  if (step.base) line.style.color = 'var(--accent)';
+  if (step.done) {
+    line.style.fontWeight = '600';
+    line.style.color = 'var(--accent)';
+  }
+  line.textContent = step.text;
+  // Remove 'active' from previous
+  traceEl.querySelectorAll('.trace-line.active').forEach(el => el.classList.remove('active'));
+  traceEl.appendChild(line);
+  traceIndex++;
+  if (traceIndex >= traceSteps.length) {
+    nextBtn.textContent = '✓ Done';
+    nextBtn.disabled = true;
+  }
+}
+
+nextBtn.addEventListener('click', renderTraceStep);
+resetBtn.addEventListener('click', () => {
+  traceIndex = 0;
+  traceEl.innerHTML = '<div class="trace-line show"><span class="muted">&gt;</span> Call <span class="mono">factorial(4)</span></div>';
+  nextBtn.textContent = '▸ Next step';
+  nextBtn.disabled = false;
+});
+</script>
+
+</body>
+</html>
