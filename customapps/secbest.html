@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Container & Temporal Security Best Practices</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+          mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root { --font-scale: 1; }
+  html { font-size: calc(16px * var(--font-scale)); }
+  .code-block {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.875em;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .modal-backdrop {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  .chevron { transition: transform 0.2s; }
+  details[open] .chevron { transform: rotate(90deg); }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200">
+
+<!-- Top Control Bar -->
+<header class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="text-2xl" aria-hidden="true">🛡️</span>
+      <h1 class="font-semibold truncate text-sm sm:text-base">Security Best Practices</h1>
+    </div>
+    <div class="flex items-center gap-1 sm:gap-2">
+      <!-- Font size controls -->
+      <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1" role="group" aria-label="Font size">
+        <button onclick="adjustFont(-0.1)" class="px-2 py-1 text-sm rounded hover:bg-white dark:hover:bg-slate-700 transition" aria-label="Decrease font size" title="Decrease font size">A−</button>
+        <button onclick="resetFont()" class="px-2 py-1 text-xs rounded hover:bg-white dark:hover:bg-slate-700 transition" aria-label="Reset font size" title="Reset">A</button>
+        <button onclick="adjustFont(0.1)" class="px-2 py-1 text-base rounded hover:bg-white dark:hover:bg-slate-700 transition" aria-label="Increase font size" title="Increase font size">A+</button>
+      </div>
+      <!-- Theme toggle -->
+      <button onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition" aria-label="Toggle dark mode" title="Toggle theme">
+        <span class="hidden dark:inline">☀️</span>
+        <span class="inline dark:hidden">🌙</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+
+  <!-- Intro -->
+  <section class="mb-10">
+    <h2 class="text-3xl sm:text-4xl font-bold mb-3">Container & Workflow Security</h2>
+    <p class="text-slate-600 dark:text-slate-400 max-w-3xl">
+      Practical guidance on rate limiting Temporal.io workers and REST APIs (Java, Python, Go), mutual TLS,
+      hardening container hosts, securing Docker with TLS, verifying client-supplied data integrity, and configuring
+      container networks. Tap any topic to expand, and use the <strong>More Info</strong> buttons for references.
+    </p>
+  </section>
+
+  <!-- Topics Grid -->
+  <div class="grid gap-6 md:grid-cols-2">
+
+    <!-- Topic 1: Temporal Rate Limiting -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+      <details open>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">⚙️</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Rate Limiting Temporal Workers
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Java calls, task queue limits, and concurrency controls</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-4 text-sm">
+            <p>Temporal rate limiting operates at several layers. Choose the right one for your goal:</p>
+            <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+              <li><strong>Task queue RPS</strong> — protects downstream APIs</li>
+              <li><strong>Per-worker RPS</strong> — throttles a single worker instance</li>
+              <li><strong>Concurrency limits</strong> — controls parallel activity execution</li>
+              <li><strong>Client-side limiter</strong> — paces workflow starts</li>
+            </ul>
+
+            <h4 class="font-semibold mt-3">Java (SDK)</h4>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+WorkerOptions opts = WorkerOptions.newBuilder()
+    .setMaxTaskQueueActivitiesPerSecond(100.0)
+    .setMaxWorkerActivitiesPerSecond(20.0)
+    .setMaxConcurrentActivityExecutionSize(50)
+    .setMaxConcurrentWorkflowTaskExecutionSize(50)
+    .build();
+Worker worker = factory.newWorker("my-task-queue", opts);</div>
+
+            <h4 class="font-semibold mt-3">Python (SDK)</h4>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+from temporalio.client import Client
+from temporalio.worker import Worker
+
+client = await Client.connect("temporal:7233")
+worker = Worker(
+    client,
+    task_queue="my-task-queue",
+    workflows=[MyWorkflow],
+    activities=[my_activity],
+    max_concurrent_activities=50,
+    max_concurrent_workflow_tasks=50,
+    # Rate limit across the whole task queue (all workers combined)
+    max_task_queue_activities_per_second=100.0,
+    # Rate limit this individual worker process
+    max_activities_per_second=20.0,
+)
+await worker.run()
+
+# Client-side pacing when starting workflows
+import asyncio
+from aiolimiter import AsyncLimiter
+starter = AsyncLimiter(50, 1)   # 50 starts/sec
+
+async def start(req):
+    async with starter:
+        await client.start_workflow(MyWorkflow.run, req,
+                                    id=f"wf-{req.id}",
+                                    task_queue="my-task-queue")</div>
+
+            <h4 class="font-semibold mt-3">Go (SDK)</h4>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+import (
+    "go.temporal.io/sdk/client"
+    "go.temporal.io/sdk/worker"
+    "golang.org/x/time/rate"
+)
+
+c, _ := client.Dial(client.Options{HostPort: "temporal:7233"})
+w := worker.New(c, "my-task-queue", worker.Options{
+    MaxConcurrentActivityExecutionSize:     50,
+    MaxConcurrentWorkflowTaskExecutionSize: 50,
+    // Across the whole task queue (cluster-wide)
+    TaskQueueActivitiesPerSecond: 100.0,
+    // This worker only
+    WorkerActivitiesPerSecond: 20.0,
+})
+w.RegisterWorkflow(MyWorkflow)
+w.RegisterActivity(MyActivity)
+_ = w.Run(worker.InterruptCh())
+
+// Client-side pacing with x/time/rate
+limiter := rate.NewLimiter(50, 100)   // 50 rps, burst 100
+func startWorkflow(ctx context.Context, req Request) error {
+    if err := limiter.Wait(ctx); err != nil { return err }
+    _, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+        ID: "wf-" + req.ID, TaskQueue: "my-task-queue",
+    }, MyWorkflow, req)
+    return err
+}</div>
+            <button onclick="showModal('temporal')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              📚 More Info & References
+            </button>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic 2: Minimize Host OS Attack Surface -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm md:col-span-2">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">🔒</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Minimize Host OS Attack Surface
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Harden the underlying host running your containers</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-6 text-sm">
+
+            <p class="text-slate-700 dark:text-slate-300">A compromised host compromises every container on it — namespaces and cgroups are isolation boundaries, not security boundaries. Each principle below reduces what an attacker can do after they land.</p>
+
+            <!-- Principle 1: Minimal OS -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">1. Use a minimal, container-optimized OS</h4>
+              <p class="text-slate-700 dark:text-slate-300">A full Ubuntu/RHEL server has 500+ packages you don't need. Container-optimized OSes ship only a kernel, container runtime, and the bare minimum to boot. No package manager at runtime, immutable root filesystem, atomic A/B updates, and automatic reboots.</p>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs border-collapse">
+                  <thead class="bg-slate-100 dark:bg-slate-800">
+                    <tr>
+                      <th class="text-left p-2 border border-slate-300 dark:border-slate-700">OS</th>
+                      <th class="text-left p-2 border border-slate-300 dark:border-slate-700">Best For</th>
+                      <th class="text-left p-2 border border-slate-300 dark:border-slate-700">Notable</th>
+                    </tr>
+                  </thead>
+                  <tbody class="text-slate-700 dark:text-slate-300">
+                    <tr>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700 font-mono">Bottlerocket</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">EKS, ECS, general AWS</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">API-driven config, no SSH by default</td>
+                    </tr>
+                    <tr>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700 font-mono">Flatcar</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">Multi-cloud, on-prem</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">CoreOS successor, Ignition-based</td>
+                    </tr>
+                    <tr>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700 font-mono">Talos</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">Pure Kubernetes</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">No shell, no SSH, gRPC API only</td>
+                    </tr>
+                    <tr>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700 font-mono">RHCOS</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">OpenShift</td>
+                      <td class="p-2 border border-slate-300 dark:border-slate-700">Managed via MachineConfig</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Bottlerocket — declarative config via user-data
+[settings.kubernetes]
+cluster-name = "prod"
+api-server = "https://K8S.example.com"
+
+[settings.kernel.sysctl]
+"net.ipv4.conf.all.rp_filter" = "1"
+
+# Enable admin container ONLY for emergencies (time-bounded)
+[settings.host-containers.admin]
+enabled = false
+
+# Flatcar — Butane/Ignition example
+variant: flatcar
+version: 1.0.0
+storage:
+  files:
+    - path: /etc/hostname
+      contents: { inline: "worker-01" }
+systemd:
+  units:
+    - name: docker.service
+      enabled: true
+
+# Talos — no shell to SSH into; everything via talosctl
+talosctl apply-config --nodes 10.0.0.1 --file worker.yaml
+talosctl -n 10.0.0.1 services
+talosctl -n 10.0.0.1 logs kubelet</div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">Migration tip: start with one non-critical node pool on the new OS before moving production.</p>
+            </div>
+
+            <!-- Principle 2: Remove packages -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">2. Remove unused packages, compilers, and interpreters</h4>
+              <p class="text-slate-700 dark:text-slate-300">If <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">gcc</code>, <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">python3</code>, <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">perl</code>, <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">curl</code>, or <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">wget</code> are installed, an attacker can build their next stage right on your box. Strip anything not required at runtime.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Step 1 — Audit what's installed
+dpkg-query -W -f='${Installed-Size}\t${Package}\n' | sort -n | tail -40
+# or RHEL: rpm -qa --queryformat '%{SIZE}\t%{NAME}\n' | sort -n
+
+# Step 2 — Find shells, compilers, network tools
+dpkg -l | grep -E 'gcc|make|python|perl|ruby|curl|wget|nc|tcpdump|gdb|strace'
+
+# Step 3 — Remove them (host only — containers have their own copies)
+apt-get purge -y gcc make build-essential python3 perl \
+                 tcpdump netcat-openbsd nmap
+apt-get autoremove --purge -y
+apt-get clean
+
+# Step 4 — Block future installs by removing apt/dnf on immutable OSes
+# (Bottlerocket/Talos do this by default — there is no package manager)
+
+# Step 5 — Scan for setuid binaries (prime targets for privesc)
+find / -xdev -perm -4000 -type f 2>/dev/null
+
+# Step 6 — Remove setuid from binaries you don't need elevated
+chmod u-s /usr/bin/chsh /usr/bin/chfn /usr/bin/newgrp</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ Don't remove tools your monitoring/backup agents depend on. Check <code>systemctl list-dependencies</code> first.
+              </p>
+            </div>
+
+            <!-- Principle 3: Disable services -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">3. Disable unused services and close unneeded ports</h4>
+              <p class="text-slate-700 dark:text-slate-300">Every listening service is an entry point. Print, mail, RPC, Avahi, CUPS — none belong on a container host. Verify with a port scan from another machine, not just locally.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Step 1 — Enumerate listening services
+ss -tulnp
+systemctl list-unit-files --state=enabled --type=service
+
+# Step 2 — Disable common offenders
+for svc in avahi-daemon cups bluetooth ModemManager \
+           rpcbind postfix nfs-server smbd; do
+  systemctl disable --now "$svc" 2>/dev/null || true
+done
+
+# Step 3 — Default-deny firewall (nftables preferred)
+cat > /etc/nftables.conf <<'EOF'
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif lo accept
+    ct state established,related accept
+    tcp dport 22 accept comment "SSH from jump host only — see fail2ban"
+    tcp dport { 80, 443 } accept
+    icmp type echo-request limit rate 5/second accept
+  }
+  chain forward { type filter hook forward priority 0; policy drop; }
+  chain output  { type filter hook output  priority 0; policy accept; }
+}
+EOF
+systemctl enable --now nftables
+
+# Step 4 — Verify from OUTSIDE the host (localhost lies)
+nmap -sS -p- -T4 <host-ip>    # run from jump host
+# Expected: only 22, 80, 443 open</div>
+            </div>
+
+            <!-- Principle 4: CIS Benchmark -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">4. Apply CIS Docker Benchmark recommendations</h4>
+              <p class="text-slate-700 dark:text-slate-300">The CIS Docker Benchmark is ~200 concrete checks: daemon config, file permissions, container runtime flags. Don't read it top-to-bottom — run an automated audit and fix the findings.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Step 1 — Run Docker Bench for Security
+docker run --rm --net host --pid host --userns host --cap-add audit_control \
+  -e DOCKER_CONTENT_TRUST=$DOCKER_CONTENT_TRUST \
+  -v /etc:/etc:ro \
+  -v /usr/bin/containerd:/usr/bin/containerd:ro \
+  -v /usr/bin/runc:/usr/bin/runc:ro \
+  -v /usr/lib/systemd:/usr/lib/systemd:ro \
+  -v /var/lib:/var/lib:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  --label docker_bench_security \
+  docker/docker-bench-security
+
+# Step 2 — Lock down daemon config (common fixes)
+# /etc/docker/daemon.json
+{
+  "icc": false,
+  "userns-remap": "default",
+  "no-new-privileges": true,
+  "live-restore": true,
+  "userland-proxy": false,
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" },
+  "default-ulimits": {
+    "nofile": { "Name": "nofile", "Hard": 65536, "Soft": 65536 }
+  }
+}
+
+# Step 3 — Fix file permissions (CIS 3.x checks)
+chmod 644 /etc/docker/daemon.json
+chown root:root /etc/docker/daemon.json
+chmod 660 /var/run/docker.sock
+chown root:docker /var/run/docker.sock
+
+# Step 4 — Restart and re-scan until clean
+systemctl restart docker
+# Re-run docker-bench-security — target zero [WARN] findings</div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">For Kubernetes, the equivalent is <code>kube-bench</code> (Aqua Security). Run it on every control-plane and worker node.</p>
+            </div>
+
+            <!-- Principle 5: MAC -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">5. Enable SELinux or AppArmor mandatory access control</h4>
+              <p class="text-slate-700 dark:text-slate-300">DAC (standard Unix permissions) relies on root being trustworthy. MAC enforces policy even against root. SELinux is the default on RHEL/Fedora; AppArmor on Ubuntu/Debian/SUSE. Never run in <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">permissive</code> or disabled mode in production.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# --- SELinux (RHEL/Fedora) ---
+# Step 1 — Verify it's enforcing
+sestatus                       # Status: enabled / Mode: enforcing
+getenforce                     # Enforcing
+
+# Step 2 — Force enforcing in /etc/selinux/config
+SELINUX=enforcing
+SELINUXTYPE=targeted
+
+# Step 3 — Run containers with SELinux labels
+docker run --security-opt label=type:container_t myapp
+# or in compose:
+# security_opt: ["label=type:container_t"]
+
+# Step 4 — Investigate denials (don't just disable)
+ausearch -m avc -ts recent
+audit2allow -a -M mypolicy     # generate a targeted policy module
+semodule -i mypolicy.pp
+
+# --- AppArmor (Ubuntu/Debian) ---
+# Step 1 — Verify it's loaded
+aa-status
+
+# Step 2 — Docker ships a default profile; use it
+docker run --security-opt apparmor=docker-default myapp
+
+# Step 3 — Write a stricter custom profile
+cat > /etc/apparmor.d/docker-myapp <<'EOF'
+#include <tunables/global>
+profile docker-myapp flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  network inet tcp,
+  /app/** r,
+  /app/data/** rw,
+  deny /etc/shadow r,
+  deny /proc/*/mem rw,
+  deny capability sys_admin,
+}
+EOF
+apparmor_parser -r /etc/apparmor.d/docker-myapp
+docker run --security-opt apparmor=docker-myapp myapp</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ The common anti-pattern is disabling SELinux because "something broke". Instead, generate a targeted policy from the denial logs. Disabling MAC for convenience is how kernel exploits become cluster-wide breaches.
+              </p>
+            </div>
+
+            <!-- Principle 6: Patching -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">6. Keep kernel and runtime patched; automate updates</h4>
+              <p class="text-slate-700 dark:text-slate-300">Kernel CVEs (Dirty Pipe, Dirty COW, OverlayFS privesc) routinely break container isolation. Manual patching doesn't scale — automate it, stagger reboots across zones, and use live-kernel-patching where supported.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Ubuntu — unattended-upgrades for security patches
+apt-get install -y unattended-upgrades
+cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'EOF'
+Unattended-Upgrade::Allowed-Origins {
+  "${distro_id}:${distro_codename}-security";
+};
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "03:00";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+EOF
+systemctl enable --now unattended-upgrades
+
+# RHEL — dnf-automatic
+dnf install -y dnf-automatic
+sed -i 's/^apply_updates = no/apply_updates = yes/' \
+    /etc/dnf/automatic.conf
+systemctl enable --now dnf-automatic.timer
+
+# Live kernel patching (no reboot needed for many CVEs)
+# Ubuntu Pro: Livepatch
+canonical-livepatch enable <token>
+canonical-livepatch status
+# RHEL: kpatch
+dnf install -y kpatch
+systemctl enable --now kpatch
+
+# Immutable OSes — atomic A/B updates (Bottlerocket example)
+apiclient update check
+apiclient update apply --reboot
+# Rollback is one command if the new image fails health checks
+
+# Kubernetes fleet — stagger reboots so you don't drain everything at once
+# kured (Kubernetes Reboot Daemon)
+kubectl apply -f https://github.com/kubereboot/kured/releases/latest/download/kured.yaml</div>
+            </div>
+
+            <!-- Principle 7: SSH -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">7. Restrict SSH access; prefer jump hosts + key-only auth</h4>
+              <p class="text-slate-700 dark:text-slate-300">SSH brute-force is constant background noise on any internet-facing port. Move access behind a single hardened bastion (or better, a zero-trust broker), disable password auth entirely, and audit every session.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Step 1 — /etc/ssh/sshd_config hardening
+Port 22
+Protocol 2
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+MaxAuthTries 3
+LoginGraceTime 30
+ClientAliveInterval 300
+ClientAliveCountMax 2
+AllowUsers deploy
+AllowGroups sshusers
+# Modern crypto only
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+# Audit:
+LogLevel VERBOSE
+
+sshd -t && systemctl reload sshd
+
+# Step 2 — Only allow SSH from the jump host
+# nftables: replace the earlier SSH rule
+nft add rule inet filter input ip saddr 10.0.0.10/32 tcp dport 22 accept
+
+# Step 3 — Use SSH certificates (scales better than authorized_keys)
+# On CA host:
+ssh-keygen -t ed25519 -f /etc/ssh/ca
+# On each server:
+echo "TrustedUserCAKeys /etc/ssh/ca.pub" >> /etc/ssh/sshd_config
+# Sign a user key (time-bounded, principals = usernames)
+ssh-keygen -s /etc/ssh/ca -I alice@corp -n deploy \
+           -V +8h alice_ed25519.pub
+
+# Step 4 — Better: use a zero-trust SSH broker
+# Teleport, Tailscale SSH, AWS SSM Session Manager, GCP IAP
+# These eliminate standing SSH ports entirely
+aws ssm start-session --target i-0abc123   # no port 22 open at all
+
+# Step 5 — fail2ban as defense-in-depth
+apt-get install -y fail2ban
+cat > /etc/fail2ban/jail.d/sshd.local <<'EOF'
+[sshd]
+enabled = true
+maxretry = 3
+findtime = 10m
+bantime = 1h
+EOF
+systemctl enable --now fail2ban</div>
+            </div>
+
+            <!-- Principle 8: Non-root -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">8. Run containers as non-root users wherever possible</h4>
+              <p class="text-slate-700 dark:text-slate-300">Container root is host root if a kernel exploit or mount escape succeeds. Running as a non-root UID — ideally combined with user namespaces and a read-only root filesystem — turns "full host compromise" into "confined user-level access".</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Step 1 — Build images with a non-root USER
+# Dockerfile
+FROM node:20-alpine
+RUN addgroup -g 10001 app && adduser -u 10001 -G app -s /sbin/nologin -D app
+WORKDIR /app
+COPY --chown=app:app . .
+RUN npm ci --omit=dev
+USER 10001                             # numeric — K8s can verify
+EXPOSE 8080
+CMD ["node", "server.js"]
+
+# Step 2 — Enforce at runtime
+docker run --user 10001:10001 \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop=ALL \
+  --cap-add=NET_BIND_SERVICE \
+  --security-opt=no-new-privileges \
+  myapp
+
+# Step 3 — Kubernetes Pod securityContext
+apiVersion: v1
+kind: Pod
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile: { type: RuntimeDefault }
+  containers:
+  - name: app
+    image: myapp:1.2.3
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: { drop: ["ALL"] }
+
+# Step 4 — Enforce cluster-wide with Pod Security Admission
+kubectl label ns prod \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/enforce-version=latest
+
+# Step 5 — Docker daemon user namespace remap (container root != host root)
+# /etc/docker/daemon.json
+{ "userns-remap": "default" }
+systemctl restart docker
+# Now UID 0 inside the container = UID 100000 on the host</div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">If you inherit an image that insists on root, run it under <code>userns-remap</code> as a compensating control while you fix the image.</p>
+            </div>
+
+            <div class="pt-2">
+              <button onclick="showModal('host')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                📚 More Info & References
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic 3: Docker TLS Auth -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">🔐</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Configure Docker TLS Authentication
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Secure the Docker daemon against remote takeover</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-4 text-sm">
+            <p>
+              The Docker daemon socket is effectively root on the host. <strong>Never</strong> expose it on a TCP port
+              without mutual TLS. If you must expose it remotely, require client certificate auth.
+            </p>
+            <ol class="list-decimal pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+              <li>Generate a CA keypair</li>
+              <li>Issue server cert for the daemon (SAN = hostname)</li>
+              <li>Issue client certs signed by the same CA</li>
+              <li>Start daemon with <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">--tlsverify</code></li>
+              <li>Clients connect with their cert + CA bundle</li>
+            </ol>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Daemon config: /etc/docker/daemon.json
+{
+  "tls": true,
+  "tlsverify": true,
+  "tlscacert": "/etc/docker/ca.pem",
+  "tlscert":   "/etc/docker/server-cert.pem",
+  "tlskey":    "/etc/docker/server-key.pem",
+  "hosts": ["tcp://0.0.0.0:2376", "unix:///var/run/docker.sock"]
+}
+
+# Client usage
+docker --tlsverify \
+  --tlscacert=ca.pem --tlscert=cert.pem --tlskey=key.pem \
+  -H=host.example.com:2376 version
+
+# Python — docker SDK with TLS
+import docker, docker.tls
+tls = docker.tls.TLSConfig(
+    client_cert=("cert.pem", "key.pem"),
+    ca_cert="ca.pem",
+    verify=True,
+)
+client = docker.DockerClient(base_url="tcp://host.example.com:2376", tls=tls)
+print(client.version())
+
+# Go — docker client with TLS
+import (
+    "github.com/docker/docker/client"
+    "github.com/docker/go-connections/tlsconfig"
+)
+tlsCfg, _ := tlsconfig.Client(tlsconfig.Options{
+    CAFile: "ca.pem", CertFile: "cert.pem", KeyFile: "key.pem",
+    InsecureSkipVerify: false,
+})
+httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsCfg}}
+cli, _ := client.NewClientWithOpts(
+    client.WithHost("tcp://host.example.com:2376"),
+    client.WithHTTPClient(httpClient),
+    client.WithAPIVersionNegotiation(),
+)
+info, _ := cli.Info(context.Background())</div>
+            <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+              ⚠️ Port 2376 = TLS. Port 2375 = plaintext. Never use 2375 except on a loopback interface in development.
+            </p>
+            <button onclick="showModal('tls')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              📚 More Info & References
+            </button>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic 4: Client Data Integrity -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm md:col-span-2">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">✅</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Verify Client-Supplied Read-Only Data
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Trust nothing from the client — verify integrity</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-6 text-sm">
+
+            <p class="text-slate-700 dark:text-slate-300">Any value that round-trips through the client — cookies, hidden form fields, JWTs, download manifests, CDN scripts, container images — must be verified server-side. The client is adversarial by default.</p>
+
+            <!-- Principle 1: HMAC -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">1. HMAC signatures over any value you issued to the client</h4>
+              <p class="text-slate-700 dark:text-slate-300">If you put a user ID, cart total, or price in a cookie or hidden field, sign it with HMAC-SHA256. On return, recompute the signature with your server secret and reject if it doesn't match. Always use <strong>constant-time comparison</strong> to prevent timing attacks.</p>
+
+              <div class="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/html/rfc2104" target="_blank" rel="noopener">RFC 2104 — HMAC spec</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html" target="_blank" rel="noopener">OWASP Cryptographic Storage Cheat Sheet</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://codahale.com/a-lesson-in-timing-attacks/" target="_blank" rel="noopener">Coda Hale — A Lesson in Timing Attacks</a></p>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+// Java — sign + verify with constant-time compare
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.MessageDigest;
+import java.util.Base64;
+
+byte[] secret = System.getenv("HMAC_SECRET").getBytes(UTF_8);
+Mac mac = Mac.getInstance("HmacSHA256");
+mac.init(new SecretKeySpec(secret, "HmacSHA256"));
+
+// Sign (server issues this to the client)
+String payload = "user=42&cart=99.00&exp=1714500000";
+byte[] sig = mac.doFinal(payload.getBytes(UTF_8));
+String token = payload + "." + Base64.getUrlEncoder().encodeToString(sig);
+
+// Verify (when the client sends it back)
+String[] parts = token.split("\\.", 2);
+byte[] expected = mac.doFinal(parts[0].getBytes(UTF_8));
+byte[] provided = Base64.getUrlDecoder().decode(parts[1]);
+
+if (!MessageDigest.isEqual(expected, provided)) {      // constant-time!
+    throw new SecurityException("HMAC verification failed");
+}
+// ALSO check exp — a valid signature on an old payload is still valid
+
+// Python — hmac.compare_digest is constant-time
+import hmac, hashlib, os, base64
+secret = os.environb[b"HMAC_SECRET"]
+sig = hmac.new(secret, payload.encode(), hashlib.sha256).digest()
+if not hmac.compare_digest(sig, provided):
+    raise PermissionError("HMAC mismatch")
+
+# Go — subtle.ConstantTimeCompare
+import ("crypto/hmac"; "crypto/sha256"; "crypto/subtle")
+h := hmac.New(sha256.New, secret)
+h.Write([]byte(payload))
+if subtle.ConstantTimeCompare(h.Sum(nil), provided) != 1 {
+    return errors.New("bad signature")
+}</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ A valid HMAC proves integrity, not freshness. Always include and check an expiration (<code>exp</code>) and/or a nonce to prevent replay.
+              </p>
+            </div>
+
+            <!-- Principle 2: JWT -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">2. Signed JWTs with strong algorithms — reject <code>alg: none</code></h4>
+              <p class="text-slate-700 dark:text-slate-300">JWT's algorithm flexibility is a footgun. The three classic attacks: (a) <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">alg: none</code> — accepted as "valid" by naive libraries; (b) <strong>algorithm confusion</strong> — attacker changes <code>RS256</code> to <code>HS256</code>, then signs the token with the server's public key as the HMAC secret; (c) weak keys. Use <strong>EdDSA</strong> (Ed25519) or <strong>RS256</strong> with ≥2048-bit keys, and always verify against an <em>allowlist</em> of algorithms.</p>
+
+              <div class="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/html/rfc7519" target="_blank" rel="noopener">RFC 7519 — JSON Web Token</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/html/rfc8037" target="_blank" rel="noopener">RFC 8037 — EdDSA for JOSE/JWT</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html" target="_blank" rel="noopener">OWASP JWT Cheat Sheet</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://www.rfc-editor.org/rfc/rfc8725" target="_blank" rel="noopener">RFC 8725 — JWT Best Current Practices</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/" target="_blank" rel="noopener">Auth0 — JWT library vulnerabilities writeup</a></p>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+// Java — Nimbus JOSE, EdDSA (Ed25519)
+import com.nimbusds.jwt.*;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.*;
+
+// Verify — pin allowed algorithm, do NOT accept what the header says blindly
+JWSVerifier verifier = new Ed25519Verifier(publicJwk);
+SignedJWT jwt = SignedJWT.parse(tokenString);
+
+if (jwt.getHeader().getAlgorithm() != JWSAlgorithm.EdDSA) {
+    throw new SecurityException("Unexpected alg: "
+        + jwt.getHeader().getAlgorithm());    // blocks 'none', HS256 confusion
+}
+if (!jwt.verify(verifier)) throw new SecurityException("bad sig");
+
+JWTClaimsSet claims = jwt.getJWTClaimsSet();
+Instant now = Instant.now();
+if (claims.getExpirationTime().toInstant().isBefore(now)) throw ...;
+if (!"https://issuer.example.com".equals(claims.getIssuer()))  throw ...;
+if (!claims.getAudience().contains("my-api"))                  throw ...;
+
+# Python — PyJWT with explicit algorithms list (never pass None)
+import jwt
+claims = jwt.decode(
+    token,
+    public_key,
+    algorithms=["EdDSA"],        # ALLOWLIST — not the token's self-declared alg
+    audience="my-api",
+    issuer="https://issuer.example.com",
+    options={"require": ["exp", "iat", "iss", "aud"]},
+)
+
+# Go — golang-jwt with keyfunc guarding the alg
+tok, err := jwt.Parse(raw, func(t *jwt.Token) (any, error) {
+    if t.Method.Alg() != "EdDSA" {           // reject anything else
+        return nil, fmt.Errorf("unexpected alg: %s", t.Method.Alg())
+    }
+    return publicKey, nil
+})
+
+// ❌ NEVER do this — trusts attacker-controlled header
+jwt.Parse(raw, func(t *jwt.Token) (any, error) { return key, nil })</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ Verify <code>iss</code>, <code>aud</code>, <code>exp</code>, and <code>nbf</code> on every request. A valid signature on a token issued for a different app or user is still a valid signature.
+              </p>
+            </div>
+
+            <!-- Principle 3: Content hashes -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">3. Content hashes (SHA-256) for downloaded artifacts</h4>
+              <p class="text-slate-700 dark:text-slate-300">Any binary, tarball, or dataset pulled at install or runtime must have its SHA-256 verified against a known-good value shipped <em>out of band</em> (e.g., committed in your repo, in a signed release manifest). Mirror compromises and MITM attacks are the real threat model here.</p>
+
+              <div class="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final" target="_blank" rel="noopener">NIST FIPS 180-4 — Secure Hash Standard</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://reproducible-builds.org/" target="_blank" rel="noopener">Reproducible Builds project</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://slsa.dev/spec/v1.0/provenance" target="_blank" rel="noopener">SLSA Provenance</a> — attested build hashes</p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://en.wikipedia.org/wiki/Linux_Mint#February_2016_forum_breach_and_website_hack" target="_blank" rel="noopener">Case study: Linux Mint ISO replacement (2016)</a></p>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Shell — verify a downloaded archive
+EXPECTED="9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+curl -fsSL -o app.tar.gz https://releases.example.com/app-1.2.3.tar.gz
+echo "${EXPECTED}  app.tar.gz" | sha256sum -c -   # exits non-zero on mismatch
+
+# Dockerfile — pin by digest, verify downloads
+FROM debian:bookworm-slim@sha256:2bc5715...   # digest, not floating tag
+ARG TERRAFORM_VERSION=1.9.5
+ARG TERRAFORM_SHA256=abc123...
+RUN curl -fsSLo tf.zip \
+      https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip \
+ && echo "${TERRAFORM_SHA256}  tf.zip" | sha256sum -c - \
+ && unzip tf.zip -d /usr/local/bin/ && rm tf.zip
+
+# Python — verify before use (streams large files)
+import hashlib, sys
+h = hashlib.sha256()
+with open("app.tar.gz", "rb") as f:
+    for chunk in iter(lambda: f.read(1 << 20), b""):
+        h.update(chunk)
+if h.hexdigest() != expected:
+    sys.exit("checksum mismatch — refusing to proceed")
+
+# Go — streaming SHA-256 with constant-time compare
+import ("crypto/sha256"; "crypto/subtle"; "encoding/hex"; "io"; "os")
+f, _ := os.Open("app.tar.gz")
+defer f.Close()
+h := sha256.New()
+if _, err := io.Copy(h, f); err != nil { log.Fatal(err) }
+got := h.Sum(nil)
+want, _ := hex.DecodeString(expected)
+if subtle.ConstantTimeCompare(got, want) != 1 {
+    log.Fatal("checksum mismatch — refusing to proceed")
+}
+
+// Java — streaming SHA-256
+MessageDigest md = MessageDigest.getInstance("SHA-256");
+try (var in = Files.newInputStream(Path.of("app.tar.gz"));
+     var dis = new DigestInputStream(in, md)) {
+    dis.transferTo(OutputStream.nullOutputStream());
+}
+byte[] got = md.digest();
+byte[] want = HexFormat.of().parseHex(expected);
+if (!MessageDigest.isEqual(got, want)) {
+    throw new SecurityException("checksum mismatch — refusing to proceed");
+}
+
+# Go modules do this for you via go.sum — don't delete it!
+# pip: use --require-hashes in requirements.txt
+requests==2.32.3 \
+    --hash=sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6
+
+# Maven — enforce dependency checksums with the checksum plugin
+mvn verify -Dchecksum.failOnError=true</div>
+            </div>
+
+            <!-- Principle 4: SRI -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">4. Subresource Integrity (SRI) for scripts loaded from CDNs</h4>
+              <p class="text-slate-700 dark:text-slate-300">When your page includes <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">&lt;script src="https://cdn.example.com/lib.js"&gt;</code>, you're trusting that CDN with arbitrary code execution in your users' browsers. SRI pins a hash — if the CDN is compromised or MITM'd, the browser refuses to execute the modified file.</p>
+
+              <div class="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://www.w3.org/TR/SRI/" target="_blank" rel="noopener">W3C — Subresource Integrity spec</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity" target="_blank" rel="noopener">MDN — Subresource Integrity guide</a></p>
+                <p>🔧 <a class="text-blue-600 dark:text-blue-400 underline" href="https://www.srihash.org/" target="_blank" rel="noopener">SRI Hash Generator (srihash.org)</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://content-security-policy.com/" target="_blank" rel="noopener">Content Security Policy reference</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://blog.sucuri.net/2018/05/javascript-supply-chain-attack-against-gate-io.html" target="_blank" rel="noopener">Case study: Polyfill.io-style supply chain attacks</a></p>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+&lt;!-- Step 1 — Generate the hash --&gt;
+# CLI
+curl -sSL https://cdn.example.com/lib@1.2.3/lib.min.js \
+ | openssl dgst -sha384 -binary | openssl base64 -A
+# → paste into integrity="sha384-..."
+
+&lt;!-- Step 2 — Add integrity + crossorigin attributes --&gt;
+&lt;script src="https://cdn.example.com/lib@1.2.3/lib.min.js"
+        integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"&gt;&lt;/script&gt;
+
+&lt;!-- Step 3 — Same for stylesheets --&gt;
+&lt;link rel="stylesheet"
+      href="https://cdn.example.com/style.css"
+      integrity="sha384-9jYlQMY08x6yM9IeIkSL+qMEaLCNlB0LqFzH2I8GzXbq7h8ZqSqXJPmj+tQTI3cY"
+      crossorigin="anonymous"&gt;
+
+&lt;!-- Step 4 — Enforce cluster-wide with CSP --&gt;
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'require-sri-for script';
+  style-src  'self' 'require-sri-for style';
+
+&lt;!-- Step 5 — Verify: tamper with the file and confirm the browser blocks it --&gt;
+# DevTools console will show:
+# "Failed to find a valid digest in the 'integrity' attribute for
+#  resource 'https://cdn.example.com/lib.js' with computed SHA-384 digest '...'"</div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">SRI pins an <em>exact</em> file — bumping the CDN version requires regenerating the hash. Automate this in your build (webpack <code>subresource-integrity-webpack-plugin</code>, Vite <code>vite-plugin-sri</code>).</p>
+            </div>
+
+            <!-- Principle 5: Cosign -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">5. Cosign / Sigstore for container image signatures</h4>
+              <p class="text-slate-700 dark:text-slate-300">A tag like <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">myapp:v1.2.3</code> is mutable — registry compromise or typosquatting can feed you a malicious image. Cosign signs the image digest with a keypair (or, better, <strong>keyless</strong> via OIDC identity), stores the signature alongside the image, and your admission controller refuses anything unsigned.</p>
+
+              <div class="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://www.sigstore.dev/" target="_blank" rel="noopener">Sigstore project homepage</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.sigstore.dev/cosign/signing/overview/" target="_blank" rel="noopener">Cosign signing docs</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.sigstore.dev/cosign/signing/signing_with_containers/" target="_blank" rel="noopener">Keyless signing with OIDC</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://kyverno.io/policies/?policytypes=Cosign" target="_blank" rel="noopener">Kyverno — Cosign verification policies</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.sigstore.dev/policy-controller/overview/" target="_blank" rel="noopener">Sigstore policy-controller (K8s admission)</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://slsa.dev/" target="_blank" rel="noopener">SLSA — supply chain framework</a></p>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# --- Keyed signing (simple, but you manage the key) ---
+cosign generate-key-pair       # produces cosign.key + cosign.pub
+export COSIGN_PASSWORD=...
+cosign sign --key cosign.key \
+  registry.example.com/app@sha256:abc123...   # sign the DIGEST, not a tag
+cosign verify --key cosign.pub \
+  registry.example.com/app@sha256:abc123...
+
+# --- Keyless signing (preferred — no long-lived keys) ---
+# Identity comes from your OIDC provider (GitHub Actions, GCP, etc.)
+# In a GitHub Action:
+- uses: sigstore/cosign-installer@v3
+- run: cosign sign --yes \
+      --oidc-issuer=https://token.actions.githubusercontent.com \
+      registry.example.com/app@${DIGEST}
+
+# Verify keyless — pin WHO signed it and from WHAT workflow
+cosign verify \
+  --certificate-identity-regexp='https://github.com/myorg/.*' \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  registry.example.com/app@sha256:abc123...
+
+# --- Kubernetes enforcement (Kyverno policy) ---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-cosign-signed-images
+spec:
+  validationFailureAction: Enforce
+  rules:
+  - name: verify-images
+    match:
+      any:
+      - resources: { kinds: [Pod] }
+    verifyImages:
+    - imageReferences: ["registry.example.com/*"]
+      attestors:
+      - entries:
+        - keyless:
+            subject: "https://github.com/myorg/*/.github/workflows/release.yml@refs/heads/main"
+            issuer: "https://token.actions.githubusercontent.com"
+
+# --- Also attach and verify SBOMs + attestations ---
+cosign attach sbom --sbom sbom.spdx.json registry.example.com/app@${DIGEST}
+cosign attest --predicate provenance.json --type slsaprovenance \
+  --key cosign.key registry.example.com/app@${DIGEST}</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ Always sign and verify by <strong>digest</strong> (<code>@sha256:...</code>), never by tag. Tags are mutable — an attacker with push access can retag over a signed image.
+              </p>
+            </div>
+
+            <!-- Principle 6: DCT -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">6. Docker Content Trust (<code>DOCKER_CONTENT_TRUST=1</code>)</h4>
+              <p class="text-slate-700 dark:text-slate-300">DCT is Docker's original signing mechanism (based on <a class="text-blue-600 dark:text-blue-400 underline" href="https://theupdateframework.io/" target="_blank" rel="noopener">The Update Framework</a>/Notary v1). With it enabled, <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">docker pull</code> and <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">docker run</code> refuse unsigned images. It's still useful for Docker Hub's Official Images, but <strong>Sigstore/Cosign is the modern successor</strong> — Notary v1 has been deprecated in favor of Notary v2 and Sigstore ecosystems.</p>
+
+              <div class="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/security/trust/" target="_blank" rel="noopener">Docker Content Trust docs</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://theupdateframework.io/" target="_blank" rel="noopener">The Update Framework (TUF)</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/notaryproject/notation" target="_blank" rel="noopener">Notary v2 / notation (successor)</a></p>
+                <p>📖 <a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/theupdateframework/notary" target="_blank" rel="noopener">Notary v1 project (legacy)</a></p>
+              </div>
+
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Enable globally for a session
+export DOCKER_CONTENT_TRUST=1
+export DOCKER_CONTENT_TRUST_SERVER=https://notary.docker.io
+
+# Any pull will now fail if the image isn't signed
+docker pull alpine:3.20                     # ✓ signed on Docker Hub
+docker pull someuser/unsigned:latest        # ✗ "No trust data for latest"
+
+# Sign on push (creates/uses ~/.docker/trust keys)
+docker trust key generate myrepo
+docker trust signer add --key myrepo.pub alice registry.example.com/app
+docker push registry.example.com/app:v1.2.3
+
+# Inspect signatures
+docker trust inspect --pretty registry.example.com/app:v1.2.3
+
+# Enforce systemwide — daemon config
+# /etc/docker/daemon.json
+{ "content-trust": { "mode": "enforced" } }
+
+# --- Modern alternative: notation (Notary v2) ---
+notation cert generate-test --default "myorg.io"
+notation sign registry.example.com/app@sha256:abc...
+notation verify registry.example.com/app@sha256:abc...</div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">If you're starting fresh, skip DCT and go straight to Cosign. If you inherited DCT, it still works — just plan a migration.</p>
+            </div>
+
+            <div class="pt-2">
+              <button onclick="showModal('integrity')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                📚 More Info & References
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic: mTLS Best Practices -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm md:col-span-2">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">🤝</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Mutual TLS (mTLS) Best Practices
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Strong two-way authentication between services</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-4 text-sm">
+            <p>mTLS authenticates <em>both</em> client and server using X.509 certificates. It's the foundation for zero-trust service-to-service communication.</p>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <h4 class="font-semibold mb-2">Certificate Management</h4>
+                <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+                  <li>Use a dedicated internal CA — never reuse public CAs for service auth</li>
+                  <li>Short-lived certs (hours–days), not years. Automate rotation</li>
+                  <li>Use SPIFFE/SPIRE or cert-manager for workload identity</li>
+                  <li>Store private keys in HSMs, KMS, or memory-only (never on disk unencrypted)</li>
+                  <li>Publish and honor CRLs or use OCSP stapling</li>
+                  <li>Use strong keys: ECDSA P-256 or Ed25519 preferred over RSA-2048</li>
+                </ul>
+              </div>
+              <div>
+                <h4 class="font-semibold mb-2">Protocol Configuration</h4>
+                <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+                  <li>TLS 1.3 only where possible; 1.2 as minimum floor</li>
+                  <li>Disable renegotiation and compression (CRIME)</li>
+                  <li>Pin CA bundle — don't trust system roots for internal traffic</li>
+                  <li>Validate SAN/URI identity, not just "signed by our CA"</li>
+                  <li>Require client cert via <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">verify-required</code>, never optional</li>
+                  <li>Log cert subject on every request for auditability</li>
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h4 class="font-semibold mb-2 mt-2">Go — mTLS server</h4>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+caCert, _ := os.ReadFile("ca.pem")
+caPool := x509.NewCertPool()
+caPool.AppendCertsFromPEM(caCert)
+
+tlsCfg := &tls.Config{
+    ClientCAs:  caPool,
+    ClientAuth: tls.RequireAndVerifyClientCert,
+    MinVersion: tls.VersionTLS13,
+    VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+        // Extra: pin the client identity (SAN/CN) beyond "signed by our CA"
+        cert, _ := x509.ParseCertificate(rawCerts[0])
+        if cert.Subject.CommonName != "service-a" {
+            return fmt.Errorf("unexpected client CN: %s", cert.Subject.CommonName)
+        }
+        return nil
+    },
+}
+srv := &http.Server{Addr: ":8443", TLSConfig: tlsCfg}
+srv.ListenAndServeTLS("server.crt", "server.key")</div>
+            </div>
+
+            <div>
+              <h4 class="font-semibold mb-2">Go — mTLS client</h4>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+clientCert, _ := tls.LoadX509KeyPair("client.crt", "client.key")
+caCert, _ := os.ReadFile("ca.pem")
+caPool := x509.NewCertPool()
+caPool.AppendCertsFromPEM(caCert)
+
+tr := &http.Transport{TLSClientConfig: &tls.Config{
+    Certificates: []tls.Certificate{clientCert},
+    RootCAs:      caPool,
+    MinVersion:   tls.VersionTLS13,
+}}
+resp, err := (&http.Client{Transport: tr}).Get("https://api.internal:8443/")</div>
+            </div>
+
+            <div>
+              <h4 class="font-semibold mb-2">Python — mTLS server (uvicorn / FastAPI)</h4>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# uvicorn ships with client-cert support since 0.27
+uvicorn app:app \
+  --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile server.key \
+  --ssl-certfile server.crt \
+  --ssl-ca-certs ca.pem \
+  --ssl-cert-reqs 2            # 2 = CERT_REQUIRED
+
+# Or programmatically with ssl.SSLContext
+import ssl, uvicorn
+ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile="ca.pem")
+ctx.load_cert_chain("server.crt", "server.key")
+ctx.verify_mode = ssl.CERT_REQUIRED
+ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+uvicorn.run("app:app", host="0.0.0.0", port=8443, ssl=ctx)
+
+# Inside FastAPI — pull client identity from the TLS layer
+from fastapi import FastAPI, Request, HTTPException
+app = FastAPI()
+
+@app.middleware("http")
+async def check_client_identity(request: Request, call_next):
+    # Starlette exposes peer cert via scope["extensions"]
+    peer = request.scope.get("extensions", {}).get("tls", {}).get("client_cert_dict")
+    if not peer or peer.get("subject", [[("commonName", "")]])[0][0][1] != "service-a":
+        raise HTTPException(403, "client identity mismatch")
+    return await call_next(request)</div>
+            </div>
+
+            <div>
+              <h4 class="font-semibold mb-2">Python — mTLS client (requests / httpx)</h4>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+import requests
+r = requests.get("https://api.internal:8443/",
+                 cert=("client.crt", "client.key"),
+                 verify="ca.pem")   # pin internal CA — don't use system roots
+
+# Async with httpx
+import httpx, ssl
+ctx = ssl.create_default_context(cafile="ca.pem")
+ctx.load_cert_chain("client.crt", "client.key")
+ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+async with httpx.AsyncClient(verify=ctx) as c:
+    r = await c.get("https://api.internal:8443/")</div>
+            </div>
+
+            <div>
+              <h4 class="font-semibold mb-2">Java — mTLS server (Spring Boot) + client</h4>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# application.yml — enforce client cert
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:server-keystore.p12
+    key-store-password: ${KEYSTORE_PW}
+    key-store-type: PKCS12
+    trust-store: classpath:truststore.p12      # contains internal CA
+    trust-store-password: ${TRUSTSTORE_PW}
+    client-auth: need                          # REQUIRED, not 'want'
+    enabled-protocols: TLSv1.3
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256
+
+// Retrieve client identity in a controller
+@GetMapping("/whoami")
+public String whoami(HttpServletRequest req) {
+    X509Certificate[] certs = (X509Certificate[]) req.getAttribute(
+        "jakarta.servlet.request.X509Certificate");
+    if (certs == null || certs.length == 0)
+        throw new AccessDeniedException("no client cert");
+    return certs[0].getSubjectX500Principal().getName();
+}
+
+// Java — mTLS client with OkHttp
+KeyStore ks = KeyStore.getInstance("PKCS12");
+try (var in = new FileInputStream("client.p12")) {
+    ks.load(in, "changeit".toCharArray());
+}
+KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+kmf.init(ks, "changeit".toCharArray());
+
+KeyStore trust = KeyStore.getInstance("PKCS12");
+try (var in = new FileInputStream("truststore.p12")) {
+    trust.load(in, "changeit".toCharArray());
+}
+TrustManagerFactory tmf = TrustManagerFactory.getInstance("PKIX");
+tmf.init(trust);
+
+SSLContext ctx = SSLContext.getInstance("TLSv1.3");
+ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+OkHttpClient client = new OkHttpClient.Builder()
+    .sslSocketFactory(ctx.getSocketFactory(),
+                      (X509TrustManager) tmf.getTrustManagers()[0])
+    .build();</div>
+            </div>
+
+            <div>
+              <h4 class="font-semibold mb-2">Service mesh option</h4>
+              <p class="text-slate-700 dark:text-slate-300">For fleet-wide mTLS, offload to a mesh: <strong>Istio, Linkerd, or Consul Connect</strong> give automatic cert issuance, rotation, and identity enforcement without app changes.</p>
+            </div>
+
+            <button onclick="showModal('mtls')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              📚 More Info & References
+            </button>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic: API Rate Limiting — Java -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">☕</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Rate Limiting Java APIs
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Spring Boot, Resilience4j, Bucket4j</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-4 text-sm">
+            <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+              <li><strong>Bucket4j</strong> — token bucket; supports Redis/Hazelcast for distributed limits</li>
+              <li><strong>Resilience4j RateLimiter</strong> — lightweight, integrates with Spring & reactive stacks</li>
+              <li><strong>Spring Cloud Gateway</strong> — built-in <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">RequestRateLimiter</code> filter with Redis</li>
+              <li>Key by API key / user ID / tenant — <em>not</em> just IP (NAT hides real clients)</li>
+              <li>Return <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">429</code> with <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">Retry-After</code> and <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">RateLimit-*</code> headers (RFC 9331)</li>
+              <li>Apply limits <em>before</em> expensive work (auth, DB) in filter chain</li>
+            </ul>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+// Bucket4j distributed (Redis via Lettuce)
+Bucket bucket = Bucket.builder()
+    .addLimit(Bandwidth.classic(100,
+        Refill.intervally(100, Duration.ofMinutes(1))))
+    .build();
+
+ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+if (!probe.isConsumed()) {
+    response.setStatus(429);
+    response.setHeader("Retry-After",
+        String.valueOf(probe.getNanosToWaitForRefill() / 1_000_000_000));
+    return;
+}</div>
+            <button onclick="showModal('ratelimitJava')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              📚 More Info & References
+            </button>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic: API Rate Limiting — Python -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">🐍</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Rate Limiting Python APIs
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">FastAPI, Flask, Django, async-safe limiters</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-4 text-sm">
+            <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+              <li><strong>slowapi</strong> — FastAPI/Starlette port of Flask-Limiter; Redis or in-memory backend</li>
+              <li><strong>Flask-Limiter</strong> — mature, decorator-based, supports Redis/Memcached/MongoDB</li>
+              <li><strong>django-ratelimit</strong> — decorator + middleware for Django views</li>
+              <li><strong>aiolimiter</strong> — leaky bucket for async outbound calls</li>
+              <li>For multi-worker deployments (gunicorn/uvicorn), <em>always</em> use a shared backend — per-process memory limits are useless</li>
+              <li>Watch out for the GIL — CPU-heavy limiter logic belongs in Redis Lua, not Python</li>
+            </ul>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# FastAPI + slowapi + Redis
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(
+    key_func=lambda req: req.headers.get("X-API-Key")
+                         or get_remote_address(req),
+    storage_uri="redis://redis:6379/0",
+    default_limits=["1000/hour"],
+)
+
+@app.get("/search")
+@limiter.limit("10/minute")
+async def search(request: Request, q: str):
+    return {"results": ...}</div>
+            <button onclick="showModal('ratelimitPy')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              📚 More Info & References
+            </button>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic: API Rate Limiting — Go -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm md:col-span-2">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">🐹</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Rate Limiting Go APIs
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1"><code>golang.org/x/time/rate</code>, Tollbooth, Redis-backed limiters</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-4 text-sm">
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <h4 class="font-semibold mb-2">Libraries</h4>
+                <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+                  <li><code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">golang.org/x/time/rate</code> — stdlib-grade token bucket</li>
+                  <li><strong>Tollbooth</strong> — HTTP middleware built on x/time/rate</li>
+                  <li><strong>uber-go/ratelimit</strong> — leaky bucket, non-blocking</li>
+                  <li><strong>go-redis/redis_rate</strong> — distributed, GCRA algorithm</li>
+                  <li>For gRPC: <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">grpc-ecosystem/go-grpc-middleware/ratelimit</code></li>
+                </ul>
+              </div>
+              <div>
+                <h4 class="font-semibold mb-2">Patterns</h4>
+                <ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+                  <li>One limiter per identity key, stored in <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">sync.Map</code> or LRU cache</li>
+                  <li>Evict idle limiters to prevent memory growth</li>
+                  <li>Use <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">limiter.Wait(ctx)</code> for outbound calls (respects deadline)</li>
+                  <li>Use <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">Allow()</code> for inbound — fail fast with 429</li>
+                  <li>Set CPU/memory-aware burst — don't over-provision tokens</li>
+                </ul>
+              </div>
+            </div>
+            <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+// Per-API-key middleware using x/time/rate
+type keyedLimiter struct {
+    mu       sync.Mutex
+    limiters map[string]*rate.Limiter
+}
+
+func (k *keyedLimiter) get(id string) *rate.Limiter {
+    k.mu.Lock(); defer k.mu.Unlock()
+    if l, ok := k.limiters[id]; ok { return l }
+    l := rate.NewLimiter(rate.Limit(10), 20) // 10 rps, burst 20
+    k.limiters[id] = l
+    return l
+}
+
+func Middleware(k *keyedLimiter) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            id := r.Header.Get("X-API-Key")
+            if id == "" { id = r.RemoteAddr }
+            if !k.get(id).Allow() {
+                w.Header().Set("Retry-After", "1")
+                http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+                return
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
+}</div>
+            <button onclick="showModal('ratelimitGo')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+              📚 More Info & References
+            </button>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <!-- Topic 5: Container Networking -->
+    <article class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm md:col-span-2">
+      <details>
+        <summary class="p-5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+          <span class="text-2xl" aria-hidden="true">🌐</span>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-lg flex items-center gap-2">
+              <span class="chevron">▶</span>
+              Configure Container Networking Securely
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Isolation, segmentation, and least-privilege connectivity</p>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 border-t border-slate-200 dark:border-slate-800">
+          <div class="pt-4 space-y-6 text-sm">
+
+            <p class="text-slate-700 dark:text-slate-300">Each principle below is a common failure mode. The examples show the <em>wrong</em> way and the <em>right</em> way side by side.</p>
+
+            <!-- Principle 1 -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">1. Never use the default bridge for production</h4>
+              <p class="text-slate-700 dark:text-slate-300">The default <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">bridge</code> network provides no DNS-based service discovery, exposes all containers to each other by default, and gives you no isolation between unrelated apps. Every <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">docker run</code> without <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">--network</code> lands here.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# ❌ BAD — lands on default bridge, talks to everything
+docker run -d --name api myapi:latest
+docker run -d --name sketchy-thirdparty some/image
+
+# ✅ GOOD — isolated user-defined network with DNS
+docker network create app-net
+docker run -d --name api --network app-net myapi:latest
+docker run -d --name db  --network app-net postgres:16
+# api can resolve "db" by name; unrelated containers can't reach either</div>
+            </div>
+
+            <!-- Principle 2 -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">2. One user-defined network per application tier</h4>
+              <p class="text-slate-700 dark:text-slate-300">Segment by tier (frontend / backend / data). Containers only join the networks they actually need. A compromised frontend container cannot reach the database directly — it must go through the API tier.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Create tier-specific networks
+docker network create frontend-net
+docker network create backend-net
+docker network create data-net
+
+# nginx: only frontend
+docker run -d --name nginx --network frontend-net -p 443:443 nginx
+
+# api: bridges frontend <-> backend, but NOT data
+docker run -d --name api --network frontend-net myapi:latest
+docker network connect backend-net api
+
+# worker: backend + data
+docker run -d --name worker --network backend-net myworker:latest
+docker network connect data-net worker
+
+# postgres: data only — unreachable from nginx or api directly
+docker run -d --name db --network data-net postgres:16</div>
+            </div>
+
+            <!-- Principle 3 -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">3. Disable inter-container comms (<code>icc=false</code>) by default</h4>
+              <p class="text-slate-700 dark:text-slate-300">With ICC enabled, any container on a bridge can open a socket to any other on the same bridge. Disabling ICC forces you to explicitly allowlist connections, turning lateral movement from "free" into "impossible without a rule".</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Daemon-wide: /etc/docker/daemon.json
+{
+  "icc": false,
+  "iptables": true
+}
+# Restart dockerd
+
+# Per-network (preferred — keeps other networks functional)
+docker network create \
+  --driver bridge \
+  --opt com.docker.network.bridge.enable_icc=false \
+  locked-net
+
+# Now containers on locked-net can only talk if you
+# explicitly link them or open a port between them
+docker run -d --name a --network locked-net alpine sleep 1d
+docker run -d --name b --network locked-net alpine sleep 1d
+docker exec a ping -c1 b     # ❌ fails — ICC disabled</div>
+            </div>
+
+            <!-- Principle 4 -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">4. Bind ports to <code>127.0.0.1</code> unless external access is required</h4>
+              <p class="text-slate-700 dark:text-slate-300">Plain <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">-p 8080:8080</code> binds to <strong>0.0.0.0</strong> — every interface, including public ones. And Docker punches through host firewalls (UFW, firewalld) via its own iptables chain. The fix is to bind explicitly.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# ❌ BAD — exposed on every host interface, bypasses UFW
+docker run -d -p 5432:5432 postgres:16
+docker run -d -p 6379:6379 redis:7
+
+# ✅ GOOD — loopback only, reachable via SSH tunnel or reverse proxy
+docker run -d -p 127.0.0.1:5432:5432 postgres:16
+docker run -d -p 127.0.0.1:6379:6379 redis:7
+
+# ✅ Also good — bind to a private interface only
+docker run -d -p 10.0.1.5:8080:8080 myapi:latest
+
+# docker-compose.yml equivalent
+services:
+  db:
+    image: postgres:16
+    ports:
+      - "127.0.0.1:5432:5432"   # NOT "5432:5432"</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ Thousands of Redis and Mongo instances get pwned every year because someone wrote <code>-p 6379:6379</code> on a cloud VM with a public IP.
+              </p>
+            </div>
+
+            <!-- Principle 5 -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">5. Use internal networks for DB + app tier</h4>
+              <p class="text-slate-700 dark:text-slate-300">An <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">--internal</code> network has no route to the outside world. Databases cannot phone home, can't download malicious payloads if compromised, and cannot leak data over HTTPS to an attacker's server.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Backend network — no external routing
+docker network create --internal backend-net
+
+# Frontend network — has external route (for the API's outbound HTTPS)
+docker network create frontend-net
+
+# DB: only on the internal network — no egress possible
+docker run -d --name db --network backend-net postgres:16
+
+# API: bridges both — can reach DB and also external APIs it needs
+docker run -d --name api \
+  --network backend-net \
+  -p 127.0.0.1:8080:8080 \
+  myapi:latest
+docker network connect frontend-net api
+
+# Proof: DB cannot resolve or reach the internet
+docker exec db curl -m3 https://example.com   # ❌ fails (no route)</div>
+            </div>
+
+            <!-- Principle 6 -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">6. Apply Kubernetes NetworkPolicies / Cilium for east-west control</h4>
+              <p class="text-slate-700 dark:text-slate-300">By default, every pod in a Kubernetes cluster can reach every other pod. A single compromised pod = full lateral movement. NetworkPolicies flip this to default-deny; Cilium adds L7 (HTTP method, path) and identity-based policy via eBPF.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Step 1 — default deny all ingress + egress in the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: prod
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Step 2 — allow only api -> db on port 5432
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-to-db
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels: { app: postgres }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels: { app: api }
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# Cilium L7 policy — API can GET /users but not DELETE
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: api-l7
+spec:
+  endpointSelector:
+    matchLabels: { app: users-svc }
+  ingress:
+  - fromEndpoints:
+    - matchLabels: { app: api }
+    toPorts:
+    - ports:
+      - { port: "8080", protocol: TCP }
+      rules:
+        http:
+        - method: "GET"
+          path: "/users(/.*)?"</div>
+            </div>
+
+            <!-- Principle 7 -->
+            <div class="border-l-4 border-red-500 pl-4 space-y-2">
+              <h4 class="font-semibold">7. Egress filtering — not just ingress</h4>
+              <p class="text-slate-700 dark:text-slate-300">Most security rules block <em>incoming</em> traffic. But every real-world breach ends with <em>outgoing</em> traffic: data exfiltration, C2 callbacks, cryptominer pool connections. Restrict egress to the specific hosts each workload actually needs.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Kubernetes — allow egress only to kube-dns + specific API
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-egress-allowlist
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels: { app: api }
+  policyTypes: [Egress]
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector: { matchLabels: { name: kube-system } }
+      podSelector: { matchLabels: { k8s-app: kube-dns } }
+    ports: [{ protocol: UDP, port: 53 }]
+  # Internal postgres
+  - to:
+    - podSelector: { matchLabels: { app: postgres } }
+    ports: [{ protocol: TCP, port: 5432 }]
+  # One specific external API (via CIDR — for FQDN use Cilium)
+  - to:
+    - ipBlock:
+        cidr: 52.94.0.0/16    # e.g. AWS API range
+    ports: [{ protocol: TCP, port: 443 }]
+---
+# Cilium CNP — FQDN-based egress allowlist (L7 aware)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: api-fqdn-egress
+spec:
+  endpointSelector:
+    matchLabels: { app: api }
+  egress:
+  - toFQDNs:
+    - matchName: "api.stripe.com"
+    - matchPattern: "*.s3.amazonaws.com"
+    toPorts:
+    - ports: [{ port: "443", protocol: TCP }]</div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">For Docker standalone, combine <code>--internal</code> networks with an egress proxy (e.g., Squid) that allowlists destinations.</p>
+            </div>
+
+            <!-- Principle 8 -->
+            <div class="border-l-4 border-amber-500 pl-4 space-y-2">
+              <h4 class="font-semibold">8. Disable IPv6 if unused — it often bypasses v4 firewall rules</h4>
+              <p class="text-slate-700 dark:text-slate-300">Many admins write iptables rules and forget ip6tables. Containers pick up link-local IPv6 addresses automatically, and services bound to <code class="text-xs bg-slate-200 dark:bg-slate-800 px-1 rounded">::</code> are reachable over v6 even when v4 is locked down. Either fully configure both stacks, or disable v6 entirely.</p>
+              <div class="bg-slate-900 dark:bg-black text-slate-100 p-3 rounded-lg code-block overflow-x-auto">
+# Disable IPv6 at the kernel (/etc/sysctl.d/99-no-ipv6.conf)
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+# Apply: sysctl --system
+
+# Or keep v6 but mirror every v4 rule in ip6tables
+ip6tables -P INPUT DROP
+ip6tables -P FORWARD DROP
+ip6tables -A INPUT -i lo -j ACCEPT
+ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Docker daemon: explicitly disable v6 if you don't need it
+# /etc/docker/daemon.json
+{
+  "ipv6": false,
+  "fixed-cidr-v6": ""
+}
+
+# Kubernetes: verify you're running single-stack if that's the intent
+kubectl get nodes -o jsonpath='{.items[*].spec.podCIDRs}'
+# Should show only IPv4 CIDRs if single-stack</div>
+              <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-900">
+                ⚠️ Test with <code>ss -tlnp6</code> and <code>nmap -6 ::1</code> to catch v6-bound services you didn't know about.
+              </p>
+            </div>
+
+            <div class="pt-2">
+              <button onclick="showModal('network')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                📚 More Info & References
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
+    </article>
+  </div>
+
+  <footer class="mt-12 pt-6 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center">
+    <p>Always consult current CIS Benchmarks, vendor docs, and your organization's security policies. This page is a starting reference, not a substitute for a security review.</p>
+  </footer>
+</main>
+
+<!-- Modal -->
+<div id="modal" class="hidden fixed inset-0 z-50 modal-backdrop bg-black/50 flex items-center justify-center p-4" onclick="if(event.target===this)closeModal()">
+  <div class="fade-in bg-white dark:bg-slate-900 rounded-xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-700" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between">
+      <h3 id="modal-title" class="font-semibold text-lg"></h3>
+      <button onclick="closeModal()" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="modal-body" class="p-4 text-sm space-y-3"></div>
+  </div>
+</div>
+
+<script>
+  // ============ Theme ============
+  function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.classList.toggle('dark');
+    try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch(e) {}
+  }
+  (function initTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem('theme'); } catch(e) {}
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (saved === 'dark' || (!saved && prefersDark)) {
+      document.documentElement.classList.add('dark');
+    }
+  })();
+
+  // ============ Font scale ============
+  let fontScale = 1;
+  try {
+    const saved = parseFloat(localStorage.getItem('fontScale'));
+    if (!isNaN(saved) && saved >= 0.8 && saved <= 1.6) fontScale = saved;
+  } catch(e) {}
+  document.documentElement.style.setProperty('--font-scale', fontScale);
+
+  function adjustFont(delta) {
+    fontScale = Math.max(0.8, Math.min(1.6, fontScale + delta));
+    document.documentElement.style.setProperty('--font-scale', fontScale);
+    try { localStorage.setItem('fontScale', fontScale); } catch(e) {}
+  }
+  function resetFont() {
+    fontScale = 1;
+    document.documentElement.style.setProperty('--font-scale', fontScale);
+    try { localStorage.setItem('fontScale', fontScale); } catch(e) {}
+  }
+
+  // ============ Modals ============
+  const MODAL_CONTENT = {
+    temporal: {
+      title: 'Temporal Rate Limiting — References',
+      body: `
+        <p>Key documentation and further reading on Temporal worker tuning:</p>
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.temporal.io/develop/worker-performance" target="_blank" rel="noopener">Temporal — Worker performance tuning</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.temporal.io/dev-guide/java" target="_blank" rel="noopener">Temporal Java SDK developer guide</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.temporal.io/activities#activity-options" target="_blank" rel="noopener">Activity options & retry policies</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.temporal.io/cloud/limits" target="_blank" rel="noopener">Temporal Cloud limits</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://resilience4j.readme.io/docs/ratelimiter" target="_blank" rel="noopener">Resilience4j RateLimiter (client-side)</a></li>
+        </ul>
+        <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 p-3 rounded text-xs">
+          <strong>Tip:</strong> Monitor <code>schedule_to_start</code> latency. Rising values mean workers are saturated — scale out or raise concurrency before raising task queue RPS.
+        </div>
+      `
+    },
+    host: {
+      title: 'Host OS Hardening — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://www.cisecurity.org/benchmark/docker" target="_blank" rel="noopener">CIS Docker Benchmark</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/docker/docker-bench-security" target="_blank" rel="noopener">Docker Bench for Security (automated audit)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://aws.amazon.com/bottlerocket/" target="_blank" rel="noopener">AWS Bottlerocket</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://flatcar.org/" target="_blank" rel="noopener">Flatcar Container Linux</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://www.talos.dev/" target="_blank" rel="noopener">Talos Linux</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://kubernetes.io/docs/concepts/security/hardening-guide/" target="_blank" rel="noopener">Kubernetes hardening guide (NSA/CISA)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/security/rootless/" target="_blank" rel="noopener">Rootless Docker mode</a></li>
+        </ul>
+      `
+    },
+    tls: {
+      title: 'Docker TLS — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/security/protect-access/" target="_blank" rel="noopener">Docker — Protect the Docker daemon socket</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/reference/cli/dockerd/" target="_blank" rel="noopener">dockerd reference (TLS flags)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://smallstep.com/docs/tutorials/docker-tls-certificate-authentication/" target="_blank" rel="noopener">Smallstep — Docker TLS cert tutorial</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/cloudflare/cfssl" target="_blank" rel="noopener">CFSSL — CA tooling</a></li>
+        </ul>
+        <div class="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 p-3 rounded text-xs">
+          <strong>Critical:</strong> An exposed unauthenticated Docker daemon = remote root. Many crypto-mining worms scan for port 2375 specifically.
+        </div>
+      `
+    },
+    integrity: {
+      title: 'Data Integrity — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://www.sigstore.dev/" target="_blank" rel="noopener">Sigstore / Cosign — image signing</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/security/trust/" target="_blank" rel="noopener">Docker Content Trust</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity" target="_blank" rel="noopener">MDN — Subresource Integrity (SRI)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/html/rfc2104" target="_blank" rel="noopener">RFC 2104 — HMAC</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://owasp.org/www-project-cheat-sheets/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html" target="_blank" rel="noopener">OWASP — JWT cheat sheet</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://slsa.dev/" target="_blank" rel="noopener">SLSA — supply chain integrity framework</a></li>
+        </ul>
+      `
+    },
+    mtls: {
+      title: 'Mutual TLS — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/html/rfc8446" target="_blank" rel="noopener">RFC 8446 — TLS 1.3</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://spiffe.io/" target="_blank" rel="noopener">SPIFFE — workload identity standard</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://spiffe.io/docs/latest/spire-about/" target="_blank" rel="noopener">SPIRE — SPIFFE runtime</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://cert-manager.io/docs/" target="_blank" rel="noopener">cert-manager — K8s cert lifecycle</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://istio.io/latest/docs/concepts/security/#mutual-tls-authentication" target="_blank" rel="noopener">Istio mTLS</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://linkerd.io/2/features/automatic-mtls/" target="_blank" rel="noopener">Linkerd automatic mTLS</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://www.nist.gov/publications/zero-trust-architecture" target="_blank" rel="noopener">NIST SP 800-207 — Zero Trust Architecture</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://wiki.mozilla.org/Security/Server_Side_TLS" target="_blank" rel="noopener">Mozilla Server Side TLS config guidelines</a></li>
+        </ul>
+        <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-3 rounded text-xs">
+          <strong>Common mistake:</strong> Accepting a client cert just because it's signed by your CA. You must also check identity (SAN, SPIFFE ID, CN) against an authorization policy — otherwise any service with any cert from your CA can call any endpoint.
+        </div>
+      `
+    },
+    ratelimitJava: {
+      title: 'Java API Rate Limiting — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://bucket4j.com/" target="_blank" rel="noopener">Bucket4j documentation</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://resilience4j.readme.io/docs/ratelimiter" target="_blank" rel="noopener">Resilience4j RateLimiter</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.spring.io/spring-cloud-gateway/reference/spring-cloud-gateway/gatewayfilter-factories/requestratelimiter-factory.html" target="_blank" rel="noopener">Spring Cloud Gateway — RequestRateLimiter</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/html/rfc6585#section-4" target="_blank" rel="noopener">RFC 6585 — 429 Too Many Requests</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/" target="_blank" rel="noopener">Draft — RateLimit HTTP headers</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/Netflix/concurrency-limits" target="_blank" rel="noopener">Netflix concurrency-limits (adaptive)</a></li>
+        </ul>
+      `
+    },
+    ratelimitPy: {
+      title: 'Python API Rate Limiting — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://slowapi.readthedocs.io/" target="_blank" rel="noopener">slowapi (FastAPI/Starlette)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://flask-limiter.readthedocs.io/" target="_blank" rel="noopener">Flask-Limiter</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://django-ratelimit.readthedocs.io/" target="_blank" rel="noopener">django-ratelimit</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/mjpieters/aiolimiter" target="_blank" rel="noopener">aiolimiter — asyncio leaky bucket</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/vutran1710/PyrateLimiter" target="_blank" rel="noopener">PyrateLimiter</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://redis.io/docs/latest/develop/use/patterns/distributed-locks/" target="_blank" rel="noopener">Redis distributed coordination</a></li>
+        </ul>
+        <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 p-3 rounded text-xs">
+          <strong>Tip:</strong> If running behind gunicorn with N workers, an in-memory "10/min" limit becomes "10×N/min". Always use Redis or Memcached storage in production.
+        </div>
+      `
+    },
+    ratelimitGo: {
+      title: 'Go API Rate Limiting — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://pkg.go.dev/golang.org/x/time/rate" target="_blank" rel="noopener">golang.org/x/time/rate</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/didip/tollbooth" target="_blank" rel="noopener">Tollbooth HTTP middleware</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/uber-go/ratelimit" target="_blank" rel="noopener">uber-go/ratelimit (leaky bucket)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/go-redis/redis_rate" target="_blank" rel="noopener">go-redis/redis_rate (distributed, GCRA)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://github.com/grpc-ecosystem/go-grpc-middleware" target="_blank" rel="noopener">gRPC middleware (incl. ratelimit)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://go.dev/blog/context" target="_blank" rel="noopener">Go context package (for Wait)</a></li>
+        </ul>
+        <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 p-3 rounded text-xs">
+          <strong>Tip:</strong> An unbounded <code>map[string]*rate.Limiter</code> is a memory leak waiting to happen. Use an LRU cache (e.g., hashicorp/golang-lru) or periodically prune idle limiters.
+        </div>
+      `
+    },
+    network: {
+      title: 'Container Networking — References',
+      body: `
+        <ul class="list-disc pl-5 space-y-2">
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/network/" target="_blank" rel="noopener">Docker networking overview</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/network/drivers/bridge/" target="_blank" rel="noopener">User-defined bridge networks</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener">Kubernetes NetworkPolicies</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://cilium.io/" target="_blank" rel="noopener">Cilium — eBPF networking & policy</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://istio.io/latest/docs/concepts/security/" target="_blank" rel="noopener">Istio security (mTLS service mesh)</a></li>
+          <li><a class="text-blue-600 dark:text-blue-400 underline" href="https://docs.docker.com/engine/network/packet-filtering-firewalls/" target="_blank" rel="noopener">Docker + iptables interaction</a></li>
+        </ul>
+        <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-3 rounded text-xs">
+          <strong>Gotcha:</strong> Docker bypasses host UFW/iptables rules by default when publishing ports. Bind to <code>127.0.0.1</code> explicitly or use <code>iptables=false</code> + manual rules.
+        </div>
+      `
+    }
+  };
+
+  function showModal(key) {
+    const content = MODAL_CONTENT[key];
+    if (!content) return;
+    document.getElementById('modal-title').textContent = content.title;
+    document.getElementById('modal-body').innerHTML = content.body;
+    document.getElementById('modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    document.getElementById('modal').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+
+</body>
+</html>
