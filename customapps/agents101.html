@@ -188,6 +188,37 @@
   .status-idle     { background:#c6c6c6; color:#161616; }
   .status-running  { background:#f1c21b; color:#161616; }
   .status-complete { background:#198038; color:#fff; }
+
+  /* === Before / After review panel === */
+  .ba-pane { background:#fff; border:1px solid #e0e0e0; }
+  .ba-pane-header {
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px; letter-spacing:.16em; text-transform:uppercase;
+    padding: 8px 12px; display:flex; align-items:center; gap:8px;
+  }
+  .ba-before-header { background:#393939; color:#fff; }
+  .ba-after-header  { background:#002d9c; color:#fff; }
+
+  /* Redline marks for contract review */
+  .redline del {
+    background:#fff1f1; color:#a2191f;
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+    padding: 0 3px;
+  }
+  .redline ins {
+    background:#defbe6; color:#0e6027;
+    text-decoration: none;
+    border-bottom: 1.5px solid #24a148;
+    padding: 0 3px;
+  }
+  /* sticky annotation rail color */
+  .annotation-add  { color:#0043ce; border-color:#a6c8ff; }
+  .annotation-warn { color:#a2191f; border-color:#ffb3b8; }
+
+  /* Fade-in for opened review panel */
+  @keyframes fadeUp { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:none; } }
+  .ba-pane { animation: fadeUp .4s ease both; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -677,6 +708,431 @@ const RUN_STEPS = {
     {label:'Execute',    detail:'Forwarded · response in 412ms · 89 tokens generated',       dur:700},
     {label:'Log',        detail:'Saved 96% vs frontier baseline · audit logged',             dur:300},
   ],
+};
+
+/* ============================================================
+   BEFORE / AFTER  ·  reviewer-friendly artefact comparisons
+   ============================================================ */
+const BEFORE_AFTER = {
+  tools: {
+    label: 'Email + PDF Receipt → Posted Journal Entry',
+    before: `<div class="mono text-[11px] text-gray-70 leading-5">
+      <div class="border-b border-gray-20 pb-1.5 mb-1.5">
+        <div class="text-gray-50">From: acme-billing@vendor.com</div>
+        <div class="text-gray-50">To: ap-inbox@yourco.com</div>
+        <div class="text-gray-50">Subject: Invoice 4421-A · Net 30</div>
+        <div class="text-gray-50">Attach: receipt-441.pdf (3 pages, 240 KB)</div>
+      </div>
+      <div>Hi Sarah, attached is this month's office furniture invoice. Net 30 from issue date. Wire details on page 3.</div>
+      <div class="bg-gray-10 mt-2 p-2 border border-gray-20 text-[10px]">
+        <div class="text-gray-50 mb-1">[ extracted from receipt-441.pdf ]</div>
+        QTY  ITEM            UNIT     AMOUNT<br>
+        2    Office Chair    $430.00  $860.00<br>
+        5    Desk Riser      $ 45.20  $226.00<br>
+        1    File Cabinet    $198.40  $198.40<br>
+        ─────────────────────────────<br>
+        SUBTOTAL                      $1,284.40
+      </div>
+      <div class="text-red-600 text-[10px] mt-2">› unstructured · clerk must classify, validate, encode</div>
+    </div>`,
+    after: `<table class="mono text-[11px] w-full border-collapse">
+      <tbody>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60 w-28">Journal #</td><td class="p-1.5 border border-gray-20 font-semibold">JE-7798</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">Posted</td><td class="p-1.5 border border-gray-20">2026-04-15 09:14:22 UTC</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">Vendor</td><td class="p-1.5 border border-gray-20">8821 · ACME OFFICE LLC</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">DR Account</td><td class="p-1.5 border border-gray-20">6420 · Office Furniture &amp; Fixtures</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">CR Account</td><td class="p-1.5 border border-gray-20">2010 · Accounts Payable</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">Amount</td><td class="p-1.5 border border-gray-20 text-emerald-700 font-semibold">$1,284.40 USD</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">PO Match</td><td class="p-1.5 border border-gray-20"><span class="text-emerald-700">✓</span> PO-44219 · within 2% tolerance</td></tr>
+        <tr><td class="p-1.5 border border-gray-20 text-gray-60">Status</td><td class="p-1.5 border border-gray-20"><span class="text-emerald-700 font-semibold">POSTED</span> · queued for next pay run</td></tr>
+      </tbody></table>`,
+  },
+
+  skills: {
+    label: 'Raw GL Numbers → Board-Ready Variance Commentary',
+    before: `<div class="mono text-[11px] text-gray-70 leading-5">
+      <div class="text-gray-50 mb-1">› SELECT * FROM finance.actual_vs_budget WHERE qtr='Q3-2026'</div>
+      <table class="text-[10px] border border-gray-20 w-full">
+        <tr class="bg-gray-10"><th class="border p-1 text-left">Account</th><th class="border p-1 text-right">Actual</th><th class="border p-1 text-right">Budget</th><th class="border p-1 text-right">Var</th></tr>
+        <tr><td class="border p-1">4010 Revenue</td><td class="border p-1 text-right">12,431,200</td><td class="border p-1 text-right">12,000,000</td><td class="border p-1 text-right">+431,200</td></tr>
+        <tr><td class="border p-1">5010 COGS</td><td class="border p-1 text-right">3,841,500</td><td class="border p-1 text-right">3,600,000</td><td class="border p-1 text-right">+241,500</td></tr>
+        <tr><td class="border p-1">6020 Marketing</td><td class="border p-1 text-right">1,420,800</td><td class="border p-1 text-right">1,800,000</td><td class="border p-1 text-right">−379,200</td></tr>
+        <tr><td class="border p-1">6010 Sales</td><td class="border p-1 text-right">2,108,300</td><td class="border p-1 text-right">2,000,000</td><td class="border p-1 text-right">+108,300</td></tr>
+        <tr><td class="border p-1">7010 G&amp;A</td><td class="border p-1 text-right">980,400</td><td class="border p-1 text-right">950,000</td><td class="border p-1 text-right">+30,400</td></tr>
+      </table>
+      <div class="text-red-600 text-[10px] mt-1">› integers · no narrative · 6 hours of analyst typing follows</div>
+    </div>`,
+    after: `<div class="text-[11px] leading-5">
+      <div class="serif text-base font-semibold text-ibm-700 mb-0.5">Q3 2026 · Variance Commentary</div>
+      <div class="text-gray-50 mono text-[10px] mb-2">prepared by AGENT-2104 · variance.skill v1.4.0 · house-style template</div>
+      <div class="font-semibold mt-1">Revenue · ▲ +3.6% vs budget</div>
+      <p class="text-gray-70">Outperformed plan by $431k driven by enterprise upsell (+$512k), partially offset by SMB churn (−$81k). YoY: +14.2%, ahead of public guidance of +12%.</p>
+      <div class="font-semibold mt-2 text-amber-700">COGS · ▼ +6.7% over budget</div>
+      <p class="text-gray-70">Cloud infrastructure ran $241k hot due to unmanaged GPU spend in R&amp;D. Recommend revisiting FinOps alerts in Q4. Gross-margin compression of 80bp was absorbed within plan envelope.</p>
+      <div class="font-semibold mt-2 text-emerald-700">Marketing · ✓ −21% under budget</div>
+      <p class="text-gray-70">Conscious pullback on top-of-funnel after 1H pipeline overhang. $379k savings flow through to operating leverage. Reactivate in Q4 if demo-request volume softens.</p>
+      <div class="text-ibm-700 mt-2 mono text-[10px]">› auto-formatted to CFO's preferred 3-account narrative · ready for Tuesday board read-out</div>
+    </div>`,
+  },
+
+  memory: {
+    label: 'Cold Reply (No Memory) → Contextualized Reply',
+    before: `<div class="text-[11px] leading-5 mono">
+      <div class="text-gray-50 text-[10px] mb-1">// stateless agent · no recall</div>
+      <div class="bg-gray-10 p-2 border-l-2 border-gray-30">
+        <div class="text-gray-50">User:</div>
+        "the SSO thing again"
+      </div>
+      <div class="bg-red-50 p-2 border-l-2 border-red-400 mt-1.5">
+        <div class="text-red-700 text-[10px]">Agent (cold):</div>
+        Hi! I'd be happy to help. To get started, could you share:<br>
+        • Your account email<br>
+        • Which SSO provider you use<br>
+        • The exact error you're seeing<br>
+        • Any prior ticket references
+      </div>
+      <div class="text-red-600 text-[10px] mt-1">› user must repeat everything · 4 round-trips before resolution</div>
+    </div>`,
+    after: `<div class="text-[11px] leading-5 mono">
+      <div class="text-gray-50 text-[10px] mb-1">// memory-augmented · 3 memories retrieved (top-k=5)</div>
+      <div class="bg-gray-10 p-2 border-l-2 border-gray-30">
+        <div class="text-gray-50">User (alice@acme.com):</div>
+        "the SSO thing again"
+      </div>
+      <div class="bg-ibm-50 p-2 border-l-2 border-ibm-500 mt-1.5">
+        <div class="text-ibm-700 text-[10px]">› RECALLED CONTEXT</div>
+        Plan: <strong>Pro</strong> · 47 seats · billing day 14<br>
+        Last ticket: <strong>SUP-3122</strong> (closed) · "SSO sandbox flow"<br>
+        On-file workaround: disable SSO during invite, then re-enable
+      </div>
+      <div class="bg-emerald-50 p-2 border-l-2 border-emerald-500 mt-1.5">
+        <div class="text-emerald-700 text-[10px]">Agent (warm):</div>
+        Hi Alice — looks like the SSO sandbox flow again. We had it working last time by disabling SSO during the invite step. Want me to walk through that, or has something changed since SUP-3122?
+      </div>
+      <div class="text-emerald-700 text-[10px] mt-1">› zero questions repeated · resolution in 1 round-trip</div>
+    </div>`,
+  },
+
+  context: {
+    label: 'Vendor MSA Draft → Agent Redline w/ Playbook Annotations',
+    before: `<div class="redline mono text-[11px] text-gray-90 leading-relaxed">
+      <div class="text-gray-50 mb-1">§ 12.3 LIMITATION OF LIABILITY</div>
+      <p class="mb-2">The aggregate liability of either party arising out of or related to this Agreement shall not exceed <strong>two times (2×)</strong> the fees paid or payable by Customer in the twelve (12) months preceding the event giving rise to the claim.</p>
+      <div class="text-gray-50 mt-3 mb-1">§ 14 INDEMNIFICATION</div>
+      <p class="mb-2">Each party shall defend and indemnify the other against third-party claims arising from its breach of this Agreement, subject to the limitations set forth in § 12.3 above.</p>
+      <div class="text-gray-50 mt-3 mb-1">§ 9.2 DATA PROCESSING</div>
+      <p>Customer hereby grants Vendor a perpetual, irrevocable, royalty-free license to use Customer Data for product improvement and analytics purposes.</p>
+    </div>`,
+    after: `<div class="redline mono text-[11px] text-gray-90 leading-relaxed">
+      <div class="text-gray-50 mb-1">§ 12.3 LIMITATION OF LIABILITY</div>
+      <p class="mb-1">The aggregate liability of either party arising out of or related to this Agreement shall not exceed <del>two times (2×)</del><ins>one times (1×)</ins> the fees paid or payable by Customer in the twelve (12) months preceding the event giving rise to the claim.</p>
+      <div class="annotation-add text-[10px] italic mt-1 mb-3 pl-2 border-l-2">› Cap reduced to 1× per playbook §4.2 — standard for deals under $500k ARR</div>
+      <div class="text-gray-50 mb-1">§ 14 INDEMNIFICATION</div>
+      <p class="mb-1">Each party shall defend and indemnify the other against third-party claims arising from its breach of this Agreement, subject to the limitations set forth in § 12.3 above. <ins>Notwithstanding the foregoing, the limitations in § 12.3 shall not apply to indemnification obligations arising from third-party intellectual property infringement claims (the "IP Super-Cap").</ins></p>
+      <div class="annotation-add text-[10px] italic mt-1 mb-3 pl-2 border-l-2">› Added IP super-cap exclusion — required by playbook §7 for any deal where customer hosts our IP</div>
+      <div class="text-gray-50 mb-1">§ 9.2 DATA PROCESSING</div>
+      <p class="mb-1">Customer hereby grants Vendor a <del>perpetual, irrevocable, royalty-free</del><ins>limited, revocable, royalty-free, non-exclusive</ins> license to use <del>Customer Data</del><ins>de-identified, aggregated Customer Data</ins> for product improvement and analytics purposes<ins>, subject to Customer's prior written consent and a 30-day revocation right</ins>.</p>
+      <div class="annotation-warn text-[10px] italic mt-1 pl-2 border-l-2">⚠ MUST FIX · perpetual + identifiable data violates DPA — playbook §11 hard-no</div>
+    </div>`,
+  },
+
+  mcp: {
+    label: 'Two Disconnected Systems → Joined Forecast in CRM',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› salesforce.opportunities · 3 of 142 records</div>
+      <table class="border border-gray-20 text-[10px] w-full mb-3">
+        <tr class="bg-gray-10"><th class="border p-1 text-left">opp</th><th class="border p-1">stage</th><th class="border p-1 text-right">amount</th></tr>
+        <tr><td class="border p-1">OPP-9821</td><td class="border p-1">Negotiate</td><td class="border p-1 text-right">$84k</td></tr>
+        <tr><td class="border p-1">OPP-9822</td><td class="border p-1">Negotiate</td><td class="border p-1 text-right">$120k</td></tr>
+        <tr><td class="border p-1">OPP-9823</td><td class="border p-1">Negotiate</td><td class="border p-1 text-right">$45k</td></tr>
+      </table>
+      <div class="text-gray-50 mb-1">› snowflake.acct_usage · 3 of 142 rows</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-gray-10"><th class="border p-1 text-left">account</th><th class="border p-1 text-right">usage_score</th></tr>
+        <tr><td class="border p-1">9821</td><td class="border p-1 text-right">0.92</td></tr>
+        <tr><td class="border p-1">9822</td><td class="border p-1 text-right">0.34</td></tr>
+        <tr><td class="border p-1">9823</td><td class="border p-1 text-right">0.78</td></tr>
+      </table>
+      <div class="text-red-600 text-[10px] mt-1">› two systems, no join · forecast lives in someone's spreadsheet</div>
+    </div>`,
+    after: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› salesforce.opportunities · enriched + scored (write-back)</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-ibm-50 text-ibm-700">
+          <th class="border p-1 text-left">opp</th><th class="border p-1 text-right">amount</th><th class="border p-1 text-right">usage</th><th class="border p-1 text-right">forecast</th><th class="border p-1">tier</th>
+        </tr>
+        <tr><td class="border p-1">OPP-9821</td><td class="border p-1 text-right">$84k</td><td class="border p-1 text-right">0.92</td><td class="border p-1 text-right text-emerald-700 font-semibold">$78k</td><td class="border p-1 text-emerald-700">Commit</td></tr>
+        <tr><td class="border p-1">OPP-9822</td><td class="border p-1 text-right">$120k</td><td class="border p-1 text-right">0.34</td><td class="border p-1 text-right text-amber-700 font-semibold">$32k</td><td class="border p-1 text-amber-700">Best-case</td></tr>
+        <tr><td class="border p-1">OPP-9823</td><td class="border p-1 text-right">$45k</td><td class="border p-1 text-right">0.78</td><td class="border p-1 text-right text-emerald-700 font-semibold">$38k</td><td class="border p-1 text-emerald-700">Commit</td></tr>
+      </table>
+      <div class="text-emerald-700 text-[10px] mt-1">› 142 opps · forecast_score written back to SF · CRO confidence ↑</div>
+    </div>`,
+  },
+
+  cron: {
+    label: 'Raw Revenue Query → Slack Exec Digest',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› revenue.daily WHERE date='2026-04-28'</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-gray-10"><th class="border p-1 text-left">date</th><th class="border p-1 text-left">sku</th><th class="border p-1 text-right">gross_rev</th></tr>
+        <tr><td class="border p-1">2026-04-28</td><td class="border p-1">PRO-MO</td><td class="border p-1 text-right">42,144.20</td></tr>
+        <tr><td class="border p-1">2026-04-28</td><td class="border p-1">PRO-AN</td><td class="border p-1 text-right">88,201.80</td></tr>
+        <tr><td class="border p-1">2026-04-28</td><td class="border p-1">ENT-01</td><td class="border p-1 text-right">114,221.00</td></tr>
+        <tr><td class="border p-1">2026-04-28</td><td class="border p-1">ENT-02</td><td class="border p-1 text-right">39,455.00</td></tr>
+        <tr class="text-gray-50"><td colspan="3" class="border p-1 italic">+ 10 more rows</td></tr>
+      </table>
+      <div class="text-red-600 text-[10px] mt-1">› 14 SKUs of integers · no analyst awake at 06:00 to write commentary</div>
+    </div>`,
+    after: `<div class="text-[11px] leading-5">
+      <div class="bg-gray-100 text-white px-2 py-1.5 mono text-[10px] flex items-center gap-2 mb-2">
+        <span class="text-amber-300">#revenue</span>
+        <span class="text-gray-30">· today at 06:00</span>
+      </div>
+      <div class="bg-white border border-gray-20 p-3">
+        <div class="font-semibold mb-1.5">Daily P&amp;L Digest · Mon Apr 28</div>
+        <div class="mb-1">📈 <strong>Gross revenue:</strong> $284,021 <span class="text-emerald-700">(+3.2% vs forecast, +1.8% vs 7d avg)</span></div>
+        <div class="mb-1">💼 <strong>Top contributor:</strong> ENT-01 at $114k (+12% DoD)</div>
+        <div class="mb-1">⚠️ <strong>Watch:</strong> PRO-MO trended down third day running (−8% vs avg)</div>
+        <div class="mb-1">🎯 <strong>MTD:</strong> $7.2M · 89% of plan with 2 days remaining</div>
+        <div class="text-gray-50 text-[10px] mt-2 mono">— posted by @revops-digest at 06:00 · 18 readers in first 90s</div>
+      </div>
+    </div>`,
+  },
+
+  delegation: {
+    label: 'One-Line Brief → Synthesized Intel from 50 Sub-Agents',
+    before: `<div class="text-[11px] leading-5">
+      <div class="bg-gray-10 p-3 border-l-4 border-gray-50 mono">
+        <div class="text-gray-50 text-[10px] mb-1">FROM: head-of-strategy@yourco.com</div>
+        <div class="text-gray-50 text-[10px] mb-2">SUBJ: comp scan</div>
+        "Hey — board meeting Friday. Need a competitive scan of the top 50 players in our space. Pricing, positioning, what's new since Q1. Standard format. Thanks!"
+      </div>
+      <div class="text-red-600 text-[10px] mt-1 mono">› 50 companies × 4 dimensions = 200 research tasks · 2 days of analyst time</div>
+    </div>`,
+    after: `<div class="text-[11px] leading-5">
+      <div class="serif text-base font-semibold text-ibm-700 mb-0.5">Competitive Landscape · Q2 2026</div>
+      <div class="text-gray-50 mono text-[10px] mb-3">8 sub-agents · 50 targets · synthesized in 7 min · CSV + deck attached</div>
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <div class="bg-ibm-50 p-2"><div class="text-ibm-700 font-semibold text-base">14</div><div class="text-[9px] text-gray-60 mono">RAISED PRICES</div></div>
+        <div class="bg-ibm-50 p-2"><div class="text-ibm-700 font-semibold text-base">6</div><div class="text-[9px] text-gray-60 mono">REPOSITIONED</div></div>
+        <div class="bg-amber-50 p-2"><div class="text-amber-700 font-semibold text-base">3</div><div class="text-[9px] text-gray-60 mono">M&amp;A ACTIVITY</div></div>
+      </div>
+      <div class="font-semibold">Headline finding</div>
+      <p class="text-gray-70 mb-2">Median list price up 8.4% across the cohort. Three of the top five repositioned around AI-native messaging in March. Two competitors (CompA, CompB) now offer "agent-included" tiers that map directly to your enterprise SKU.</p>
+      <div class="font-semibold">Recommended actions</div>
+      <ul class="text-gray-70 list-disc ml-4">
+        <li>Re-baseline our enterprise list price by May 30</li>
+        <li>Launch competitive battlecard for CompA / CompB by next sales kickoff</li>
+        <li>Tag 14 named accounts where CompA's new tier overlaps our pipeline</li>
+      </ul>
+    </div>`,
+  },
+
+  codeexec: {
+    label: 'Raw 18,422-Row Spreadsheet → Pivot Table + Chart',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› Q3-finance.xlsx · sheet "raw" · 18,422 rows × 12 cols</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-gray-10"><th class="border p-1 text-left">date</th><th class="border p-1">region</th><th class="border p-1">sku</th><th class="border p-1 text-right">qty</th><th class="border p-1 text-right">amount</th></tr>
+        <tr><td class="border p-1">2026-07-01</td><td class="border p-1">NA</td><td class="border p-1">PRO-AN</td><td class="border p-1 text-right">14</td><td class="border p-1 text-right">9,800</td></tr>
+        <tr><td class="border p-1">2026-07-01</td><td class="border p-1">EMEA</td><td class="border p-1">ENT-02</td><td class="border p-1 text-right">3</td><td class="border p-1 text-right">12,400</td></tr>
+        <tr><td class="border p-1">2026-07-02</td><td class="border p-1">APAC</td><td class="border p-1">PRO-MO</td><td class="border p-1 text-right">28</td><td class="border p-1 text-right">8,400</td></tr>
+        <tr class="text-gray-50"><td colspan="5" class="border p-1 italic">+ 18,419 more rows · unaggregated · noisy</td></tr>
+      </table>
+      <div class="text-red-600 text-[10px] mt-1">› analyst still has to write the pandas code</div>
+    </div>`,
+    after: `<div class="text-[11px] leading-5">
+      <div class="text-gray-50 mono text-[10px] mb-2">› pandas pivot · region × month · output: pivots/region.csv + chart.png · 1.4s</div>
+      <table class="mono text-[10px] border border-gray-20 w-full mb-2">
+        <tr class="bg-ibm-50 text-ibm-700"><th class="border p-1 text-left">REGION</th><th class="border p-1 text-right">JUL</th><th class="border p-1 text-right">AUG</th><th class="border p-1 text-right">SEP</th><th class="border p-1 text-right">Q3</th><th class="border p-1 text-right">YoY</th></tr>
+        <tr><td class="border p-1">NA</td><td class="border p-1 text-right">$1.34M</td><td class="border p-1 text-right">$1.42M</td><td class="border p-1 text-right">$1.44M</td><td class="border p-1 text-right font-semibold">$4.20M</td><td class="border p-1 text-right text-emerald-700">+8.1%</td></tr>
+        <tr><td class="border p-1">EMEA</td><td class="border p-1 text-right">$0.91M</td><td class="border p-1 text-right">$0.98M</td><td class="border p-1 text-right">$1.01M</td><td class="border p-1 text-right font-semibold">$2.90M</td><td class="border p-1 text-right text-red-600">−3.2%</td></tr>
+        <tr><td class="border p-1">APAC</td><td class="border p-1 text-right">$0.49M</td><td class="border p-1 text-right">$0.55M</td><td class="border p-1 text-right">$0.56M</td><td class="border p-1 text-right font-semibold">$1.60M</td><td class="border p-1 text-right text-emerald-700">+22%</td></tr>
+      </table>
+      <svg viewBox="0 0 280 60" class="w-full">
+        <g font-family="IBM Plex Mono" font-size="7" fill="#6f6f6f">
+          <text x="22" y="58">JUL</text><text x="120" y="58">AUG</text><text x="220" y="58">SEP</text>
+        </g>
+        <rect x="10" y="20" width="20" height="30" fill="#0f62fe"/>
+        <rect x="32" y="32" width="20" height="18" fill="#78a9ff"/>
+        <rect x="54" y="42" width="20" height="8"  fill="#a6c8ff"/>
+        <rect x="110" y="14" width="20" height="36" fill="#0f62fe"/>
+        <rect x="132" y="28" width="20" height="22" fill="#78a9ff"/>
+        <rect x="154" y="40" width="20" height="10" fill="#a6c8ff"/>
+        <rect x="210" y="12" width="20" height="38" fill="#0f62fe"/>
+        <rect x="232" y="26" width="20" height="24" fill="#78a9ff"/>
+        <rect x="254" y="40" width="14" height="10" fill="#a6c8ff"/>
+      </svg>
+      <div class="text-emerald-700 mono text-[10px]">› 18,422 rows → 9 cells in 1.4s · matched analyst output exactly</div>
+    </div>`,
+  },
+
+  browser: {
+    label: 'Vendor Web Page → Structured Spreadsheet Row',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="border border-gray-20">
+        <div class="bg-gray-10 border-b border-gray-20 px-2 py-1 flex items-center gap-1.5 text-[10px]">
+          <span class="w-1.5 h-1.5 bg-red-400 rounded-full"></span>
+          <span class="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
+          <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+          <span class="text-gray-60 ml-1">vendor-portal.example.com/sku/CMP-4421-A</span>
+        </div>
+        <div class="p-2 text-[10px] bg-white">
+          <div class="text-base font-semibold">Component CMP-4421-A</div>
+          <div class="text-gray-50">SKU: CMP-4421-A &nbsp;|&nbsp; In Stock: 1,420 units</div>
+          <div class="my-1.5">
+            <span class="text-gray-50 line-through">$290.00</span>
+            <span class="text-2xl font-bold text-emerald-700 ml-2">$284.10</span>
+            <span class="text-gray-50 text-[9px] ml-1">/ unit · qty 100+</span>
+          </div>
+          <div class="text-gray-60">Lead time: 7 days · Min order: 100 · Wire transfer net-30</div>
+          <button class="bg-ibm-700 text-white px-2 py-0.5 mt-1 text-[10px]">Add to RFQ</button>
+        </div>
+      </div>
+      <div class="text-red-600 text-[10px] mt-1">› 14 such pages to visit · manual copy-paste · error-prone</div>
+    </div>`,
+    after: `<div class="text-[11px] leading-5">
+      <div class="text-gray-50 mono text-[10px] mb-1">› comp-pricing.gsheet · row 14 written</div>
+      <table class="mono text-[10px] border border-gray-20 w-full">
+        <tr class="bg-ibm-50 text-ibm-700">
+          <th class="border p-1">SKU</th><th class="border p-1">Vendor</th><th class="border p-1 text-right">Was</th><th class="border p-1 text-right">Now</th><th class="border p-1 text-right">Δ</th><th class="border p-1 text-right">Stock</th><th class="border p-1">Lead</th>
+        </tr>
+        <tr>
+          <td class="border p-1">CMP-4421-A</td>
+          <td class="border p-1">acme-portal</td>
+          <td class="border p-1 text-right text-gray-60">$290.00</td>
+          <td class="border p-1 text-right text-emerald-700 font-semibold">$284.10</td>
+          <td class="border p-1 text-right text-emerald-700">−2.0%</td>
+          <td class="border p-1 text-right">1,420</td>
+          <td class="border p-1">7d</td>
+        </tr>
+      </table>
+      <div class="text-emerald-700 mono text-[10px] mt-1">› 14 SKUs captured in 90s · 3 changes flagged for procurement review</div>
+    </div>`,
+  },
+
+  hooks: {
+    label: 'Vague Inbound Ticket → Triaged & Routed',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="bg-gray-10 border border-gray-20 p-2">
+        <div class="text-gray-50 text-[10px]">PROJ-3122 · created 2026-04-29 14:18</div>
+        <div class="font-semibold mt-1">login fails sometimes after sso change</div>
+        <div class="grid grid-cols-2 gap-1 mt-2 text-[10px]">
+          <div><span class="text-gray-50">Priority:</span> <span class="text-amber-700">— (unset)</span></div>
+          <div><span class="text-gray-50">Type:</span> Bug</div>
+          <div><span class="text-gray-50">Component:</span> <span class="text-amber-700">— (unset)</span></div>
+          <div><span class="text-gray-50">Assignee:</span> <span class="text-amber-700">— (unset)</span></div>
+        </div>
+        <div class="text-gray-70 text-[10px] mt-1">Reporter: customer · several enterprise users impacted · started this AM</div>
+      </div>
+      <div class="text-red-600 text-[10px] mt-1">› unrouted · could sit in queue for hours waiting on a human</div>
+    </div>`,
+    after: `<div class="mono text-[11px] leading-5">
+      <div class="bg-white border border-emerald-300 p-2">
+        <div class="text-gray-50 text-[10px]">PROJ-3122 · auto-triaged 14:18:07 by AGENT-8843</div>
+        <div class="font-semibold mt-1">login fails sometimes after sso change</div>
+        <div class="grid grid-cols-2 gap-1 mt-2 text-[10px]">
+          <div><span class="text-gray-50">Priority:</span> <span class="text-red-700 font-semibold">P2 · High</span></div>
+          <div><span class="text-gray-50">Type:</span> Bug</div>
+          <div><span class="text-gray-50">Component:</span> <span class="text-ibm-700">auth-service</span></div>
+          <div><span class="text-gray-50">Assignee:</span> <span class="text-ibm-700">@oncall-platform</span></div>
+        </div>
+        <div class="bg-ibm-50 p-1.5 mt-2 text-[10px]">
+          <div class="text-ibm-700">› AGENT REASONING</div>
+          "Multiple enterprise users · auth-service component · matches signature of past P1 SUP-3122 (Q1 SSO regression). Pinged @oncall, linked dupe candidate, set P2 pending repro."
+        </div>
+      </div>
+      <div class="text-emerald-700 text-[10px] mt-1">› triaged in 1.8s · oncall pinged · 23 min mean time-to-action</div>
+    </div>`,
+  },
+
+  batch: {
+    label: '5,000 Unprocessed Invoices → Batch Disposition Report',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› inbox/invoices/2026-04 · 5,000 PDFs · awaiting AP</div>
+      <div class="bg-gray-10 border border-gray-20 p-2 text-[10px] grid grid-cols-2 gap-1">
+        <div>inv-44120.pdf · 412 KB · ?</div>
+        <div>inv-44121.pdf ·  89 KB · ?</div>
+        <div>inv-44122.pdf · 1.2 MB · ?</div>
+        <div>inv-44123.pdf · 304 KB · ?</div>
+        <div>inv-44124.pdf ·  88 KB · ?</div>
+        <div>inv-44125.pdf · 412 KB · ?</div>
+        <div class="col-span-2 text-gray-50 italic">+ 4,994 more files queued</div>
+      </div>
+      <div class="text-red-600 text-[10px] mt-1">› a clerk processes ~80/day · projected backlog: ~9 weeks</div>
+    </div>`,
+    after: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› batch invoices-2026-04 · complete in 04:21:08</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-ibm-50 text-ibm-700"><th class="border p-1 text-left">DISPOSITION</th><th class="border p-1 text-right">COUNT</th><th class="border p-1 text-right">VALUE</th></tr>
+        <tr><td class="border p-1 text-emerald-700">✓ Auto-posted to GL</td><td class="border p-1 text-right">4,916</td><td class="border p-1 text-right">$8,421,408</td></tr>
+        <tr><td class="border p-1 text-amber-700">⚠ Flagged for review</td><td class="border p-1 text-right">74</td><td class="border p-1 text-right">$214,890</td></tr>
+        <tr><td class="border p-1 text-red-700">✗ Errored / unparseable</td><td class="border p-1 text-right">10</td><td class="border p-1 text-right">$28,420</td></tr>
+        <tr class="bg-gray-10"><td class="border p-1 font-semibold">TOTAL</td><td class="border p-1 text-right font-semibold">5,000</td><td class="border p-1 text-right font-semibold">$8,664,718</td></tr>
+      </table>
+      <div class="text-emerald-700 text-[10px] mt-1">› 9 weeks of work in 4 hours · 50% inference cost vs realtime</div>
+    </div>`,
+  },
+
+  rl: {
+    label: 'Base Model Quote (Off-Policy) → Fine-Tuned House Quote',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› base claude-haiku · no fine-tune</div>
+      <div class="bg-red-50 border-l-4 border-red-400 p-2">
+        <div class="font-semibold mb-1">Quote · APP-9012 · home insurance</div>
+        <div class="text-[10px]">Annual premium: <strong>$1,420</strong></div>
+        <div class="text-[10px]">Coverage: $400k dwelling, $200k personal property</div>
+        <div class="text-[10px]">Deductible: $500</div>
+        <div class="bg-white p-1.5 my-1 text-[10px] border border-red-200">
+          "We are pleased to offer competitive coverage for your beautiful home..."
+          <div class="text-red-700 italic mt-0.5">[← off-tone, generic, brand-incorrect]</div>
+        </div>
+        <div class="text-red-700 text-[10px]">⚠ deductible $500 violates §3.1 (≥ $1,000 required for built &lt; 1980)</div>
+        <div class="text-red-700 text-[10px]">⚠ no flood-zone disclosure (§7.4)</div>
+      </div>
+    </div>`,
+    after: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› yourco-underwriter v0.3 · PPO step 25,000</div>
+      <div class="bg-emerald-50 border-l-4 border-emerald-400 p-2">
+        <div class="font-semibold mb-1">Quote · APP-9012 · home insurance</div>
+        <div class="text-[10px]">Annual premium: <strong>$1,540</strong></div>
+        <div class="text-[10px]">Coverage: $400k dwelling, $200k personal property</div>
+        <div class="text-[10px]">Deductible: <span class="text-emerald-700 font-semibold">$1,000</span> <span class="text-gray-50">(adjusted per §3.1)</span></div>
+        <div class="bg-white p-1.5 my-1 text-[10px] border border-emerald-200">
+          "Quote APP-9012 issued effective 2026-05-15. Property age 1972 triggers §3.1 deductible floor. Mandatory flood-zone disclosure attached."
+        </div>
+        <div class="text-emerald-700 text-[10px]">✓ guideline adherence 100% · ✓ disclosures complete · ✓ tone matches house standard</div>
+        <div class="text-gray-50 text-[10px] mt-1">› held-out test: +14% adherence · −22% deviations vs base</div>
+      </div>
+    </div>`,
+  },
+
+  routing: {
+    label: 'All Calls → Frontier Model · vs · Routed by Fitness',
+    before: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› last 7 days · pre-router · all calls → claude-opus</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-gray-10"><th class="border p-1 text-left">REQUEST</th><th class="border p-1 text-right">VOLUME</th><th class="border p-1 text-right">COST</th></tr>
+        <tr><td class="border p-1">classify (~2 tok)</td><td class="border p-1 text-right">412,000</td><td class="border p-1 text-right">$5,820</td></tr>
+        <tr><td class="border p-1">summarize (~800 tok)</td><td class="border p-1 text-right">14,200</td><td class="border p-1 text-right">$2,140</td></tr>
+        <tr><td class="border p-1">deep reasoning (~8k)</td><td class="border p-1 text-right">1,820</td><td class="border p-1 text-right">$2,830</td></tr>
+        <tr><td class="border p-1">long-context (~1M)</td><td class="border p-1 text-right">42</td><td class="border p-1 text-right">$914</td></tr>
+        <tr class="bg-gray-10"><td class="border p-1 font-semibold">7-day total</td><td class="border p-1 text-right font-semibold">428,062</td><td class="border p-1 text-right font-semibold text-red-700">$11,704</td></tr>
+      </table>
+    </div>`,
+    after: `<div class="mono text-[11px] leading-5">
+      <div class="text-gray-50 mb-1">› same 7 days · post-router · request fingerprinting + scoring</div>
+      <table class="border border-gray-20 text-[10px] w-full">
+        <tr class="bg-ibm-50 text-ibm-700"><th class="border p-1 text-left">REQUEST</th><th class="border p-1 text-left">ROUTED TO</th><th class="border p-1 text-right">COST</th></tr>
+        <tr><td class="border p-1">classify (412k)</td><td class="border p-1">llama-3-8b · together</td><td class="border p-1 text-right text-emerald-700">$82</td></tr>
+        <tr><td class="border p-1">summarize (14.2k)</td><td class="border p-1">claude-sonnet</td><td class="border p-1 text-right text-emerald-700">$680</td></tr>
+        <tr><td class="border p-1">deep reasoning (1.8k)</td><td class="border p-1">claude-opus</td><td class="border p-1 text-right">$2,830</td></tr>
+        <tr><td class="border p-1">long-context (42)</td><td class="border p-1">gemini-pro 1M</td><td class="border p-1 text-right text-emerald-700">$120</td></tr>
+        <tr class="bg-emerald-50"><td class="border p-1 font-semibold">7-day total</td><td class="border p-1"></td><td class="border p-1 text-right font-semibold text-emerald-700">$3,712</td></tr>
+      </table>
+      <div class="text-emerald-700 text-[10px] mt-1">› 68% reduction · same quality outcomes · zero code changes</div>
+    </div>`,
+  },
 };
 
 /* ============================================================
@@ -1280,23 +1736,31 @@ function buildCard(cap, idx){
       </div>
     </div>
 
-    <!-- ===== ACTION BUTTONS (Show Flow / How It Works) ===== -->
-    <div class="grid grid-cols-2 border-b border-gray-20">
-      <button class="text-left px-6 py-3 mono text-xs hover:bg-ibm-50 transition flex items-center justify-between border-r border-gray-20"
+    <!-- ===== ACTION BUTTONS (Show Flow / Before-After / How It Works) ===== -->
+    <div class="grid grid-cols-3 border-b border-gray-20">
+      <button class="text-left px-4 py-3 mono text-[11px] hover:bg-ibm-50 transition flex items-center justify-between border-r border-gray-20"
               onclick="toggleFlow('${cap.key}')">
-        <span class="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><circle cx="3" cy="7" r="1.5"/><circle cx="11" cy="7" r="1.5"/><path d="M4.5 7h5"/></svg>
-          SHOW FLOW DIAGRAM
+        <span class="flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><circle cx="3" cy="7" r="1.5"/><circle cx="11" cy="7" r="1.5"/><path d="M4.5 7h5"/></svg>
+          FLOW
         </span>
-        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 5l4 4 4-4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
+        <svg width="12" height="12" viewBox="0 0 14 14"><path d="M3 5l4 4 4-4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
       </button>
-      <button class="text-left px-6 py-3 mono text-xs hover:bg-ibm-50 transition flex items-center justify-between"
+      <button class="text-left px-4 py-3 mono text-[11px] hover:bg-ibm-50 transition flex items-center justify-between border-r border-gray-20"
+              onclick="toggleBeforeAfter('${cap.key}')">
+        <span class="flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><rect x="1.5" y="2.5" width="4" height="9"/><rect x="8.5" y="2.5" width="4" height="9"/><path d="M5.5 7h3"/></svg>
+          BEFORE / AFTER
+        </span>
+        <svg width="12" height="12" viewBox="0 0 14 14"><path d="M3 5l4 4 4-4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
+      </button>
+      <button class="text-left px-4 py-3 mono text-[11px] hover:bg-ibm-50 transition flex items-center justify-between"
               onclick="openModal('${cap.key}')">
-        <span class="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="4.5" r="0.6" fill="#0f62fe"/><path d="M7 7v3.5"/></svg>
+        <span class="flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="4.5" r="0.6" fill="#0f62fe"/><path d="M7 7v3.5"/></svg>
           HOW IT WORKS
         </span>
-        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M5 3l4 4-4 4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
+        <svg width="12" height="12" viewBox="0 0 14 14"><path d="M5 3l4 4-4 4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
       </button>
     </div>
 
@@ -1306,6 +1770,41 @@ function buildCard(cap, idx){
         <div class="num-badge mb-3">EXECUTION FLOW · ${cap.name.toUpperCase()}</div>
         ${buildFlowSVG(cap.flow, cap.key)}
         <div class="mono text-[10px] text-gray-60 mt-2">animated packets indicate live token / data flow between agent steps</div>
+      </div>
+    </div>
+
+    <!-- COLLAPSIBLE BEFORE / AFTER REVIEW PANEL -->
+    <div id="ba-${cap.key}" class="flow-collapsed bg-gray-10 border-b border-gray-20">
+      <div class="px-6 py-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="num-badge">BEFORE / AFTER · ${(BEFORE_AFTER[cap.key] && BEFORE_AFTER[cap.key].label) || cap.name.toUpperCase()}</div>
+          <span class="mono text-[10px] text-emerald-700 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 bg-emerald-500"></span>
+            REVIEWER VIEW
+          </span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div class="ba-pane">
+            <div class="ba-pane-header ba-before-header">
+              <span class="w-1.5 h-1.5 bg-red-400"></span>
+              BEFORE · INBOUND ARTEFACT
+            </div>
+            <div class="p-3">${(BEFORE_AFTER[cap.key] && BEFORE_AFTER[cap.key].before) || '<div class="text-gray-60 mono text-xs">comparison coming soon</div>'}</div>
+          </div>
+          <div class="ba-pane">
+            <div class="ba-pane-header ba-after-header">
+              <span class="w-1.5 h-1.5 bg-emerald-400 pulse-dot"></span>
+              AFTER · AGENT OUTPUT
+            </div>
+            <div class="p-3">${(BEFORE_AFTER[cap.key] && BEFORE_AFTER[cap.key].after) || '<div class="text-gray-60 mono text-xs">comparison coming soon</div>'}</div>
+          </div>
+        </div>
+        <div class="mono text-[10px] text-gray-60 mt-3 flex items-center gap-3 flex-wrap">
+          <span class="flex items-center gap-1"><span class="redline-key inline-block w-3 h-2 bg-red-100 border border-red-300"></span>removed</span>
+          <span class="flex items-center gap-1"><span class="redline-key inline-block w-3 h-2 bg-emerald-100 border border-emerald-400"></span>inserted</span>
+          <span class="flex items-center gap-1"><span class="redline-key inline-block w-3 h-2 border-l-2 border-ibm-500"></span>annotation</span>
+          <span class="flex items-center gap-1"><span class="redline-key inline-block w-3 h-2 border-l-2 border-red-400"></span>must-fix</span>
+        </div>
       </div>
     </div>
 
@@ -1496,6 +1995,19 @@ function toggleFlow(key){
   }
 }
 window.toggleFlow = toggleFlow;
+
+function toggleBeforeAfter(key){
+  const el = document.getElementById('ba-' + key);
+  if (!el) return;
+  if (el.classList.contains('flow-collapsed')){
+    el.classList.remove('flow-collapsed');
+    el.classList.add('flow-expanded');
+  } else {
+    el.classList.add('flow-collapsed');
+    el.classList.remove('flow-expanded');
+  }
+}
+window.toggleBeforeAfter = toggleBeforeAfter;
 
 /* ============================================================
    MODAL
