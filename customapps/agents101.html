@@ -148,6 +148,46 @@
 
   /* Disable focus rings only for buttons that show their own indicator */
   button:focus-visible { outline: 2px solid #0f62fe; outline-offset: 2px; }
+
+  /* === Agent live-run additions === */
+
+  /* Spinner for executing button */
+  @keyframes spinSlow { to { transform: rotate(360deg); } }
+  .anim-spin { animation: spinSlow 1s linear infinite; transform-origin: center; }
+
+  /* Big trigger button hover pulse */
+  @keyframes triggerGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    50%      { box-shadow: 0 0 0 4px rgba(255,255,255,0.22); }
+  }
+  .trigger-btn:not(:disabled):hover { animation: triggerGlow 1.4s ease-in-out infinite; }
+  .trigger-btn:disabled { cursor: not-allowed; opacity: 0.85; }
+
+  /* Capability icon tile */
+  .cap-tile { background:#001d6c; color:#fff; }
+  .cap-tile svg { width: 100%; height: 100%; }
+
+  /* Agent avatar tile */
+  .agent-avatar { background:#d0e2ff; color:#002d9c; }
+  .agent-avatar svg { width: 100%; height: 100%; }
+
+  /* Live console for run panel */
+  .run-console { background:#000; color:#33b1ff; min-height: 130px; max-height: 200px; overflow-y: auto; }
+
+  /* Step dot transitions */
+  .step-dot { transition: background-color .3s ease, transform .3s ease; }
+
+  /* Status pill */
+  .status-pill {
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    padding: 2px 8px;
+    text-transform: uppercase;
+  }
+  .status-idle     { background:#c6c6c6; color:#161616; }
+  .status-running  { background:#f1c21b; color:#161616; }
+  .status-complete { background:#198038; color:#fff; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -495,6 +535,149 @@ animateCounter('m_agents', 142);
 animateCounter('m_tasks', 28431);
 animateCounter('m_hours', 9712);
 animateCounter('m_dollars', 912440);
+
+/* ============================================================
+   ICONS · AGENTS · RUN_STEPS
+   Per-capability icons, agent identities, and live-execution scripts
+   ============================================================ */
+const ICONS = {
+  tools:      `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 4l4 4-3 3-1-1-2 2 1 1-7 7-3-3 7-7 1 1 2-2-1-1z"/><path d="M11 18l-7 7a2 2 0 102.8 2.8l7-7"/></svg>`,
+  skills:     `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4l11 6v12l-11 6-11-6V10z"/><path d="M5 10l11 6 11-6M16 16v12"/></svg>`,
+  memory:     `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="9" width="20" height="14"/><path d="M6 14h20M6 18h20M11 9v14M16 9v14M21 9v14"/></svg>`,
+  context:    `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4h11l5 5v19H9z"/><path d="M20 4v5h5"/><path d="M13 16h11M13 20h9M13 24h11"/></svg>`,
+  mcp:        `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="16" r="3"/><circle cx="26" cy="7" r="3"/><circle cx="26" cy="25" r="3"/><circle cx="16" cy="16" r="3.5"/><path d="M9 16h3.5M19.5 16h3.5M18.5 14L23.5 9M18.5 18L23.5 23"/></svg>`,
+  cron:       `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="16" cy="16" r="12"/><path d="M16 8v8l5 3"/></svg>`,
+  delegation: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><rect x="12" y="3" width="8" height="6"/><rect x="3" y="22" width="8" height="6"/><rect x="12" y="22" width="8" height="6"/><rect x="21" y="22" width="8" height="6"/><path d="M16 9v7M7 16v6M16 16v6M25 16v6M7 16h18"/></svg>`,
+  codeexec:   `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 8L3 16l8 8M21 8l8 8-8 8"/><path d="M19 5l-6 22"/></svg>`,
+  browser:    `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="24" height="20"/><path d="M4 12h24"/><circle cx="8" cy="9" r="1" fill="currentColor"/><circle cx="11" cy="9" r="1" fill="currentColor"/><circle cx="14" cy="9" r="1" fill="currentColor"/></svg>`,
+  hooks:      `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 3l-12 17h8l-2 9 12-17h-8z"/></svg>`,
+  batch:      `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4l12 5-12 5L4 9z"/><path d="M4 16l12 5 12-5"/><path d="M4 23l12 5 12-5"/></svg>`,
+  rl:         `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 24l8-8 6 6 10-12"/><path d="M21 10h7v7"/></svg>`,
+  routing:    `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16h6"/><path d="M10 16l8-8h10"/><path d="M10 16h18"/><path d="M10 16l8 8h10"/><circle cx="28" cy="8" r="2.5"/><circle cx="28" cy="16" r="2.5"/><circle cx="28" cy="24" r="2.5"/></svg>`,
+};
+
+const AGENTS = {
+  tools:      { id:'AGENT-7842', role:'AP Automation Bot',     desc:'Accounts Payable Clerk' },
+  skills:     { id:'AGENT-2104', role:'Variance Reporter',     desc:'Financial Analyst' },
+  memory:     { id:'AGENT-3301', role:'Customer Continuity',   desc:'Support Lead' },
+  context:    { id:'AGENT-5021', role:'Contract Reviewer',     desc:'Legal Ops Specialist' },
+  mcp:        { id:'AGENT-9001', role:'Pipeline Forecaster',   desc:'Sales Operations' },
+  cron:       { id:'AGENT-1109', role:'Daily Digest Agent',    desc:'Revenue Operations' },
+  delegation: { id:'AGENT-4521', role:'Research Orchestrator', desc:'Strategy Analyst' },
+  codeexec:   { id:'AGENT-2210', role:'Data Crunch Agent',     desc:'Data Analyst' },
+  browser:    { id:'AGENT-6612', role:'Web Recon Agent',       desc:'Procurement Specialist' },
+  hooks:      { id:'AGENT-8843', role:'Triage Bot',            desc:'IT Operations' },
+  batch:      { id:'AGENT-4470', role:'Bulk Processor',        desc:'Operations Analyst' },
+  rl:         { id:'AGENT-7720', role:'Policy Trainer',        desc:'Underwriting Engineer' },
+  routing:    { id:'AGENT-0001', role:'Inference Router',      desc:'Platform Engineer' },
+};
+
+const RUN_STEPS = {
+  tools: [
+    {label:'Inbox',      detail:'Reading email MSG-44120 from acme-billing@vendor.com', dur:600},
+    {label:'Read PDF',   detail:'Parsing receipt-441.pdf · 3 pages · 7 line items',     dur:900},
+    {label:'OCR',        detail:'Extracting amounts, dates, vendor reference number',    dur:1100},
+    {label:'Vendor DB',  detail:'Matched ACME OFFICE LLC → vendor-id 8821',              dur:700},
+    {label:'Validate',   detail:'PO-44219 found · amount within 2% tolerance',           dur:600},
+    {label:'Post to GL', detail:'Journal entry JE-7798 posted to account 6420',           dur:800},
+  ],
+  skills: [
+    {label:'Trigger',    detail:'Quarter-end signal received from finance-data hook',     dur:400},
+    {label:'Load Skill', detail:'Loading variance.skill v1.4.0 · playbook + templates',   dur:600},
+    {label:'Plan',       detail:'Outlining 4 sections: revenue, opex, EBITDA, FX impact', dur:700},
+    {label:'Compute',    detail:'Pulling actuals vs budget across 18 GL accounts',        dur:1200},
+    {label:'Format',     detail:'Rendering board-ready PowerPoint with house styling',    dur:900},
+    {label:'Deliver',    detail:'Posted to /Finance/Q3 · CC\'d CFO and audit committee',  dur:500},
+  ],
+  memory: [
+    {label:'User Msg',   detail:'Inbound: alice@acme.com — "the SSO thing again"',        dur:500},
+    {label:'Recall',     detail:'Vector search · top-5 memories from past 90 days',        dur:700},
+    {label:'Filter',     detail:'Filtered by account-id 9821 · 3 memories retained',       dur:500},
+    {label:'Inject',     detail:'Adding context: Plan=Pro, last-issue=SUP-3122 (closed)',  dur:400},
+    {label:'Respond',    detail:'Drafting reply with prior workaround · cc to L2 eng',     dur:1000},
+    {label:'Write-back', detail:'New memory: "asked about SSO sandbox flow on 2026-04"',   dur:500},
+  ],
+  context: [
+    {label:'Upload',     detail:'Receiving MSA-Acme-v3.pdf · 142 pages · 3.4 MB',          dur:500},
+    {label:'Chunk',      detail:'Segmenting by clause boundary · 218 chunks',              dur:700},
+    {label:'Embed',      detail:'Generating embeddings · 218 × 1536 vectors',              dur:1100},
+    {label:'Index',      detail:'Built per-session FAISS index · ready for query',         dur:600},
+    {label:'Query',      detail:'Searching: indemnification, liability cap, IP carve-out', dur:900},
+    {label:'Cite',       detail:'Returned 7 deviations from playbook · §12.3, §14.1, ...', dur:700},
+  ],
+  mcp: [
+    {label:'Agent',      detail:'Sales-ops agent invoked · weekly forecast workflow',      dur:500},
+    {label:'MCP Host',   detail:'Routing tool calls to 2 servers · auth verified',         dur:500},
+    {label:'Salesforce', detail:'GET /opportunities?stage=Negotiation · 142 records',      dur:1100},
+    {label:'Snowflake',  detail:'SELECT usage_score FROM acct_usage · 142 rows · 80ms',    dur:900},
+    {label:'Reasoning',  detail:'Joining usage signals to deal pipeline · scoring',         dur:1000},
+    {label:'Write-back', detail:'PATCH 142 opportunities · forecast_score updated',         dur:700},
+  ],
+  cron: [
+    {label:'Schedule',   detail:'Cron expression "0 6 * * 1-5" UTC · next: now',           dur:300},
+    {label:'Wake',       detail:'Spawning revops-digest agent · fresh context',            dur:400},
+    {label:'Pull Data',  detail:'Querying yesterday revenue: $284,021 across 14 SKUs',     dur:900},
+    {label:'Analyze',    detail:'vs forecast: +3.2% · vs trailing 7d avg: +1.8%',           dur:800},
+    {label:'Draft',      detail:'Writing exec summary in CFO\'s preferred 5-bullet format', dur:1000},
+    {label:'Post',       detail:'Slack #revenue · 06:00:14 · 18 readers in first 90s',      dur:600},
+  ],
+  delegation: [
+    {label:'Planner',    detail:'Brief received: scan 50 competitors for pricing changes',  dur:500},
+    {label:'Decompose',  detail:'Sliced into 50 leaf tasks · grouping by industry vertical', dur:700},
+    {label:'Worker 1',   detail:'Worker-A scanning 7 SaaS targets · running concurrently',   dur:1000},
+    {label:'Worker 2',   detail:'Worker-B scanning 7 hardware targets · concurrent',         dur:1100},
+    {label:'Worker 3',   detail:'Worker-C scanning 7 services targets · concurrent',         dur:900},
+    {label:'Reduce',     detail:'Merging 50 outputs · dedup · ranking · final deck rendered',dur:900},
+  ],
+  codeexec: [
+    {label:'Write Code', detail:'Drafting pandas script for Q3.xlsx pivot analysis',         dur:700},
+    {label:'Sandbox',    detail:'Spinning up E2B firecracker microVM · python 3.12',         dur:600},
+    {label:'Exec',       detail:'Running run.py · loaded 14 sheets · 18,422 rows',           dur:1200},
+    {label:'Capture',    detail:'stdout: 4 pivots created · pivots/region.csv written',      dur:500},
+    {label:'Render',     detail:'Generating matplotlib bar chart · /tmp/chart.png',          dur:800},
+    {label:'Iterate',    detail:'User feedback: add YoY column · re-run with diff',          dur:700},
+  ],
+  browser: [
+    {label:'Goal',       detail:'Goal: pull current pricing for 14 vendor SKUs',             dur:400},
+    {label:'Open',       detail:'Headless Chromium launched · stealth profile · cookies',    dur:600},
+    {label:'Navigate',   detail:'Logged into vendor-portal · navigated 14 product pages',    dur:1300},
+    {label:'Extract',    detail:'Vision model parsed price elements · 14/14 captured',       dur:1100},
+    {label:'Validate',   detail:'Cross-checked against cached snapshot · 3 price changes',   dur:600},
+    {label:'Write',      detail:'Updated comp-pricing.gsheet rows 12-25 · diffs flagged',    dur:600},
+  ],
+  hooks: [
+    {label:'Event',      detail:'Jira event: PROJ-3122 created · priority=null · type=Bug',  dur:400},
+    {label:'Webhook',    detail:'Hookdeck received POST · verified HMAC · queued',           dur:300},
+    {label:'Filter',     detail:'Match: project=PROJ AND priority IS NULL · agent assigned', dur:400},
+    {label:'Agent',      detail:'Triage agent classifying: severity=high, area=auth-service',dur:1000},
+    {label:'Action',     detail:'PATCH PROJ-3122 priority=P2 · assigned oncall · pinged',    dur:700},
+    {label:'Audit',      detail:'Logged to immutable audit trail · run-id 4xa9b2',           dur:400},
+  ],
+  batch: [
+    {label:'Submit',     detail:'Batch invoices-2026-04 · 5,000 items · model=claude-haiku', dur:500},
+    {label:'Queue',      detail:'Job accepted · provider queue depth: 1,221 ahead',          dur:600},
+    {label:'Workers',    detail:'128 parallel workers processing · 47 RPS sustained',        dur:1500},
+    {label:'Score',      detail:'Per-item validation: 4,916 OK · 74 flagged · 10 errored',   dur:900},
+    {label:'Aggregate',  detail:'Compiled manifest · staged 4,916 entries for AP review',    dur:600},
+    {label:'Report',     detail:'Email to controller · CSV attached · 50% cost vs realtime', dur:500},
+  ],
+  rl: [
+    {label:'Collect',    detail:'Sampling 12k underwriting decisions from past 18 months',   dur:900},
+    {label:'Reward',     detail:'Training reward model on senior-underwriter judgments',     dur:1100},
+    {label:'Rollouts',   detail:'Generating 50k policy quotes from base model · scoring',    dur:1300},
+    {label:'PPO Update', detail:'Step 18,420 · loss=0.0142 · entropy=0.31 · kl=0.018',       dur:1000},
+    {label:'Eval',       detail:'Held-out test: +14% guideline adherence · -22% deviations', dur:800},
+    {label:'Deploy',     detail:'Pushed to canary · 5% traffic · monitoring loss curve',     dur:600},
+  ],
+  routing: [
+    {label:'Request',    detail:'Inbound LLM call from agent-fleet · 1,420 tokens',          dur:300},
+    {label:'Fingerprint',detail:'Classified: short-form, low-complexity, non-sensitive',     dur:300},
+    {label:'Score',      detail:'Provider scores: llama-3-8b 0.92 · gpt-4o 0.88 · ...',      dur:500},
+    {label:'Route',      detail:'Selected: llama-3-8b on Together · est. cost $0.0002',      dur:300},
+    {label:'Execute',    detail:'Forwarded · response in 412ms · 89 tokens generated',       dur:700},
+    {label:'Log',        detail:'Saved 96% vs frontier baseline · audit logged',             dur:300},
+  ],
+};
 
 /* ============================================================
    CAPABILITIES DATA
@@ -1003,44 +1186,117 @@ function buildSimulation(cap){
    FEATURE CARD RENDERER
    ============================================================ */
 function buildCard(cap, idx){
+  const agent = AGENTS[cap.key];
+  const icon  = ICONS[cap.key];
   return `
-  <article class="ibm-card transition" data-cap="${cap.key}">
-    <div class="p-6 border-b border-gray-20">
-      <div class="flex items-baseline justify-between mb-2">
-        <span class="num-badge">CAP · ${cap.code} / 13</span>
-        <span class="mono text-[11px] text-emerald-700 flex items-center gap-1">
-          <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full pulse-dot"></span>
-          live
-        </span>
+  <article class="ibm-card transition" data-cap="${cap.key}" id="card-${cap.key}">
+
+    <!-- ===== HEADER · Capability icon + Status pill + Agent identity ===== -->
+    <div class="p-6 border-b border-gray-20 bg-ibm-50/40">
+      <div class="flex items-start gap-4 mb-4">
+        <!-- Capability icon tile -->
+        <div class="cap-tile w-14 h-14 p-3 flex-shrink-0">${icon}</div>
+        <!-- Title block -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline justify-between gap-2 mb-1">
+            <span class="num-badge">CAPABILITY · ${cap.code} / 13</span>
+            <span id="status-${cap.key}" class="status-pill status-idle">IDLE</span>
+          </div>
+          <h3 class="serif text-2xl font-medium leading-tight">${cap.name}</h3>
+          <p class="mono text-xs text-gray-60 mt-0.5">${cap.tag}</p>
+        </div>
       </div>
-      <h3 class="serif text-2xl font-medium">${cap.name}</h3>
-      <p class="mono text-xs text-gray-60 mt-1">${cap.tag}</p>
+
+      <!-- Agent identity strip -->
+      <div class="flex items-center gap-3 bg-white border-l-2 border-ibm-500 p-3">
+        <div class="agent-avatar w-10 h-10 p-2 flex-shrink-0">${icon}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mono text-[10px] tracking-widest text-gray-60">
+            <span class="text-ibm-700 font-semibold">${agent.id}</span>
+            <span>·</span>
+            <span class="truncate">${agent.desc.toUpperCase()}</span>
+          </div>
+          <div class="text-sm font-medium truncate">${agent.role}</div>
+        </div>
+        <span id="hb-${cap.key}" class="status-dot" title="ready"></span>
+      </div>
     </div>
 
-    <!-- USE CASE -->
-    <div class="px-6 py-4 bg-ibm-50 border-b border-gray-20">
-      <div class="num-badge mb-1">USE CASE</div>
-      <div class="text-gray-90"><span class="font-medium">${cap.useCase.split(' · ')[0]}</span> <span class="text-gray-60">·</span> ${cap.useCase.split(' · ')[1] || ''}</div>
-      <p class="text-sm text-gray-70 mt-1">${cap.desc}</p>
+    <!-- ===== USE CASE ===== -->
+    <div class="px-6 py-4 border-b border-gray-20">
+      <div class="num-badge mb-1">BUSINESS WORKFLOW</div>
+      <p class="text-sm text-gray-70 leading-relaxed">${cap.desc}</p>
     </div>
 
-    <!-- LIVE SIM -->
-    <div class="px-6 py-5 border-b border-gray-20">
-      <div class="num-badge mb-2">LIVE SIMULATION</div>
+    <!-- ===== AMBIENT PREVIEW (always-on micro-sim) ===== -->
+    <div class="px-6 py-4 border-b border-gray-20">
+      <div class="num-badge mb-2">AMBIENT PREVIEW · CURRENT STATE</div>
       ${buildSimulation(cap)}
     </div>
 
-    <!-- BUTTONS -->
+    <!-- ===== BIG TRIGGER BUTTON ===== -->
+    <div class="px-6 py-5 bg-ibm-700 text-white relative overflow-hidden">
+      <div class="absolute inset-0 hatch-dark opacity-50 pointer-events-none"></div>
+      <button id="runBtn-${cap.key}"
+              onclick="runAgent('${cap.key}')"
+              class="trigger-btn relative w-full bg-white text-ibm-700 hover:bg-ibm-50 transition py-4 px-4 flex items-center justify-center gap-3 group font-medium">
+        <span id="runBtnIcon-${cap.key}" class="flex items-center justify-center">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M5 3l12 7-12 7z"/>
+          </svg>
+        </span>
+        <span id="runBtnLabel-${cap.key}" class="tracking-[0.2em] text-sm">TRIGGER AGENT EXECUTION</span>
+      </button>
+      <div class="relative mono text-[10px] text-ibm-200 text-center mt-3 tracking-wider">
+        click to watch <span class="text-white font-semibold">${agent.id}</span> run all ${RUN_STEPS[cap.key].length} steps live
+      </div>
+    </div>
+
+    <!-- ===== LIVE EXECUTION PANEL (collapsed initially) ===== -->
+    <div id="run-${cap.key}" class="flow-collapsed border-b border-gray-20">
+      <div class="bg-gray-100 text-white p-5">
+        <!-- Live header -->
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <span id="runHbDot-${cap.key}" class="w-2 h-2 bg-amber-400 rounded-full pulse-dot"></span>
+            <span class="mono text-[11px] tracking-widest">${agent.id} · LIVE EXECUTION</span>
+          </div>
+          <span id="runTimer-${cap.key}" class="mono text-xs text-emerald-300">⏱ 0.0s</span>
+        </div>
+
+        <!-- Step indicator dots row -->
+        <div id="runDots-${cap.key}" class="flex items-center gap-0 mb-3 px-1"></div>
+
+        <!-- Current step title -->
+        <div id="runTitle-${cap.key}" class="serif text-sm mb-2 text-ibm-200">awaiting trigger…</div>
+
+        <!-- Progress bar -->
+        <div class="h-1 bg-gray-80 mb-4 overflow-hidden">
+          <div id="runProgress-${cap.key}" class="h-full bg-emerald-400" style="width:0%"></div>
+        </div>
+
+        <!-- Streaming log feed -->
+        <div id="runLog-${cap.key}" class="run-console p-3 mono text-[11px] leading-5"></div>
+      </div>
+    </div>
+
+    <!-- ===== ACTION BUTTONS (Show Flow / How It Works) ===== -->
     <div class="grid grid-cols-2 border-b border-gray-20">
       <button class="text-left px-6 py-3 mono text-xs hover:bg-ibm-50 transition flex items-center justify-between border-r border-gray-20"
               onclick="toggleFlow('${cap.key}')">
-        <span>SHOW FLOW</span>
+        <span class="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><circle cx="3" cy="7" r="1.5"/><circle cx="11" cy="7" r="1.5"/><path d="M4.5 7h5"/></svg>
+          SHOW FLOW DIAGRAM
+        </span>
         <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 5l4 4 4-4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
       </button>
       <button class="text-left px-6 py-3 mono text-xs hover:bg-ibm-50 transition flex items-center justify-between"
               onclick="openModal('${cap.key}')">
-        <span>HOW IT WORKS</span>
-        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" stroke="#0f62fe" stroke-width="1.2" fill="none"/><circle cx="7" cy="4.5" r="0.8" fill="#0f62fe"/><rect x="6.4" y="6" width="1.2" height="4" fill="#0f62fe"/></svg>
+        <span class="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#0f62fe" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="4.5" r="0.6" fill="#0f62fe"/><path d="M7 7v3.5"/></svg>
+          HOW IT WORKS
+        </span>
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M5 3l4 4-4 4" stroke="#0f62fe" stroke-width="1.5" fill="none"/></svg>
       </button>
     </div>
 
@@ -1085,7 +1341,135 @@ function buildCard(cap, idx){
 }
 
 /* ============================================================
-   RENDER GRID
+   RUN AGENT  ·  step-by-step live execution
+   ============================================================ */
+async function runAgent(key){
+  const cap   = CAPS.find(c => c.key === key);
+  const steps = RUN_STEPS[key];
+  const agent = AGENTS[key];
+  const total = steps.length;
+
+  const $ = id => document.getElementById(id);
+  const button   = $(`runBtn-${key}`);
+  const btnIcon  = $(`runBtnIcon-${key}`);
+  const btnLabel = $(`runBtnLabel-${key}`);
+  const status   = $(`status-${key}`);
+  const heartbeat= $(`hb-${key}`);
+  const panel    = $(`run-${key}`);
+  const stepDots = $(`runDots-${key}`);
+  const title    = $(`runTitle-${key}`);
+  const progress = $(`runProgress-${key}`);
+  const log      = $(`runLog-${key}`);
+  const timer    = $(`runTimer-${key}`);
+  const hbDot    = $(`runHbDot-${key}`);
+
+  // Open the live panel
+  panel.classList.remove('flow-collapsed');
+  panel.classList.add('flow-expanded');
+
+  // Reset previous run state
+  log.innerHTML = '';
+  progress.style.transition = 'none';
+  progress.style.width = '0%';
+  // force reflow so the next transition takes effect
+  void progress.offsetWidth;
+
+  // Switch to RUNNING
+  button.disabled = true;
+  btnIcon.innerHTML = `
+    <svg class="anim-spin" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M10 2a8 8 0 018 8" stroke-linecap="round"/>
+      <circle cx="10" cy="10" r="8" opacity="0.2"/>
+    </svg>`;
+  btnLabel.textContent = 'AGENT EXECUTING…';
+  status.textContent = 'RUNNING';
+  status.className = 'status-pill status-running';
+  heartbeat.className = 'status-dot running';
+  hbDot.className = 'w-2 h-2 bg-amber-400 rounded-full pulse-dot';
+  title.className = 'serif text-sm mb-2 text-amber-300';
+
+  // Build step indicator dots row
+  stepDots.innerHTML = steps.map((s,i) => {
+    const isLast = i === total - 1;
+    return `
+      <div class="flex items-center ${isLast?'':'flex-1'}">
+        <span id="stepDot-${key}-${i}" class="step-dot w-3 h-3 rounded-full bg-gray-60"></span>
+        ${isLast ? '' : `<span id="stepBar-${key}-${i}" class="flex-1 h-0.5 bg-gray-60 mx-1"></span>`}
+      </div>`;
+  }).join('');
+
+  // Tick timer
+  const start = Date.now();
+  const tInt = setInterval(() => {
+    const sec = ((Date.now() - start)/1000).toFixed(1);
+    timer.textContent = `⏱ ${sec}s`;
+  }, 100);
+
+  // Run each step
+  for (let i = 0; i < total; i++) {
+    const step = steps[i];
+    const elapsed = ((Date.now() - start)/1000).toFixed(1);
+
+    // Activate step dot
+    const dot = $(`stepDot-${key}-${i}`);
+    dot.className = 'step-dot w-3 h-3 rounded-full bg-amber-400 pulse-dot';
+    title.innerHTML = `<span class="text-amber-300">▶</span> STEP ${String(i+1).padStart(2,'0')} / ${String(total).padStart(2,'0')} · <span class="text-white">${step.label}</span>`;
+
+    // Push log line (with running marker)
+    const line = document.createElement('div');
+    line.className = 'log-line flex gap-2 mb-1';
+    line.innerHTML = `
+      <span id="logIcon-${key}-${i}" class="text-amber-400 inline-block w-3 flex-shrink-0">▶</span>
+      <span class="text-gray-50 flex-shrink-0">[${elapsed.padStart(4,'0')}s]</span>
+      <span class="text-gray-30">${step.detail}</span>`;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+
+    // Animate progress bar
+    progress.style.transition = `width ${step.dur}ms ease`;
+    progress.style.width = `${((i+1)/total)*100}%`;
+
+    await new Promise(r => setTimeout(r, step.dur));
+
+    // Mark step complete
+    dot.className = 'step-dot w-3 h-3 rounded-full bg-emerald-400';
+    if (i < total - 1) {
+      const bar = $(`stepBar-${key}-${i}`);
+      if (bar) bar.className = 'flex-1 h-0.5 bg-emerald-400 mx-1';
+    }
+    const icon = $(`logIcon-${key}-${i}`);
+    if (icon){ icon.textContent = '✓'; icon.className = 'text-emerald-400 inline-block w-3 flex-shrink-0'; }
+  }
+
+  clearInterval(tInt);
+
+  // COMPLETE state
+  status.textContent = 'COMPLETE';
+  status.className = 'status-pill status-complete';
+  heartbeat.className = 'status-dot complete';
+  hbDot.className = 'w-2 h-2 bg-emerald-400 rounded-full';
+  title.innerHTML = `<span class="text-emerald-400">✓ EXECUTION COMPLETE</span> · ${total} steps · all OK`;
+  title.className = 'serif text-sm mb-2 text-emerald-300';
+
+  const totalSec = ((Date.now() - start)/1000).toFixed(1);
+  const finalLine = document.createElement('div');
+  finalLine.className = 'log-line mt-2 pt-2 border-t border-gray-80 flex gap-2 text-emerald-400';
+  finalLine.innerHTML = `<span class="inline-block w-3">●</span><span class="flex-shrink-0">[${totalSec}s]</span><span>workflow complete · agent shutting down · audit logged</span>`;
+  log.appendChild(finalLine);
+  log.scrollTop = log.scrollHeight;
+
+  button.disabled = false;
+  btnIcon.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 10a7 7 0 1112.5 4.3" stroke-linecap="round"/>
+      <path d="M16 10v4h-4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  btnLabel.textContent = 'RUN AGENT AGAIN';
+}
+window.runAgent = runAgent;
+
+/* ============================================================
+   FEATURE GRID RENDER
    ============================================================ */
 const grid = document.getElementById('featureGrid');
 grid.innerHTML = CAPS.map(buildCard).join('');
