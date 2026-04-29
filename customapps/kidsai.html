@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cosine · HNSW · Transformers · Elasticsearch · RAG — Visual Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --b10:#edf5ff;--b20:#d0e2ff;--b40:#78a9ff;--b60:#0f62fe;--b70:#0043ce;--b80:#002d9c;--b90:#001d6c;
+  --g10:#f2f4f8;--g20:#dde1e6;--g50:#878d96;--g70:#525252;--g90:#21272a;
+  --cy40:#33b1ff;--te40:#08bdba;--te60:#009d9a;
+  --pu50:#a56eff;--pu70:#6929c4;
+  --gr40:#42be65;--gr60:#198038;
+  --rd50:#fa4d56;--or40:#ff832b;--ye30:#f6f2e0;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'IBM Plex Sans',sans-serif;background:#fff;color:var(--g90);overflow-x:hidden;line-height:1.6;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+/* ─── NAV ─── */
+nav{background:var(--b90);height:3rem;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,.5);overflow-x:auto;}
+.nav-logo{color:#fff;font-weight:700;font-size:.88rem;padding:0 1.2rem;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);}
+nav a{color:var(--b20);font-size:.68rem;font-weight:700;letter-spacing:.06em;text-decoration:none;text-transform:uppercase;transition:color .15s,background .15s;white-space:nowrap;padding:0 .85rem;height:3rem;display:flex;align-items:center;border-right:1px solid rgba(255,255,255,.06);}
+nav a:hover{color:#fff;background:rgba(255,255,255,.07);}
+#pb{position:fixed;top:3rem;left:0;height:3px;background:var(--cy40);z-index:300;transition:width .06s linear;pointer-events:none;}
+
+/* ─── HERO ─── */
+.hero{background:linear-gradient(135deg,var(--b90) 0%,#0a1a4a 60%,#10104a 100%);padding:3.5rem 2rem 2.8rem;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;right:-60px;top:-60px;width:360px;height:360px;border:80px solid rgba(255,255,255,.03);border-radius:50%;}
+.hero::after{content:'';position:absolute;left:-30px;bottom:-80px;width:220px;height:220px;border:50px solid rgba(51,177,255,.05);border-radius:50%;}
+.hbadge{display:inline-flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);padding:.28rem .8rem;border-radius:20px;color:var(--b20);font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.9rem;}
+.hero h1{font-size:clamp(1.8rem,4vw,3rem);font-weight:700;color:#fff;line-height:1.07;max-width:740px;}
+.hero h1 .a1{color:var(--cy40);}
+.hero h1 .a2{color:var(--pu50);}
+.hero h1 .a3{color:var(--te40);}
+.hero p{color:var(--b20);max-width:640px;margin-top:.85rem;font-size:.95rem;line-height:1.8;}
+.hbtns{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1.4rem;}
+
+/* ─── SECTION LABELS ─── */
+.sec-label{display:flex;align-items:center;gap:.7rem;max-width:900px;margin:2.4rem auto .2rem;padding:0 .3rem;}
+.sec-label .sl-line{flex:1;height:1px;background:var(--g20);}
+.sec-label .sl-text{font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--g50);white-space:nowrap;}
+
+/* ─── CARDS ─── */
+.card{background:#fff;border:1px solid var(--g20);max-width:900px;margin:.6rem auto;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.06);transition:box-shadow .25s;}
+.card:hover{box-shadow:0 6px 28px rgba(15,98,254,.09);}
+.ch{padding:1rem 1.5rem;display:flex;align-items:center;gap:.9rem;}
+.cn2{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.95rem;color:#fff;flex-shrink:0;background:rgba(255,255,255,.18);}
+.ct{color:#fff;font-size:1.05rem;font-weight:700;}
+.cs2{color:rgba(255,255,255,.68);font-size:.78rem;margin-top:.1rem;}
+.cb{padding:1.5rem;}
+/* header colours */
+.hc-pu{background:var(--pu70);}
+.hc-bl{background:var(--b70);}
+.hc-te{background:var(--te60);}
+.hc-cy{background:#0072c3;}
+.hc-gr{background:var(--gr60);}
+.hc-dk{background:var(--b90);}
+.hc-or{background:#b45309;}
+.hc-gy{background:var(--g90);}
+
+/* ─── BUTTONS ─── */
+.btn{display:inline-flex;align-items:center;gap:.3rem;border:none;padding:.45rem .9rem;font-family:'IBM Plex Sans',sans-serif;font-size:.75rem;font-weight:700;letter-spacing:.05em;cursor:pointer;border-radius:2px;margin:.2rem .18rem .2rem 0;transition:filter .15s,transform .1s;text-transform:uppercase;}
+.btn:hover{filter:brightness(1.13);transform:translateY(-1px);}
+.b-bl{background:var(--b60);color:#fff;}
+.b-ol{background:transparent;color:var(--b60);border:2px solid var(--b60);}
+.b-ol:hover{background:var(--b10);}
+.b-te{background:var(--te40);color:#fff;}
+.b-pu{background:var(--pu70);color:#fff;}
+.b-cy{background:#0072c3;color:#fff;}
+.b-gh{background:var(--g10);color:var(--g90);border:1px solid var(--g20);}
+
+/* ─── BOXES ─── */
+.bx{padding:.9rem 1.05rem;margin:.65rem 0;border-left:4px solid var(--b60);background:var(--b10);border-radius:0 3px 3px 0;font-size:.9rem;}
+.bx strong{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.28rem;}
+.bx.gr{background:#defbe6;border-color:var(--gr60);}
+.bx.ye{background:var(--ye30);border-color:#c49b00;}
+.bx.re{background:#fff1f1;border-color:#da1e28;}
+.bx.te{background:#d9fbfb;border-color:var(--te60);}
+.bx.pu{background:#f6f2ff;border-color:var(--pu70);}
+.bx.or{background:#fff2e8;border-color:var(--or40);}
+
+/* ─── CODE ─── */
+.code{background:#161616;color:var(--cy40);font-family:'IBM Plex Mono',monospace;padding:.95rem 1.2rem;margin:.7rem 0;font-size:.8rem;line-height:1.7;overflow-x:auto;white-space:pre;border-radius:3px;border:1px solid #2a2a2a;}
+.cm{color:#6f6f6f;}.ck{color:var(--pu50);}.cs{color:var(--gr40);}.cn{color:var(--or40);}.cw{color:#fff;}
+
+/* ─── SVG ─── */
+.svgb{background:var(--g10);border:1px solid var(--g20);padding:1rem;margin:.7rem 0;border-radius:3px;overflow-x:auto;text-align:center;}
+svg text{font-family:'IBM Plex Sans',sans-serif;}
+
+/* ─── TABLE ─── */
+table{width:100%;border-collapse:collapse;margin:.7rem 0;font-size:.83rem;}
+th{background:var(--b80);color:#fff;padding:.6rem .9rem;text-align:left;font-weight:700;}
+td{padding:.55rem .9rem;border-bottom:1px solid var(--g20);vertical-align:top;line-height:1.5;}
+tr:nth-child(even) td{background:var(--b10);}
+
+/* ─── GRID ─── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:.7rem 0;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;margin:.7rem 0;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:.7rem 0;}
+@media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr;}}
+
+/* ─── MODAL ─── */
+.ov{position:fixed;inset:0;background:rgba(0,10,40,.78);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(6px);}
+.ov.on{display:flex;}
+.modal{background:#fff;max-width:720px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 28px 80px rgba(0,0,0,.5);}
+.mh{background:var(--b80);padding:1.1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;}
+.mh h2{color:#fff;font-size:.98rem;font-weight:700;}
+.mx{background:none;border:none;color:var(--b20);font-size:1.3rem;cursor:pointer;padding:.2rem .4rem;}
+.mx:hover{color:#fff;}
+.mb{padding:1.5rem;line-height:1.82;font-size:.9rem;}
+.mb p{margin-bottom:.7rem;}
+.mb a{color:var(--b60);font-weight:600;}
+.mb ul{margin-left:1.3rem;line-height:2.1;}
+.mb ol{margin-left:1.3rem;line-height:2.1;}
+
+/* ─── COSINE PLAYGROUND ─── */
+#cosCanvas{display:block;margin:.6rem auto;cursor:crosshair;border-radius:3px;border:1px solid var(--g20);}
+.slrow{display:flex;align-items:center;gap:.7rem;margin:.35rem 0;font-size:.83rem;}
+.slrow label{width:130px;font-weight:600;color:var(--b80);font-size:.8rem;}
+.slrow input[type=range]{flex:1;accent-color:var(--b60);}
+.slrow .sv{width:55px;text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--b60);font-weight:700;font-size:.85rem;}
+#cosScore{font-size:2.2rem;font-weight:700;text-align:center;color:var(--b60);font-family:'IBM Plex Mono',monospace;margin:.4rem 0;}
+#cosLabel{text-align:center;font-size:.82rem;color:var(--g50);}
+
+/* ─── HNSW CANVAS ─── */
+#hnswCanvas{display:block;margin:.6rem auto;border-radius:3px;border:1px solid var(--g20);cursor:pointer;}
+
+/* ─── PIPE NODES ─── */
+.pipe{display:flex;align-items:stretch;gap:0;margin:.8rem 0;overflow-x:auto;}
+.pnode{background:var(--b10);border:1.5px solid var(--b40);padding:.75rem .65rem;min-width:100px;text-align:center;flex:1;position:relative;}
+.pnode .pn{background:var(--b60);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;margin-bottom:.3rem;}
+.pnode .pt{font-size:.75rem;font-weight:700;color:var(--b80);}
+.pnode .ps{font-size:.65rem;color:var(--g50);margin-top:.15rem;line-height:1.35;}
+.parr{display:flex;align-items:center;color:var(--b40);font-size:1.2rem;padding:0 .1rem;flex-shrink:0;}
+
+/* ─── REVEAL ─── */
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .45s,transform .45s;}
+.reveal.on{opacity:1;transform:none;}
+
+/* ─── TAGS ─── */
+.tag{display:inline-block;font-size:.67rem;font-weight:700;padding:.1rem .42rem;border-radius:10px;text-transform:uppercase;letter-spacing:.05em;margin:.1rem .1rem;}
+.tag.bl{background:var(--b20);color:var(--b80);}
+.tag.te{background:#d9fbfb;color:var(--te60);}
+.tag.pu{background:#f6f2ff;color:var(--pu70);}
+.tag.gr{background:#defbe6;color:var(--gr60);}
+.tag.or{background:#fff2e8;color:#b45309;}
+
+/* ─── FOOTER ─── */
+footer{background:var(--g90);color:var(--g20);padding:2.5rem 2rem;margin-top:3rem;}
+footer h4{color:#fff;font-size:.88rem;margin-bottom:.55rem;}
+footer a{color:var(--cy40);text-decoration:none;font-size:.82rem;line-height:1.9;}
+footer a:hover{text-decoration:underline;}
+footer p{font-size:.8rem;line-height:1.7;}
+</style>
+</head>
+<body>
+<div id="pb" style="width:0"></div>
+
+<!-- ══════════════════════════════════════════
+  NAV
+══════════════════════════════════════════ -->
+<nav>
+  <span class="nav-logo">🔍 ES · Cosine · HNSW · LLM</span>
+  <a href="#s-cos">Cosine</a>
+  <a href="#s-embed">Embeddings</a>
+  <a href="#s-hnsw">HNSW</a>
+  <a href="#s-invert">Inverted Index</a>
+  <a href="#s-bm25">BM25</a>
+  <a href="#s-chroma">ChromaDB</a>
+  <a href="#s-knn">ES kNN</a>
+  <a href="#s-rag">RAG Pipeline</a>
+  <a href="#s-alt">Alternatives</a>
+</nav>
+
+<!-- ══════════════════════════════════════════
+  HERO
+══════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hbadge">📐 Middle School → Production · Full Visual Guide</div>
+  <h1>
+    <span class="a1">Cosine Similarity</span>,<br/>
+    <span class="a2">HNSW Graphs</span> &amp; <span class="a3">Transformer Embeddings</span><br/>
+    inside Elasticsearch &amp; LLM Retrieval
+  </h1>
+  <p>Every concept explained from geometry basics — dot products, vector direction, transformer neural networks, multi-layer HNSW graphs — up to how real RAG pipelines ingest documents and answer your questions.</p>
+  <div class="hbtns">
+    <button class="btn b-te" onclick="sc('s-cos')">▶ Start with Cosine Math</button>
+    <button class="btn b-pu" onclick="openM('m-rag')">🤖 What is RAG?</button>
+    <button class="btn b-cy" onclick="openM('m-why')">🎯 Why these tools?</button>
+    <button class="btn b-gh" onclick="sc('s-alt')">⚖️ Alternatives Table</button>
+  </div>
+</div>
+
+<main style="padding:1rem 1rem 3rem;max-width:940px;margin:0 auto;">
+
+<!-- ══════════════════════════════════════════
+  SECTION 1 — COSINE SIMILARITY
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 1 — The Core Math</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-cos">
+  <div class="ch hc-pu">
+    <div class="cn2">📐</div>
+    <div><div class="ct">Cosine Similarity — Measuring Direction, Not Length</div>
+    <div class="cs2">cos(θ) = a·b ÷ (‖a‖·‖b‖) &nbsp;|&nbsp; O(d) time complexity</div></div>
+  </div>
+  <div class="cb">
+    <p>Imagine shining a flashlight. The direction you point it is what matters — not how bright it is. <strong>Cosine similarity measures the angle between two vectors.</strong> Vectors pointing the same way = similar meaning. Vectors pointing at right angles = totally different.</p>
+
+    <div class="g2" style="margin-top:.9rem;">
+      <div class="bx pu">
+        <strong>🧭 Magnitude-Blind</strong>
+        A 3-sentence paragraph and a 30-sentence essay about the same topic will produce vectors pointing in <em>nearly the same direction</em>. Cosine ignores how long each vector is — only direction matters. This is perfect for comparing short vs. long text chunks.
+      </div>
+      <div class="bx te">
+        <strong>⚡ O(d) Time Complexity</strong>
+        Computing cosine costs exactly <mark>O(d)</mark> — one pass through all d dimensions. For a 768-d embedding: 768 multiplications + 768 additions + 2 square roots. Modern CPUs do this in microseconds with SIMD vector instructions.
+      </div>
+    </div>
+
+    <!-- BIG FORMULA BOX -->
+    <div style="background:#161616;border-radius:4px;padding:1.4rem 1.6rem;margin:1.1rem 0;">
+      <div style="color:#6f6f6f;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.9rem;font-family:'IBM Plex Mono',monospace;">The Formula — Fully Annotated</div>
+      <div style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:clamp(.9rem,2.2vw,1.35rem);color:var(--cy40);letter-spacing:.03em;line-height:2.4;">
+        cos(<span style="color:#fff">θ</span>) &nbsp;=&nbsp;
+        <span style="color:var(--pu50)">a · b</span>
+        &nbsp;÷&nbsp;
+        ( <span style="color:var(--gr40)">‖a‖</span> &nbsp;·&nbsp; <span style="color:var(--or40)">‖b‖</span> )
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-top:1rem;font-size:.79rem;">
+        <div style="background:rgba(165,110,255,.12);padding:.65rem;border-left:3px solid var(--pu50);">
+          <div style="color:var(--pu50);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-bottom:.25rem;">a · b  (dot product)</div>
+          <div style="color:#aaa;line-height:1.55;">Multiply matching dimensions then sum: a₁b₁ + a₂b₂ + … + aₙbₙ</div>
+        </div>
+        <div style="background:rgba(66,190,101,.1);padding:.65rem;border-left:3px solid var(--gr40);">
+          <div style="color:var(--gr40);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-bottom:.25rem;">‖a‖  (magnitude)</div>
+          <div style="color:#aaa;line-height:1.55;">Length of vector a = √(a₁²+a₂²+…+aₙ²). Normalises for text length.</div>
+        </div>
+        <div style="background:rgba(255,131,43,.1);padding:.65rem;border-left:3px solid var(--or40);">
+          <div style="color:var(--or40);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-bottom:.25rem;">‖b‖  (magnitude)</div>
+          <div style="color:#aaa;line-height:1.55;">Same for vector b. Dividing by both makes the result always −1 to +1.</div>
+        </div>
+        <div style="background:rgba(51,177,255,.1);padding:.65rem;border-left:3px solid var(--cy40);">
+          <div style="color:var(--cy40);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-bottom:.25rem;">θ  (theta, the angle)</div>
+          <div style="color:#aaa;line-height:1.55;">0° → cos=1 (identical). 90° → cos=0 (unrelated). 180° → cos=−1 (opposite).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKED EXAMPLE -->
+    <p style="font-weight:700;color:var(--b80);margin-top:1.1rem;">📝 Worked Example — 2-D Vectors (Easy Numbers)</p>
+    <div class="code"><span class="cw">a</span> = [<span class="cn">3</span>, <span class="cn">4</span>]   <span class="cm">← embedding for "The cat sat on the mat"</span>
+<span class="cw">b</span> = [<span class="cn">1</span>, <span class="cn">2</span>]   <span class="cm">← embedding for "A cat rested on a rug"</span>
+
+<span class="cm">── Step 1: Dot product ──────────────────────────</span>
+a · b  = (3×1) + (4×2) = 3 + 8 = <span class="cs">11</span>
+
+<span class="cm">── Step 2: Magnitudes ──────────────────────────</span>
+‖a‖  = √(3²+4²) = √25 = <span class="cs">5.000</span>
+‖b‖  = √(1²+2²) = √5  ≈ <span class="cs">2.236</span>
+
+<span class="cm">── Step 3: Cosine similarity ────────────────────</span>
+cos(θ) = 11 ÷ (5.000 × 2.236) = 11 ÷ 11.18 ≈ <span class="cw">0.984</span>  ✓ very similar!</div>
+
+    <!-- SVG DIAGRAM -->
+    <div class="svgb">
+      <svg viewBox="0 0 560 260" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ar1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#a56eff"/></marker>
+          <marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#42be65"/></marker>
+          <marker id="ar3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3z" fill="#33b1ff"/></marker>
+        </defs>
+        <!-- axes -->
+        <line x1="60" y1="200" x2="280" y2="200" stroke="#dde1e6" stroke-width="1.5"/>
+        <line x1="60" y1="200" x2="60" y2="40" stroke="#dde1e6" stroke-width="1.5"/>
+        <text x="290" y="203" fill="#878d96" font-size="11">x</text>
+        <text x="58" y="34" fill="#878d96" font-size="11">y</text>
+        <!-- vector a -->
+        <line x1="60" y1="200" x2="195" y2="64" stroke="#a56eff" stroke-width="2.8" marker-end="url(#ar1)"/>
+        <text x="204" y="60" fill="#a56eff" font-size="12" font-weight="bold">a = [3,4]</text>
+        <text x="204" y="76" fill="#a56eff" font-size="10">"cat on mat"</text>
+        <!-- vector b -->
+        <line x1="60" y1="200" x2="123" y2="110" stroke="#42be65" stroke-width="2.8" marker-end="url(#ar2)"/>
+        <text x="128" y="105" fill="#42be65" font-size="12" font-weight="bold">b = [1,2]</text>
+        <text x="128" y="119" fill="#42be65" font-size="10">"cat on rug"</text>
+        <!-- angle arc -->
+        <path d="M 90,175 A 30,30 0 0,0 73,160" stroke="#33b1ff" stroke-width="1.8" fill="none"/>
+        <text x="96" y="162" fill="#33b1ff" font-size="11" font-weight="bold">θ ≈ 10°</text>
+        <!-- score box -->
+        <rect x="310" y="50" width="230" height="155" rx="4" fill="#f6f2ff" stroke="#6929c4" stroke-width="1.5"/>
+        <text x="425" y="75" text-anchor="middle" fill="#6929c4" font-size="12" font-weight="bold">cos(θ) Result</text>
+        <text x="425" y="115" text-anchor="middle" fill="#0f62fe" font-size="32" font-weight="700" font-family="IBM Plex Mono">0.984</text>
+        <text x="425" y="138" text-anchor="middle" fill="#42be65" font-size="11" font-weight="bold">✓ Very Similar Meaning</text>
+        <line x1="330" y1="150" x2="520" y2="150" stroke="#dde1e6"/>
+        <text x="425" y="167" text-anchor="middle" fill="#878d96" font-size="10">ChromaDB distance = 1 − 0.984 = 0.016</text>
+        <text x="425" y="184" text-anchor="middle" fill="#878d96" font-size="10">Smaller distance = closer match ✓</text>
+        <!-- Scale legend -->
+        <text x="60" y="240" fill="#878d96" font-size="10">Scale: 1 unit = 40px</text>
+        <rect x="120" y="232" width="8" height="8" fill="#a56eff" rx="2"/>
+        <text x="132" y="240" fill="#a56eff" font-size="10">Vector a</text>
+        <rect x="180" y="232" width="8" height="8" fill="#42be65" rx="2"/>
+        <text x="192" y="240" fill="#42be65" font-size="10">Vector b</text>
+        <rect x="240" y="232" width="8" height="8" fill="#33b1ff" rx="2"/>
+        <text x="252" y="240" fill="#33b1ff" font-size="10">Angle θ</text>
+      </svg>
+    </div>
+
+    <!-- CHROMADB DISTANCE NOTE -->
+    <div class="bx or">
+      <strong>🟠 ChromaDB — distance = 1 − cosine</strong>
+      ChromaDB returns a <em>distance</em> score, not a similarity score. So <code style="background:rgba(0,0,0,.07);padding:.05rem .3rem;border-radius:2px;">distance = 1 − cos(θ)</code>. A distance of <strong>0.0</strong> means identical. A distance of <strong>1.0</strong> means completely unrelated. <strong>Smaller is always better</strong> — this is the opposite convention from Elasticsearch's similarity score where bigger is better.
+    </div>
+
+    <!-- SCALE REFERENCE -->
+    <div class="svgb" style="margin-top:.8rem;">
+      <svg viewBox="0 0 600 90" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <text x="300" y="18" text-anchor="middle" fill="#002d9c" font-size="12" font-weight="bold">Cosine Similarity Scale — What the Numbers Mean</text>
+        <!-- bar -->
+        <defs>
+          <linearGradient id="scaleGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#da1e28"/>
+            <stop offset="33%" stop-color="#f1c21b"/>
+            <stop offset="66%" stop-color="#42be65"/>
+            <stop offset="100%" stop-color="#0f62fe"/>
+          </linearGradient>
+        </defs>
+        <rect x="30" y="28" width="540" height="24" fill="url(#scaleGrad)" rx="3"/>
+        <!-- tick marks and labels -->
+        <line x1="30" y1="52" x2="30" y2="60" stroke="#21272a" stroke-width="1.5"/>
+        <text x="30" y="72" text-anchor="middle" fill="#21272a" font-size="10">−1</text>
+        <text x="30" y="83" text-anchor="middle" fill="#878d96" font-size="9">Opposite</text>
+        <line x1="165" y1="52" x2="165" y2="60" stroke="#21272a" stroke-width="1.5"/>
+        <text x="165" y="72" text-anchor="middle" fill="#21272a" font-size="10">−0.5</text>
+        <line x1="300" y1="52" x2="300" y2="60" stroke="#21272a" stroke-width="1.5"/>
+        <text x="300" y="72" text-anchor="middle" fill="#21272a" font-size="10">0</text>
+        <text x="300" y="83" text-anchor="middle" fill="#878d96" font-size="9">Unrelated</text>
+        <line x1="435" y1="52" x2="435" y2="60" stroke="#21272a" stroke-width="1.5"/>
+        <text x="435" y="72" text-anchor="middle" fill="#21272a" font-size="10">+0.5</text>
+        <line x1="570" y1="52" x2="570" y2="60" stroke="#21272a" stroke-width="1.5"/>
+        <text x="570" y="72" text-anchor="middle" fill="#21272a" font-size="10">+1</text>
+        <text x="570" y="83" text-anchor="middle" fill="#878d96" font-size="9">Identical</text>
+        <!-- markers -->
+        <circle cx="492" cy="40" r="5" fill="#fff" stroke="#0f62fe" stroke-width="2"/>
+        <text x="492" y="22" text-anchor="middle" fill="#0f62fe" font-size="9">0.984 (our example)</text>
+      </svg>
+    </div>
+
+    <!-- INTERACTIVE DEMO -->
+    <p style="font-weight:700;color:var(--b80);margin:.9rem 0 .5rem;">🎮 Interactive Cosine Playground — Drag the Sliders</p>
+    <div style="background:var(--g10);border:1px solid var(--g20);padding:1rem;border-radius:3px;">
+      <canvas id="cosCanvas" width="500" height="220"></canvas>
+      <div class="slrow"><label>Vector A — angle °</label><input type="range" id="slA" min="0" max="175" value="60" oninput="drawCos()"/><span class="sv" id="vA">60°</span></div>
+      <div class="slrow"><label>Vector B — angle °</label><input type="range" id="slB" min="0" max="175" value="30" oninput="drawCos()"/><span class="sv" id="vB">30°</span></div>
+      <div id="cosScore">0.866</div>
+      <div id="cosLabel">cos(30°) — similar direction → similar meaning</div>
+    </div>
+    <div style="margin-top:.8rem;">
+      <button class="btn b-pu" onclick="openM('m-cosdeep')">📐 Cosine Deep Dive</button>
+      <button class="btn b-ol" onclick="openM('m-chromadist')">🟠 ChromaDB Distance Explained</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 2 — TRANSFORMER EMBEDDINGS
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 2 — Transformer Embeddings</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-embed">
+  <div class="ch hc-cy">
+    <div class="cn2">🧠</div>
+    <div><div class="ct">Transformer Embeddings — Text → Numbers</div>
+    <div class="cs2">768-d · nomic-embed · OpenAI ada-002 · "warranty" → [0.012, −0.034, 0.567, …]</div></div>
+  </div>
+  <div class="cb">
+    <p>A <strong>transformer embedding model</strong> reads text and outputs a fixed-length list of numbers — a vector. Think of it as a super-smart translator that converts <em>meaning</em> into a location in a high-dimensional map.</p>
+
+    <div class="bx pu">
+      <strong>🔑 The Core Insight</strong>
+      "warranty period" and "coverage duration" are completely different words, but they <em>mean the same thing</em>. A transformer embedding model has learned from billions of documents that these phrases appear in similar contexts — so it maps them to nearby locations in 768-dimensional space. Traditional keyword search would miss this. Cosine similarity catches it.
+    </div>
+
+    <!-- EMBEDDING PIPELINE SVG -->
+    <div class="svgb">
+      <svg viewBox="0 0 700 200" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="ea" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#0072c3"/></marker></defs>
+        <text x="350" y="18" text-anchor="middle" fill="#002d9c" font-size="12" font-weight="bold">Transformer Embedding Pipeline</text>
+        <!-- Input text -->
+        <rect x="10" y="30" width="110" height="50" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="65" y="53" text-anchor="middle" fill="#002d9c" font-size="10" font-weight="bold">Raw Text</text>
+        <text x="65" y="68" text-anchor="middle" fill="#0f62fe" font-size="9">"warranty period"</text>
+        <!-- Arrow -->
+        <line x1="122" y1="55" x2="148" y2="55" stroke="#0072c3" stroke-width="2" marker-end="url(#ea)"/>
+        <!-- Tokenizer -->
+        <rect x="150" y="30" width="100" height="50" rx="3" fill="#f6f2ff" stroke="#6929c4" stroke-width="1.5"/>
+        <text x="200" y="50" text-anchor="middle" fill="#6929c4" font-size="10" font-weight="bold">Tokenizer</text>
+        <text x="200" y="64" text-anchor="middle" fill="#6929c4" font-size="9">→ token IDs</text>
+        <text x="200" y="76" text-anchor="middle" fill="#a56eff" font-size="9">[8943, 2201]</text>
+        <!-- Arrow -->
+        <line x1="252" y1="55" x2="278" y2="55" stroke="#0072c3" stroke-width="2" marker-end="url(#ea)"/>
+        <!-- Transformer -->
+        <rect x="280" y="20" width="140" height="70" rx="3" fill="#161616" stroke="#33b1ff" stroke-width="2"/>
+        <text x="350" y="44" text-anchor="middle" fill="#33b1ff" font-size="11" font-weight="bold">Transformer</text>
+        <text x="350" y="59" text-anchor="middle" fill="#6f6f6f" font-size="9">12–24 attention layers</text>
+        <text x="350" y="72" text-anchor="middle" fill="#6f6f6f" font-size="9">nomic-embed / ada-002</text>
+        <text x="350" y="84" text-anchor="middle" fill="#878d96" font-size="9">768M parameters</text>
+        <!-- Arrow -->
+        <line x1="422" y1="55" x2="448" y2="55" stroke="#0072c3" stroke-width="2" marker-end="url(#ea)"/>
+        <!-- Output vector -->
+        <rect x="450" y="20" width="240" height="70" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="570" y="40" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">768-Dimensional Vector</text>
+        <text x="570" y="55" text-anchor="middle" fill="#21272a" font-size="9" font-family="IBM Plex Mono">[0.012, −0.034, 0.567,</text>
+        <text x="570" y="68" text-anchor="middle" fill="#21272a" font-size="9" font-family="IBM Plex Mono"> 0.891, −0.203, …]</text>
+        <text x="570" y="82" text-anchor="middle" fill="#198038" font-size="9">768 floats total</text>
+        <!-- Second example -->
+        <rect x="10" y="115" width="110" height="50" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="65" y="138" text-anchor="middle" fill="#002d9c" font-size="10" font-weight="bold">Different Text</text>
+        <text x="65" y="153" text-anchor="middle" fill="#0f62fe" font-size="9">"coverage duration"</text>
+        <!-- Arrow to transformer -->
+        <line x1="120" y1="140" x2="279" y2="80" stroke="#0043ce" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ea)"/>
+        <!-- Output vector 2 -->
+        <rect x="450" y="112" width="240" height="58" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="570" y="132" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">Similar Vector! 🎯</text>
+        <text x="570" y="147" text-anchor="middle" fill="#21272a" font-size="9" font-family="IBM Plex Mono">[0.011, −0.031, 0.571,</text>
+        <text x="570" y="160" text-anchor="middle" fill="#21272a" font-size="9" font-family="IBM Plex Mono"> 0.884, −0.198, …]</text>
+        <!-- Similarity arrow -->
+        <line x1="690" y1="75" x2="690" y2="125" stroke="#a56eff" stroke-width="2" stroke-dasharray="4,2"/>
+        <text x="693" y="100" fill="#a56eff" font-size="9">cos ≈ 0.97</text>
+        <!-- Bottom annotation -->
+        <text x="350" y="192" text-anchor="middle" fill="#878d96" font-size="10">Same model, different words → nearly identical vectors → cosine ≈ 0.97</text>
+      </svg>
+    </div>
+
+    <!-- DIMENSION TABLE -->
+    <p style="font-weight:700;color:var(--b80);margin:.9rem 0 .5rem;">📊 Popular Embedding Models Compared</p>
+    <table>
+      <tr><th>Model</th><th>Dimensions</th><th>Provider</th><th>Best For</th><th>Context Window</th></tr>
+      <tr><td><strong>nomic-embed-text</strong> <span class="tag or">open</span></td><td class="mono">768</td><td>Nomic AI</td><td>Long docs, local deploy</td><td>8,192 tokens</td></tr>
+      <tr><td><strong>text-embedding-ada-002</strong></td><td class="mono">1,536</td><td>OpenAI</td><td>General purpose RAG</td><td>8,191 tokens</td></tr>
+      <tr><td><strong>text-embedding-3-small</strong></td><td class="mono">1,536</td><td>OpenAI</td><td>Cost-efficient</td><td>8,191 tokens</td></tr>
+      <tr><td><strong>text-embedding-3-large</strong></td><td class="mono">3,072</td><td>OpenAI</td><td>Highest accuracy</td><td>8,191 tokens</td></tr>
+      <tr><td><strong>all-MiniLM-L6-v2</strong> <span class="tag or">open</span></td><td class="mono">384</td><td>Sentence-BERT</td><td>Fast, small footprint</td><td>512 tokens</td></tr>
+      <tr><td><strong>e5-mistral-7b</strong> <span class="tag or">open</span></td><td class="mono">4,096</td><td>Microsoft</td><td>State-of-the-art open</td><td>32,768 tokens</td></tr>
+    </table>
+
+    <!-- HOW TRANSFORMERS WORK -->
+    <div class="bx">
+      <strong>🔬 How Does the Transformer Produce These Numbers?</strong>
+      The transformer reads every word in relation to every other word (called <em>self-attention</em>). After 12–24 layers of this, it has built a rich understanding of context. The final [CLS] token or mean-pooled output is taken as the sentence's embedding. The model was trained to make similar sentences produce similar vectors using contrastive learning.
+    </div>
+
+    <div class="code"><span class="cm">── Python Example: Generating Embeddings ─────────────────────</span>
+<span class="ck">from</span> <span class="cs">sentence_transformers</span> <span class="ck">import</span> SentenceTransformer
+
+model = SentenceTransformer(<span class="cs">"nomic-ai/nomic-embed-text-v1"</span>)
+
+chunks = [
+    <span class="cs">"The warranty period covers 12 months from purchase"</span>,
+    <span class="cs">"Coverage duration is one year after the sale date"</span>,
+    <span class="cs">"Python is a programming language for data science"</span>,
+]
+
+embeddings = model.encode(chunks)   <span class="cm"># shape: (3, 768)</span>
+<span class="cm"># embeddings[0] ≈ embeddings[1]  →  cosine ≈ 0.96</span>
+<span class="cm"># embeddings[0] vs embeddings[2] →  cosine ≈ 0.12  (unrelated)</span></div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-cy" onclick="openM('m-attention')">🔬 Self-Attention Explained</button>
+      <button class="btn b-ol" onclick="openM('m-chunking')">✂️ Chunking Strategies</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 3 — HNSW
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 3 — HNSW Index</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-hnsw">
+  <div class="ch" style="background:linear-gradient(90deg,#0a2a4a,#0043ce);">
+    <div class="cn2">🗺️</div>
+    <div><div class="ct">HNSW — Hierarchical Navigable Small Worlds</div>
+    <div class="cs2">Multi-layer graph · Sparse highways at top · Dense streets at bottom · O(log n) search</div></div>
+  </div>
+  <div class="cb">
+    <p>Searching cosine similarity across <em>millions</em> of vectors one by one would be <strong>O(n·d)</strong> — impossibly slow. HNSW solves this with a brilliant multi-layer graph structure inspired by how highway maps work. It finds your nearest neighbor in <mark>O(log n)</mark> time.</p>
+
+    <div class="g2">
+      <div class="bx">
+        <strong>🛣️ Highways &amp; Streets Analogy</strong>
+        Imagine you're looking for a restaurant in a city. You don't check every street — you take the highway to the right district (sparse top layer), exit onto main roads (middle layers), then walk the local streets to the exact address (dense bottom layer). HNSW does exactly this with vectors.
+      </div>
+      <div class="bx te">
+        <strong>📉 O(log n) vs O(n)</strong>
+        For 10 million vectors: brute-force checks 10,000,000 nodes. HNSW checks about 23 (log₂ of 10M). That's a <strong>430,000× speedup</strong>. This is why vector search is practical at scale.
+      </div>
+    </div>
+
+    <!-- HNSW LAYERS SVG -->
+    <div class="svgb">
+      <svg viewBox="0 0 700 360" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ha" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="#33b1ff"/></marker>
+          <marker id="hg" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="#42be65"/></marker>
+        </defs>
+        <!-- LAYER LABELS -->
+        <text x="350" y="16" text-anchor="middle" fill="#002d9c" font-size="12" font-weight="bold">HNSW Multi-Layer Graph Structure</text>
+
+        <!-- Layer 2 — Top (Sparse / Highway) -->
+        <rect x="20" y="30" width="660" height="75" rx="4" fill="#edf5ff" stroke="#78a9ff" stroke-width="1"/>
+        <text x="35" y="50" fill="#0043ce" font-size="11" font-weight="bold">Layer 2 — Highway (Sparse, Long-Range Connections)</text>
+        <text x="35" y="63" fill="#0072c3" font-size="9">Few nodes, each connected to others far away. Entry point for all searches.</text>
+        <!-- sparse nodes -->
+        <circle cx="150" cy="90" r="10" fill="#0f62fe"/>
+        <circle cx="370" cy="85" r="10" fill="#0f62fe"/>
+        <circle cx="570" cy="92" r="10" fill="#0f62fe"/>
+        <line x1="160" y1="90" x2="360" y2="85" stroke="#78a9ff" stroke-width="2"/>
+        <line x1="380" y1="85" x2="560" y2="92" stroke="#78a9ff" stroke-width="2"/>
+        <!-- long-range dashes -->
+        <line x1="160" y1="90" x2="560" y2="92" stroke="#78a9ff" stroke-width="1.5" stroke-dasharray="8,4"/>
+
+        <!-- Layer 1 — Middle -->
+        <rect x="20" y="120" width="660" height="90" rx="4" fill="#f6f2ff" stroke="#a56eff" stroke-width="1"/>
+        <text x="35" y="140" fill="#6929c4" font-size="11" font-weight="bold">Layer 1 — Main Roads (Medium Density)</text>
+        <text x="35" y="153" fill="#6929c4" font-size="9">More nodes, shorter connections. Refines the search to the right neighbourhood.</text>
+        <circle cx="110" cy="182" r="8" fill="#6929c4"/>
+        <circle cx="220" cy="175" r="8" fill="#6929c4"/>
+        <circle cx="330" cy="185" r="8" fill="#6929c4"/>
+        <circle cx="430" cy="172" r="8" fill="#6929c4"/>
+        <circle cx="530" cy="180" r="8" fill="#6929c4"/>
+        <circle cx="620" cy="178" r="8" fill="#6929c4"/>
+        <line x1="118" y1="182" x2="212" y2="175" stroke="#a56eff" stroke-width="1.5"/>
+        <line x1="228" y1="175" x2="322" y2="185" stroke="#a56eff" stroke-width="1.5"/>
+        <line x1="338" y1="185" x2="422" y2="172" stroke="#a56eff" stroke-width="1.5"/>
+        <line x1="438" y1="172" x2="522" y2="180" stroke="#a56eff" stroke-width="1.5"/>
+        <line x1="538" y1="180" x2="612" y2="178" stroke="#a56eff" stroke-width="1.5"/>
+
+        <!-- Layer 0 — Bottom (Dense) -->
+        <rect x="20" y="226" width="660" height="100" rx="4" fill="#defbe6" stroke="#42be65" stroke-width="1"/>
+        <text x="35" y="246" fill="#198038" font-size="11" font-weight="bold">Layer 0 — Local Streets (Dense, Short-Range, Every Node)</text>
+        <text x="35" y="259" fill="#198038" font-size="9">All vectors live here. Dense connectivity to nearby neighbours. Final exact comparison happens here.</text>
+        <!-- many small nodes -->
+        <circle cx="75" cy="295" r="6" fill="#42be65"/>
+        <circle cx="130" cy="285" r="6" fill="#42be65"/>
+        <circle cx="185" cy="298" r="6" fill="#42be65"/>
+        <circle cx="235" cy="282" r="6" fill="#42be65"/>
+        <circle cx="285" cy="300" r="6" fill="#42be65"/>
+        <circle cx="335" cy="288" r="6" fill="#ff832b" stroke="#002d9c" stroke-width="2"/>
+        <!-- query target highlighted -->
+        <circle cx="385" cy="296" r="6" fill="#42be65"/>
+        <circle cx="440" cy="283" r="6" fill="#42be65"/>
+        <circle cx="495" cy="297" r="6" fill="#42be65"/>
+        <circle cx="545" cy="286" r="6" fill="#42be65"/>
+        <circle cx="595" cy="295" r="6" fill="#42be65"/>
+        <circle cx="645" cy="282" r="6" fill="#42be65"/>
+        <!-- dense connections -->
+        <line x1="81" y1="295" x2="124" y2="285" stroke="#198038" stroke-width="1"/>
+        <line x1="136" y1="285" x2="179" y2="298" stroke="#198038" stroke-width="1"/>
+        <line x1="191" y1="298" x2="229" y2="282" stroke="#198038" stroke-width="1"/>
+        <line x1="241" y1="282" x2="279" y2="300" stroke="#198038" stroke-width="1"/>
+        <line x1="291" y1="300" x2="329" y2="288" stroke="#198038" stroke-width="1"/>
+        <line x1="341" y1="288" x2="379" y2="296" stroke="#198038" stroke-width="1"/>
+        <line x1="391" y1="296" x2="434" y2="283" stroke="#198038" stroke-width="1"/>
+        <line x1="446" y1="283" x2="489" y2="297" stroke="#198038" stroke-width="1"/>
+        <line x1="501" y1="297" x2="539" y2="286" stroke="#198038" stroke-width="1"/>
+        <line x1="551" y1="286" x2="589" y2="295" stroke="#198038" stroke-width="1"/>
+        <line x1="601" y1="295" x2="639" y2="282" stroke="#198038" stroke-width="1"/>
+        <!-- query result label -->
+        <text x="335" y="320" text-anchor="middle" fill="#da1e28" font-size="10" font-weight="bold">🎯 Nearest Neighbor Found!</text>
+
+        <!-- SEARCH PATH (greedy descent) -->
+        <!-- Entry at layer 2 -->
+        <circle cx="370" cy="85" r="14" fill="none" stroke="#33b1ff" stroke-width="2.5" stroke-dasharray="4,2"/>
+        <text x="370" y="70" text-anchor="middle" fill="#33b1ff" font-size="9">1. Enter here</text>
+        <!-- descend to layer 1 -->
+        <line x1="370" y1="100" x2="340" y2="120" stroke="#33b1ff" stroke-width="2" stroke-dasharray="3,2" marker-end="url(#ha)"/>
+        <circle cx="330" cy="185" r="12" fill="none" stroke="#33b1ff" stroke-width="2.5" stroke-dasharray="4,2"/>
+        <text x="280" y="200" fill="#33b1ff" font-size="9">2. Greedily descend</text>
+        <!-- descend to layer 0 -->
+        <line x1="330" y1="197" x2="335" y2="226" stroke="#33b1ff" stroke-width="2" stroke-dasharray="3,2" marker-end="url(#ha)"/>
+        <!-- complexity box -->
+        <rect x="430" y="330" width="240" height="26" rx="3" fill="#161616"/>
+        <text x="550" y="347" text-anchor="middle" fill="#33b1ff" font-size="10" font-family="IBM Plex Mono" font-weight="bold">Search complexity: O(log n)  🚀</text>
+      </svg>
+    </div>
+
+    <!-- BUILD PROCESS -->
+    <p style="font-weight:700;color:var(--b80);margin:.9rem 0 .5rem;">🔨 How HNSW is Built (Insertion Algorithm)</p>
+    <div class="code"><span class="cm">── Inserting a new vector into HNSW ────────────────────────</span>
+<span class="ck">for each</span> new vector v:
+  1. Randomly assign it to layers 0 … L  <span class="cm">(exponential decay: most go to L0 only)</span>
+  2. <span class="ck">for</span> layer = top → assigned_layer:
+       Find nearest neighbour (greedy search, just like query time)
+  3. <span class="ck">for</span> layer = assigned_layer → 0:
+       Add bidirectional edges to M nearest neighbours
+       If any node has &gt; Mmax connections → prune weakest edges
+
+<span class="cm">Parameters you tune:</span>
+  M       = max connections per node (default 16)   <span class="cm">↑ = more accurate, more RAM</span>
+  efConstruction = search width at build time        <span class="cm">↑ = slower build, better index</span>
+  ef      = search width at query time               <span class="cm">↑ = more accurate, slower query</span></div>
+
+    <!-- HNSW VS BRUTE FORCE TABLE -->
+    <table>
+      <tr><th>Method</th><th>Search Speed</th><th>Accuracy</th><th>Memory</th><th>Used By</th></tr>
+      <tr><td><strong>Brute Force</strong></td><td>O(n·d) 🐢</td><td>100% exact</td><td>Just vectors</td><td>Tiny datasets &lt;10k</td></tr>
+      <tr><td><strong>IVF (Flat)</strong></td><td>O(√n·d)</td><td>~95%</td><td>Centroids + vectors</td><td>Faiss, classic Pinecone</td></tr>
+      <tr><td><strong>HNSW</strong> ⭐</td><td>O(log n) 🚀</td><td>95–99%</td><td>~1.5× vectors</td><td>Elasticsearch, ChromaDB, Weaviate, Qdrant</td></tr>
+      <tr><td><strong>Product Quantization</strong></td><td>O(log n)</td><td>~90%</td><td>~0.25× vectors</td><td>When RAM is scarce</td></tr>
+    </table>
+
+    <div class="g2">
+      <div class="bx gr">
+        <strong>✅ HNSW in Elasticsearch</strong>
+        Elasticsearch uses HNSW natively for its <code>dense_vector</code> field type. When you set <code>"index": true</code>, ES builds an HNSW index automatically. You control M and ef_construction in the mapping. At query time, <code>num_candidates</code> sets the ef parameter.
+      </div>
+      <div class="bx pu">
+        <strong>✅ HNSW in ChromaDB</strong>
+        ChromaDB uses the <strong>hnswlib</strong> C++ library under the hood. When you call <code>collection.add()</code>, it inserts into HNSW. When you call <code>collection.query()</code>, it traverses the graph and returns <code>distance = 1 − cosine</code>.
+      </div>
+    </div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-bl" onclick="openM('m-hnswparams')">⚙️ HNSW Parameters Tuning</button>
+      <button class="btn b-ol" onclick="openM('m-approx')">🎯 Approximate vs Exact Search</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 4 — INVERTED INDEX + BM25
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 4 — Classic Text Search (BM25)</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-invert">
+  <div class="ch hc-bl">
+    <div class="cn2">📖</div>
+    <div><div class="ct">Inverted Index + BM25 — Elasticsearch's Classic Engine</div>
+    <div class="cs2">term frequency · inverse document frequency · field boosting</div></div>
+  </div>
+  <div class="cb">
+    <p>Before vector search existed, Elasticsearch was already the world's fastest full-text search engine. It uses two powerful ideas together: the <strong>inverted index</strong> (a backwards book index) and <strong>BM25 scoring</strong> (a smart relevance formula).</p>
+
+    <!-- INVERTED INDEX SVG -->
+    <div class="svgb">
+      <svg viewBox="0 0 700 240" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="ba" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="#0043ce"/></marker></defs>
+        <text x="350" y="18" text-anchor="middle" fill="#002d9c" font-size="12" font-weight="bold">Building the Inverted Index</text>
+        <!-- Docs -->
+        <rect x="15" y="30" width="160" height="46" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="95" y="51" text-anchor="middle" fill="#002d9c" font-size="11" font-weight="bold">Doc 1</text>
+        <text x="95" y="66" text-anchor="middle" fill="#525252" font-size="9">"The quick brown fox"</text>
+        <rect x="15" y="88" width="160" height="46" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="95" y="109" text-anchor="middle" fill="#002d9c" font-size="11" font-weight="bold">Doc 2</text>
+        <text x="95" y="124" text-anchor="middle" fill="#525252" font-size="9">"Fox ran through forest"</text>
+        <rect x="15" y="146" width="160" height="46" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="95" y="167" text-anchor="middle" fill="#002d9c" font-size="11" font-weight="bold">Doc 3</text>
+        <text x="95" y="182" text-anchor="middle" fill="#525252" font-size="9">"Brown bears eat fish"</text>
+        <!-- Arrow -->
+        <line x1="178" y1="120" x2="215" y2="120" stroke="#0043ce" stroke-width="2" marker-end="url(#ba)"/>
+        <text x="196" y="113" text-anchor="middle" fill="#0043ce" font-size="9">analyze</text>
+        <!-- Inverted Index Table -->
+        <rect x="220" y="25" width="460" height="190" rx="3" fill="#fff" stroke="#0043ce" stroke-width="1.5"/>
+        <rect x="220" y="25" width="160" height="28" fill="#002d9c" rx="2"/>
+        <text x="300" y="43" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">Token</text>
+        <rect x="380" y="25" width="300" height="28" fill="#002d9c"/>
+        <text x="530" y="43" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">Posting List (doc IDs + positions)</text>
+        <!-- rows -->
+        <text x="300" y="75" text-anchor="middle" fill="#0f62fe" font-size="12" font-weight="bold" font-family="IBM Plex Mono">fox</text>
+        <rect x="390" y="60" width="60" height="22" rx="10" fill="#0f62fe"/><text x="420" y="75" text-anchor="middle" fill="#fff" font-size="10">Doc1:p3</text>
+        <rect x="458" y="60" width="60" height="22" rx="10" fill="#0f62fe"/><text x="488" y="75" text-anchor="middle" fill="#fff" font-size="10">Doc2:p1</text>
+        <line x1="220" y1="93" x2="680" y2="93" stroke="#dde1e6"/>
+        <text x="300" y="117" text-anchor="middle" fill="#0f62fe" font-size="12" font-weight="bold" font-family="IBM Plex Mono">brown</text>
+        <rect x="390" y="103" width="60" height="22" rx="10" fill="#4589ff"/><text x="420" y="118" text-anchor="middle" fill="#fff" font-size="10">Doc1:p3</text>
+        <rect x="458" y="103" width="60" height="22" rx="10" fill="#4589ff"/><text x="488" y="118" text-anchor="middle" fill="#fff" font-size="10">Doc3:p1</text>
+        <line x1="220" y1="135" x2="680" y2="135" stroke="#dde1e6"/>
+        <text x="300" y="158" text-anchor="middle" fill="#0f62fe" font-size="12" font-weight="bold" font-family="IBM Plex Mono">quick</text>
+        <rect x="390" y="144" width="60" height="22" rx="10" fill="#6ea6ff"/><text x="420" y="159" text-anchor="middle" fill="#fff" font-size="10">Doc1:p2</text>
+        <line x1="220" y1="177" x2="680" y2="177" stroke="#dde1e6"/>
+        <text x="300" y="200" text-anchor="middle" fill="#0f62fe" font-size="12" font-weight="bold" font-family="IBM Plex Mono">fish</text>
+        <rect x="390" y="185" width="60" height="22" rx="10" fill="#08bdba"/><text x="420" y="200" text-anchor="middle" fill="#fff" font-size="10">Doc3:p4</text>
+        <text x="530" y="224" text-anchor="middle" fill="#878d96" font-size="9">p = position in document; used for phrase queries</text>
+      </svg>
+    </div>
+
+    <!-- BM25 -->
+    <div id="s-bm25" style="margin-top:1rem;">
+      <p style="font-weight:700;color:var(--b80);">📊 BM25 Scoring Formula</p>
+      <div class="code"><span class="cm">── BM25 — What Elasticsearch Actually Computes ─────────────</span>
+
+BM25(doc, term) = IDF(term) × [ TF × (k₁+1) ] / [ TF + k₁ × (1 − b + b × |doc|/avgLen) ]
+
+  IDF(term)   = log( (N − df + 0.5) / (df + 0.5) + 1 )
+  TF          = term frequency in this document
+  |doc|       = length of this document (in tokens)
+  avgLen      = average document length across all docs
+  N           = total documents in index
+  df          = documents containing this term
+  k₁          = 1.2  (saturation — how much TF matters)
+  b           = 0.75 (length normalisation)
+
+<span class="cm">Key insight: a word appearing 100× vs 10× isn't 10× more relevant.</span>
+<span class="cm">BM25 flattens this — the score saturates at high TF values. 📉→📉→→</span></div>
+    </div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-bl" onclick="openM('m-bm25')">📊 BM25 Deep Dive</button>
+      <button class="btn b-ol" onclick="openM('m-analyzer')">✂️ Text Analyzers</button>
+      <button class="btn b-ghost" onclick="openM('m-boost')">⬆️ Field Boosting</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 5 — CHROMADB
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 5 — ChromaDB Vector Store</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-chroma">
+  <div class="ch hc-or">
+    <div class="cn2">🟠</div>
+    <div><div class="ct">ChromaDB — Purpose-Built Vector Database</div>
+    <div class="cs2">distance = 1 − cosine · HNSW under the hood · Python-native</div></div>
+  </div>
+  <div class="cb">
+    <p>ChromaDB is a <strong>vector-first database</strong> — its only job is storing embeddings and finding similar ones fast. It's the most popular choice for local RAG prototypes and Python-native LLM apps.</p>
+
+    <div class="g2">
+      <div class="bx or">
+        <strong>🔑 ChromaDB Distance Convention</strong>
+        ChromaDB uses <code>distance = 1 − cosine_similarity</code>. So when you get back results with <code>distances=[0.02, 0.15, 0.41]</code>, the <strong>smallest number is the most similar</strong>. A distance of 0 means identical. Distance of 1 means totally unrelated. This is the <em>opposite</em> of Elasticsearch where bigger score = better.
+      </div>
+      <div class="bx te">
+        <strong>🏗️ What's Inside ChromaDB</strong>
+        Each collection has: an HNSW index (hnswlib), a SQLite metadata store, and a flat file for raw embeddings. You can swap in different embedding functions (OpenAI, Cohere, local models). Persistence is optional — great for testing in-memory.
+      </div>
+    </div>
+
+    <div class="code"><span class="cm">── ChromaDB Full Example: Ingest + Query ───────────────────</span>
+<span class="ck">import</span> chromadb
+<span class="ck">from</span> chromadb.utils <span class="ck">import</span> embedding_functions
+
+<span class="cm"># 1. Create client + collection</span>
+client = chromadb.PersistentClient(path=<span class="cs">"./chroma_db"</span>)
+embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name=<span class="cs">"nomic-ai/nomic-embed-text-v1"</span>
+)
+collection = client.get_or_create_collection(
+    name=<span class="cs">"documents"</span>,
+    embedding_function=embed_fn,
+    metadata={<span class="cs">"hnsw:space"</span>: <span class="cs">"cosine"</span>}   <span class="cm"># ← use cosine distance</span>
+)
+
+<span class="cm"># 2. Add documents (embeddings generated automatically)</span>
+collection.add(
+    documents=[
+        <span class="cs">"The warranty period covers 12 months from purchase date"</span>,
+        <span class="cs">"Coverage duration is one year after the sale"</span>,
+        <span class="cs">"Python is great for machine learning projects"</span>,
+    ],
+    ids=[<span class="cs">"doc1"</span>, <span class="cs">"doc2"</span>, <span class="cs">"doc3"</span>]
+)
+
+<span class="cm"># 3. Query — returns distance = 1 − cosine (smaller = better)</span>
+results = collection.query(
+    query_texts=[<span class="cs">"how long is the warranty?"</span>],
+    n_results=<span class="cn">2</span>
+)
+
+<span class="cm"># results["distances"][0] → [0.03, 0.04]   ← doc1 and doc2 are very close!</span>
+<span class="cm"># results["documents"][0] → ["The warranty period...", "Coverage duration..."]</span></div>
+
+    <!-- CHROMADB DISTANCE VISUAL -->
+    <div class="svgb">
+      <svg viewBox="0 0 600 130" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <text x="300" y="18" text-anchor="middle" fill="#b45309" font-size="12" font-weight="bold">ChromaDB: distance = 1 − cosine(query, chunk)</text>
+        <!-- query -->
+        <rect x="20" y="35" width="130" height="40" rx="3" fill="#fff2e8" stroke="#ff832b" stroke-width="2"/>
+        <text x="85" y="55" text-anchor="middle" fill="#b45309" font-size="10" font-weight="bold">Query Vector</text>
+        <text x="85" y="68" text-anchor="middle" fill="#b45309" font-size="9">"warranty length?"</text>
+        <!-- results -->
+        <rect x="200" y="28" width="150" height="54" rx="3" fill="#defbe6" stroke="#198038" stroke-width="2"/>
+        <text x="275" y="48" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">Doc 1</text>
+        <text x="275" y="62" text-anchor="middle" fill="#525252" font-size="9">"warranty period..."</text>
+        <text x="275" y="74" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">distance = 0.03 ✓</text>
+        <rect x="370" y="28" width="150" height="54" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="445" y="48" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">Doc 2</text>
+        <text x="445" y="62" text-anchor="middle" fill="#525252" font-size="9">"coverage duration..."</text>
+        <text x="445" y="74" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">distance = 0.04 ✓</text>
+        <!-- arrows -->
+        <line x1="152" y1="55" x2="196" y2="55" stroke="#ff832b" stroke-width="2" marker-end="url(#ha)"/>
+        <!-- distance bar -->
+        <text x="300" y="105" text-anchor="middle" fill="#878d96" font-size="10">Lower distance = higher cosine similarity = more relevant chunk for LLM context</text>
+        <rect x="50" y="113" width="500" height="12" rx="6" fill="#dde1e6"/>
+        <rect x="50" y="113" width="15" height="12" rx="6" fill="#198038"/>
+        <text x="50" y="112" fill="#198038" font-size="9">0</text>
+        <text x="550" y="112" fill="#da1e28" font-size="9">1</text>
+        <text x="300" y="112" fill="#878d96" font-size="9">0.5</text>
+        <circle cx="58" cy="119" r="4" fill="#ff832b" stroke="#fff" stroke-width="1.5"/>
+        <text x="66" y="127" fill="#ff832b" font-size="9">our results</text>
+      </svg>
+    </div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-ol" onclick="openM('m-chromavses')">🆚 ChromaDB vs Elasticsearch</button>
+      <button class="btn b-te" onclick="openM('m-persist')">💾 Persistence &amp; Scaling</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 6 — ELASTICSEARCH kNN
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 6 — Elasticsearch kNN + Hybrid Search</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-knn">
+  <div class="ch hc-bl">
+    <div class="cn2">⚡</div>
+    <div><div class="ct">Elasticsearch kNN — Vector Search at Production Scale</div>
+    <div class="cs2">dense_vector · HNSW built-in · Hybrid BM25 + cosine in one query</div></div>
+  </div>
+  <div class="cb">
+    <p>Elasticsearch 8.0+ added <strong>native kNN vector search</strong>. It uses HNSW internally and — uniquely — lets you <strong>combine BM25 keyword scoring with cosine similarity in a single query</strong>. This is called <em>hybrid search</em> and it outperforms either method alone.</p>
+
+    <div class="code"><span class="cm">── Step 1: Create Index with dense_vector field ────────────</span>
+PUT /my_docs
+{
+  <span class="cs">"mappings"</span>: {
+    <span class="cs">"properties"</span>: {
+      <span class="cs">"text"</span>:      { <span class="cs">"type"</span>: <span class="cs">"text"</span> },
+      <span class="cs">"embedding"</span>: {
+        <span class="cs">"type"</span>:       <span class="cs">"dense_vector"</span>,
+        <span class="cs">"dims"</span>:       <span class="cn">768</span>,              <span class="cm">// must match your model</span>
+        <span class="cs">"index"</span>:      <span class="ck">true</span>,             <span class="cm">// build HNSW index</span>
+        <span class="cs">"similarity"</span>: <span class="cs">"cosine"</span>,         <span class="cm">// cosine similarity metric</span>
+        <span class="cs">"index_options"</span>: {
+          <span class="cs">"type"</span>: <span class="cs">"hnsw"</span>,
+          <span class="cs">"m"</span>: <span class="cn">16</span>,              <span class="cm">// HNSW M parameter</span>
+          <span class="cs">"ef_construction"</span>: <span class="cn">100</span>  <span class="cm">// build accuracy vs speed</span>
+        }
+      }
+    }
+  }
+}
+
+<span class="cm">── Step 2: Index a document ────────────────────────────────</span>
+POST /my_docs/_doc
+{
+  <span class="cs">"text"</span>: <span class="cs">"The warranty period covers 12 months from purchase"</span>,
+  <span class="cs">"embedding"</span>: [<span class="cn">0.012</span>, <span class="cn">-0.034</span>, <span class="cn">0.567</span>, ...]  <span class="cm">// 768 floats</span>
+}
+
+<span class="cm">── Step 3: Hybrid search — BM25 + kNN cosine ───────────────</span>
+POST /my_docs/_search
+{
+  <span class="cs">"knn"</span>: {
+    <span class="cs">"field"</span>:         <span class="cs">"embedding"</span>,
+    <span class="cs">"query_vector"</span>:  [<span class="cn">0.008</span>, <span class="cn">-0.031</span>, <span class="cn">0.571</span>, ...],  <span class="cm">// query embedding</span>
+    <span class="cs">"k"</span>:             <span class="cn">10</span>,             <span class="cm">// return 10 nearest</span>
+    <span class="cs">"num_candidates"</span>:<span class="cn">100</span>            <span class="cm">// HNSW ef parameter</span>
+  },
+  <span class="cs">"query"</span>: {
+    <span class="cs">"match"</span>: { <span class="cs">"text"</span>: <span class="cs">"warranty period"</span> }  <span class="cm">// BM25 boost</span>
+  },
+  <span class="cs">"rank"</span>: { <span class="cs">"rrf"</span>: {} }   <span class="cm">// Reciprocal Rank Fusion = merge both rankings</span>
+}</div>
+
+    <div class="bx gr">
+      <strong>🏆 Why Hybrid Search Wins</strong>
+      BM25 is great at exact keyword matches ("warranty" → finds "warranty"). Cosine is great at semantic matches ("coverage duration" → finds "warranty period"). Combining both with Reciprocal Rank Fusion (RRF) gets you the best of both worlds — exact terms score high AND semantically similar results score high. Benchmark studies show RRF hybrid outperforms either alone by 10–30% on recall metrics.
+    </div>
+
+    <div class="svgb">
+      <svg viewBox="0 0 680 200" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="rra" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="#0043ce"/></marker></defs>
+        <text x="340" y="18" text-anchor="middle" fill="#002d9c" font-size="12" font-weight="bold">Hybrid Search: BM25 + kNN → RRF Fusion</text>
+        <!-- Query -->
+        <rect x="270" y="28" width="140" height="36" rx="3" fill="#002d9c"/>
+        <text x="340" y="50" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">User Query</text>
+        <!-- branches -->
+        <line x1="310" y1="64" x2="200" y2="98" stroke="#0043ce" stroke-width="1.8" marker-end="url(#rra)"/>
+        <line x1="370" y1="64" x2="480" y2="98" stroke="#0043ce" stroke-width="1.8" marker-end="url(#rra)"/>
+        <!-- BM25 box -->
+        <rect x="100" y="100" width="190" height="55" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="2"/>
+        <text x="195" y="122" text-anchor="middle" fill="#0043ce" font-size="11" font-weight="bold">BM25 Ranking</text>
+        <text x="195" y="138" text-anchor="middle" fill="#525252" font-size="9">Inverted index keyword match</text>
+        <text x="195" y="150" text-anchor="middle" fill="#0f62fe" font-size="9">Scores: [2.4, 1.8, 1.2 …]</text>
+        <!-- kNN box -->
+        <rect x="390" y="100" width="190" height="55" rx="3" fill="#f6f2ff" stroke="#6929c4" stroke-width="2"/>
+        <text x="485" y="122" text-anchor="middle" fill="#6929c4" font-size="11" font-weight="bold">kNN Cosine</text>
+        <text x="485" y="138" text-anchor="middle" fill="#525252" font-size="9">HNSW vector similarity</text>
+        <text x="485" y="150" text-anchor="middle" fill="#6929c4" font-size="9">Scores: [0.98, 0.95, 0.87 …]</text>
+        <!-- merge arrows -->
+        <line x1="200" y1="155" x2="290" y2="175" stroke="#0043ce" stroke-width="1.8" marker-end="url(#rra)"/>
+        <line x1="480" y1="155" x2="390" y2="175" stroke="#6929c4" stroke-width="1.8" marker-end="url(#rra)"/>
+        <!-- RRF box -->
+        <rect x="245" y="175" width="190" height="20" rx="3" fill="#42be65"/>
+        <text x="340" y="189" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">RRF Merged Results 🏆</text>
+      </svg>
+    </div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-bl" onclick="openM('m-rrf')">🔀 RRF Fusion Explained</button>
+      <button class="btn b-ol" onclick="openM('m-shards')">🗂️ Shards &amp; Scaling</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 7 — RAG PIPELINE
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 7 — Full RAG Ingestion &amp; Query Pipeline</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-rag">
+  <div class="ch hc-dk">
+    <div class="cn2">🤖</div>
+    <div><div class="ct">RAG — Retrieval Augmented Generation</div>
+    <div class="cs2">How ChatGPT-style apps use your documents to answer questions</div></div>
+  </div>
+  <div class="cb">
+    <p>RAG is how modern LLM apps (like enterprise chatbots, document Q&amp;A) work. Instead of baking all knowledge into the model, you <em>retrieve</em> relevant chunks at query time and inject them into the LLM's prompt. Two phases: <strong>Ingestion</strong> and <strong>Retrieval</strong>.</p>
+
+    <!-- INGESTION PIPELINE -->
+    <p style="font-weight:700;color:var(--b80);margin:.8rem 0 .5rem;">📥 Phase 1 — Ingestion (Done Once / On New Data)</p>
+    <div class="svgb">
+      <svg viewBox="0 0 700 170" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="pa" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="#0072c3"/></marker></defs>
+        <!-- Step boxes -->
+        <rect x="10" y="40" width="95" height="70" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="57" y="65" text-anchor="middle" fill="#002d9c" font-size="10" font-weight="bold">1. Raw Docs</text>
+        <text x="57" y="80" text-anchor="middle" fill="#525252" font-size="8">PDF, HTML,</text>
+        <text x="57" y="92" text-anchor="middle" fill="#525252" font-size="8">Markdown,</text>
+        <text x="57" y="104" text-anchor="middle" fill="#525252" font-size="8">Database rows</text>
+        <line x1="106" y1="75" x2="120" y2="75" stroke="#0072c3" stroke-width="1.8" marker-end="url(#pa)"/>
+        <rect x="122" y="40" width="95" height="70" rx="3" fill="#f6f2ff" stroke="#6929c4" stroke-width="1.5"/>
+        <text x="169" y="65" text-anchor="middle" fill="#6929c4" font-size="10" font-weight="bold">2. Chunking</text>
+        <text x="169" y="80" text-anchor="middle" fill="#525252" font-size="8">Split into</text>
+        <text x="169" y="92" text-anchor="middle" fill="#525252" font-size="8">~500 token</text>
+        <text x="169" y="104" text-anchor="middle" fill="#525252" font-size="8">overlapping</text>
+        <text x="169" y="116" text-anchor="middle" fill="#525252" font-size="8">segments</text>
+        <line x1="218" y1="75" x2="232" y2="75" stroke="#0072c3" stroke-width="1.8" marker-end="url(#pa)"/>
+        <rect x="234" y="40" width="110" height="70" rx="3" fill="#161616" stroke="#33b1ff" stroke-width="1.5"/>
+        <text x="289" y="65" text-anchor="middle" fill="#33b1ff" font-size="10" font-weight="bold">3. Embedding</text>
+        <text x="289" y="80" text-anchor="middle" fill="#6f6f6f" font-size="8">nomic-embed</text>
+        <text x="289" y="92" text-anchor="middle" fill="#6f6f6f" font-size="8">text-ada-002</text>
+        <text x="289" y="104" text-anchor="middle" fill="#33b1ff" font-size="8">chunk → 768-d</text>
+        <text x="289" y="116" text-anchor="middle" fill="#6f6f6f" font-size="8">float vector</text>
+        <line x1="345" y1="75" x2="359" y2="75" stroke="#0072c3" stroke-width="1.8" marker-end="url(#pa)"/>
+        <rect x="361" y="40" width="100" height="70" rx="3" fill="#fff2e8" stroke="#ff832b" stroke-width="1.5"/>
+        <text x="411" y="60" text-anchor="middle" fill="#b45309" font-size="10" font-weight="bold">4. Store</text>
+        <text x="411" y="74" text-anchor="middle" fill="#b45309" font-size="8">ChromaDB</text>
+        <text x="411" y="86" text-anchor="middle" fill="#878d96" font-size="8">or</text>
+        <text x="411" y="98" text-anchor="middle" fill="#0043ce" font-size="8">Elasticsearch</text>
+        <text x="411" y="110" text-anchor="middle" fill="#878d96" font-size="8">HNSW index</text>
+        <line x1="462" y1="75" x2="476" y2="75" stroke="#0072c3" stroke-width="1.8" marker-end="url(#pa)"/>
+        <rect x="478" y="40" width="105" height="70" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="530" y="60" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">5. Metadata</text>
+        <text x="530" y="74" text-anchor="middle" fill="#525252" font-size="8">source file</text>
+        <text x="530" y="86" text-anchor="middle" fill="#525252" font-size="8">page number</text>
+        <text x="530" y="98" text-anchor="middle" fill="#525252" font-size="8">section title</text>
+        <text x="530" y="110" text-anchor="middle" fill="#525252" font-size="8">date created</text>
+        <!-- chunking visual -->
+        <text x="350" y="148" text-anchor="middle" fill="#878d96" font-size="10">Each chunk gets its own vector → stored as a row in ChromaDB / document in Elasticsearch</text>
+      </svg>
+    </div>
+
+    <!-- RETRIEVAL PIPELINE -->
+    <p style="font-weight:700;color:var(--b80);margin:.9rem 0 .5rem;">🔎 Phase 2 — Retrieval (Done on Every User Query)</p>
+    <div class="svgb">
+      <svg viewBox="0 0 700 220" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="qa" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3z" fill="#6929c4"/></marker></defs>
+        <!-- User -->
+        <rect x="10" y="20" width="90" height="50" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
+        <text x="55" y="42" text-anchor="middle" fill="#002d9c" font-size="20">👤</text>
+        <text x="55" y="60" text-anchor="middle" fill="#002d9c" font-size="9" font-weight="bold">User Question</text>
+        <line x1="102" y1="45" x2="116" y2="45" stroke="#6929c4" stroke-width="1.8" marker-end="url(#qa)"/>
+        <!-- Embed query -->
+        <rect x="118" y="20" width="100" height="50" rx="3" fill="#161616" stroke="#33b1ff" stroke-width="1.5"/>
+        <text x="168" y="40" text-anchor="middle" fill="#33b1ff" font-size="9" font-weight="bold">Embed Query</text>
+        <text x="168" y="55" text-anchor="middle" fill="#6f6f6f" font-size="8">same model</text>
+        <text x="168" y="65" text-anchor="middle" fill="#6f6f6f" font-size="8">→ 768-d vector</text>
+        <line x1="220" y1="45" x2="234" y2="45" stroke="#6929c4" stroke-width="1.8" marker-end="url(#qa)"/>
+        <!-- Vector DB -->
+        <rect x="236" y="15" width="120" height="60" rx="3" fill="#fff2e8" stroke="#ff832b" stroke-width="2"/>
+        <text x="296" y="38" text-anchor="middle" fill="#b45309" font-size="9" font-weight="bold">HNSW Search</text>
+        <text x="296" y="52" text-anchor="middle" fill="#878d96" font-size="8">ChromaDB /</text>
+        <text x="296" y="63" text-anchor="middle" fill="#878d96" font-size="8">Elasticsearch kNN</text>
+        <text x="296" y="73" text-anchor="middle" fill="#198038" font-size="8">O(log n)</text>
+        <line x1="358" y1="45" x2="372" y2="45" stroke="#6929c4" stroke-width="1.8" marker-end="url(#qa)"/>
+        <!-- Top k chunks -->
+        <rect x="374" y="15" width="110" height="60" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="429" y="38" text-anchor="middle" fill="#198038" font-size="9" font-weight="bold">Top-k Chunks</text>
+        <text x="429" y="52" text-anchor="middle" fill="#525252" font-size="8">k=3 most similar</text>
+        <text x="429" y="63" text-anchor="middle" fill="#525252" font-size="8">passages returned</text>
+        <text x="429" y="73" text-anchor="middle" fill="#198038" font-size="8">with distances</text>
+        <line x1="486" y1="45" x2="500" y2="45" stroke="#6929c4" stroke-width="1.8" marker-end="url(#qa)"/>
+        <!-- Prompt build -->
+        <rect x="502" y="15" width="110" height="60" rx="3" fill="#f6f2ff" stroke="#6929c4" stroke-width="2"/>
+        <text x="557" y="38" text-anchor="middle" fill="#6929c4" font-size="9" font-weight="bold">Build Prompt</text>
+        <text x="557" y="52" text-anchor="middle" fill="#525252" font-size="8">System + chunks</text>
+        <text x="557" y="63" text-anchor="middle" fill="#525252" font-size="8">+ user question</text>
+        <text x="557" y="73" text-anchor="middle" fill="#525252" font-size="8">→ LLM context</text>
+        <!-- LLM -->
+        <rect x="240" y="110" width="220" height="55" rx="3" fill="#161616" stroke="#a56eff" stroke-width="2"/>
+        <text x="350" y="132" text-anchor="middle" fill="#a56eff" font-size="11" font-weight="bold">LLM (GPT-4 / Claude / Llama)</text>
+        <text x="350" y="148" text-anchor="middle" fill="#6f6f6f" font-size="9">Reads context chunks + question</text>
+        <text x="350" y="160" text-anchor="middle" fill="#6f6f6f" font-size="9">Generates grounded answer</text>
+        <!-- down arrows to LLM -->
+        <line x1="557" y1="77" x2="420" y2="110" stroke="#6929c4" stroke-width="1.8" stroke-dasharray="4,2" marker-end="url(#qa)"/>
+        <!-- Answer -->
+        <rect x="240" y="185" width="220" height="30" rx="3" fill="#0043ce"/>
+        <text x="350" y="204" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">✅ Grounded Answer</text>
+        <line x1="350" y1="165" x2="350" y2="184" stroke="#a56eff" stroke-width="1.8" marker-end="url(#qa)"/>
+        <!-- annotations -->
+        <text x="350" y="218" text-anchor="middle" fill="#878d96" font-size="9">No hallucination — LLM only answers from retrieved chunks</text>
+      </svg>
+    </div>
+
+    <!-- FULL CODE EXAMPLE -->
+    <div class="code"><span class="cm">── Full RAG Query with LangChain + ChromaDB + OpenAI ───────</span>
+<span class="ck">from</span> langchain.vectorstores <span class="ck">import</span> Chroma
+<span class="ck">from</span> langchain.embeddings <span class="ck">import</span> OpenAIEmbeddings
+<span class="ck">from</span> langchain.chat_models <span class="ck">import</span> ChatOpenAI
+<span class="ck">from</span> langchain.chains <span class="ck">import</span> RetrievalQA
+
+<span class="cm"># 1. Load existing ChromaDB vector store</span>
+vectorstore = Chroma(
+    persist_directory=<span class="cs">"./chroma_db"</span>,
+    embedding_function=OpenAIEmbeddings()
+)
+
+<span class="cm"># 2. Create retriever — returns top 3 chunks by cosine similarity</span>
+retriever = vectorstore.as_retriever(
+    search_type=<span class="cs">"similarity"</span>,
+    search_kwargs={<span class="cs">"k"</span>: <span class="cn">3</span>}
+)
+
+<span class="cm"># 3. Build QA chain</span>
+qa_chain = RetrievalQA.from_chain_type(
+    llm=ChatOpenAI(model=<span class="cs">"gpt-4"</span>, temperature=<span class="cn">0</span>),
+    retriever=retriever,
+    return_source_documents=<span class="ck">True</span>
+)
+
+<span class="cm"># 4. Ask question → retrieval → grounded answer</span>
+result = qa_chain({<span class="cs">"query"</span>: <span class="cs">"How long is the warranty period?"</span>})
+<span class="cm"># LLM reads chunk: "The warranty period covers 12 months..."</span>
+<span class="cm"># Answers: "The warranty period is 12 months from the purchase date."</span></div>
+
+    <div class="bx gr">
+      <strong>🎯 Why RAG Beats Fine-Tuning for Most Use Cases</strong>
+      Fine-tuning bakes knowledge into model weights — expensive, slow, hard to update. RAG externalises knowledge into a retrieval store — cheap, instant updates, fully auditable (you can see exactly which chunks were used). The LLM becomes a reasoning engine; the vector DB becomes its long-term memory.
+    </div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-pu" onclick="openM('m-prompt')">📝 Prompt Template Patterns</button>
+      <button class="btn b-te" onclick="openM('m-rerank')">🔝 Reranking Strategies</button>
+      <button class="btn b-ol" onclick="openM('m-hyper')">⚙️ Chunk Size &amp; Overlap</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+  SECTION 8 — ALTERNATIVES
+══════════════════════════════════════════ -->
+<div class="sec-label"><div class="sl-line"></div><div class="sl-text">Section 8 — Alternatives &amp; Decision Guide</div><div class="sl-line"></div></div>
+
+<div class="card reveal" id="s-alt">
+  <div class="ch hc-gy">
+    <div class="cn2">⚖️</div>
+    <div><div class="ct">Which Tool Should You Use?</div>
+    <div class="cs2">Vector DBs, hybrid engines, full-text search — decision guide</div></div>
+  </div>
+  <div class="cb">
+    <table>
+      <tr><th>Tool</th><th>Type</th><th>Search Method</th><th>Best For</th><th>Weakness</th></tr>
+      <tr><td><strong>Elasticsearch 8+</strong> ⭐</td><td><span class="tag bl">hybrid</span></td><td>BM25 + HNSW cosine</td><td>Production RAG + keyword + analytics</td><td>Complex ops, RAM heavy</td></tr>
+      <tr><td><strong>ChromaDB</strong></td><td><span class="tag or">vector</span></td><td>HNSW cosine/L2/IP</td><td>Local prototyping, Python RAG</td><td>Not production-grade at huge scale</td></tr>
+      <tr><td><strong>Pinecone</strong></td><td><span class="tag or">vector</span></td><td>HNSW / ANN</td><td>Managed cloud vector search</td><td>Cost, vendor lock-in</td></tr>
+      <tr><td><strong>Weaviate</strong></td><td><span class="tag or">vector</span></td><td>HNSW + BM25</td><td>GraphQL + vector, multi-modal</td><td>Steeper learning curve</td></tr>
+      <tr><td><strong>Qdrant</strong></td><td><span class="tag or">vector</span></td><td>HNSW cosine</td><td>High performance, Rust-based</td><td>Smaller ecosystem</td></tr>
+      <tr><td><strong>pgvector</strong></td><td><span class="tag gr">sql</span></td><td>Exact cosine / IVFFlat</td><td>Already on PostgreSQL</td><td>Slower than dedicated DBs at scale</td></tr>
+      <tr><td><strong>Redis (VSS)</strong></td><td><span class="tag te">cache</span></td><td>HNSW / FLAT</td><td>Low-latency, in-memory</td><td>Data size limited by RAM</td></tr>
+      <tr><td><strong>Milvus</strong></td><td><span class="tag or">vector</span></td><td>HNSW/IVF/ANNOY</td><td>Billion-scale vectors</td><td>Heavy infrastructure</td></tr>
+      <tr><td><strong>OpenSearch</strong></td><td><span class="tag bl">hybrid</span></td><td>BM25 + k-NN</td><td>AWS native, ES alternative</td><td>Slightly behind ES features</td></tr>
+    </table>
+
+    <!-- DECISION TREE SVG -->
+    <div class="svgb" style="margin-top:.9rem;">
+      <svg viewBox="0 0 680 260" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="da" markerWidth="5" markerHeight="5" refX="3" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5z" fill="#0043ce"/></marker></defs>
+        <text x="340" y="16" text-anchor="middle" fill="#002d9c" font-size="12" font-weight="bold">Vector DB Decision Tree</text>
+        <rect x="255" y="25" width="170" height="34" rx="3" fill="#002d9c"/>
+        <text x="340" y="46" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">New RAG Project?</text>
+        <!-- branch 1: prototype -->
+        <line x1="290" y1="59" x2="175" y2="90" stroke="#0043ce" stroke-width="1.5" marker-end="url(#da)"/>
+        <text x="215" y="82" fill="#0043ce" font-size="9">Prototype</text>
+        <rect x="80" y="92" width="185" height="32" rx="3" fill="#fff2e8" stroke="#ff832b" stroke-width="1.5"/>
+        <text x="172" y="112" text-anchor="middle" fill="#b45309" font-size="10" font-weight="bold">ChromaDB  🟠</text>
+        <!-- branch 2: production -->
+        <line x1="390" y1="59" x2="505" y2="90" stroke="#0043ce" stroke-width="1.5" marker-end="url(#da)"/>
+        <text x="466" y="82" fill="#0043ce" font-size="9">Production</text>
+        <rect x="410" y="92" width="185" height="32" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="2"/>
+        <text x="502" y="112" text-anchor="middle" fill="#0043ce" font-size="10" font-weight="bold">Need keyword too?</text>
+        <!-- sub-branches production -->
+        <line x1="460" y1="124" x2="400" y2="155" stroke="#0043ce" stroke-width="1.3" marker-end="url(#da)"/>
+        <text x="408" y="148" fill="#0043ce" font-size="9">Yes (hybrid)</text>
+        <rect x="290" y="158" width="130" height="30" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="355" y="178" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">Elasticsearch ⚡</text>
+        <line x1="544" y1="124" x2="564" y2="155" stroke="#0043ce" stroke-width="1.3" marker-end="url(#da)"/>
+        <text x="562" y="148" fill="#0043ce" font-size="9">Pure vector</text>
+        <rect x="510" y="158" width="130" height="30" rx="3" fill="#f6f2ff" stroke="#6929c4" stroke-width="1.5"/>
+        <text x="575" y="178" text-anchor="middle" fill="#6929c4" font-size="10" font-weight="bold">Pinecone / Qdrant</text>
+        <!-- on postgres -->
+        <line x1="172" y1="124" x2="172" y2="155" stroke="#0043ce" stroke-width="1.3" marker-end="url(#da)"/>
+        <text x="172" y="149" text-anchor="middle" fill="#0043ce" font-size="9">Already on Postgres?</text>
+        <rect x="80" y="158" width="185" height="30" rx="3" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
+        <text x="172" y="178" text-anchor="middle" fill="#198038" font-size="10" font-weight="bold">pgvector  🐘</text>
+        <!-- billion scale -->
+        <text x="340" y="220" text-anchor="middle" fill="#878d96" font-size="10">Billion+ vectors at tight RAM budget?</text>
+        <rect x="240" y="228" width="200" height="26" rx="3" fill="#161616" stroke="#33b1ff"/>
+        <text x="340" y="245" text-anchor="middle" fill="#33b1ff" font-size="10" font-weight="bold">Milvus / Weaviate</text>
+      </svg>
+    </div>
+
+    <div style="margin-top:.8rem;">
+      <button class="btn b-bl" onclick="openM('m-elk')">📊 ELK Stack</button>
+      <button class="btn b-pu" onclick="openM('m-future')">🚀 Future: Sparse + Dense</button>
+      <button class="btn b-te" onclick="openM('m-benchmarks')">📈 Benchmarks &amp; ANN-Benchmarks</button>
+    </div>
+  </div>
+</div>
+
+<!-- REFERENCES -->
+<div class="card reveal">
+  <div class="ch" style="background:var(--b10);border-bottom:2px solid var(--b60);">
+    <div class="cn2" style="background:var(--b60);">📚</div>
+    <div><div class="ct" style="color:var(--b80);">References &amp; Further Reading</div>
+    <div class="cs2" style="color:var(--b60);">Papers, docs, courses, and free tools</div></div>
+  </div>
+  <div class="cb">
+    <div class="g3">
+      <div>
+        <p style="font-weight:700;color:var(--b80);font-size:.85rem;margin-bottom:.5rem;">📐 Math &amp; Algorithms</p>
+        <ul style="list-style:none;font-size:.83rem;line-height:2;">
+          <li><a href="https://en.wikipedia.org/wiki/Cosine_similarity" target="_blank" style="color:var(--b60);">Cosine Similarity (Wikipedia)</a></li>
+          <li><a href="https://en.wikipedia.org/wiki/Hierarchical_navigable_small_world" target="_blank" style="color:var(--b60);">HNSW (Wikipedia)</a></li>
+          <li><a href="https://arxiv.org/abs/1603.09320" target="_blank" style="color:var(--b60);">HNSW Original Paper (arXiv)</a></li>
+          <li><a href="https://en.wikipedia.org/wiki/Okapi_BM25" target="_blank" style="color:var(--b60);">BM25 (Wikipedia)</a></li>
+          <li><a href="https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)" target="_blank" style="color:var(--b60);">Transformers (Wikipedia)</a></li>
+        </ul>
+      </div>
+      <div>
+        <p style="font-weight:700;color:var(--b80);font-size:.85rem;margin-bottom:.5rem;">🔧 Tools &amp; Docs</p>
+        <ul style="list-style:none;font-size:.83rem;line-height:2;">
+          <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/knn-search.html" target="_blank" style="color:var(--b60);">Elasticsearch kNN Docs</a></li>
+          <li><a href="https://docs.trychroma.com" target="_blank" style="color:var(--b60);">ChromaDB Docs</a></li>
+          <li><a href="https://sbert.net" target="_blank" style="color:var(--b60);">Sentence-BERT / SBERT</a></li>
+          <li><a href="https://huggingface.co/nomic-ai/nomic-embed-text-v1" target="_blank" style="color:var(--b60);">nomic-embed-text (HuggingFace)</a></li>
+          <li><a href="https://ann-benchmarks.com" target="_blank" style="color:var(--b60);">ANN-Benchmarks.com</a></li>
+        </ul>
+      </div>
+      <div>
+        <p style="font-weight:700;color:var(--b80);font-size:.85rem;margin-bottom:.5rem;">🤖 RAG &amp; LLMs</p>
+        <ul style="list-style:none;font-size:.83rem;line-height:2;">
+          <li><a href="https://arxiv.org/abs/2005.11401" target="_blank" style="color:var(--b60);">RAG Original Paper (arXiv)</a></li>
+          <li><a href="https://python.langchain.com/docs/use_cases/question_answering/" target="_blank" style="color:var(--b60);">LangChain RAG Guide</a></li>
+          <li><a href="https://docs.llamaindex.ai" target="_blank" style="color:var(--b60);">LlamaIndex Docs</a></li>
+          <li><a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" style="color:var(--b60);">OpenAI Embeddings Guide</a></li>
+          <li><a href="https://cloud.elastic.co" target="_blank" style="color:var(--b60);">Elastic Cloud Free Trial</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- ════════════════════════════════════════════════
+  ALL MODALS
+════════════════════════════════════════════════ -->
+
+<!-- RAG What is -->
+<div class="ov" id="m-rag"><div class="modal">
+  <div class="mh"><h2>🤖 What is RAG?</h2><button class="mx" onclick="closeM('m-rag')">✕</button></div>
+  <div class="mb">
+    <p><strong>Retrieval Augmented Generation (RAG)</strong> is an architecture pattern that gives LLMs access to external knowledge without retraining.</p>
+    <p>The problem RAG solves: LLMs have a fixed knowledge cutoff date and hallucinate when asked about specific documents they've never seen. RAG fixes both by:</p>
+    <ol>
+      <li>Storing your documents as vector embeddings in a retrieval store</li>
+      <li>At query time, finding the most relevant chunks using cosine similarity</li>
+      <li>Injecting those chunks into the LLM's prompt as context</li>
+      <li>The LLM answers based only on that context — no hallucination!</li>
+    </ol>
+    <p style="margin-top:.7rem;"><a href="https://arxiv.org/abs/2005.11401" target="_blank">Original RAG Paper (Facebook AI, 2020) →</a></p>
+  </div>
+</div></div>
+
+<!-- Why these tools -->
+<div class="ov" id="m-why"><div class="modal">
+  <div class="mh"><h2>🎯 Why These Tools?</h2><button class="mx" onclick="closeM('m-why')">✕</button></div>
+  <div class="mb">
+    <p>Traditional search fails LLM applications in three ways:</p>
+    <ul>
+      <li>❌ Keyword search misses synonyms ("warranty" ≠ "coverage")</li>
+      <li>❌ SQL can't rank by semantic meaning</li>
+      <li>❌ No way to find conceptually similar passages</li>
+    </ul>
+    <p style="margin-top:.7rem;">Vector search solves all three by representing meaning as geometry. Cosine similarity measures if two texts "point in the same direction" in embedding space. HNSW makes this fast at scale. Elasticsearch combines this with traditional keyword search for best-of-both-worlds retrieval.</p>
+  </div>
+</div></div>
+
+<!-- Cosine Deep Dive -->
+<div class="ov" id="m-cosdeep"><div class="modal">
+  <div class="mh"><h2>📐 Cosine Similarity — Deep Dive</h2><button class="mx" onclick="closeM('m-cosdeep')">✕</button></div>
+  <div class="mb">
+    <p><strong>Why cosine instead of Euclidean distance?</strong></p>
+    <p>Euclidean distance (straight-line distance) is affected by vector magnitude. A short summary and a long essay about the same topic would be far apart in Euclidean space — even though they mean the same thing. Cosine only looks at angle, ignoring length.</p>
+    <p><strong>When is cosine NOT the right choice?</strong></p>
+    <ul>
+      <li>When magnitude matters (e.g. recommendation systems where click count matters)</li>
+      <li>Inner product / dot product is sometimes preferred when vectors are already normalised</li>
+      <li>L2 (Euclidean) is used by some models trained with metric learning</li>
+    </ul>
+    <p><strong>Dot product vs cosine:</strong> If vectors are L2-normalised (‖v‖=1), cosine = dot product. Elasticsearch's <code>"similarity": "dot_product"</code> is faster but requires normalised inputs.</p>
+    <p><a href="https://en.wikipedia.org/wiki/Cosine_similarity" target="_blank">Cosine Similarity — Wikipedia →</a></p>
+  </div>
+</div></div>
+
+<!-- ChromaDB Distance -->
+<div class="ov" id="m-chromadist"><div class="modal">
+  <div class="mh"><h2>🟠 ChromaDB Distance Convention</h2><button class="mx" onclick="closeM('m-chromadist')">✕</button></div>
+  <div class="mb">
+    <p>ChromaDB uses <strong>distance</strong> (not similarity) to rank results. For cosine space:</p>
+    <div style="background:#161616;color:var(--cy40);padding:.8rem;font-family:'IBM Plex Mono',monospace;font-size:.85rem;border-radius:3px;margin:.6rem 0;">
+distance = 1 − cosine_similarity(query, chunk)</div>
+    <p>So the mapping is:</p>
+    <ul>
+      <li>distance = 0.00 → cosine = 1.00 → identical</li>
+      <li>distance = 0.10 → cosine = 0.90 → very similar</li>
+      <li>distance = 0.50 → cosine = 0.50 → somewhat related</li>
+      <li>distance = 1.00 → cosine = 0.00 → completely unrelated</li>
+    </ul>
+    <p>ChromaDB also supports L2 (Euclidean) and IP (inner product) distance. Set at collection creation time with <code>metadata={"hnsw:space": "cosine"}</code>.</p>
+    <p><a href="https://docs.trychroma.com/usage-guide#changing-the-distance-function" target="_blank">ChromaDB Distance Docs →</a></p>
+  </div>
+</div></div>
+
+<!-- Self-Attention -->
+<div class="ov" id="m-attention"><div class="modal">
+  <div class="mh"><h2>🔬 Self-Attention Explained</h2><button class="mx" onclick="closeM('m-attention')">✕</button></div>
+  <div class="mb">
+    <p>The magic of transformers is <strong>self-attention</strong>: each token looks at every other token and asks "how relevant are you to understanding me?"</p>
+    <p>For the sentence "The bank by the river was steep":</p>
+    <ul>
+      <li>The word "bank" attends strongly to "river" → understands it means river bank, not financial bank</li>
+      <li>This context flows through 12–24 layers, building richer understanding at each step</li>
+    </ul>
+    <p>The final embedding captures this full contextual understanding as a single 768-dimensional vector. Two sentences that appear in similar contexts throughout the training corpus end up with similar embeddings — regardless of the exact words used.</p>
+    <p><a href="https://arxiv.org/abs/1706.03762" target="_blank">"Attention Is All You Need" (Original Transformer Paper) →</a></p>
+  </div>
+</div></div>
+
+<!-- Chunking -->
+<div class="ov" id="m-chunking"><div class="modal">
+  <div class="mh"><h2>✂️ Chunking Strategies</h2><button class="mx" onclick="closeM('m-chunking')">✕</button></div>
+  <div class="mb">
+    <p>How you split documents before embedding dramatically affects RAG quality:</p>
+    <ul>
+      <li><strong>Fixed-size chunks</strong> (e.g. 512 tokens) — simplest, but may cut sentences mid-thought</li>
+      <li><strong>Sentence-level</strong> — clean boundaries, but variable length</li>
+      <li><strong>Recursive character splitting</strong> — LangChain default; tries paragraphs → sentences → words</li>
+      <li><strong>Semantic chunking</strong> — embed every sentence, split where cosine similarity drops sharply</li>
+      <li><strong>Document-structure aware</strong> — split on headings, sections (best for structured docs)</li>
+    </ul>
+    <p><strong>Overlap is critical:</strong> Always use 10–20% overlap between chunks to avoid splitting answers across chunk boundaries.</p>
+    <p>Rule of thumb: chunk size should be 3–5× smaller than your embedding model's context window.</p>
+  </div>
+</div></div>
+
+<!-- HNSW Params -->
+<div class="ov" id="m-hnswparams"><div class="modal">
+  <div class="mh"><h2>⚙️ HNSW Parameter Tuning</h2><button class="mx" onclick="closeM('m-hnswparams')">✕</button></div>
+  <div class="mb">
+    <p>Three main parameters control HNSW performance:</p>
+    <ul>
+      <li><strong>M</strong> (default 16) — max bidirectional connections per node. Higher M = better recall + more RAM. 16 is good for most cases; 32–64 for high-accuracy requirements.</li>
+      <li><strong>ef_construction</strong> (default 100) — search width during index build. Higher = slower build, better index quality. Increase to 200–400 for important indexes.</li>
+      <li><strong>ef</strong> / <strong>num_candidates</strong> (default varies) — search width at query time. Increasing this trades speed for recall. Elasticsearch calls this <code>num_candidates</code>.</li>
+    </ul>
+    <div style="background:#161616;color:var(--cy40);padding:.8rem;font-family:'IBM Plex Mono',monospace;font-size:.8rem;border-radius:3px;margin:.6rem 0;">
+<span style="color:#6f6f6f">// Elasticsearch mapping example</span>
+"index_options": {
+  "type": "hnsw",
+  "m": 16,
+  "ef_construction": 100
+}</div>
+    <p><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/dense-vector.html" target="_blank">Elasticsearch dense_vector docs →</a></p>
+  </div>
+</div></div>
+
+<!-- Approx vs Exact -->
+<div class="ov" id="m-approx"><div class="modal">
+  <div class="mh"><h2>🎯 Approximate vs Exact Search</h2><button class="mx" onclick="closeM('m-approx')">✕</button></div>
+  <div class="mb">
+    <p>HNSW is an <strong>Approximate Nearest Neighbor (ANN)</strong> algorithm — it finds the <em>likely</em> nearest neighbors, not guaranteed exact ones. Typical recall@10 is 95–99% with good parameters.</p>
+    <p>Is this a problem for RAG? <strong>Almost never</strong>. You're retrieving 3–10 chunks, and the difference between rank #1 and rank #2 is usually negligible for LLM quality.</p>
+    <p>When exact search IS needed:</p>
+    <ul>
+      <li>Security/fraud detection where missing a result is costly</li>
+      <li>Very small datasets (&lt;10k vectors) — just use brute force</li>
+    </ul>
+    <p>Elasticsearch supports exact kNN search with <code>"exact": true</code> — it disables HNSW and scans all vectors. Only practical for &lt;~100k vectors.</p>
+  </div>
+</div></div>
+
+<!-- BM25 Deep -->
+<div class="ov" id="m-bm25"><div class="modal">
+  <div class="mh"><h2>📊 BM25 — Why It Beats TF-IDF</h2><button class="mx" onclick="closeM('m-bm25')">✕</button></div>
+  <div class="mb">
+    <p>BM25 (Best Match 25) improves on TF-IDF in two key ways:</p>
+    <ul>
+      <li><strong>Term saturation</strong>: A word appearing 50× in a document isn't 50× more relevant than one appearing once. BM25 flattens this curve via the k₁ parameter — the score saturates. TF-IDF grows linearly.</li>
+      <li><strong>Length normalisation</strong>: A 10-word document mentioning "cat" twice is probably more about cats than a 1000-word document mentioning it twice. The b parameter (0.75 default) normalises by document length relative to average length.</li>
+    </ul>
+    <p>You can tune both in Elasticsearch's similarity settings. Most use-cases are fine with defaults.</p>
+    <p><a href="https://en.wikipedia.org/wiki/Okapi_BM25" target="_blank">BM25 Wikipedia →</a></p>
+  </div>
+</div></div>
+
+<!-- Analyzer -->
+<div class="ov" id="m-analyzer"><div class="modal">
+  <div class="mh"><h2>✂️ Text Analyzers in Elasticsearch</h2><button class="mx" onclick="closeM('m-analyzer')">✕</button></div>
+  <div class="mb">
+    <p>An analyzer is the pipeline that converts raw text into index tokens:</p>
+    <ul>
+      <li><strong>Character filters</strong> — strip HTML, map characters (ﬁ → fi)</li>
+      <li><strong>Tokenizer</strong> — split on whitespace/punctuation</li>
+      <li><strong>Token filters</strong> — lowercase, remove stop words, stem, synonyms</li>
+    </ul>
+    <p>Built-in analyzers: <code>standard</code>, <code>english</code>, <code>simple</code>, <code>whitespace</code>, <code>keyword</code>. You can build custom ones with any combination. The same analyzer must run at both index time and query time.</p>
+  </div>
+</div></div>
+
+<!-- Boost -->
+<div class="ov" id="m-boost"><div class="modal">
+  <div class="mh"><h2>⬆️ Field Boosting in Elasticsearch</h2><button class="mx" onclick="closeM('m-boost')">✕</button></div>
+  <div class="mb">
+    <p>A match in the document title is more relevant than one buried in the body. Boost lets you multiply scores by field:</p>
+    <div style="background:#161616;color:var(--cy40);padding:.8rem;font-family:'IBM Plex Mono',monospace;font-size:.8rem;border-radius:3px;margin:.6rem 0;">
+"multi_match": {
+  "query": "elasticsearch",
+  "fields": ["title^3", "body^1"]
+}</div>
+    <p><code>^3</code> means the title match score is multiplied by 3. You can also use <code>function_score</code> for boosting by recency, popularity, or geographic distance.</p>
+  </div>
+</div></div>
+
+<!-- ChromaDB vs ES -->
+<div class="ov" id="m-chromavses"><div class="modal">
+  <div class="mh"><h2>🆚 ChromaDB vs Elasticsearch</h2><button class="mx" onclick="closeM('m-chromavses')">✕</button></div>
+  <div class="mb">
+    <table>
+      <tr><th>Feature</th><th>ChromaDB</th><th>Elasticsearch</th></tr>
+      <tr><td>Setup</td><td>pip install, 3 lines of code</td><td>Docker / cloud, cluster config</td></tr>
+      <tr><td>Keyword search</td><td>❌ No</td><td>✅ BM25</td></tr>
+      <tr><td>Hybrid search</td><td>❌ No</td><td>✅ BM25 + kNN + RRF</td></tr>
+      <tr><td>Scale</td><td>Millions (single node)</td><td>Billions (distributed)</td></tr>
+      <tr><td>Metadata filtering</td><td>✅ Basic</td><td>✅ Full query DSL</td></tr>
+      <tr><td>Distance score</td><td>1 − cosine (lower = better)</td><td>Cosine similarity (higher = better)</td></tr>
+      <tr><td>Best for</td><td>Prototyping, local RAG</td><td>Production apps, enterprise</td></tr>
+    </table>
+  </div>
+</div></div>
+
+<!-- Persistence -->
+<div class="ov" id="m-persist"><div class="modal">
+  <div class="mh"><h2>💾 ChromaDB Persistence &amp; Scaling</h2><button class="mx" onclick="closeM('m-persist')">✕</button></div>
+  <div class="mb">
+    <p>ChromaDB has three modes:</p>
+    <ul>
+      <li><strong>In-memory</strong> — <code>chromadb.Client()</code> — data lost when script ends. Good for tests.</li>
+      <li><strong>Persistent local</strong> — <code>chromadb.PersistentClient(path="./db")</code> — saves to disk (SQLite + HNSW files).</li>
+      <li><strong>Chroma Cloud</strong> — managed, scalable, team collaboration. New in 2024.</li>
+    </ul>
+    <p>For production with 10M+ vectors or multi-node setups, migrate to Elasticsearch, Qdrant, or Pinecone. ChromaDB is primarily a developer-experience-first tool for prototyping.</p>
+    <p><a href="https://docs.trychroma.com/deployment" target="_blank">ChromaDB Deployment Docs →</a></p>
+  </div>
+</div></div>
+
+<!-- RRF -->
+<div class="ov" id="m-rrf"><div class="modal">
+  <div class="mh"><h2>🔀 Reciprocal Rank Fusion (RRF)</h2><button class="mx" onclick="closeM('m-rrf')">✕</button></div>
+  <div class="mb">
+    <p>RRF is a technique for merging two ranked lists (e.g. BM25 results + kNN results) into a single ranking. Formula:</p>
+    <div style="background:#161616;color:var(--cy40);padding:.8rem;font-family:'IBM Plex Mono',monospace;font-size:.85rem;border-radius:3px;margin:.6rem 0;">
+RRF_score(doc) = Σ  1 / (rank_i + k)
+
+  rank_i = position of this doc in list i
+  k      = 60 (constant, prevents top-rank domination)
+  Σ      = sum over all ranking lists</div>
+    <p>A document ranked #1 in both BM25 and kNN gets a very high RRF score. A document ranked #1 in only kNN but #50 in BM25 gets a moderate score. This naturally promotes documents that are good in both dimensions.</p>
+    <p><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/rrf.html" target="_blank">Elasticsearch RRF Docs →</a></p>
+  </div>
+</div></div>
+
+<!-- Shards -->
+<div class="ov" id="m-shards"><div class="modal">
+  <div class="mh"><h2>🗂️ Elasticsearch Shards &amp; Scaling</h2><button class="mx" onclick="closeM('m-shards')">✕</button></div>
+  <div class="mb">
+    <p>Elasticsearch splits an index into <strong>shards</strong> — each shard is a self-contained Lucene index with its own HNSW graph and inverted index. Shards are distributed across nodes.</p>
+    <ul>
+      <li><strong>Primary shards</strong> — the main data. Set at index creation (can't change without reindexing). Default: 1.</li>
+      <li><strong>Replica shards</strong> — copies for fault tolerance and read scaling. Default: 1.</li>
+    </ul>
+    <p>For vector search: shard count = key parallelism lever. More shards = more parallel HNSW searches = lower latency. But too many small shards = overhead.</p>
+    <p>Rule of thumb for vector indexes: 100k–500k vectors per shard is a good starting point.</p>
+  </div>
+</div></div>
+
+<!-- Prompt patterns -->
+<div class="ov" id="m-prompt"><div class="modal">
+  <div class="mh"><h2>📝 RAG Prompt Template Patterns</h2><button class="mx" onclick="closeM('m-prompt')">✕</button></div>
+  <div class="mb">
+    <p>The prompt template is how you inject retrieved chunks into the LLM's context. Best practices:</p>
+    <div style="background:#161616;color:var(--cy40);padding:.9rem;font-family:'IBM Plex Mono',monospace;font-size:.78rem;border-radius:3px;margin:.6rem 0;line-height:1.7;">
+System: You are a helpful assistant. Answer ONLY based on
+the context provided. If the answer is not in the context,
+say "I don't have information about that."
+
+Context:
+[CHUNK 1] {chunk_1_text}
+Source: {chunk_1_source}, page {chunk_1_page}
+
+[CHUNK 2] {chunk_2_text}
+Source: {chunk_2_source}
+
+Question: {user_question}
+Answer:</div>
+    <p>Key principles: explicitly instruct to use only context; include source attribution; keep chunks short enough that the whole prompt fits in the LLM's context window (usually &lt;4k tokens total).</p>
+  </div>
+</div></div>
+
+<!-- Reranking -->
+<div class="ov" id="m-rerank"><div class="modal">
+  <div class="mh"><h2>🔝 Reranking Strategies</h2><button class="mx" onclick="closeM('m-rerank')">✕</button></div>
+  <div class="mb">
+    <p>After initial retrieval (fast HNSW cosine), you can run a second, slower, more accurate reranking step:</p>
+    <ul>
+      <li><strong>Cross-encoder reranking</strong> — takes (query, chunk) pair and scores relevance. Much more accurate than bi-encoder cosine but ~100× slower. Only run on top-20 results.</li>
+      <li><strong>Cohere Rerank API</strong> — managed cross-encoder, 1 API call</li>
+      <li><strong>ColBERT</strong> — token-level late interaction, good accuracy/speed tradeoff</li>
+      <li><strong>LLM as reranker</strong> — ask GPT to rank chunks by relevance. Expensive but powerful.</li>
+    </ul>
+    <p>Typical pipeline: HNSW retrieves top 50 → reranker rescores → take top 3 for LLM context.</p>
+  </div>
+</div></div>
+
+<!-- Chunk size -->
+<div class="ov" id="m-hyper"><div class="modal">
+  <div class="mh"><h2>⚙️ Chunk Size &amp; Overlap Tuning</h2><button class="mx" onclick="closeM('m-hyper')">✕</button></div>
+  <div class="mb">
+    <p><strong>Chunk size</strong> is the most impactful RAG hyperparameter. Tradeoffs:</p>
+    <ul>
+      <li><strong>Small chunks (128–256 tokens)</strong> — precise retrieval, but may lose context needed to answer</li>
+      <li><strong>Medium chunks (512 tokens)</strong> — good default for most documents</li>
+      <li><strong>Large chunks (1024+ tokens)</strong> — more context but less precise; embedding quality degrades for very long inputs</li>
+    </ul>
+    <p><strong>Overlap</strong> (typically 10–20% of chunk size) prevents answers being split across chunk boundaries. A 512-token chunk with 50-token overlap means each chunk shares 50 tokens with its neighbor.</p>
+    <p>Advanced: use <strong>parent-child chunking</strong> — embed small child chunks for precise retrieval, but feed the parent chunk (more context) to the LLM.</p>
+  </div>
+</div></div>
+
+<!-- ELK -->
+<div class="ov" id="m-elk"><div class="modal">
+  <div class="mh"><h2>📊 The ELK / Elastic Stack</h2><button class="mx" onclick="closeM('m-elk')">✕</button></div>
+  <div class="mb">
+    <p>ELK = <strong>Elasticsearch + Logstash + Kibana</strong>:</p>
+    <ul>
+      <li>🔷 <strong>Elasticsearch</strong> — stores, indexes, searches</li>
+      <li>🔷 <strong>Logstash</strong> — ETL pipeline: collect, parse, enrich, ship data into ES</li>
+      <li>🔷 <strong>Kibana</strong> — dashboards, visualisations, ML anomaly detection on top of ES</li>
+      <li>🔷 <strong>Beats</strong> — lightweight shippers (Filebeat for logs, Metricbeat for metrics)</li>
+    </ul>
+    <p>For RAG/LLM use: Elasticsearch is combined with the Elastic Inference API (ELSER model) — a sparse retrieval model trained by Elastic that expands queries semantically without needing external embeddings. Very powerful for enterprise search.</p>
+    <p><a href="https://www.elastic.co/what-is/elk-stack" target="_blank">ELK Stack Overview →</a></p>
+  </div>
+</div></div>
+
+<!-- Future -->
+<div class="ov" id="m-future"><div class="modal">
+  <div class="mh"><h2>🚀 Future: Sparse + Dense Hybrid</h2><button class="mx" onclick="closeM('m-future')">✕</button></div>
+  <div class="mb">
+    <p>The frontier of retrieval combines three signals:</p>
+    <ul>
+      <li><strong>Dense vectors</strong> (cosine + HNSW) — semantic meaning</li>
+      <li><strong>Sparse vectors</strong> (SPLADE, BM42) — learned keyword expansion, better than BM25 but still explainable</li>
+      <li><strong>Late interaction</strong> (ColBERT) — token-level matching for maximum accuracy</li>
+    </ul>
+    <p>Elasticsearch's <strong>ELSER</strong> (Elastic Learned Sparse Encoder) is a production-ready sparse model. Combined with kNN cosine in a single hybrid query, it represents the current state-of-the-art for enterprise retrieval.</p>
+    <p><a href="https://www.elastic.co/guide/en/machine-learning/current/ml-nlp-elser.html" target="_blank">ELSER Model Docs →</a></p>
+  </div>
+</div></div>
+
+<!-- Benchmarks -->
+<div class="ov" id="m-benchmarks"><div class="modal">
+  <div class="mh"><h2>📈 ANN-Benchmarks &amp; BEIR</h2><button class="mx" onclick="closeM('m-benchmarks')">✕</button></div>
+  <div class="mb">
+    <p>Two key benchmark suites:</p>
+    <ul>
+      <li><strong>ANN-Benchmarks</strong> (<a href="https://ann-benchmarks.com" target="_blank">ann-benchmarks.com</a>) — measures raw vector search speed and recall for HNSW, IVF, etc. across different datasets. Use this to compare Qdrant vs Weaviate vs pgvector.</li>
+      <li><strong>BEIR</strong> — Benchmarking Information Retrieval. Measures how well retrieval systems find relevant passages for QA tasks. Use this to compare BM25 vs dense vs hybrid strategies for RAG.</li>
+      <li><strong>MTEB</strong> — Massive Text Embedding Benchmark. Ranks embedding models (nomic, ada-002, e5) on retrieval, classification, clustering tasks. Check it on HuggingFace.</li>
+    </ul>
+    <p><a href="https://huggingface.co/spaces/mteb/leaderboard" target="_blank">MTEB Leaderboard on HuggingFace →</a></p>
+  </div>
+</div></div>
+
+<!-- ════════════════════
+  FOOTER
+════════════════════ -->
+<footer>
+  <div style="max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1.8rem;">
+    <div>
+      <h4>Topics Covered</h4>
+      <p>Cosine similarity, HNSW graphs, transformer embeddings, inverted index, BM25, ChromaDB, Elasticsearch kNN, RAG ingestion, hybrid search, RRF fusion.</p>
+    </div>
+    <div>
+      <h4>Key Formulas</h4>
+      <p style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;line-height:2;color:#a8b2c1;">
+        cos(θ) = a·b ÷ (‖a‖·‖b‖)<br/>
+        ChromaDB: d = 1 − cos(θ)<br/>
+        HNSW search: O(log n)<br/>
+        BM25: IDF × TF/(TF+k₁)
+      </p>
+    </div>
+    <div>
+      <h4>External Links</h4>
+      <ul style="list-style:none;line-height:2.1;">
+        <li><a href="https://arxiv.org/abs/1603.09320">HNSW Paper (arXiv)</a></li>
+        <li><a href="https://arxiv.org/abs/2005.11401">RAG Paper (arXiv)</a></li>
+        <li><a href="https://ann-benchmarks.com">ANN-Benchmarks</a></li>
+        <li><a href="https://docs.trychroma.com">ChromaDB Docs</a></li>
+        <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/knn-search.html">ES kNN Docs</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Models to Try</h4>
+      <ul style="list-style:none;line-height:2.1;">
+        <li><a href="https://huggingface.co/nomic-ai/nomic-embed-text-v1">nomic-embed-text-v1</a></li>
+        <li><a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2">all-MiniLM-L6-v2</a></li>
+        <li><a href="https://platform.openai.com/docs/guides/embeddings">OpenAI ada-002</a></li>
+        <li><a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB Leaderboard</a></li>
+      </ul>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:2rem;padding-top:1.4rem;border-top:1px solid #3a3a3a;font-size:.76rem;color:#6f6f6f;">
+    IBM Plex Design System · Elasticsearch™ is a trademark of Elastic N.V. · For educational purposes
+  </div>
+</footer>
+
+<!-- ════════════════════
+  JAVASCRIPT
+════════════════════ -->
+<script>
+/* ── Helpers ── */
+function sc(id){document.getElementById(id).scrollIntoView({behavior:'smooth'});}
+function openM(id){document.getElementById(id).classList.add('on');document.body.style.overflow='hidden';}
+function closeM(id){document.getElementById(id).classList.remove('on');document.body.style.overflow='';}
+document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',function(e){if(e.target===this){this.classList.remove('on');document.body.style.overflow=''}}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.ov.on').forEach(m=>{m.classList.remove('on');document.body.style.overflow='';})});
+
+/* ── Progress bar ── */
+window.addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  document.getElementById('pb').style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';
+});
+
+/* ── Scroll reveal ── */
+const ro=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('on');}),{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>ro.observe(el));
+
+/* ══════════════════════════════════════
+   COSINE INTERACTIVE CANVAS
+══════════════════════════════════════ */
+const cosCanvas=document.getElementById('cosCanvas');
+const cosCtx=cosCanvas.getContext('2d');
+
+function resizeCosCanvas(){
+  const maxW=Math.min(500,cosCanvas.parentElement.clientWidth-30);
+  cosCanvas.width=maxW;cosCanvas.height=Math.round(maxW*0.44);
+}
+resizeCosCanvas();
+window.addEventListener('resize',()=>{resizeCosCanvas();drawCos();});
+
+function drawCos(){
+  const W=cosCanvas.width,H=cosCanvas.height;
+  const cx=Math.round(W*0.38),cy=Math.round(H*0.78);
+  const R=Math.min(W,H)*0.55;
+  const degA=parseFloat(document.getElementById('slA').value);
+  const degB=parseFloat(document.getElementById('slB').value);
+  const radA=degA*Math.PI/180;
+  const radB=degB*Math.PI/180;
+
+  cosCtx.clearRect(0,0,W,H);
+
+  /* grid */
+  cosCtx.strokeStyle='#f0f4ff';cosCtx.lineWidth=1;
+  for(let i=0;i<W;i+=30){cosCtx.beginPath();cosCtx.moveTo(i,0);cosCtx.lineTo(i,H);cosCtx.stroke();}
+  for(let i=0;i<H;i+=30){cosCtx.beginPath();cosCtx.moveTo(0,i);cosCtx.lineTo(W,i);cosCtx.stroke();}
+
+  /* axes */
+  cosCtx.strokeStyle='#dde1e6';cosCtx.lineWidth=1.5;
+  cosCtx.beginPath();cosCtx.moveTo(cx,cy);cosCtx.lineTo(cx+R*0.8,cy);cosCtx.stroke();
+  cosCtx.beginPath();cosCtx.moveTo(cx,cy);cosCtx.lineTo(cx,cy-R*0.9);cosCtx.stroke();
+
+  /* origin */
+  cosCtx.fillStyle='#525252';
+  cosCtx.beginPath();cosCtx.arc(cx,cy,4,0,Math.PI*2);cosCtx.fill();
+
+  const ax1=cx+Math.cos(-radA)*R*0.85,ay1=cy+Math.sin(-radA)*R*0.85;
+  const bx1=cx+Math.cos(-radB)*R*0.85,by1=cy+Math.sin(-radB)*R*0.85;
+
+  /* angle arc */
+  const diff=Math.abs(radA-radB);
+  if(diff>0.02){
+    cosCtx.beginPath();
+    cosCtx.arc(cx,cy,R*0.22,-Math.max(radA,radB),-Math.min(radA,radB));
+    cosCtx.strokeStyle='#33b1ff';cosCtx.lineWidth=2;cosCtx.stroke();
+    const midAngle=-(radA+radB)/2;
+    cosCtx.fillStyle='#0072c3';cosCtx.font=`bold ${Math.max(10,W*0.025)}px IBM Plex Mono`;
+    cosCtx.textAlign='center';
+    cosCtx.fillText('θ',cx+Math.cos(midAngle)*R*0.3,cy+Math.sin(midAngle)*R*0.3);
+  }
+
+  function drawVec(x2,y2,color,label){
+    cosCtx.beginPath();cosCtx.moveTo(cx,cy);cosCtx.lineTo(x2,y2);
+    cosCtx.strokeStyle=color;cosCtx.lineWidth=3;cosCtx.stroke();
+    /* arrowhead */
+    const angle=Math.atan2(y2-cy,x2-cx);
+    cosCtx.beginPath();
+    cosCtx.moveTo(x2,y2);
+    cosCtx.lineTo(x2-14*Math.cos(angle-0.35),y2-14*Math.sin(angle-0.35));
+    cosCtx.lineTo(x2-14*Math.cos(angle+0.35),y2-14*Math.sin(angle+0.35));
+    cosCtx.closePath();cosCtx.fillStyle=color;cosCtx.fill();
+    /* label */
+    cosCtx.fillStyle=color;cosCtx.font=`bold ${Math.max(11,W*0.028)}px IBM Plex Sans`;
+    cosCtx.textAlign='center';
+    const lx=cx+(x2-cx)*1.12,ly=cy+(y2-cy)*1.12;
+    cosCtx.fillText(label,lx,ly);
+  }
+
+  drawVec(ax1,ay1,'#a56eff','a');
+  drawVec(bx1,by1,'#42be65','b');
+
+  /* compute cosine */
+  const aVec=[Math.cos(radA),Math.sin(radA)];
+  const bVec=[Math.cos(radB),Math.sin(radB)];
+  const dot=aVec[0]*bVec[0]+aVec[1]*bVec[1];
+  const mag=1;
+  const cosVal=Math.max(-1,Math.min(1,dot/(mag*mag)));
+  const angleDiff=Math.abs(degA-degB);
+
+  /* display */
+  document.getElementById('slA').nextElementSibling.textContent=degA+'°';
+  document.getElementById('slB').nextElementSibling.textContent=degB+'°';
+  document.getElementById('cosScore').textContent=cosVal.toFixed(4);
+  document.getElementById('cosScore').style.color=cosVal>0.7?'#198038':cosVal>0.3?'#c49b00':'#da1e28';
+
+  let interp='';
+  if(angleDiff<10) interp=`angle=${angleDiff}° — nearly identical meaning`;
+  else if(angleDiff<45) interp=`angle=${angleDiff}° — similar meaning`;
+  else if(angleDiff<90) interp=`angle=${angleDiff}° — loosely related`;
+  else interp=`angle=${angleDiff}° — unrelated or opposite`;
+  document.getElementById('cosLabel').textContent=`cos(${angleDiff}°) → ${interp}`;
+
+  /* chromadb distance */
+  const chromaDist=(1-cosVal).toFixed(4);
+  const scoreEl=document.getElementById('cosScore');
+  scoreEl.title=`ChromaDB distance = 1 − ${cosVal.toFixed(4)} = ${chromaDist}`;
+}
+drawCos();
+</script>
+</body>
+</html>
