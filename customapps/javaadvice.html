@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>@ControllerAdvice — Spring Boot 3.5.13 / Java 21</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Apply theme BEFORE first paint to prevent flash-of-wrong-theme.
+  // Order: saved preference → OS preference → light.
+  (function () {
+    try {
+      var saved = localStorage.getItem('advisory-theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.dataset.theme = theme;
+    } catch (e) {
+      document.documentElement.dataset.theme = 'light';
+    }
+  })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300..700;1,300..700&family=IBM+Plex+Mono:ital,wght@0,400..600;1,400..600&family=IBM+Plex+Serif:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/properties.min.js"></script>
+
+<style>
+  :root {
+    /* IBM Carbon-inspired palette: blue + white business (light theme) */
+    --bg:        #ffffff;
+    --bg-2:      #f4f4f4;   /* surface */
+    --bg-3:      #e8eef9;   /* tinted blue surface */
+    --bg-code:   #f4f4f4;
+    --ink:       #161616;
+    --ink-2:     #393939;
+    --ink-3:     #6f6f6f;
+    --rule:      #e0e0e0;
+    --rule-2:    #c6c6c6;
+    --blue:      #0f62fe;
+    --blue-dark: #0043ce;
+    --blue-deep: #002d9c;
+    --blue-tint: #edf5ff;
+    --blue-soft: #d0e2ff;
+    --green:     #198038;
+    --green-tint:#defbe6;
+    --amber:     #f1c21b;
+    --amber-tint:#fcf4d6;
+    --amber-ink: #b28600;
+    --red:       #da1e28;
+    --shadow:    rgba(15, 98, 254, 0.08);
+    --shadow-2:  rgba(15, 98, 254, 0.16);
+
+    /* Hero accents */
+    --hero-grid: rgba(15, 98, 254, 0.06);
+    --hero-glow: rgba(15, 98, 254, 0.10);
+    --bg-grad-1: rgba(15, 98, 254, 0.05);
+    --bg-grad-2: rgba(0, 67, 206, 0.04);
+  }
+
+  [data-theme="dark"] {
+    --bg:        #0b0c0f;
+    --bg-2:      #16181d;
+    --bg-3:      #1c2030;
+    --bg-code:   #161821;
+    --ink:       #f4f4f4;
+    --ink-2:     #c6c6c6;
+    --ink-3:     #8d8d8d;
+    --rule:      #2a2c33;
+    --rule-2:    #3d4049;
+    --blue:      #4589ff;     /* Carbon Blue 50 — readable on dark */
+    --blue-dark: #78a9ff;     /* Blue 40 for hover/accent on dark */
+    --blue-deep: #a6c8ff;
+    --blue-tint: #131c2e;
+    --blue-soft: #1c2e52;
+    --green:     #42be65;
+    --green-tint:#1a3a23;
+    --amber:     #f1c21b;
+    --amber-tint:#3d3416;
+    --amber-ink: #f1c21b;
+    --red:       #fa4d56;
+    --shadow:    rgba(69, 137, 255, 0.15);
+    --shadow-2:  rgba(69, 137, 255, 0.25);
+
+    --hero-grid: rgba(69, 137, 255, 0.07);
+    --hero-glow: rgba(69, 137, 255, 0.12);
+    --bg-grad-1: rgba(69, 137, 255, 0.06);
+    --bg-grad-2: rgba(120, 169, 255, 0.04);
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse 70% 50% at 0% 0%, var(--bg-grad-1), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 100% 0%, var(--bg-grad-2), transparent 60%);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .font-display { font-family: 'IBM Plex Serif', serif; }
+  .font-mono { font-family: 'IBM Plex Mono', monospace; }
+  main, header, nav, aside, footer { position: relative; z-index: 2; }
+
+  /* Code blocks */
+  pre {
+    background: var(--bg-code) !important;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--blue);
+    border-radius: 0;
+    padding: 1.25rem 1.5rem !important;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+  }
+  pre code.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+  }
+  :not(pre) > code {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--blue-tint);
+    color: var(--blue-dark);
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    font-size: 0.875em;
+    border: 1px solid var(--blue-soft);
+    font-weight: 500;
+    word-break: break-word;
+  }
+  .code-block { position: relative; margin: 1.5rem 0; }
+  .code-label {
+    position: absolute; top: 0; right: 0;
+    background: var(--blue);
+    color: #ffffff;
+    padding: 0.3rem 0.85rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    z-index: 5;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .copy-btn {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    background: var(--bg);
+    border: 1px solid var(--rule-2);
+    color: var(--ink-2);
+    padding: 0.3rem 0.7rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    border-radius: 0;
+    cursor: pointer;
+    opacity: 1; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    z-index: 5;
+    font-weight: 500;
+  }
+  /* On desktop, fade in on hover; on touch always-visible */
+  @media (hover: hover) and (pointer: fine) {
+    .copy-btn { opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; }
+    .code-block:hover .copy-btn { opacity: 1; }
+  }
+  .copy-btn:hover { background: var(--blue); color: #ffffff; border-color: var(--blue); }
+  .copy-btn.copied { background: var(--green); color: #ffffff; border-color: var(--green); }
+  .code-block.has-label pre { padding-top: 2.75rem !important; }
+
+  /* TOC */
+  .toc-link {
+    display: block;
+    color: var(--ink-3);
+    padding: 0.5rem 0;
+    border-left: 2px solid transparent;
+    padding-left: 1rem;
+    margin-left: -1px;
+    transition: all 0.15s;
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+  .toc-link:hover {
+    color: var(--ink);
+    background: var(--bg-2);
+    border-color: var(--rule-2);
+  }
+  .toc-link.active {
+    color: var(--blue-dark);
+    border-color: var(--blue);
+    background: var(--blue-tint);
+    font-weight: 600;
+  }
+
+  /* Section markers */
+  .section-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--blue);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+  }
+  .section-num::before {
+    content: '';
+    width: 28px; height: 2px;
+    background: var(--blue);
+  }
+
+  h2.section-title {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 300;
+    font-size: clamp(1.6rem, 5vw, 2.85rem);
+    line-height: 1.18;
+    letter-spacing: -0.015em;
+    margin-top: 1rem;
+    color: var(--ink);
+  }
+  h2.section-title em {
+    font-style: italic;
+    color: var(--blue-dark);
+    font-weight: 400;
+  }
+  h3 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(1.1rem, 3vw, 1.35rem);
+    letter-spacing: -0.005em;
+    color: var(--ink);
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  h4 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--blue-dark);
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  p { color: var(--ink-2); line-height: 1.7; margin-bottom: 1rem; }
+  p strong { color: var(--ink); font-weight: 600; }
+  ul, ol { color: var(--ink-2); line-height: 1.7; padding-left: 1.5rem; margin-bottom: 1rem; }
+  ul li { margin-bottom: 0.5rem; list-style: none; position: relative; padding-left: 1.25rem; }
+  ul li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.65em;
+    width: 8px; height: 2px;
+    background: var(--blue);
+  }
+  ol li { margin-bottom: 0.5rem; }
+
+  /* Callouts */
+  .callout {
+    border-left: 3px solid var(--blue);
+    background: var(--blue-tint);
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+    border-radius: 0;
+  }
+  .callout.tip { border-color: var(--green); background: var(--green-tint); }
+  .callout.warn { border-color: var(--amber); background: var(--amber-tint); }
+  .callout-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.4rem;
+    color: var(--blue-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+  }
+  .callout.tip .callout-label { color: var(--green); }
+  .callout.warn .callout-label { color: var(--amber-ink); }
+  .callout p { margin-bottom: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+  /* Section divider */
+  .divider {
+    display: flex; align-items: center; gap: 1rem;
+    margin: 4rem 0 3rem;
+    color: var(--ink-3);
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--rule);
+  }
+  .divider-mark {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--blue);
+    font-weight: 600;
+  }
+
+  /* Hero grid */
+  .hero-grid {
+    background-image:
+      linear-gradient(var(--hero-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--hero-grid) 1px, transparent 1px);
+    background-size: 64px 64px;
+    background-position: -1px -1px;
+    opacity: 1;
+  }
+
+  /* Use case cards */
+  .case-card {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    padding: 1.5rem;
+    border-radius: 0;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .case-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0;
+    width: 3px; height: 100%;
+    background: var(--blue);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 0.25s ease;
+  }
+  .case-card:hover {
+    border-color: var(--blue);
+    box-shadow: 0 4px 16px var(--shadow);
+    transform: translateY(-2px);
+  }
+  .case-card:hover::before { transform: scaleY(1); }
+
+  /* Badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    padding: 0.3rem 0.7rem;
+    border-radius: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+  }
+
+  /* Theme toggle button — show the right icon for current theme */
+  [data-theme="dark"] #iconSun { display: block !important; }
+  [data-theme="dark"] #iconMoon { display: none !important; }
+  #themeToggle:hover { background: var(--blue) !important; color: #ffffff !important; border-color: var(--blue) !important; }
+
+  /* Mobile menu visibility */
+  @media (max-width: 1023px) {
+    .toc-sidebar { display: none; }
+    .mobile-toc-toggle { display: inline-flex; }
+  }
+  @media (min-width: 1024px) {
+    .mobile-toc-toggle { display: none; }
+    .mobile-toc-panel { display: none !important; }
+  }
+
+  /* Reading progress bar */
+  #progress {
+    position: fixed; top: 0; left: 0;
+    height: 3px;
+    background: var(--blue);
+    z-index: 100;
+    width: 0%;
+    transition: width 0.1s;
+  }
+
+  section { scroll-margin-top: 4rem; }
+
+  /* Lead paragraph */
+  .lead {
+    font-family: 'IBM Plex Serif', serif;
+    font-weight: 300;
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  /* Tables — scroll horizontally on mobile */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 1.5rem 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    min-width: 480px;
+  }
+  th {
+    text-align: left;
+    padding: 0.85rem 1rem;
+    background: var(--blue);
+    color: #ffffff;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    border-bottom: 1px solid var(--blue-dark);
+  }
+  td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink-2);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--blue-tint); }
+
+  /* Accent text */
+  .gradient-text {
+    color: var(--blue);
+    font-weight: 600;
+  }
+
+  /* ===== Highlight.js DARK MODE override (atom-one-dark colors) ===== */
+  [data-theme="dark"] .hljs                  { color: #abb2bf; background: transparent; }
+  [data-theme="dark"] .hljs-comment,
+  [data-theme="dark"] .hljs-quote            { color: #5c6370; font-style: italic; }
+  [data-theme="dark"] .hljs-keyword,
+  [data-theme="dark"] .hljs-selector-tag,
+  [data-theme="dark"] .hljs-built_in,
+  [data-theme="dark"] .hljs-literal          { color: #c678dd; }
+  [data-theme="dark"] .hljs-string,
+  [data-theme="dark"] .hljs-symbol,
+  [data-theme="dark"] .hljs-attribute        { color: #98c379; }
+  [data-theme="dark"] .hljs-number           { color: #d19a66; }
+  [data-theme="dark"] .hljs-title,
+  [data-theme="dark"] .hljs-class .hljs-title,
+  [data-theme="dark"] .hljs-function .hljs-title,
+  [data-theme="dark"] .hljs-meta             { color: #61afef; }
+  [data-theme="dark"] .hljs-tag,
+  [data-theme="dark"] .hljs-name,
+  [data-theme="dark"] .hljs-attr             { color: #e06c75; }
+  [data-theme="dark"] .hljs-type,
+  [data-theme="dark"] .hljs-variable,
+  [data-theme="dark"] .hljs-template-variable{ color: #e06c75; }
+  [data-theme="dark"] .hljs-doctag,
+  [data-theme="dark"] .hljs-formula          { color: #56b6c2; }
+  [data-theme="dark"] .hljs-section,
+  [data-theme="dark"] .hljs-selector-id      { color: #e06c75; }
+  [data-theme="dark"] .hljs-emphasis         { font-style: italic; }
+  [data-theme="dark"] .hljs-strong           { font-weight: bold; }
+
+  /* ===== Mobile fine-tuning ===== */
+  @media (max-width: 640px) {
+    .divider { margin: 2.5rem 0 2rem; }
+    h3 { margin-top: 2rem; }
+    .callout { padding: 0.85rem 1rem; }
+    pre { padding: 1rem 1.1rem !important; font-size: 0.8rem; }
+    .code-block.has-label pre { padding-top: 2.5rem !important; }
+    .section-num::before { width: 18px; }
+    .case-card { padding: 1.1rem; }
+  }
+
+  /* Prevent layout overflow from long unbroken tokens in code blocks */
+  pre code { white-space: pre; }
+
+  /* Smooth focus */
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body class="antialiased">
+
+<div id="progress"></div>
+
+<!-- HEADER / HERO -->
+<header class="relative overflow-hidden border-b" style="border-color: var(--rule);">
+  <div class="absolute inset-0 hero-grid"></div>
+  <div class="absolute top-0 right-0 w-1/2 h-full" style="background: radial-gradient(ellipse at right, rgba(15, 98, 254, 0.08), transparent 60%);"></div>
+
+  <nav class="relative px-4 sm:px-6 lg:px-12 py-4 sm:py-5 flex items-center justify-between gap-3 border-b" style="border-color: var(--rule);">
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" class="shrink-0">
+        <rect x="2"  y="6"  width="28" height="2.5" fill="var(--blue)"/>
+        <rect x="2"  y="11" width="28" height="2.5" fill="var(--blue)"/>
+        <rect x="2"  y="16" width="20" height="2.5" fill="var(--blue)"/>
+        <rect x="2"  y="21" width="28" height="2.5" fill="var(--blue)"/>
+      </svg>
+      <span class="font-mono text-[10px] sm:text-xs tracking-widest uppercase truncate" style="color: var(--ink-2);">spring · advisory</span>
+    </div>
+
+    <div class="hidden lg:flex items-center gap-3 text-xs font-mono" style="color: var(--ink-3);">
+      <span class="badge"><span class="badge-dot"></span>Java 21</span>
+      <span class="badge"><span class="badge-dot"></span>Spring Boot 3.5.13</span>
+      <span class="badge"><span class="badge-dot"></span>Lombok</span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Theme toggle -->
+      <button id="themeToggle" aria-label="Toggle theme" title="Toggle theme"
+              class="flex items-center justify-center w-9 h-9 rounded border transition-colors"
+              style="border-color: var(--rule); color: var(--ink-2); background: var(--bg);">
+        <svg id="iconSun" class="hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+
+      <!-- Mobile TOC trigger -->
+      <button class="mobile-toc-toggle items-center gap-2 text-xs font-mono px-3 h-9 rounded border" style="border-color: var(--rule); color: var(--ink-2); background: var(--bg);" onclick="document.getElementById('mobileTocPanel').classList.toggle('hidden')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <span class="hidden sm:inline">contents</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="relative px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-24 max-w-6xl">
+    <div class="section-num mb-4 sm:mb-6">A field guide</div>
+    <h1 class="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl leading-[1.05] sm:leading-[0.95] tracking-tight mb-6 sm:mb-8" style="font-weight: 300; color: var(--ink);">
+      Mastering<br/>
+      <span style="font-style: italic; font-weight: 300; color: var(--blue-dark);">@ControllerAdvice</span><br/>
+      <span class="gradient-text">in modern Spring.</span>
+    </h1>
+    <p class="lead max-w-2xl mb-8 sm:mb-10 text-base sm:text-xl">
+      A practical, opinionated walkthrough of cross-cutting concerns in Spring Boot 3.5.13 — global exception handling, structured logging, audit trails, and reusable patterns powered by Lombok and Java 21.
+    </p>
+    <div class="flex flex-wrap gap-3 text-xs">
+      <a href="#setup" class="px-5 py-2.5 font-mono uppercase tracking-wider transition-all" style="background: var(--blue); color: #ffffff;">Begin setup →</a>
+      <a href="#toc" class="px-5 py-2.5 font-mono uppercase tracking-wider border transition-all" style="border-color: var(--rule-2); color: var(--ink-2); background: var(--bg);">Browse chapters</a>
+    </div>
+  </div>
+</header>
+
+<!-- Mobile TOC -->
+<aside id="mobileTocPanel" class="mobile-toc-panel hidden lg:hidden border-b" style="background: var(--bg-2); border-color: var(--rule);">
+  <div class="px-6 py-6">
+    <div class="text-xs font-mono uppercase tracking-widest mb-4" style="color: var(--blue);">Contents</div>
+    <nav id="tocMobile" class="space-y-1"></nav>
+  </div>
+</aside>
+
+<!-- MAIN LAYOUT -->
+<div class="flex max-w-[1600px] mx-auto">
+
+  <!-- DESKTOP TOC -->
+  <aside class="toc-sidebar w-72 shrink-0 sticky top-0 h-screen overflow-y-auto px-8 py-12 border-r hidden lg:block" style="border-color: var(--rule);">
+    <div id="toc" class="text-xs font-mono uppercase tracking-widest mb-5" style="color: var(--blue);">Table of contents</div>
+    <nav id="tocDesktop" class="space-y-1"></nav>
+
+    <div class="mt-12 pt-8 border-t" style="border-color: var(--rule);">
+      <div class="text-xs font-mono uppercase tracking-widest mb-3" style="color: var(--ink-3);">Stack</div>
+      <ul class="text-xs space-y-2 font-mono" style="color: var(--ink-2);">
+        <li class="flex justify-between"><span>java</span><span style="color: var(--blue);">21</span></li>
+        <li class="flex justify-between"><span>spring-boot</span><span style="color: var(--blue);">3.5.13</span></li>
+        <li class="flex justify-between"><span>spring-framework</span><span style="color: var(--blue);">6.2.x</span></li>
+        <li class="flex justify-between"><span>lombok</span><span style="color: var(--blue);">1.18.x</span></li>
+        <li class="flex justify-between"><span>jackson</span><span style="color: var(--blue);">2.18.x</span></li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <main class="flex-1 px-4 sm:px-6 lg:px-16 py-10 sm:py-12 lg:py-20 max-w-5xl w-full overflow-x-hidden">
+
+    <!-- ===================== INTRO ===================== -->
+    <section id="intro" data-toc="What is @ControllerAdvice">
+      <div class="section-num mb-4">§ 00 — Premise</div>
+      <h2 class="section-title font-display mb-6">What <em>is</em> @ControllerAdvice, really?</h2>
+      <p class="lead mb-8">It's a specialized <code style="color: var(--blue); background: var(--bg-3);">@Component</code> that lets you intercept and influence the behavior of <em>every</em> controller in your application — without modifying the controllers themselves.</p>
+
+      <p>In a Spring Boot application, your <code>@RestController</code> classes shouldn't be drowning in <code>try/catch</code> blocks, manual logging, audit calls, or repeated header manipulation. Those concerns belong somewhere else — somewhere central, declarative, and reusable. That somewhere is <code>@ControllerAdvice</code>.</p>
+
+      <p>It exposes three primary hooks:</p>
+      <ul>
+        <li><strong>@ExceptionHandler</strong> — catch exceptions thrown anywhere in your controllers and translate them into clean HTTP responses.</li>
+        <li><strong>@ModelAttribute</strong> — inject values that should be available to all (or selected) controllers.</li>
+        <li><strong>@InitBinder</strong> — register custom property editors and validators globally.</li>
+      </ul>
+
+      <p>Combined with Java 21 features (records, pattern matching, sealed types) and Lombok's annotation-driven boilerplate elimination, you can build an extraordinarily clean cross-cutting layer.</p>
+
+      <div class="callout tip">
+        <div class="callout-label">▲ Vocabulary</div>
+        <p><code>@RestControllerAdvice</code> = <code>@ControllerAdvice</code> + <code>@ResponseBody</code>. Use it for REST APIs (the common case). Use plain <code>@ControllerAdvice</code> when you need to return view names from MVC handlers.</p>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== SETUP ===================== -->
+    <section id="setup" data-toc="Project setup">
+      <div class="section-num mb-4">§ 01 — Setup</div>
+      <h2 class="section-title font-display mb-6">Project bootstrap</h2>
+      <p>We'll start with a Spring Boot 3.5.13 project running on Java 21 with Lombok and Bean Validation enabled. The dependency selection below is intentionally minimal — every entry earns its place.</p>
+
+      <h3>Maven (pom.xml)</h3>
+      <div class="code-block has-label">
+        <span class="code-label">pom.xml</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0"&gt;
+    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+    &lt;parent&gt;
+        &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+        &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+        &lt;version&gt;3.5.13&lt;/version&gt;
+        &lt;relativePath/&gt;
+    &lt;/parent&gt;
+
+    &lt;groupId&gt;com.example&lt;/groupId&gt;
+    &lt;artifactId&gt;advisory-demo&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+
+    &lt;properties&gt;
+        &lt;java.version&gt;21&lt;/java.version&gt;
+        &lt;maven.compiler.release&gt;21&lt;/maven.compiler.release&gt;
+    &lt;/properties&gt;
+
+    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-validation&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-aop&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+            &lt;optional&gt;true&lt;/optional&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+
+    &lt;build&gt;
+        &lt;plugins&gt;
+            &lt;plugin&gt;
+                &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+                &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+                &lt;configuration&gt;
+                    &lt;excludes&gt;
+                        &lt;exclude&gt;
+                            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+                            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+                        &lt;/exclude&gt;
+                    &lt;/excludes&gt;
+                &lt;/configuration&gt;
+            &lt;/plugin&gt;
+        &lt;/plugins&gt;
+    &lt;/build&gt;
+&lt;/project&gt;</code></pre>
+      </div>
+
+      <h3>Gradle (build.gradle.kts)</h3>
+      <div class="code-block has-label">
+        <span class="code-label">build.gradle.kts</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-properties">plugins {
+    java
+    id("org.springframework.boot") version "3.5.13"
+    id("io.spring.dependency-management") version "1.1.6"
+}
+
+group = "com.example"
+version = "1.0.0"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+
+    compileOnly("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+}</code></pre>
+      </div>
+
+      <h3>application.yml</h3>
+      <div class="code-block has-label">
+        <span class="code-label">application.yml</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-yaml">spring:
+  application:
+    name: advisory-demo
+  mvc:
+    problemdetails:
+      enabled: true   # Enables RFC 7807 ProblemDetail by default
+
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+
+logging:
+  level:
+    root: INFO
+    com.example: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %highlight(%-5level) [%X{requestId:-}] %cyan(%logger{36}) - %msg%n"</code></pre>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">⬢ Note on RFC 7807</div>
+        <p>Spring Boot 3.x ships with native support for <strong>ProblemDetail</strong> (RFC 7807) — the standardized error response format. We'll lean into it heavily because it gives clients a consistent contract for errors.</p>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== BASIC ===================== -->
+    <section id="basic" data-toc="Basic exception handling">
+      <div class="section-num mb-4">§ 02 — Foundations</div>
+      <h2 class="section-title font-display mb-6">Your first global handler</h2>
+      <p>Let's start with the simplest possible <code>@RestControllerAdvice</code>: catch any uncaught exception and return a clean 500 response. Notice how Lombok's <code>@Slf4j</code> eliminates the manual logger declaration.</p>
+
+      <h3>The minimal advice</h3>
+      <div class="code-block has-label">
+        <span class="code-label">GlobalExceptionHandler.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.advice;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.net.URI;
+import java.time.Instant;
+
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(Exception.class)
+    public ProblemDetail handleAny(Exception ex) {
+        log.error("Unhandled exception bubbled up to the advice", ex);
+
+        var problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "An unexpected error occurred. Please try again later."
+        );
+        problem.setTitle("Internal Server Error");
+        problem.setType(URI.create("https://api.example.com/errors/internal"));
+        problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+}</code></pre>
+      </div>
+
+      <p>That's it. Drop this class into a package scanned by your <code>@SpringBootApplication</code> and every uncaught exception thrown by any controller becomes a structured JSON response.</p>
+
+      <h3>A quick controller to test against</h3>
+      <div class="code-block has-label">
+        <span class="code-label">UserController.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.user;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/users")
+@RequiredArgsConstructor   // Lombok: generates a constructor for final fields
+public class UserController {
+
+    private final UserService userService;
+
+    @GetMapping("/{id}")
+    public UserDto findOne(@PathVariable Long id) {
+        return userService.findById(id);     // may throw UserNotFoundException
+    }
+
+    @PostMapping
+    public UserDto create(@RequestBody @jakarta.validation.Valid CreateUserRequest req) {
+        return userService.create(req);
+    }
+}</code></pre>
+      </div>
+
+      <p><code>@RequiredArgsConstructor</code> is your friend. The combination of <code>final</code> fields + this annotation is the canonical modern Spring constructor injection pattern — no <code>@Autowired</code>, no manual constructor.</p>
+
+      <div class="callout warn">
+        <div class="callout-label">⚠ Catch-all gotcha</div>
+        <p>A handler for <code>Exception.class</code> swallows <em>everything</em>, including framework exceptions Spring would otherwise handle correctly (like <code>MethodArgumentNotValidException</code>). Always declare more specific handlers <em>before</em> the catch-all — Spring resolves them by specificity, but explicit ordering is a sound practice.</p>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== CUSTOM EXCEPTIONS ===================== -->
+    <section id="custom" data-toc="Custom exception hierarchy">
+      <div class="section-num mb-4">§ 03 — Domain</div>
+      <h2 class="section-title font-display mb-6">A reusable exception hierarchy</h2>
+      <p>Throwing <code>RuntimeException</code> with a string message is fine for prototypes. For a real application you want a typed hierarchy that carries enough metadata for your advice to translate into a meaningful HTTP response. Java 21's <strong>sealed interfaces</strong> are perfect for this — they make the set of error types <em>closed and exhaustive</em>.</p>
+
+      <h3>The base abstraction</h3>
+      <div class="code-block has-label">
+        <span class="code-label">ApiException.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.error;
+
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+import java.util.Map;
+
+@Getter   // Lombok generates getters for all fields
+public abstract class ApiException extends RuntimeException {
+
+    private final HttpStatus status;
+    private final String code;          // machine-readable, e.g. "USER_NOT_FOUND"
+    private final Map&lt;String, Object&gt; context;
+
+    protected ApiException(HttpStatus status, String code, String message,
+                           Map&lt;String, Object&gt; context, Throwable cause) {
+        super(message, cause);
+        this.status = status;
+        this.code = code;
+        this.context = context == null ? Map.of() : Map.copyOf(context);
+    }
+
+    protected ApiException(HttpStatus status, String code, String message) {
+        this(status, code, message, null, null);
+    }
+}</code></pre>
+      </div>
+
+      <h3>Concrete domain exceptions</h3>
+      <div class="code-block has-label">
+        <span class="code-label">UserNotFoundException.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.user;
+
+import com.example.error.ApiException;
+import org.springframework.http.HttpStatus;
+
+import java.util.Map;
+
+public final class UserNotFoundException extends ApiException {
+    public UserNotFoundException(Long userId) {
+        super(HttpStatus.NOT_FOUND,
+              "USER_NOT_FOUND",
+              "No user exists with id " + userId,
+              Map.of("userId", userId),
+              null);
+    }
+}
+
+public final class DuplicateEmailException extends ApiException {
+    public DuplicateEmailException(String email) {
+        super(HttpStatus.CONFLICT,
+              "EMAIL_ALREADY_REGISTERED",
+              "An account with this email already exists",
+              Map.of("email", email),
+              null);
+    }
+}
+
+public final class InsufficientFundsException extends ApiException {
+    public InsufficientFundsException(String accountId, long requested, long available) {
+        super(HttpStatus.UNPROCESSABLE_ENTITY,
+              "INSUFFICIENT_FUNDS",
+              "Account balance cannot cover the requested operation",
+              Map.of("accountId", accountId, "requested", requested, "available", available),
+              null);
+    }
+}</code></pre>
+      </div>
+
+      <h3>One handler to translate them all</h3>
+      <div class="code-block has-label">
+        <span class="code-label">GlobalExceptionHandler.java (extended)</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@ExceptionHandler(ApiException.class)
+public ProblemDetail handleApi(ApiException ex, HttpServletRequest req) {
+    log.warn("API exception: code={} status={} path={} ctx={}",
+        ex.getCode(), ex.getStatus(), req.getRequestURI(), ex.getContext());
+
+    var problem = ProblemDetail.forStatusAndDetail(ex.getStatus(), ex.getMessage());
+    problem.setTitle(ex.getStatus().getReasonPhrase());
+    problem.setType(URI.create("https://api.example.com/errors/" + ex.getCode().toLowerCase().replace('_', '-')));
+    problem.setProperty("code", ex.getCode());
+    problem.setProperty("timestamp", Instant.now());
+    problem.setProperty("path", req.getRequestURI());
+
+    if (!ex.getContext().isEmpty()) {
+        problem.setProperty("context", ex.getContext());
+    }
+    return problem;
+}</code></pre>
+      </div>
+
+      <p>The result: a single handler covers an unbounded family of domain errors. To add a new error type, you create the class — no advice change required.</p>
+
+      <h3>Sample response</h3>
+      <div class="code-block has-label">
+        <span class="code-label">404 Not Found</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-properties">{
+  "type": "https://api.example.com/errors/user-not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "No user exists with id 42",
+  "code": "USER_NOT_FOUND",
+  "timestamp": "2026-05-05T18:24:11.802Z",
+  "path": "/api/users/42",
+  "context": { "userId": 42 }
+}</code></pre>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== VALIDATION ===================== -->
+    <section id="validation" data-toc="Validation errors">
+      <div class="section-num mb-4">§ 04 — Validation</div>
+      <h2 class="section-title font-display mb-6">Bean Validation, gracefully translated</h2>
+      <p>Spring's <code>MethodArgumentNotValidException</code> is thrown when a <code>@Valid</code> request body fails validation. By default Spring Boot renders a wall of error noise. You can do much better.</p>
+
+      <h3>The request DTO with Lombok</h3>
+      <div class="code-block has-label">
+        <span class="code-label">CreateUserRequest.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.user;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+// Java 21 record + bean validation. No Lombok needed for DTOs — records win here.
+public record CreateUserRequest(
+    @NotBlank @Size(min = 2, max = 50) String name,
+    @NotBlank @Email                   String email,
+    @Size(min = 8, max = 100)          String password
+) { }</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <div class="callout-label">▲ Records vs Lombok</div>
+        <p>For immutable DTOs, prefer <strong>Java records</strong>. They give you a constructor, accessors, <code>equals</code>, <code>hashCode</code>, and <code>toString</code> with zero annotations. Reserve Lombok for entities, builders, and classes that need mutable state or inheritance.</p>
+      </div>
+
+      <h3>The validation handler</h3>
+      <div class="code-block has-label">
+        <span class="code-label">GlobalExceptionHandler.java (validation)</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@ExceptionHandler(MethodArgumentNotValidException.class)
+public ProblemDetail handleValidation(MethodArgumentNotValidException ex,
+                                      HttpServletRequest req) {
+    var fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+        .map(fe -&gt; Map.of(
+            "field",   fe.getField(),
+            "rejected", String.valueOf(fe.getRejectedValue()),
+            "message", Objects.toString(fe.getDefaultMessage(), "Invalid value")
+        ))
+        .toList();
+
+    log.info("Validation failed for {} — {} field error(s)",
+        req.getRequestURI(), fieldErrors.size());
+
+    var problem = ProblemDetail.forStatusAndDetail(
+        HttpStatus.BAD_REQUEST,
+        "Request body validation failed"
+    );
+    problem.setTitle("Validation Error");
+    problem.setProperty("code", "VALIDATION_FAILED");
+    problem.setProperty("errors", fieldErrors);
+    problem.setProperty("timestamp", Instant.now());
+    problem.setProperty("path", req.getRequestURI());
+    return problem;
+}
+
+// For @Validated method-parameter validation (e.g. @RequestParam @Min(1) int page)
+@ExceptionHandler(ConstraintViolationException.class)
+public ProblemDetail handleConstraint(ConstraintViolationException ex,
+                                      HttpServletRequest req) {
+    var violations = ex.getConstraintViolations().stream()
+        .map(v -&gt; Map.of(
+            "path",    v.getPropertyPath().toString(),
+            "message", v.getMessage()
+        ))
+        .toList();
+
+    var problem = ProblemDetail.forStatusAndDetail(
+        HttpStatus.BAD_REQUEST,
+        "Request parameter validation failed"
+    );
+    problem.setProperty("code", "CONSTRAINT_VIOLATION");
+    problem.setProperty("violations", violations);
+    return problem;
+}</code></pre>
+      </div>
+
+      <h3>Sample 400 response</h3>
+      <div class="code-block has-label">
+        <span class="code-label">400 Bad Request</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-properties">{
+  "type": "about:blank",
+  "title": "Validation Error",
+  "status": 400,
+  "detail": "Request body validation failed",
+  "code": "VALIDATION_FAILED",
+  "errors": [
+    { "field": "email",    "rejected": "not-an-email", "message": "must be a well-formed email address" },
+    { "field": "password", "rejected": "abc",          "message": "size must be between 8 and 100" }
+  ],
+  "timestamp": "2026-05-05T18:24:11.802Z",
+  "path": "/api/users"
+}</code></pre>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== LOGGING ===================== -->
+    <section id="logging" data-toc="Structured logging & MDC">
+      <div class="section-num mb-4">§ 05 — Observability</div>
+      <h2 class="section-title font-display mb-6">Structured logging with MDC</h2>
+      <p>An advice on its own logs each error reactively. The next leap is <em>proactive</em> contextual logging: tagging every log line in a request with a correlation ID, user identity, and route. Combine an <code>OncePerRequestFilter</code> with <code>@ControllerAdvice</code> and you get coherent traces end-to-end.</p>
+
+      <h3>Step 1 — A request-scoped correlation filter</h3>
+      <div class="code-block has-label">
+        <span class="code-label">RequestContextFilter.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.observability;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.UUID;
+
+@Slf4j
+@Component
+public class RequestContextFilter extends OncePerRequestFilter {
+
+    public static final String REQUEST_ID = "requestId";
+    public static final String USER_ID    = "userId";
+    public static final String ROUTE      = "route";
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+                                    HttpServletResponse res,
+                                    FilterChain chain) throws ServletException, IOException {
+        var requestId = req.getHeader("X-Request-Id");
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString();
+        }
+
+        try {
+            MDC.put(REQUEST_ID, requestId);
+            MDC.put(ROUTE, req.getMethod() + " " + req.getRequestURI());
+            // Populate USER_ID from your security context if available
+            res.setHeader("X-Request-Id", requestId);
+            chain.doFilter(req, res);
+        } finally {
+            MDC.clear();   // critical — MDC is thread-local, leaks are dangerous
+        }
+    }
+}</code></pre>
+      </div>
+
+      <h3>Step 2 — Structured log line in your advice</h3>
+      <p>Because MDC is now populated for every request, every log statement made inside your controller advice (and your services, and your repositories) automatically carries the request ID. The pattern <code>%X{requestId:-}</code> in <code>application.yml</code> renders it.</p>
+
+      <div class="code-block has-label">
+        <span class="code-label">Sample log output</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-properties">14:22:08.811 WARN  [b3a4-...-9d2c] c.e.advice.GlobalExceptionHandler - API exception: code=USER_NOT_FOUND status=404 NOT_FOUND path=/api/users/42 ctx={userId=42}
+14:22:08.812 INFO  [b3a4-...-9d2c] c.e.observability.AuditAdvice    - audit.outcome user-lookup status=404 latencyMs=12 user=anonymous</code></pre>
+      </div>
+
+      <h3>Step 3 — Tiered logging by severity</h3>
+      <p>Not every exception deserves <code>ERROR</code>. A simple convention saves your on-call rotation from waking up over a 404:</p>
+      <div class="code-block has-label">
+        <span class="code-label">Log severity helper</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">private void logByStatus(ApiException ex, HttpServletRequest req) {
+    var status = ex.getStatus();
+    var msg = "API exception: code={} status={} path={}";
+
+    // Java 21 switch expression — compact, exhaustive, and readable
+    switch (status.series()) {
+        case CLIENT_ERROR  -&gt; log.warn (msg, ex.getCode(), status, req.getRequestURI());
+        case SERVER_ERROR  -&gt; log.error(msg, ex.getCode(), status, req.getRequestURI(), ex);
+        default            -&gt; log.info (msg, ex.getCode(), status, req.getRequestURI());
+    }
+}</code></pre>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">⬢ MDC + virtual threads</div>
+        <p>Java 21's virtual threads work cleanly with SLF4J's MDC <em>as long as you set Spring Boot 3.2+'s default behavior</em> (<code>spring.threads.virtual.enabled=true</code>) and avoid manually reusing platform-thread pools. Always <code>MDC.clear()</code> in a <code>finally</code>.</p>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== AUDITING ===================== -->
+    <section id="auditing" data-toc="Auditing API calls">
+      <div class="section-num mb-4">§ 06 — Auditing</div>
+      <h2 class="section-title font-display mb-6">A reusable audit pattern</h2>
+      <p>Auditing is a separate concern from error handling — but it pairs beautifully with <code>@ControllerAdvice</code>. The trick is to use a custom annotation, an AOP aspect, and a small advice that emits structured outcome events for both successes and failures.</p>
+
+      <h3>Step 1 — Define an audit annotation</h3>
+      <div class="code-block has-label">
+        <span class="code-label">Audited.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.audit;
+
+import java.lang.annotation.*;
+
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Audited {
+    /** Action name, e.g. "user.create", "payment.authorize". */
+    String value();
+
+    /** Whether to also record the request payload (avoid for PII!). */
+    boolean recordPayload() default false;
+}</code></pre>
+      </div>
+
+      <h3>Step 2 — An AOP aspect that records outcomes</h3>
+      <div class="code-block has-label">
+        <span class="code-label">AuditAspect.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.audit;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.time.Instant;
+
+@Slf4j
+@Aspect
+@Component
+@RequiredArgsConstructor
+public class AuditAspect {
+
+    private final AuditRecorder recorder;   // your impl: DB, Kafka, log sink, etc.
+
+    @Around("@annotation(audited) || @within(audited)")
+    public Object record(ProceedingJoinPoint pjp, Audited audited) throws Throwable {
+        var started = Instant.now();
+        var action  = audited.value();
+        var method  = ((MethodSignature) pjp.getSignature()).getMethod().getName();
+
+        try {
+            var result = pjp.proceed();
+            recorder.success(AuditEvent.of(action, method, started, audited.recordPayload(), pjp.getArgs()));
+            return result;
+        } catch (Throwable t) {
+            recorder.failure(AuditEvent.of(action, method, started, audited.recordPayload(), pjp.getArgs()), t);
+            throw t;   // let the advice translate it
+        }
+    }
+}</code></pre>
+      </div>
+
+      <h3>Step 3 — A reusable AuditEvent record</h3>
+      <div class="code-block has-label">
+        <span class="code-label">AuditEvent.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.audit;
+
+import org.slf4j.MDC;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+
+public record AuditEvent(
+    String   action,
+    String   method,
+    String   requestId,
+    String   userId,
+    Instant  startedAt,
+    Duration latency,
+    Object[] payload
+) {
+    public static AuditEvent of(String action, String method, Instant started,
+                                boolean withPayload, Object[] args) {
+        return new AuditEvent(
+            action,
+            method,
+            MDC.get("requestId"),
+            MDC.get("userId"),
+            started,
+            Duration.between(started, Instant.now()),
+            withPayload ? args : new Object[0]
+        );
+    }
+}</code></pre>
+      </div>
+
+      <h3>Step 4 — Use it on a controller</h3>
+      <div class="code-block has-label">
+        <span class="code-label">UserController with auditing</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@RestController
+@RequestMapping("/api/users")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService service;
+
+    @PostMapping
+    @Audited("user.create")
+    public UserDto create(@RequestBody @Valid CreateUserRequest req) {
+        return service.create(req);
+    }
+
+    @DeleteMapping("/{id}")
+    @Audited(value = "user.delete", recordPayload = true)
+    public void delete(@PathVariable Long id) {
+        service.delete(id);
+    }
+}</code></pre>
+      </div>
+
+      <p>Your <code>@ControllerAdvice</code> still handles the exception path. The aspect records the outcome. Both can write to the same audit sink — together they give you a complete log of what happened, why, and how long it took.</p>
+
+      <div class="callout warn">
+        <div class="callout-label">⚠ Compliance reminder</div>
+        <p>If your audit log is a compliance artifact (SOX, HIPAA, GDPR), it must be append-only and tamper-evident. A log file isn't enough — write to an event store, immutable database table, or signed log stream.</p>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== MODEL ATTRIBUTE ===================== -->
+    <section id="modelattr" data-toc="@ModelAttribute & @InitBinder">
+      <div class="section-num mb-4">§ 07 — Cross-cutting state</div>
+      <h2 class="section-title font-display mb-6">@ModelAttribute and @InitBinder</h2>
+      <p>Beyond exceptions, advice classes can inject shared state and bind data globally.</p>
+
+      <h3>Inject a per-request value into every controller</h3>
+      <div class="code-block has-label">
+        <span class="code-label">RequestModelAdvice.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@RestControllerAdvice
+public class RequestModelAdvice {
+
+    /** Available as a method argument (or model attribute) in every controller. */
+    @ModelAttribute("requestContext")
+    public RequestContext requestContext(HttpServletRequest req) {
+        return new RequestContext(
+            req.getHeader("X-Tenant-Id"),
+            req.getLocale(),
+            Instant.now()
+        );
+    }
+
+    /** Trim every incoming String automatically. */
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.registerCustomEditor(String.class,
+            new StringTrimmerEditor(true));   // null when empty
+    }
+}
+
+public record RequestContext(String tenantId, Locale locale, Instant arrivedAt) { }</code></pre>
+      </div>
+
+      <p>Now any controller method can declare <code>@ModelAttribute("requestContext") RequestContext ctx</code> as a parameter and Spring will inject the value populated by the advice.</p>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== SCOPING ===================== -->
+    <section id="scoping" data-toc="Scoping advice">
+      <div class="section-num mb-4">§ 08 — Scoping</div>
+      <h2 class="section-title font-display mb-6">Targeted advice with selectors</h2>
+      <p>By default, <code>@ControllerAdvice</code> applies to <em>every</em> controller in the application. That's often wrong. Public APIs and admin APIs typically need different error contracts. <code>@ControllerAdvice</code> exposes selectors:</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Selector</th><th>Effect</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>basePackages</code></td><td>Apply to controllers in specified packages.</td></tr>
+          <tr><td><code>annotations</code></td><td>Apply to controllers carrying a specified annotation.</td></tr>
+          <tr><td><code>assignableTypes</code></td><td>Apply to controllers extending/implementing the given type.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Public vs admin advice</h3>
+      <div class="code-block has-label">
+        <span class="code-label">Two advices, two scopes</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@RestControllerAdvice(basePackages = "com.example.api.public_")
+public class PublicApiAdvice {
+    // returns sanitized error responses — no stack traces, no internal codes
+}
+
+@RestControllerAdvice(basePackages = "com.example.api.admin")
+public class AdminApiAdvice {
+    // returns verbose error responses — includes correlation IDs, hints, etc.
+}</code></pre>
+      </div>
+
+      <h3>By annotation</h3>
+      <div class="code-block has-label">
+        <span class="code-label">Annotation-based scoping</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">// Marker annotation
+@Target(ElementType.TYPE) @Retention(RetentionPolicy.RUNTIME)
+public @interface PublicApi { }
+
+// Advice that only applies to controllers marked @PublicApi
+@RestControllerAdvice(annotations = PublicApi.class)
+public class PublicApiAdvice { /* ... */ }
+
+@PublicApi
+@RestController
+@RequestMapping("/api/public/v1")
+public class PublicProductController { /* ... */ }</code></pre>
+      </div>
+
+      <p>You can also use <code>@Order</code> to control the precedence between multiple advices that match the same exception. Lower order wins.</p>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== ADVANCED ===================== -->
+    <section id="advanced" data-toc="Advanced patterns">
+      <div class="section-num mb-4">§ 09 — Advanced</div>
+      <h2 class="section-title font-display mb-6">Patterns worth stealing</h2>
+
+      <h3>Pattern 1 — Pattern matching on exception types (Java 21)</h3>
+      <p>For aggregator handlers that need to inspect multiple exception shapes, Java 21's <strong>pattern matching for switch</strong> dramatically cleans things up:</p>
+      <div class="code-block has-label">
+        <span class="code-label">Pattern-matching dispatcher</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@ExceptionHandler({ IllegalArgumentException.class,
+                    DataAccessException.class,
+                    HttpMessageNotReadableException.class })
+public ProblemDetail handleCommon(Exception ex, HttpServletRequest req) {
+    var problem = switch (ex) {
+        case IllegalArgumentException iae -&gt;
+            ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, iae.getMessage());
+
+        case HttpMessageNotReadableException hme -&gt; {
+            var p = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Malformed JSON request");
+            p.setProperty("hint", "Ensure your Content-Type is application/json and the body parses cleanly");
+            yield p;
+        }
+
+        case DataAccessException dae -&gt; {
+            log.error("Database failure on {}", req.getRequestURI(), dae);
+            yield ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "A data store is temporarily unavailable.");
+        }
+
+        default -&gt; ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                       "An unexpected error occurred.");
+    };
+    problem.setProperty("path", req.getRequestURI());
+    return problem;
+}</code></pre>
+      </div>
+
+      <h3>Pattern 2 — Extending <code>ResponseEntityExceptionHandler</code></h3>
+      <p>If you want to fully override Spring MVC's built-in exception responses (for things like <code>HttpRequestMethodNotSupportedException</code>, <code>NoHandlerFoundException</code>, etc.) extend <code>ResponseEntityExceptionHandler</code> and override the protected hooks. You get a uniform error contract for both <em>your</em> exceptions and Spring's framework exceptions.</p>
+      <div class="code-block has-label">
+        <span class="code-label">Extending the framework base</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @Override
+    protected ResponseEntity&lt;Object&gt; handleHttpRequestMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest req) {
+
+        var problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
+        problem.setProperty("supportedMethods", ex.getSupportedHttpMethods());
+        problem.setProperty("code", "METHOD_NOT_ALLOWED");
+        return ResponseEntity.status(status).headers(headers).body(problem);
+    }
+
+    // ... your own @ExceptionHandler methods coexist below ...
+}</code></pre>
+      </div>
+
+      <h3>Pattern 3 — Centralized response wrapping</h3>
+      <p>Implement <code>ResponseBodyAdvice</code> to wrap or transform every controller response uniformly — for example, to attach a server timing header or wrap successful responses in an envelope:</p>
+      <div class="code-block has-label">
+        <span class="code-label">EnvelopeAdvice.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@RestControllerAdvice(basePackages = "com.example.api.public_")
+public class EnvelopeAdvice implements ResponseBodyAdvice&lt;Object&gt; {
+
+    @Override
+    public boolean supports(MethodParameter rt, Class&lt;? extends HttpMessageConverter&lt;?&gt;&gt; c) {
+        return !ProblemDetail.class.isAssignableFrom(rt.getParameterType());
+    }
+
+    @Override
+    public Object beforeBodyWrite(Object body, MethodParameter mp, MediaType mt,
+                                  Class&lt;? extends HttpMessageConverter&lt;?&gt;&gt; c,
+                                  ServerHttpRequest req, ServerHttpResponse res) {
+        return new ApiEnvelope&lt;&gt;(body, MDC.get("requestId"), Instant.now());
+    }
+
+    public record ApiEnvelope&lt;T&gt;(T data, String requestId, Instant timestamp) { }
+}</code></pre>
+      </div>
+
+      <h3>Pattern 4 — i18n-aware messages</h3>
+      <div class="code-block has-label">
+        <span class="code-label">Localized error detail</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@RestControllerAdvice
+@RequiredArgsConstructor
+public class LocalizedExceptionHandler {
+
+    private final MessageSource messages;
+
+    @ExceptionHandler(ApiException.class)
+    public ProblemDetail handle(ApiException ex, Locale locale) {
+        var detail = messages.getMessage(
+            "error." + ex.getCode().toLowerCase(),
+            ex.getContext().values().toArray(),
+            ex.getMessage(),
+            locale
+        );
+        var problem = ProblemDetail.forStatusAndDetail(ex.getStatus(), detail);
+        problem.setProperty("code", ex.getCode());
+        return problem;
+    }
+}</code></pre>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== LOMBOK ===================== -->
+    <section id="lombok" data-toc="Lombok cheatsheet">
+      <div class="section-num mb-4">§ 10 — Toolkit</div>
+      <h2 class="section-title font-display mb-6">Lombok annotations to know</h2>
+      <p>Lombok is most valuable when used selectively. Here is the high-leverage subset that pairs naturally with Spring code.</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Annotation</th><th>What it generates</th><th>Best used on</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>@Slf4j</code></td><td>A <code>private static final Logger log</code> field.</td><td>Anywhere you log — controllers, services, advices, aspects.</td></tr>
+          <tr><td><code>@RequiredArgsConstructor</code></td><td>Constructor that takes every <code>final</code> field.</td><td>Spring components that use constructor injection.</td></tr>
+          <tr><td><code>@Getter</code> / <code>@Setter</code></td><td>Accessors for all fields (or a single one if placed on a field).</td><td>JPA entities, exceptions carrying metadata.</td></tr>
+          <tr><td><code>@Builder</code></td><td>A fluent builder + an all-args static factory.</td><td>Complex DTOs, test fixtures, audit events.</td></tr>
+          <tr><td><code>@Value</code></td><td>Immutable class: final fields, getters, equals/hashCode/toString. (Records often replace this.)</td><td>Pre-Java-16 codebases; immutable value objects with inheritance.</td></tr>
+          <tr><td><code>@SneakyThrows</code></td><td>Hides checked exceptions inside aspects/handlers.</td><td>Use sparingly; great for AOP plumbing, dangerous in business code.</td></tr>
+          <tr><td><code>@Data</code></td><td>Combines getters, setters, equals/hashCode, toString, required-args ctor.</td><td>Mutable JPA entities; <em>avoid</em> on DTOs (prefer records).</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>A representative Lombok-powered service</h3>
+      <div class="code-block has-label">
+        <span class="code-label">UserService.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">package com.example.user;
+
+import com.example.audit.Audited;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository repository;
+    private final PasswordEncoder encoder;
+
+    @Transactional(readOnly = true)
+    public UserDto findById(Long id) {
+        log.debug("Looking up user id={}", id);
+        return repository.findById(id)
+            .map(UserDto::fromEntity)
+            .orElseThrow(() -&gt; new UserNotFoundException(id));
+    }
+
+    @Transactional
+    @Audited("user.create")
+    public UserDto create(CreateUserRequest req) {
+        if (repository.existsByEmail(req.email())) {
+            throw new DuplicateEmailException(req.email());
+        }
+        var user = repository.save(User.builder()
+            .name(req.name())
+            .email(req.email())
+            .passwordHash(encoder.encode(req.password()))
+            .build());
+        log.info("Created user id={} email={}", user.getId(), user.getEmail());
+        return UserDto.fromEntity(user);
+    }
+}</code></pre>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== USE CASES ===================== -->
+    <section id="usecases" data-toc="Use case catalog">
+      <div class="section-num mb-4">§ 11 — Catalog</div>
+      <h2 class="section-title font-display mb-6">Use case catalog</h2>
+      <p>A quick-reference map from problem to <code>@ControllerAdvice</code>-shaped solution.</p>
+
+      <div class="grid md:grid-cols-2 gap-4 mt-8">
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">01 · Translate domain errors</div>
+          <p class="text-sm">Map your typed exceptions (<code>UserNotFoundException</code>, <code>DuplicateEmailException</code>) to RFC 7807 ProblemDetail responses with stable error codes.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">02 · Format validation errors</div>
+          <p class="text-sm">Catch <code>MethodArgumentNotValidException</code> and emit field-by-field error arrays clients can render directly in forms.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">03 · Mask sensitive errors</div>
+          <p class="text-sm">For public APIs, strip stack traces, internal codes, and SQL hints from exception responses while still logging them server-side.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">04 · Correlation IDs</div>
+          <p class="text-sm">Attach a request ID to every response (success or error) so support engineers can trace customer reports through logs.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">05 · Translate framework errors</div>
+          <p class="text-sm">Override Spring's <code>HttpMessageNotReadableException</code>, <code>HttpRequestMethodNotSupportedException</code>, and friends to match your error contract.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">06 · Tenant resolution</div>
+          <p class="text-sm">Use <code>@ModelAttribute</code> on advice to expose a tenant context object every controller can inject.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">07 · Global string trimming</div>
+          <p class="text-sm">Use <code>@InitBinder</code> in advice to trim every incoming String parameter — eliminates a class of validation bugs.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">08 · Response envelopes</div>
+          <p class="text-sm">Implement <code>ResponseBodyAdvice</code> to wrap every successful response in a uniform envelope with metadata.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">09 · Differential advice</div>
+          <p class="text-sm">Use <code>basePackages</code>/<code>annotations</code> to apply different rules to public vs admin APIs.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">10 · i18n</div>
+          <p class="text-sm">Resolve error <code>detail</code> through <code>MessageSource</code> + the request's <code>Locale</code>.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">11 · Auditing outcomes</div>
+          <p class="text-sm">Pair an <code>@Audited</code> aspect with the advice to record both success outcomes and exception outcomes against one event schema.</p>
+        </div>
+        <div class="case-card">
+          <div class="text-xs font-mono uppercase tracking-widest mb-2" style="color: var(--blue);">12 · Rate limit responses</div>
+          <p class="text-sm">Map <code>RateLimitExceededException</code> to a 429 with <code>Retry-After</code> headers populated from your limiter.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== TESTING ===================== -->
+    <section id="testing" data-toc="Testing">
+      <div class="section-num mb-4">§ 12 — Testing</div>
+      <h2 class="section-title font-display mb-6">Testing your advice</h2>
+      <p>An advice that isn't tested is a bug factory. <code>@WebMvcTest</code> with <code>MockMvc</code> is the right tool — it boots only the web slice (your controllers + advices), making the tests fast.</p>
+      <div class="code-block has-label">
+        <span class="code-label">UserControllerWebMvcTest.java</span>
+        <button class="copy-btn">copy</button>
+<pre><code class="language-java">@WebMvcTest(UserController.class)
+@Import(GlobalExceptionHandler.class)
+class UserControllerWebMvcTest {
+
+    @Autowired MockMvc mvc;
+    @MockBean   UserService userService;
+
+    @Test
+    void notFoundEmitsRfc7807() throws Exception {
+        given(userService.findById(42L)).willThrow(new UserNotFoundException(42L));
+
+        mvc.perform(get("/api/users/42"))
+           .andExpect(status().isNotFound())
+           .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
+           .andExpect(jsonPath("$.context.userId").value(42))
+           .andExpect(jsonPath("$.path").value("/api/users/42"));
+    }
+
+    @Test
+    void validationErrorReturnsFieldList() throws Exception {
+        var bad = """
+            { "name": "", "email": "nope", "password": "abc" }
+            """;
+        mvc.perform(post("/api/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bad))
+           .andExpect(status().isBadRequest())
+           .andExpect(jsonPath("$.errors", hasSize(greaterThanOrEqualTo(2))));
+    }
+}</code></pre>
+      </div>
+    </section>
+
+    <div class="divider"><span class="divider-mark">◆ ◆ ◆</span></div>
+
+    <!-- ===================== BEST PRACTICES ===================== -->
+    <section id="best" data-toc="Best practices">
+      <div class="section-num mb-4">§ 13 — Closing</div>
+      <h2 class="section-title font-display mb-6">Principles to live by</h2>
+      <ol class="space-y-3 pl-0 list-none">
+        <li><strong class="font-display text-2xl gradient-text">i.</strong>&nbsp;&nbsp;<strong>Keep controllers thin.</strong> If an exception lives in your domain, throw it. Let the advice translate.</li>
+        <li><strong class="font-display text-2xl gradient-text">ii.</strong>&nbsp;&nbsp;<strong>Use stable, machine-readable error codes</strong> (<code>USER_NOT_FOUND</code>, not "user not found"). Clients depend on them.</li>
+        <li><strong class="font-display text-2xl gradient-text">iii.</strong>&nbsp;&nbsp;<strong>Log at the right level.</strong> Client errors → <code>WARN</code> or <code>INFO</code>. Server errors → <code>ERROR</code> with the stack trace.</li>
+        <li><strong class="font-display text-2xl gradient-text">iv.</strong>&nbsp;&nbsp;<strong>Never leak internals</strong> on public APIs. Stack traces, SQL, file paths — strip or mask.</li>
+        <li><strong class="font-display text-2xl gradient-text">v.</strong>&nbsp;&nbsp;<strong>Always include a correlation ID.</strong> Both in logs (MDC) and on the response (header or body).</li>
+        <li><strong class="font-display text-2xl gradient-text">vi.</strong>&nbsp;&nbsp;<strong>Prefer <code>ProblemDetail</code></strong> over hand-rolled error JSON. RFC 7807 is the standard.</li>
+        <li><strong class="font-display text-2xl gradient-text">vii.</strong>&nbsp;&nbsp;<strong>Scope advice carefully.</strong> One advice for public APIs, another for admin APIs, ordered explicitly.</li>
+        <li><strong class="font-display text-2xl gradient-text">viii.</strong>&nbsp;&nbsp;<strong>Audit through aspects, not advice.</strong> Use <code>@ControllerAdvice</code> for HTTP translation; use AOP for cross-cutting outcome recording.</li>
+        <li><strong class="font-display text-2xl gradient-text">ix.</strong>&nbsp;&nbsp;<strong>Lean on Java 21.</strong> Records for DTOs, sealed types for exception families, switch expressions for handler bodies.</li>
+        <li><strong class="font-display text-2xl gradient-text">x.</strong>&nbsp;&nbsp;<strong>Test the advice.</strong> <code>@WebMvcTest</code> is fast and gives the right boundary.</li>
+      </ol>
+
+      <div class="callout tip mt-12">
+        <div class="callout-label">▲ The big idea</div>
+        <p><code>@ControllerAdvice</code> is your application's <em>seam</em> for cross-cutting HTTP concerns. Build it once, build it well, and every new controller you add inherits a coherent error contract, structured logs, audit trails, and i18n — for free.</p>
+      </div>
+    </section>
+
+    <footer class="mt-24 pt-12 border-t" style="border-color: var(--rule);">
+      <div class="flex items-end justify-between flex-wrap gap-6">
+        <div>
+          <div class="font-display text-3xl mb-1" style="">Fin.</div>
+          <p class="text-xs font-mono uppercase tracking-widest" style="color: var(--ink-3);">A practical field guide · v1.0</p>
+        </div>
+        <div class="text-xs font-mono" style="color: var(--ink-3);">
+          <div>Java 21 · Spring Boot 3.5.13 · Lombok 1.18.x</div>
+          <div class="mt-1">Compiled <span style="color: var(--blue);">2026.05.05</span></div>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<script>
+  // ============ Highlight.js ============
+  hljs.highlightAll();
+
+  // ============ THEME TOGGLE (light/dark) ============
+  // (Initial theme is applied by the inline script in <head> to avoid flashing.)
+  const themeToggle = document.getElementById('themeToggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+      const root = document.documentElement;
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try { localStorage.setItem('advisory-theme', next); } catch (e) {}
+    });
+  }
+
+  // ============ TOC GENERATION ============
+  const sections = document.querySelectorAll('section[data-toc]');
+  const tocDesktop = document.getElementById('tocDesktop');
+  const tocMobile  = document.getElementById('tocMobile');
+  let idx = 0;
+  sections.forEach(sec => {
+    const label = sec.dataset.toc;
+    const num = String(idx).padStart(2, '0');
+    const html = `<a href="#${sec.id}" class="toc-link" data-target="${sec.id}"><span class="font-mono mr-2" style="color: var(--ink-3);">${num}</span>${label}</a>`;
+    tocDesktop.insertAdjacentHTML('beforeend', html);
+    tocMobile.insertAdjacentHTML('beforeend', html);
+    idx++;
+  });
+
+  // ============ ACTIVE LINK ON SCROLL ============
+  const tocLinks = document.querySelectorAll('.toc-link');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        tocLinks.forEach(l => l.classList.toggle('active', l.dataset.target === id));
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+
+  // ============ COPY CODE BUTTONS ============
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const block = btn.closest('.code-block');
+      const code = block.querySelector('pre code');
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code.innerText);
+        const original = btn.textContent;
+        btn.textContent = 'copied ✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 1400);
+      } catch { btn.textContent = 'failed'; }
+    });
+  });
+
+  // ============ READING PROGRESS ============
+  const progress = document.getElementById('progress');
+  window.addEventListener('scroll', () => {
+    const h = document.documentElement;
+    const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+    progress.style.width = pct + '%';
+  });
+
+  // ============ MOBILE TOC CLOSE ON CLICK ============
+  document.querySelectorAll('#tocMobile a').forEach(a => {
+    a.addEventListener('click', () => {
+      document.getElementById('mobileTocPanel').classList.add('hidden');
+    });
+  });
+</script>
+
+</body>
+</html>
