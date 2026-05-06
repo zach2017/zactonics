@@ -1,0 +1,1952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AWS Temp Environment Setup Guide — Spring Boot · React · Redis</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --ibm-blue: #0f62fe;
+    --ibm-blue-dark: #0043ce;
+    --ibm-blue-light: #4589ff;
+    --ibm-blue-10: #edf5ff;
+    --ibm-blue-20: #d0e2ff;
+    --ibm-gray-10: #f4f4f4;
+    --ibm-gray-20: #e0e0e0;
+    --ibm-gray-50: #8d8d8d;
+    --ibm-gray-80: #393939;
+    --ibm-gray-100: #161616;
+    --ibm-teal: #009d9a;
+    --ibm-green: #24a148;
+    --ibm-red: #da1e28;
+    --ibm-yellow: #f1c21b;
+    --ibm-purple: #8a3ffc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: #f4f4f4;
+    color: #161616;
+    margin: 0;
+  }
+  code, pre, .mono { font-family: 'IBM Plex Mono', monospace; }
+  h1, h2, h3 { font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; }
+
+  /* Sidebar */
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 260px; background: #161616; overflow-y: auto;
+    z-index: 100; transition: transform .3s;
+  }
+  #sidebar.hidden { transform: translateX(-260px); }
+  #main-content { margin-left: 260px; transition: margin .3s; }
+  #main-content.full { margin-left: 0; }
+
+  .nav-item {
+    display: block; padding: 10px 20px; color: #c6c6c6;
+    font-size: 13px; text-decoration: none; border-left: 3px solid transparent;
+    transition: all .2s; cursor: pointer;
+  }
+  .nav-item:hover, .nav-item.active {
+    color: #fff; border-left-color: var(--ibm-blue); background: #262626;
+  }
+  .nav-section {
+    padding: 16px 20px 6px; color: var(--ibm-blue-light);
+    font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Code blocks */
+  .code-block {
+    background: #161616; border-radius: 0; position: relative;
+    margin: 16px 0; border-left: 4px solid var(--ibm-blue);
+  }
+  .code-block pre {
+    padding: 20px 24px; overflow-x: auto; color: #f4f4f4;
+    font-size: 13px; line-height: 1.7; margin: 0;
+  }
+  .code-label {
+    background: var(--ibm-blue); color: #fff;
+    font-size: 11px; padding: 4px 12px; display: inline-block;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600;
+    letter-spacing: .5px;
+  }
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: #393939; color: #c6c6c6; border: none;
+    padding: 4px 10px; font-size: 11px; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace; transition: background .2s;
+  }
+  .copy-btn:hover { background: var(--ibm-blue); color: #fff; }
+
+  /* Step cards */
+  .step-card {
+    background: #fff; border-top: 4px solid var(--ibm-blue);
+    margin-bottom: 32px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  }
+  .step-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 24px 28px; border-bottom: 1px solid #e0e0e0;
+  }
+  .step-num {
+    width: 40px; height: 40px; background: var(--ibm-blue);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; flex-shrink: 0;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .step-body { padding: 24px 28px; }
+
+  /* Tags */
+  .tag {
+    display: inline-block; padding: 2px 10px; font-size: 12px;
+    font-weight: 600; font-family: 'IBM Plex Mono', monospace;
+    margin: 2px;
+  }
+  .tag-blue { background: var(--ibm-blue-10); color: var(--ibm-blue); }
+  .tag-teal { background: #d9fbfb; color: var(--ibm-teal); }
+  .tag-green { background: #defbe6; color: var(--ibm-green); }
+  .tag-red { background: #fff1f1; color: var(--ibm-red); }
+  .tag-yellow { background: #fdf6dd; color: #825e00; }
+  .tag-purple { background: #f6f2ff; color: var(--ibm-purple); }
+
+  /* Info boxes */
+  .info-box {
+    border-left: 4px solid; padding: 16px 20px; margin: 16px 0;
+    font-size: 14px; line-height: 1.6;
+  }
+  .info-tip { border-color: var(--ibm-blue); background: var(--ibm-blue-10); }
+  .info-warn { border-color: var(--ibm-yellow); background: #fdf6dd; }
+  .info-danger { border-color: var(--ibm-red); background: #fff1f1; }
+  .info-success { border-color: var(--ibm-green); background: #defbe6; }
+
+  /* Section titles */
+  .section-hero {
+    background: linear-gradient(135deg, #0043ce 0%, #0f62fe 60%, #4589ff 100%);
+    color: #fff; padding: 48px 40px 40px;
+  }
+  .section-title {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--ibm-blue); font-weight: 700; margin-bottom: 8px;
+  }
+
+  /* Arch diagram */
+  .arch-box {
+    border: 2px solid; border-radius: 2px;
+    padding: 10px 16px; text-align: center; font-size: 13px;
+    font-weight: 600; font-family: 'IBM Plex Mono', monospace;
+  }
+  .arch-arrow { color: var(--ibm-blue); font-size: 22px; text-align: center; }
+
+  /* Tabs */
+  .tab-btn {
+    padding: 10px 20px; border: none; background: #e0e0e0;
+    cursor: pointer; font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px; font-weight: 600; transition: all .2s;
+    border-bottom: 3px solid transparent;
+  }
+  .tab-btn.active {
+    background: #fff; border-bottom-color: var(--ibm-blue);
+    color: var(--ibm-blue);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* QA section */
+  .qa-item { border-bottom: 1px solid #e0e0e0; }
+  .qa-q {
+    padding: 18px 20px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center;
+    font-weight: 600; font-size: 15px; background: #fff;
+    transition: background .15s;
+  }
+  .qa-q:hover { background: var(--ibm-blue-10); }
+  .qa-a {
+    display: none; padding: 0 20px 20px; background: var(--ibm-blue-10);
+    font-size: 14px; line-height: 1.7;
+  }
+  .qa-a.open { display: block; }
+  .chevron { transition: transform .2s; }
+  .chevron.open { transform: rotate(180deg); }
+
+  /* Progress */
+  #progress-bar {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: var(--ibm-blue-light); z-index: 999;
+    transition: width .1s;
+  }
+
+  /* Responsive */
+  @media(max-width:768px){
+    #sidebar { transform: translateX(-260px); }
+    #sidebar.mobile-open { transform: translateX(0); }
+    #main-content { margin-left: 0; }
+  }
+
+  /* Syntax highlight colors */
+  .kw { color: #be95ff; }
+  .str { color: #42be65; }
+  .cm { color: #6f6f6f; }
+  .fn { color: #82cfff; }
+  .num { color: #ff832b; }
+  .var { color: #78a9ff; }
+  .prop { color: #3ddbd9; }
+
+  a.ref-link {
+    color: var(--ibm-blue); text-decoration: none; font-weight: 600;
+    border-bottom: 1px dashed var(--ibm-blue);
+  }
+  a.ref-link:hover { border-bottom-style: solid; }
+
+  .badge-new {
+    background: var(--ibm-blue); color: #fff;
+    font-size: 10px; padding: 1px 6px; vertical-align: middle;
+    font-family: 'IBM Plex Mono', monospace; margin-left: 6px;
+  }
+
+  .checklist li {
+    padding: 8px 0; border-bottom: 1px solid #e0e0e0;
+    display: flex; align-items: flex-start; gap: 10px; font-size: 14px;
+  }
+  .checklist li::before {
+    content: '☐'; color: var(--ibm-blue); font-size: 16px; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="progress-bar" style="width:0%"></div>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div style="padding:20px 20px 10px; border-bottom:1px solid #393939;">
+    <div style="color:#fff; font-size:15px; font-weight:700; font-family:'IBM Plex Mono',monospace;">
+      ⬡ AWS TEMP ENV
+    </div>
+    <div style="color:#8d8d8d; font-size:11px; margin-top:4px;">Spring · React · Redis</div>
+  </div>
+
+  <div class="nav-section">Getting Started</div>
+  <a class="nav-item active" onclick="scrollTo('overview')">🗺 Architecture Overview</a>
+  <a class="nav-item" onclick="scrollTo('prereqs')">✅ Prerequisites</a>
+  <a class="nav-item" onclick="scrollTo('iam')">🔑 IAM & Credentials</a>
+
+  <div class="nav-section">Infrastructure</div>
+  <a class="nav-item" onclick="scrollTo('terraform-setup')">⚙️ Terraform Setup</a>
+  <a class="nav-item" onclick="scrollTo('vpc')">🌐 VPC & Networking</a>
+  <a class="nav-item" onclick="scrollTo('security')">🔒 Security Groups</a>
+  <a class="nav-item" onclick="scrollTo('ec2')">🖥 EC2 / Spring Boot</a>
+  <a class="nav-item" onclick="scrollTo('redis')">⚡ Redis (ElastiCache)</a>
+  <a class="nav-item" onclick="scrollTo('react')">⚛ React Frontend</a>
+
+  <div class="nav-section">Config & Deploy</div>
+  <a class="nav-item" onclick="scrollTo('cloudconfig')">☁️ AWS CloudFormation</a>
+  <a class="nav-item" onclick="scrollTo('docker')">🐳 Docker & ECR</a>
+  <a class="nav-item" onclick="scrollTo('env-vars')">📋 Env Variables</a>
+  <a class="nav-item" onclick="scrollTo('cleanup')">🧹 Teardown</a>
+
+  <div class="nav-section">Interview Prep</div>
+  <a class="nav-item" onclick="scrollTo('interview')">🎤 Q&amp;A Section</a>
+  <a class="nav-item" onclick="scrollTo('refs')">📚 References</a>
+</nav>
+
+<!-- TOGGLE SIDEBAR BUTTON -->
+<button onclick="toggleSidebar()" style="position:fixed;top:12px;left:12px;z-index:200;background:#0f62fe;color:#fff;border:none;width:36px;height:36px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;" id="toggle-btn">☰</button>
+
+<!-- MAIN CONTENT -->
+<div id="main-content">
+
+  <!-- HERO -->
+  <div class="section-hero">
+    <div style="max-width:900px; margin:0 auto;">
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#a6c8ff; letter-spacing:2px; margin-bottom:12px;">AWS SOLUTION GUIDE · TEMP ENVIRONMENT SETUP</div>
+      <h1 style="font-size:clamp(28px,4vw,48px); font-weight:700; margin:0 0 16px; line-height:1.1;">
+        Deploy a Secure Temp AWS Stack<br/>
+        <span style="color:#a6c8ff;">Spring Boot + React + Redis</span>
+      </h1>
+      <p style="font-size:16px; color:#d0e2ff; max-width:680px; line-height:1.6; margin:0 0 24px;">
+        A complete, step-by-step guide to spinning up a temporary cloud environment using Terraform, AWS VPC, EC2, ElastiCache, and S3/CloudFront — with secure API-to-database networking and interview prep.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">Terraform</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">AWS VPC</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">EC2</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">ElastiCache</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">S3 + CloudFront</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">Spring Boot</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">ReactJS</span>
+        <span class="tag" style="background:rgba(255,255,255,.15);color:#fff;">Redis</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:960px; margin:0 auto; padding:32px 24px;">
+
+  <!-- ═══════════════════════════════ OVERVIEW ═══════════════════════════════ -->
+  <div id="overview" class="step-card">
+    <div class="step-header">
+      <div class="step-num">🗺</div>
+      <div>
+        <div class="section-title">Architecture Overview</div>
+        <h2 style="margin:0; font-size:22px;">What We're Building</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:15px; line-height:1.7; margin-bottom:24px;">
+        We're setting up a <strong>temporary, cost-effective AWS environment</strong> that mirrors a real production stack. This guide is beginner-friendly — every command is explained. Here's how the pieces connect:
+      </p>
+
+      <!-- Architecture Diagram -->
+      <div style="background:#f4f4f4; border:1px solid #e0e0e0; padding:28px; overflow-x:auto;">
+        <div style="min-width:600px;">
+          <div style="display:flex; justify-content:center; margin-bottom:8px;">
+            <div class="arch-box" style="border-color:#0f62fe; background:#edf5ff; color:#0f62fe; width:180px;">
+              👤 User / Browser
+            </div>
+          </div>
+          <div class="arch-arrow">↕ HTTPS (443)</div>
+          <div style="display:flex; justify-content:center; margin-bottom:4px;">
+            <div class="arch-box" style="border-color:#009d9a; background:#d9fbfb; width:220px;">
+              ☁️ CloudFront CDN<br/><small style="font-weight:400;">SSL Termination</small>
+            </div>
+          </div>
+          <div class="arch-arrow">↕</div>
+          <div style="display:flex; justify-content:center; gap:16px; flex-wrap:wrap;">
+            <div class="arch-box" style="border-color:#0f62fe; background:#edf5ff; width:200px;">
+              🪣 S3 Bucket<br/><small style="font-weight:400;">React Static Files</small>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+              <div style="color:#8d8d8d;font-size:12px;">API Calls</div>
+              <div style="font-size:20px;color:#0f62fe;">→</div>
+            </div>
+            <div style="border:2px dashed #0f62fe; padding:12px; background:#f4f4f4;">
+              <div style="text-align:center;font-size:11px;color:#0f62fe;font-weight:700;margin-bottom:8px;">PUBLIC SUBNET</div>
+              <div class="arch-box" style="border-color:#8a3ffc; background:#f6f2ff; width:180px;">
+                ⚖️ Application Load Balancer<br/><small style="font-weight:400;">Port 8080 → EC2</small>
+              </div>
+              <div class="arch-arrow" style="color:#8a3ffc;">↕</div>
+              <div style="border:2px dashed #393939; padding:10px; background:#fff;">
+                <div style="text-align:center;font-size:11px;color:#393939;font-weight:700;margin-bottom:8px;">PRIVATE SUBNET</div>
+                <div class="arch-box" style="border-color:#24a148; background:#defbe6; width:180px;">
+                  🖥 EC2 Instance<br/><small style="font-weight:400;">Spring Boot :8080</small>
+                </div>
+                <div class="arch-arrow" style="color:#24a148;">↕ Port 6379 (internal)</div>
+                <div class="arch-box" style="border-color:#da1e28; background:#fff1f1; width:180px;">
+                  ⚡ ElastiCache Redis<br/><small style="font-weight:400;">Port 6379 only</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center;margin-top:16px;font-size:12px;color:#8d8d8d;font-family:'IBM Plex Mono',monospace;">
+            VPC: 10.0.0.0/16 · Public: 10.0.1.0/24 · Private: 10.0.2.0/24
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px;">
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="color:var(--ibm-blue); font-size:20px; margin-bottom:8px;">🌐</div>
+          <div style="font-weight:700; margin-bottom:4px;">VPC Network</div>
+          <div style="font-size:13px; color:#6f6f6f;">Isolated private network. Public + Private subnets. Internet Gateway for outbound traffic.</div>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="color:#24a148; font-size:20px; margin-bottom:8px;">🖥</div>
+          <div style="font-weight:700; margin-bottom:4px;">Spring Boot API</div>
+          <div style="font-size:13px; color:#6f6f6f;">EC2 t3.small in private subnet. Talks to Redis internally. Exposed only via ALB.</div>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="color:#da1e28; font-size:20px; margin-bottom:8px;">⚡</div>
+          <div style="font-weight:700; margin-bottom:4px;">Redis Cache</div>
+          <div style="font-size:13px; color:#6f6f6f;">ElastiCache in private subnet. Only EC2 security group can reach port 6379.</div>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="color:#009d9a; font-size:20px; margin-bottom:8px;">⚛</div>
+          <div style="font-weight:700; margin-bottom:4px;">React Frontend</div>
+          <div style="font-size:13px; color:#6f6f6f;">Static build on S3. Served via CloudFront with HTTPS. No servers to manage.</div>
+        </div>
+      </div>
+
+      <div class="info-box info-tip" style="margin-top:24px;">
+        💡 <strong>New to AWS?</strong> Think of a <strong>VPC</strong> like your own private data center inside AWS. The <strong>Public Subnet</strong> is like the lobby — internet-facing. The <strong>Private Subnet</strong> is the back office — no direct internet access, much more secure.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ PREREQUISITES ═══════════════════════════════ -->
+  <div id="prereqs" class="step-card">
+    <div class="step-header">
+      <div class="step-num">01</div>
+      <div>
+        <div class="section-title">Step 1 — Prerequisites</div>
+        <h2 style="margin:0; font-size:22px;">Tools You Need Installed</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:20px;">Install all of these before starting. Click the links to go to official installation pages.</p>
+
+      <table style="width:100%; border-collapse:collapse; font-size:14px;">
+        <thead>
+          <tr style="background:#161616; color:#fff;">
+            <th style="padding:12px 16px; text-align:left;">Tool</th>
+            <th style="padding:12px 16px; text-align:left;">Version</th>
+            <th style="padding:12px 16px; text-align:left;">Purpose</th>
+            <th style="padding:12px 16px; text-align:left;">Install Link</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#fff; border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px; font-weight:700; font-family:'IBM Plex Mono',monospace;">AWS CLI</td>
+            <td style="padding:12px 16px;"><span class="tag tag-blue">v2.x</span></td>
+            <td style="padding:12px 16px;">Talk to AWS from terminal</td>
+            <td style="padding:12px 16px;"><a href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html" class="ref-link" target="_blank">docs.aws.amazon.com</a></td>
+          </tr>
+          <tr style="background:#f4f4f4; border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px; font-weight:700; font-family:'IBM Plex Mono',monospace;">Terraform</td>
+            <td style="padding:12px 16px;"><span class="tag tag-teal">v1.7+</span></td>
+            <td style="padding:12px 16px;">Infrastructure as Code</td>
+            <td style="padding:12px 16px;"><a href="https://developer.hashicorp.com/terraform/install" class="ref-link" target="_blank">hashicorp.com/terraform</a></td>
+          </tr>
+          <tr style="background:#fff; border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px; font-weight:700; font-family:'IBM Plex Mono',monospace;">Docker</td>
+            <td style="padding:12px 16px;"><span class="tag tag-blue">v24+</span></td>
+            <td style="padding:12px 16px;">Containerize Spring Boot</td>
+            <td style="padding:12px 16px;"><a href="https://docs.docker.com/get-docker/" class="ref-link" target="_blank">docs.docker.com</a></td>
+          </tr>
+          <tr style="background:#f4f4f4; border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px; font-weight:700; font-family:'IBM Plex Mono',monospace;">Java JDK 17</td>
+            <td style="padding:12px 16px;"><span class="tag tag-green">LTS</span></td>
+            <td style="padding:12px 16px;">Build Spring Boot app</td>
+            <td style="padding:12px 16px;"><a href="https://adoptium.net/" class="ref-link" target="_blank">adoptium.net</a></td>
+          </tr>
+          <tr style="background:#fff; border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px; font-weight:700; font-family:'IBM Plex Mono',monospace;">Node.js</td>
+            <td style="padding:12px 16px;"><span class="tag tag-green">v20 LTS</span></td>
+            <td style="padding:12px 16px;">Build React app</td>
+            <td style="padding:12px 16px;"><a href="https://nodejs.org/" class="ref-link" target="_blank">nodejs.org</a></td>
+          </tr>
+          <tr style="background:#f4f4f4;">
+            <td style="padding:12px 16px; font-weight:700; font-family:'IBM Plex Mono',monospace;">Git</td>
+            <td style="padding:12px 16px;"><span class="tag tag-blue">latest</span></td>
+            <td style="padding:12px 16px;">Version control</td>
+            <td style="padding:12px 16px;"><a href="https://git-scm.com/" class="ref-link" target="_blank">git-scm.com</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:20px;">
+        <div class="code-label">bash — Verify all tools</div>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="cm"># Run each line and confirm you see version numbers</span>
+aws --version          <span class="cm"># aws-cli/2.x.x</span>
+terraform --version    <span class="cm"># Terraform v1.x.x</span>
+docker --version       <span class="cm"># Docker version 24.x</span>
+java -version          <span class="cm"># openjdk 17</span>
+node --version         <span class="cm"># v20.x.x</span>
+git --version          <span class="cm"># git version 2.x</span></pre>
+        </div>
+      </div>
+
+      <div class="info-box info-warn">
+        ⚠️ <strong>Windows Users:</strong> Use <a href="https://docs.microsoft.com/en-us/windows/wsl/install" class="ref-link" target="_blank">WSL2 (Windows Subsystem for Linux)</a> for the best experience. All commands in this guide assume a Unix-like shell (bash/zsh).
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ IAM ═══════════════════════════════ -->
+  <div id="iam" class="step-card">
+    <div class="step-header">
+      <div class="step-num">02</div>
+      <div>
+        <div class="section-title">Step 2 — IAM & Credentials</div>
+        <h2 style="margin:0; font-size:22px;">Setting Up AWS Access</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="info-box info-danger">
+        🚨 <strong>Never use your root AWS account!</strong> Always create a dedicated IAM user. Never commit credentials to Git. Never share access keys.
+      </div>
+
+      <h3 style="margin-top:20px;">Create an IAM User (AWS Console)</h3>
+      <ol style="font-size:14px; line-height:2;">
+        <li>Log in to <a href="https://console.aws.amazon.com/iam/" class="ref-link" target="_blank">AWS IAM Console</a></li>
+        <li>Go to <strong>Users → Create user</strong></li>
+        <li>Name it: <code style="background:#e0e0e0; padding:2px 6px;">terraform-deploy</code></li>
+        <li>Select <strong>Attach policies directly</strong></li>
+        <li>Attach: <code style="background:#e0e0e0; padding:2px 6px;">AdministratorAccess</code> <em>(for temp env — restrict in prod)</em></li>
+        <li>Go to the user → <strong>Security credentials → Create access key</strong></li>
+        <li>Choose <strong>CLI</strong> → Download the CSV file</li>
+      </ol>
+
+      <h3 style="margin-top:20px;">Configure AWS CLI</h3>
+      <div class="code-label">bash</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre>aws configure
+
+<span class="cm"># You will be prompted:</span>
+AWS Access Key ID [None]: <span class="str">AKIAIOSFODNN7EXAMPLE</span>
+AWS Secret Access Key [None]: <span class="str">wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY</span>
+Default region name [None]: <span class="str">us-east-1</span>
+Default output format [None]: <span class="str">json</span>
+
+<span class="cm"># Test it works:</span>
+aws sts get-caller-identity</pre>
+      </div>
+
+      <div class="info-box info-tip">
+        💡 <strong>What is STS?</strong> <code>get-caller-identity</code> calls the AWS Security Token Service (STS) to verify your credentials. If you see your Account ID and ARN, you're authenticated!
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="code-label">bash — Expected output</div>
+        <div class="code-block">
+          <pre>{
+    <span class="prop">"UserId"</span>: <span class="str">"AIDAIOSFODNN7EXAMPLE"</span>,
+    <span class="prop">"Account"</span>: <span class="str">"123456789012"</span>,
+    <span class="prop">"Arn"</span>: <span class="str">"arn:aws:iam::123456789012:user/terraform-deploy"</span>
+}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ TERRAFORM SETUP ═══════════════════════════════ -->
+  <div id="terraform-setup" class="step-card">
+    <div class="step-header">
+      <div class="step-num">03</div>
+      <div>
+        <div class="section-title">Step 3 — Terraform Project Setup</div>
+        <h2 style="margin:0; font-size:22px;">Infrastructure as Code Foundation</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7;">Terraform lets you define your entire AWS infrastructure in code files. This means you can <strong>create everything with one command</strong> and <strong>destroy it just as easily</strong> — perfect for temp environments.</p>
+
+      <h3 style="margin-top:20px;">Project Folder Structure</h3>
+      <div class="code-label">directory layout</div>
+      <div class="code-block">
+        <pre>aws-temp-env/
+├── terraform/
+│   ├── <span class="fn">main.tf</span>          <span class="cm"># Root config & providers</span>
+│   ├── <span class="fn">variables.tf</span>     <span class="cm"># Input variables</span>
+│   ├── <span class="fn">outputs.tf</span>       <span class="cm"># Output values (IPs, URLs)</span>
+│   ├── <span class="fn">vpc.tf</span>           <span class="cm"># VPC, subnets, gateways</span>
+│   ├── <span class="fn">security.tf</span>      <span class="cm"># Security groups</span>
+│   ├── <span class="fn">ec2.tf</span>           <span class="cm"># EC2 for Spring Boot</span>
+│   ├── <span class="fn">redis.tf</span>         <span class="cm"># ElastiCache Redis</span>
+│   ├── <span class="fn">s3.tf</span>            <span class="cm"># S3 + CloudFront for React</span>
+│   └── <span class="fn">terraform.tfvars</span> <span class="cm"># Your actual values (don't commit!)</span>
+├── spring-api/
+│   ├── src/
+│   └── Dockerfile
+└── react-app/
+    ├── src/
+    └── build/</pre>
+      </div>
+
+      <div class="code-label">terraform/main.tf — Provider configuration</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># main.tf — Tells Terraform we're using AWS</span>
+
+<span class="kw">terraform</span> {
+  required_version = <span class="str">">= 1.7.0"</span>
+  required_providers {
+    aws = {
+      source  = <span class="str">"hashicorp/aws"</span>
+      version = <span class="str">"~> 5.0"</span>
+    }
+  }
+}
+
+<span class="cm"># This tells Terraform which AWS region to use</span>
+<span class="kw">provider</span> <span class="str">"aws"</span> {
+  region = <span class="var">var.aws_region</span>
+
+  <span class="cm"># Tag every resource so we know it's temp</span>
+  default_tags {
+    tags = {
+      Project     = <span class="str">"temp-env"</span>
+      Environment = <span class="str">"temporary"</span>
+      ManagedBy   = <span class="str">"terraform"</span>
+      Owner       = <span class="var">var.owner_name</span>
+    }
+  }
+}</pre>
+      </div>
+
+      <div class="code-label">terraform/variables.tf</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="kw">variable</span> <span class="str">"aws_region"</span> {
+  description = <span class="str">"AWS region to deploy to"</span>
+  type        = <span class="fn">string</span>
+  default     = <span class="str">"us-east-1"</span>
+}
+
+<span class="kw">variable</span> <span class="str">"owner_name"</span> {
+  description = <span class="str">"Your name — for resource tagging"</span>
+  type        = <span class="fn">string</span>
+}
+
+<span class="kw">variable</span> <span class="str">"instance_type"</span> {
+  description = <span class="str">"EC2 size (t3.small is cheap for testing)"</span>
+  type        = <span class="fn">string</span>
+  default     = <span class="str">"t3.small"</span>
+}
+
+<span class="kw">variable</span> <span class="str">"redis_node_type"</span> {
+  description = <span class="str">"ElastiCache Redis node size"</span>
+  type        = <span class="fn">string</span>
+  default     = <span class="str">"cache.t3.micro"</span>
+}</pre>
+      </div>
+
+      <div class="code-label">terraform/terraform.tfvars — Your values</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># terraform.tfvars — Fill in your actual values</span>
+<span class="cm"># IMPORTANT: Add this file to .gitignore!</span>
+
+<span class="var">aws_region</span>    = <span class="str">"us-east-1"</span>
+<span class="var">owner_name</span>    = <span class="str">"your-name-here"</span>
+<span class="var">instance_type</span> = <span class="str">"t3.small"</span></pre>
+      </div>
+
+      <h3 style="margin-top:24px;">Initialize Terraform</h3>
+      <div class="code-label">bash</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># Navigate into the terraform directory</span>
+cd aws-temp-env/terraform
+
+<span class="cm"># Download the AWS provider plugin</span>
+terraform init
+
+<span class="cm"># Expected output:</span>
+<span class="cm"># Initializing provider plugins...</span>
+<span class="cm"># - Installing hashicorp/aws v5.x.x...</span>
+<span class="cm"># Terraform has been successfully initialized!</span></pre>
+      </div>
+
+      <div class="info-box info-tip">
+        💡 <code>terraform init</code> downloads the AWS provider plugin — think of it like <code>npm install</code> for infrastructure. It creates a <code>.terraform/</code> folder. You only need to run this once per project.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ VPC ═══════════════════════════════ -->
+  <div id="vpc" class="step-card">
+    <div class="step-header">
+      <div class="step-num">04</div>
+      <div>
+        <div class="section-title">Step 4 — VPC & Networking</div>
+        <h2 style="margin:0; font-size:22px;">Building Your Private Network</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:16px;">
+        A <strong>VPC (Virtual Private Cloud)</strong> is your isolated section of AWS. We create <strong>two subnets</strong>: a public one for internet-facing resources, and a private one for the API and Redis that should never be directly accessible.
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+        <div style="border:2px solid var(--ibm-blue); padding:16px; background:var(--ibm-blue-10);">
+          <div style="font-weight:700; color:var(--ibm-blue); margin-bottom:8px;">🌍 Public Subnet (10.0.1.0/24)</div>
+          <ul style="font-size:13px; padding-left:16px; line-height:1.8;">
+            <li>Application Load Balancer</li>
+            <li>NAT Gateway (for private subnet's outbound)</li>
+            <li>Has direct internet access</li>
+          </ul>
+        </div>
+        <div style="border:2px solid #393939; padding:16px; background:#f4f4f4;">
+          <div style="font-weight:700; color:#393939; margin-bottom:8px;">🔒 Private Subnet (10.0.2.0/24)</div>
+          <ul style="font-size:13px; padding-left:16px; line-height:1.8;">
+            <li>EC2 (Spring Boot API)</li>
+            <li>ElastiCache (Redis)</li>
+            <li>No direct inbound internet</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-label">terraform/vpc.tf</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># ── VPC ──────────────────────────────────────────</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc"</span> <span class="str">"main"</span> {
+  cidr_block           = <span class="str">"10.0.0.0/16"</span>
+  enable_dns_hostnames = <span class="fn">true</span>  <span class="cm"># Required for RDS/ElastiCache</span>
+  enable_dns_support   = <span class="fn">true</span>
+
+  tags = { Name = <span class="str">"temp-vpc"</span> }
+}
+
+<span class="cm"># ── PUBLIC SUBNET (Load Balancer lives here) ─────</span>
+<span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"public"</span> {
+  vpc_id                  = <span class="fn">aws_vpc.main.id</span>
+  cidr_block              = <span class="str">"10.0.1.0/24"</span>
+  availability_zone       = <span class="str">"us-east-1a"</span>
+  map_public_ip_on_launch = <span class="fn">true</span>  <span class="cm"># EC2 here gets public IP</span>
+
+  tags = { Name = <span class="str">"temp-public-subnet"</span> }
+}
+
+<span class="cm"># ── PRIVATE SUBNET (API + Redis live here) ───────</span>
+<span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"private"</span> {
+  vpc_id            = <span class="fn">aws_vpc.main.id</span>
+  cidr_block        = <span class="str">"10.0.2.0/24"</span>
+  availability_zone = <span class="str">"us-east-1a"</span>
+
+  tags = { Name = <span class="str">"temp-private-subnet"</span> }
+}
+
+<span class="cm"># Need a second AZ subnet for ElastiCache subnet group</span>
+<span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"private_b"</span> {
+  vpc_id            = <span class="fn">aws_vpc.main.id</span>
+  cidr_block        = <span class="str">"10.0.3.0/24"</span>
+  availability_zone = <span class="str">"us-east-1b"</span>
+
+  tags = { Name = <span class="str">"temp-private-subnet-b"</span> }
+}
+
+<span class="cm"># ── INTERNET GATEWAY (door to the internet) ──────</span>
+<span class="kw">resource</span> <span class="str">"aws_internet_gateway"</span> <span class="str">"igw"</span> {
+  vpc_id = <span class="fn">aws_vpc.main.id</span>
+  tags   = { Name = <span class="str">"temp-igw"</span> }
+}
+
+<span class="cm"># ── NAT GATEWAY (private subnet → internet, 1-way)</span>
+<span class="kw">resource</span> <span class="str">"aws_eip"</span> <span class="str">"nat"</span> {
+  domain = <span class="str">"vpc"</span>
+}
+
+<span class="kw">resource</span> <span class="str">"aws_nat_gateway"</span> <span class="str">"nat"</span> {
+  allocation_id = <span class="fn">aws_eip.nat.id</span>
+  subnet_id     = <span class="fn">aws_subnet.public.id</span>  <span class="cm"># NAT lives in PUBLIC</span>
+  tags          = { Name = <span class="str">"temp-nat"</span> }
+}
+
+<span class="cm"># ── ROUTE TABLES ─────────────────────────────────</span>
+<span class="cm"># Public: 0.0.0.0/0 → Internet Gateway</span>
+<span class="kw">resource</span> <span class="str">"aws_route_table"</span> <span class="str">"public"</span> {
+  vpc_id = <span class="fn">aws_vpc.main.id</span>
+  route {
+    cidr_block = <span class="str">"0.0.0.0/0"</span>
+    gateway_id = <span class="fn">aws_internet_gateway.igw.id</span>
+  }
+  tags = { Name = <span class="str">"temp-public-rt"</span> }
+}
+
+<span class="kw">resource</span> <span class="str">"aws_route_table_association"</span> <span class="str">"public"</span> {
+  subnet_id      = <span class="fn">aws_subnet.public.id</span>
+  route_table_id = <span class="fn">aws_route_table.public.id</span>
+}
+
+<span class="cm"># Private: 0.0.0.0/0 → NAT Gateway (outbound only)</span>
+<span class="kw">resource</span> <span class="str">"aws_route_table"</span> <span class="str">"private"</span> {
+  vpc_id = <span class="fn">aws_vpc.main.id</span>
+  route {
+    cidr_block     = <span class="str">"0.0.0.0/0"</span>
+    nat_gateway_id = <span class="fn">aws_nat_gateway.nat.id</span>
+  }
+  tags = { Name = <span class="str">"temp-private-rt"</span> }
+}
+
+<span class="kw">resource</span> <span class="str">"aws_route_table_association"</span> <span class="str">"private"</span> {
+  subnet_id      = <span class="fn">aws_subnet.private.id</span>
+  route_table_id = <span class="fn">aws_route_table.private.id</span>
+}</pre>
+      </div>
+
+      <div class="info-box info-tip">
+        💡 <strong>NAT Gateway Explained:</strong> Private subnet instances can't receive inbound internet traffic BUT they can reach out (for yum/apt updates, etc.) through the NAT Gateway. Think of it as a one-way mirror.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ SECURITY GROUPS ═══════════════════════════════ -->
+  <div id="security" class="step-card">
+    <div class="step-header">
+      <div class="step-num">05</div>
+      <div>
+        <div class="section-title">Step 5 — Security Groups</div>
+        <h2 style="margin:0; font-size:22px;">Firewall Rules Between Services</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:16px;">
+        Security Groups are <strong>virtual firewalls</strong>. The key principle: <strong>only allow the minimum required traffic</strong>. Redis should only be reachable from Spring Boot. Spring Boot should only be reachable from the Load Balancer.
+      </p>
+
+      <div style="overflow-x:auto; margin-bottom:16px;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead>
+            <tr style="background:#0f62fe; color:#fff;">
+              <th style="padding:10px 14px; text-align:left;">Security Group</th>
+              <th style="padding:10px 14px; text-align:left;">Inbound From</th>
+              <th style="padding:10px 14px; text-align:left;">Port</th>
+              <th style="padding:10px 14px; text-align:left;">Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background:#fff; border-bottom:1px solid #e0e0e0;">
+              <td style="padding:10px 14px; font-family:'IBM Plex Mono',monospace; font-weight:700;">sg-alb</td>
+              <td style="padding:10px 14px;">Internet (0.0.0.0/0)</td>
+              <td style="padding:10px 14px;"><span class="tag tag-blue">443, 80</span></td>
+              <td style="padding:10px 14px;">Public web traffic to load balancer</td>
+            </tr>
+            <tr style="background:#f4f4f4; border-bottom:1px solid #e0e0e0;">
+              <td style="padding:10px 14px; font-family:'IBM Plex Mono',monospace; font-weight:700;">sg-api</td>
+              <td style="padding:10px 14px;">sg-alb only</td>
+              <td style="padding:10px 14px;"><span class="tag tag-teal">8080</span></td>
+              <td style="padding:10px 14px;">ALB forwards traffic to Spring Boot</td>
+            </tr>
+            <tr style="background:#fff; border-bottom:1px solid #e0e0e0;">
+              <td style="padding:10px 14px; font-family:'IBM Plex Mono',monospace; font-weight:700;">sg-redis</td>
+              <td style="padding:10px 14px;">sg-api only</td>
+              <td style="padding:10px 14px;"><span class="tag tag-red">6379</span></td>
+              <td style="padding:10px 14px;">Only Spring Boot API can reach Redis</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-label">terraform/security.tf</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># ── ALB SECURITY GROUP (Internet → Load Balancer) ─</span>
+<span class="kw">resource</span> <span class="str">"aws_security_group"</span> <span class="str">"alb"</span> {
+  name        = <span class="str">"temp-sg-alb"</span>
+  description = <span class="str">"Allow HTTP/HTTPS from internet to ALB"</span>
+  vpc_id      = <span class="fn">aws_vpc.main.id</span>
+
+  ingress {
+    from_port   = <span class="num">80</span>
+    to_port     = <span class="num">80</span>
+    protocol    = <span class="str">"tcp"</span>
+    cidr_blocks = [<span class="str">"0.0.0.0/0"</span>]
+    description = <span class="str">"HTTP from anywhere"</span>
+  }
+  ingress {
+    from_port   = <span class="num">443</span>
+    to_port     = <span class="num">443</span>
+    protocol    = <span class="str">"tcp"</span>
+    cidr_blocks = [<span class="str">"0.0.0.0/0"</span>]
+    description = <span class="str">"HTTPS from anywhere"</span>
+  }
+  egress {
+    from_port   = <span class="num">0</span>
+    to_port     = <span class="num">0</span>
+    protocol    = <span class="str">"-1"</span>
+    cidr_blocks = [<span class="str">"0.0.0.0/0"</span>]
+  }
+  tags = { Name = <span class="str">"temp-sg-alb"</span> }
+}
+
+<span class="cm"># ── API SECURITY GROUP (ALB → Spring Boot EC2) ───</span>
+<span class="kw">resource</span> <span class="str">"aws_security_group"</span> <span class="str">"api"</span> {
+  name        = <span class="str">"temp-sg-api"</span>
+  description = <span class="str">"Allow port 8080 only from ALB"</span>
+  vpc_id      = <span class="fn">aws_vpc.main.id</span>
+
+  ingress {
+    from_port       = <span class="num">8080</span>
+    to_port         = <span class="num">8080</span>
+    protocol        = <span class="str">"tcp"</span>
+    <span class="cm"># Only from ALB security group — NOT from internet!</span>
+    security_groups = [<span class="fn">aws_security_group.alb.id</span>]
+    description     = <span class="str">"Spring Boot from ALB only"</span>
+  }
+  egress {
+    from_port   = <span class="num">0</span>
+    to_port     = <span class="num">0</span>
+    protocol    = <span class="str">"-1"</span>
+    cidr_blocks = [<span class="str">"0.0.0.0/0"</span>]
+  }
+  tags = { Name = <span class="str">"temp-sg-api"</span> }
+}
+
+<span class="cm"># ── REDIS SECURITY GROUP (API → Redis only) ──────</span>
+<span class="kw">resource</span> <span class="str">"aws_security_group"</span> <span class="str">"redis"</span> {
+  name        = <span class="str">"temp-sg-redis"</span>
+  description = <span class="str">"Allow Redis port only from API security group"</span>
+  vpc_id      = <span class="fn">aws_vpc.main.id</span>
+
+  ingress {
+    from_port       = <span class="num">6379</span>
+    to_port         = <span class="num">6379</span>
+    protocol        = <span class="str">"tcp"</span>
+    <span class="cm"># This is the KEY security rule — only EC2 API can talk to Redis</span>
+    security_groups = [<span class="fn">aws_security_group.api.id</span>]
+    description     = <span class="str">"Redis from API EC2 only"</span>
+  }
+  <span class="cm"># No egress needed for Redis</span>
+  tags = { Name = <span class="str">"temp-sg-redis"</span> }
+}</pre>
+      </div>
+
+      <div class="info-box info-success">
+        ✅ <strong>Security Best Practice:</strong> By referencing <code>security_groups</code> instead of <code>cidr_blocks</code>, you're saying "traffic from instances with THIS security group" — not a fixed IP. This is more dynamic and secure.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ EC2 ═══════════════════════════════ -->
+  <div id="ec2" class="step-card">
+    <div class="step-header">
+      <div class="step-num">06</div>
+      <div>
+        <div class="section-title">Step 6 — EC2 Instance (Spring Boot)</div>
+        <h2 style="margin:0; font-size:22px;">Deploying the Java API Server</h2>
+      </div>
+    </div>
+    <div class="step-body">
+
+      <!-- Tabs -->
+      <div style="display:flex; gap:0; margin-bottom:0; flex-wrap:wrap;">
+        <button class="tab-btn active" onclick="switchTab(this,'ec2-terraform')">Terraform</button>
+        <button class="tab-btn" onclick="switchTab(this,'ec2-dockerfile')">Dockerfile</button>
+        <button class="tab-btn" onclick="switchTab(this,'ec2-springconfig')">Spring Config</button>
+        <button class="tab-btn" onclick="switchTab(this,'ec2-userdata')">UserData Script</button>
+      </div>
+
+      <div id="ec2-terraform" class="tab-panel active" style="border:1px solid #e0e0e0; padding:0;">
+        <div class="code-label">terraform/ec2.tf</div>
+        <div class="code-block" style="border-left:none; margin:0;">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="cm"># Get the latest Amazon Linux 2023 AMI</span>
+<span class="kw">data</span> <span class="str">"aws_ami"</span> <span class="str">"amazon_linux"</span> {
+  most_recent = <span class="fn">true</span>
+  owners      = [<span class="str">"amazon"</span>]
+  filter {
+    name   = <span class="str">"name"</span>
+    values = [<span class="str">"al2023-ami-*-x86_64"</span>]
+  }
+}
+
+<span class="cm"># IAM Role — allows EC2 to pull from ECR</span>
+<span class="kw">resource</span> <span class="str">"aws_iam_role"</span> <span class="str">"ec2_role"</span> {
+  name = <span class="str">"temp-ec2-role"</span>
+  assume_role_policy = <span class="fn">jsonencode</span>({
+    Version = <span class="str">"2012-10-17"</span>
+    Statement = [{
+      Action    = <span class="str">"sts:AssumeRole"</span>
+      Effect    = <span class="str">"Allow"</span>
+      Principal = { Service = <span class="str">"ec2.amazonaws.com"</span> }
+    }]
+  })
+}
+
+<span class="kw">resource</span> <span class="str">"aws_iam_role_policy_attachment"</span> <span class="str">"ecr"</span> {
+  role       = <span class="fn">aws_iam_role.ec2_role.name</span>
+  policy_arn = <span class="str">"arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"</span>
+}
+
+<span class="kw">resource</span> <span class="str">"aws_iam_instance_profile"</span> <span class="str">"ec2"</span> {
+  name = <span class="str">"temp-ec2-profile"</span>
+  role = <span class="fn">aws_iam_role.ec2_role.name</span>
+}
+
+<span class="cm"># EC2 Instance in PRIVATE subnet</span>
+<span class="kw">resource</span> <span class="str">"aws_instance"</span> <span class="str">"api"</span> {
+  ami                    = <span class="fn">data.aws_ami.amazon_linux.id</span>
+  instance_type          = <span class="var">var.instance_type</span>
+  subnet_id              = <span class="fn">aws_subnet.private.id</span>
+  vpc_security_group_ids = [<span class="fn">aws_security_group.api.id</span>]
+  iam_instance_profile   = <span class="fn">aws_iam_instance_profile.ec2.name</span>
+
+  <span class="cm"># Bootstrap script — runs on first boot</span>
+  user_data = <span class="fn">templatefile</span>(<span class="str">"${path.module}/userdata.sh"</span>, {
+    redis_endpoint = <span class="fn">aws_elasticache_cluster.redis.cache_nodes[0].address</span>
+    ecr_image      = <span class="var">var.ecr_image_uri</span>
+    aws_region     = <span class="var">var.aws_region</span>
+  })
+
+  tags = { Name = <span class="str">"temp-spring-api"</span> }
+}</pre>
+        </div>
+      </div>
+
+      <div id="ec2-dockerfile" class="tab-panel" style="border:1px solid #e0e0e0; padding:0;">
+        <div class="code-label">spring-api/Dockerfile — Multi-stage build</div>
+        <div class="code-block" style="border-left:none; margin:0;">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="cm"># Stage 1: Build the JAR using Maven</span>
+<span class="kw">FROM</span> <span class="fn">eclipse-temurin:17-jdk-alpine</span> <span class="kw">AS</span> builder
+<span class="kw">WORKDIR</span> /app
+
+<span class="cm"># Copy Maven wrapper and pom first (layer caching)</span>
+<span class="kw">COPY</span> mvnw .
+<span class="kw">COPY</span> .mvn .mvn
+<span class="kw">COPY</span> pom.xml .
+<span class="kw">RUN</span> ./mvnw dependency:go-offline -B
+
+<span class="cm"># Now copy source and build</span>
+<span class="kw">COPY</span> src src
+<span class="kw">RUN</span> ./mvnw package -DskipTests
+
+<span class="cm"># ─────────────────────────────────────────────────</span>
+<span class="cm"># Stage 2: Lean runtime image (no JDK, just JRE)</span>
+<span class="kw">FROM</span> <span class="fn">eclipse-temurin:17-jre-alpine</span>
+<span class="kw">WORKDIR</span> /app
+
+<span class="cm"># Create non-root user for security</span>
+<span class="kw">RUN</span> addgroup -S appgroup && adduser -S appuser -G appgroup
+<span class="kw">USER</span> appuser
+
+<span class="kw">COPY</span> --from=builder /app/target/*.jar app.jar
+
+<span class="kw">EXPOSE</span> 8080
+<span class="kw">ENTRYPOINT</span> [<span class="str">"java"</span>, <span class="str">"-jar"</span>, <span class="str">"-Xmx512m"</span>, <span class="str">"app.jar"</span>]</pre>
+        </div>
+      </div>
+
+      <div id="ec2-springconfig" class="tab-panel" style="border:1px solid #e0e0e0; padding:0;">
+        <div class="code-label">spring-api/src/main/resources/application.yml</div>
+        <div class="code-block" style="border-left:none; margin:0;">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="var">spring</span>:
+  <span class="var">application</span>:
+    <span class="var">name</span>: <span class="str">temp-api</span>
+
+  <span class="cm"># Redis connection — reads from environment variable</span>
+  <span class="var">data</span>:
+    <span class="var">redis</span>:
+      <span class="var">host</span>: <span class="str">${REDIS_HOST}</span>       <span class="cm"># injected at runtime</span>
+      <span class="var">port</span>: <span class="num">6379</span>
+      <span class="var">timeout</span>: <span class="num">2000</span>
+      <span class="var">connect-timeout</span>: <span class="num">2000</span>
+
+<span class="var">server</span>:
+  <span class="var">port</span>: <span class="num">8080</span>
+
+<span class="cm"># Health check endpoint for ALB</span>
+<span class="var">management</span>:
+  <span class="var">endpoints</span>:
+    <span class="var">web</span>:
+      <span class="var">exposure</span>:
+        <span class="var">include</span>: <span class="str">health,info</span>
+  <span class="var">endpoint</span>:
+    <span class="var">health</span>:
+      <span class="var">show-details</span>: <span class="str">always</span></pre>
+        </div>
+      </div>
+
+      <div id="ec2-userdata" class="tab-panel" style="border:1px solid #e0e0e0; padding:0;">
+        <div class="code-label">terraform/userdata.sh — EC2 bootstrap</div>
+        <div class="code-block" style="border-left:none; margin:0;">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="cm">#!/bin/bash</span>
+<span class="cm"># This script runs automatically when EC2 boots for the first time</span>
+
+<span class="cm"># Update and install Docker</span>
+yum update -y
+yum install -y docker
+systemctl start docker
+systemctl enable docker
+
+<span class="cm"># Log in to ECR (AWS container registry)</span>
+aws ecr get-login-password --region <span class="str">${aws_region}</span> | \
+  docker login --username AWS --password-stdin \
+  <span class="str">${ecr_image}</span>
+
+<span class="cm"># Pull and run the Spring Boot container</span>
+docker pull <span class="str">${ecr_image}</span>
+
+docker run -d \
+  --name spring-api \
+  --restart always \
+  -p <span class="num">8080</span>:<span class="num">8080</span> \
+  -e <span class="var">REDIS_HOST</span>=<span class="str">${redis_endpoint}</span> \
+  -e <span class="var">SPRING_PROFILES_ACTIVE</span>=<span class="str">prod</span> \
+  <span class="str">${ecr_image}</span>
+
+<span class="cm"># Confirm it's running</span>
+docker ps</pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ REDIS ═══════════════════════════════ -->
+  <div id="redis" class="step-card">
+    <div class="step-header">
+      <div class="step-num">07</div>
+      <div>
+        <div class="section-title">Step 7 — Redis (ElastiCache)</div>
+        <h2 style="margin:0; font-size:22px;">Setting Up the Cache Layer</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:16px;">
+        <strong>AWS ElastiCache</strong> is a managed Redis service. No server to patch, no Redis config to write. We place it in the private subnet — <strong>only accessible from the EC2 API</strong> via the security group rule we created earlier.
+      </p>
+
+      <div class="code-label">terraform/redis.tf</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># ElastiCache needs a subnet group (min 2 AZs)</span>
+<span class="kw">resource</span> <span class="str">"aws_elasticache_subnet_group"</span> <span class="str">"redis"</span> {
+  name       = <span class="str">"temp-redis-subnet-group"</span>
+  subnet_ids = [
+    <span class="fn">aws_subnet.private.id</span>,
+    <span class="fn">aws_subnet.private_b.id</span>
+  ]
+}
+
+<span class="cm"># Redis cluster — single node for temp environment</span>
+<span class="kw">resource</span> <span class="str">"aws_elasticache_cluster"</span> <span class="str">"redis"</span> {
+  cluster_id           = <span class="str">"temp-redis"</span>
+  engine               = <span class="str">"redis"</span>
+  node_type            = <span class="var">var.redis_node_type</span>  <span class="cm"># cache.t3.micro</span>
+  num_cache_nodes      = <span class="num">1</span>
+  parameter_group_name = <span class="str">"default.redis7"</span>
+  engine_version       = <span class="str">"7.1"</span>
+  port                 = <span class="num">6379</span>
+
+  subnet_group_name  = <span class="fn">aws_elasticache_subnet_group.redis.name</span>
+  security_group_ids = [<span class="fn">aws_security_group.redis.id</span>]
+
+  <span class="cm"># Disable backups for temp env (saves cost)</span>
+  snapshot_retention_limit = <span class="num">0</span>
+
+  tags = { Name = <span class="str">"temp-redis"</span> }
+}</pre>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="code-label">terraform/outputs.tf — Get the Redis hostname</div>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="kw">output</span> <span class="str">"redis_endpoint"</span> {
+  description = <span class="str">"ElastiCache Redis hostname"</span>
+  value       = <span class="fn">aws_elasticache_cluster.redis.cache_nodes[0].address</span>
+  sensitive   = <span class="fn">false</span>
+}
+
+<span class="kw">output</span> <span class="str">"alb_dns_name"</span> {
+  description = <span class="str">"Load balancer URL for Spring Boot API"</span>
+  value       = <span class="fn">aws_lb.api.dns_name</span>
+}
+
+<span class="kw">output</span> <span class="str">"cloudfront_url"</span> {
+  description = <span class="str">"React app CloudFront URL"</span>
+  value       = <span class="fn">aws_cloudfront_distribution.react.domain_name</span>
+}</pre>
+        </div>
+      </div>
+
+      <div class="info-box info-warn">
+        ⚠️ <strong>Cost Tip:</strong> NAT Gateway costs ~$0.045/hr. ElastiCache cache.t3.micro costs ~$0.017/hr. Remember to run <code>terraform destroy</code> when done to stop all charges!
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ REACT ═══════════════════════════════ -->
+  <div id="react" class="step-card">
+    <div class="step-header">
+      <div class="step-num">08</div>
+      <div>
+        <div class="section-title">Step 8 — React Frontend</div>
+        <h2 style="margin:0; font-size:22px;">S3 + CloudFront Static Hosting</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:16px;">
+        React apps are just static files after you run <code>npm run build</code>. We upload them to S3 and serve them globally via CloudFront CDN — no web server needed, and it scales automatically.
+      </p>
+
+      <div class="code-label">bash — Build your React app first</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre>cd react-app
+
+<span class="cm"># Install dependencies</span>
+npm install
+
+<span class="cm"># Set the API URL as an env variable</span>
+<span class="cm"># Create a .env file:</span>
+echo <span class="str">"REACT_APP_API_URL=https://your-alb-dns.amazonaws.com"</span> > .env
+
+<span class="cm"># Build for production</span>
+npm run build
+
+<span class="cm"># The build/ folder is now ready to upload to S3</span>
+ls build/</pre>
+      </div>
+
+      <div class="code-label">terraform/s3.tf</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># S3 bucket for React static files</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket"</span> <span class="str">"react"</span> {
+  bucket = <span class="str">"temp-react-app-${random_id.suffix.hex}"</span>
+  tags   = { Name = <span class="str">"temp-react-frontend"</span> }
+}
+
+<span class="kw">resource</span> <span class="str">"aws_random_id"</span> <span class="str">"suffix"</span> {
+  byte_length = <span class="num">4</span>
+}
+
+<span class="cm"># Block all public access — CloudFront uses OAC instead</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket_public_access_block"</span> <span class="str">"react"</span> {
+  bucket                  = <span class="fn">aws_s3_bucket.react.id</span>
+  block_public_acls       = <span class="fn">true</span>
+  block_public_policy     = <span class="fn">true</span>
+  ignore_public_acls      = <span class="fn">true</span>
+  restrict_public_buckets = <span class="fn">true</span>
+}
+
+<span class="cm"># CloudFront Origin Access Control</span>
+<span class="kw">resource</span> <span class="str">"aws_cloudfront_origin_access_control"</span> <span class="str">"react"</span> {
+  name                              = <span class="str">"temp-react-oac"</span>
+  origin_access_control_origin_type = <span class="str">"s3"</span>
+  signing_behavior                  = <span class="str">"always"</span>
+  signing_protocol                  = <span class="str">"sigv4"</span>
+}
+
+<span class="cm"># CloudFront Distribution</span>
+<span class="kw">resource</span> <span class="str">"aws_cloudfront_distribution"</span> <span class="str">"react"</span> {
+  enabled             = <span class="fn">true</span>
+  default_root_object = <span class="str">"index.html"</span>
+  price_class         = <span class="str">"PriceClass_100"</span>  <span class="cm"># US/EU only — cheapest</span>
+
+  origin {
+    domain_name              = <span class="fn">aws_s3_bucket.react.bucket_regional_domain_name</span>
+    origin_id                = <span class="str">"S3-React"</span>
+    origin_access_control_id = <span class="fn">aws_cloudfront_origin_access_control.react.id</span>
+  }
+
+  default_cache_behavior {
+    allowed_methods        = [<span class="str">"GET"</span>, <span class="str">"HEAD"</span>]
+    cached_methods         = [<span class="str">"GET"</span>, <span class="str">"HEAD"</span>]
+    target_origin_id       = <span class="str">"S3-React"</span>
+    viewer_protocol_policy = <span class="str">"redirect-to-https"</span>
+
+    forwarded_values {
+      query_string = <span class="fn">false</span>
+      cookies { forward = <span class="str">"none"</span> }
+    }
+  }
+
+  <span class="cm"># SPA routing — serve index.html for 404s</span>
+  custom_error_response {
+    error_code         = <span class="num">404</span>
+    response_code      = <span class="num">200</span>
+    response_page_path = <span class="str">"/index.html"</span>
+  }
+
+  restrictions {
+    geo_restriction { restriction_type = <span class="str">"none"</span> }
+  }
+  viewer_certificate {
+    cloudfront_default_certificate = <span class="fn">true</span>
+  }
+}</pre>
+      </div>
+
+      <div class="code-label">bash — Deploy React build to S3</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># After terraform apply, get the bucket name:</span>
+BUCKET=$(terraform output -raw react_bucket_name)
+
+<span class="cm"># Sync the React build folder to S3</span>
+aws s3 sync react-app/build/ s3://$BUCKET \
+  --delete \
+  --cache-control "max-age=31536000,immutable"
+
+<span class="cm"># Always upload index.html with no-cache</span>
+aws s3 cp react-app/build/index.html s3://$BUCKET/index.html \
+  --cache-control "no-cache, no-store, must-revalidate"
+
+<span class="cm"># Invalidate CloudFront cache to serve fresh files</span>
+CF_ID=$(terraform output -raw cloudfront_id)
+aws cloudfront create-invalidation \
+  --distribution-id $CF_ID \
+  --paths "/*"</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ CLOUDFORMATION ═══════════════════════════════ -->
+  <div id="cloudconfig" class="step-card">
+    <div class="step-header">
+      <div class="step-num">09</div>
+      <div>
+        <div class="section-title">Step 9 — AWS CloudFormation Alternative</div>
+        <h2 style="margin:0; font-size:22px;">Native AWS Infrastructure as Code</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:16px;">
+        CloudFormation is AWS's built-in IaC tool (no extra install needed). While we use Terraform in this guide, here's an equivalent snippet so you understand both approaches.
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; font-size:13px;">
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; margin-bottom:8px; color:var(--ibm-blue);">✅ Use Terraform when:</div>
+          <ul style="padding-left:16px; line-height:2;">
+            <li>Multi-cloud environments</li>
+            <li>Team already knows HCL</li>
+            <li>Better state management</li>
+            <li>Richer ecosystem of modules</li>
+          </ul>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; margin-bottom:8px; color:#009d9a;">✅ Use CloudFormation when:</div>
+          <ul style="padding-left:16px; line-height:2;">
+            <li>AWS-only environment</li>
+            <li>Native AWS integration</li>
+            <li>No extra tools to install</li>
+            <li>StackSets for multi-account</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-label">cloudformation/vpc-template.yaml</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="var">AWSTemplateFormatVersion</span>: <span class="str">'2010-09-09'</span>
+<span class="var">Description</span>: <span class="str">'Temp environment VPC - Spring Boot + Redis'</span>
+
+<span class="var">Parameters</span>:
+  <span class="var">OwnerName</span>:
+    <span class="var">Type</span>: <span class="fn">String</span>
+    <span class="var">Description</span>: <span class="str">Your name for tagging</span>
+
+<span class="var">Resources</span>:
+  <span class="cm"># VPC</span>
+  <span class="var">MainVPC</span>:
+    <span class="var">Type</span>: <span class="fn">AWS::EC2::VPC</span>
+    <span class="var">Properties</span>:
+      <span class="var">CidrBlock</span>: <span class="str">10.0.0.0/16</span>
+      <span class="var">EnableDnsHostnames</span>: <span class="fn">true</span>
+      <span class="var">Tags</span>:
+        - <span class="var">Key</span>: Name
+          <span class="var">Value</span>: temp-vpc
+        - <span class="var">Key</span>: Owner
+          <span class="var">Value</span>: !<span class="fn">Ref</span> OwnerName
+
+  <span class="cm"># Public Subnet</span>
+  <span class="var">PublicSubnet</span>:
+    <span class="var">Type</span>: <span class="fn">AWS::EC2::Subnet</span>
+    <span class="var">Properties</span>:
+      <span class="var">VpcId</span>: !<span class="fn">Ref</span> MainVPC
+      <span class="var">CidrBlock</span>: <span class="str">10.0.1.0/24</span>
+      <span class="var">AvailabilityZone</span>: !<span class="fn">Select</span> [0, !<span class="fn">GetAZs</span> '']
+      <span class="var">MapPublicIpOnLaunch</span>: <span class="fn">true</span>
+
+  <span class="cm"># Redis Security Group</span>
+  <span class="var">RedisSecurityGroup</span>:
+    <span class="var">Type</span>: <span class="fn">AWS::EC2::SecurityGroup</span>
+    <span class="var">Properties</span>:
+      <span class="var">GroupDescription</span>: <span class="str">Redis access from API only</span>
+      <span class="var">VpcId</span>: !<span class="fn">Ref</span> MainVPC
+      <span class="var">SecurityGroupIngress</span>:
+        - <span class="var">IpProtocol</span>: tcp
+          <span class="var">FromPort</span>: <span class="num">6379</span>
+          <span class="var">ToPort</span>: <span class="num">6379</span>
+          <span class="var">SourceSecurityGroupId</span>: !<span class="fn">Ref</span> ApiSecurityGroup
+
+<span class="var">Outputs</span>:
+  <span class="var">VpcId</span>:
+    <span class="var">Value</span>: !<span class="fn">Ref</span> MainVPC
+    <span class="var">Export</span>:
+      <span class="var">Name</span>: TempEnv-VpcId</pre>
+      </div>
+
+      <div class="code-label">bash — Deploy CloudFormation stack</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre>aws cloudformation deploy \
+  --template-file cloudformation/vpc-template.yaml \
+  --stack-name temp-env-vpc \
+  --parameter-overrides OwnerName=YourName \
+  --capabilities CAPABILITY_IAM
+
+<span class="cm"># Check stack status:</span>
+aws cloudformation describe-stacks \
+  --stack-name temp-env-vpc \
+  --query 'Stacks[0].StackStatus'
+
+<span class="cm"># Delete when done:</span>
+aws cloudformation delete-stack --stack-name temp-env-vpc</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ DOCKER ═══════════════════════════════ -->
+  <div id="docker" class="step-card">
+    <div class="step-header">
+      <div class="step-num">10</div>
+      <div>
+        <div class="section-title">Step 10 — Docker & ECR</div>
+        <h2 style="margin:0; font-size:22px;">Containerize & Push to AWS Registry</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-label">bash — Full Docker + ECR workflow</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># ── 1. Set variables ───────────────────────────────</span>
+<span class="var">AWS_ACCOUNT_ID</span>=$(aws sts get-caller-identity --query Account --output text)
+<span class="var">AWS_REGION</span>=us-east-1
+<span class="var">ECR_REPO</span>=temp-spring-api
+
+<span class="cm"># ── 2. Create ECR repository ───────────────────────</span>
+aws ecr create-repository \
+  --repository-name $ECR_REPO \
+  --region $AWS_REGION
+
+<span class="cm"># ── 3. Build the Docker image ──────────────────────</span>
+cd spring-api
+docker build -t $ECR_REPO:latest .
+
+<span class="cm"># ── 4. Tag for ECR ────────────────────────────────</span>
+<span class="var">ECR_URI</span>=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO
+docker tag $ECR_REPO:latest $ECR_URI:latest
+
+<span class="cm"># ── 5. Log in to ECR ──────────────────────────────</span>
+aws ecr get-login-password --region $AWS_REGION | \
+  docker login --username AWS --password-stdin \
+  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+<span class="cm"># ── 6. Push to ECR ────────────────────────────────</span>
+docker push $ECR_URI:latest
+
+<span class="cm"># ── 7. Confirm it uploaded ────────────────────────</span>
+aws ecr list-images --repository-name $ECR_REPO</pre>
+      </div>
+
+      <div class="info-box info-tip">
+        💡 <strong>What is ECR?</strong> Amazon Elastic Container Registry (ECR) is like Docker Hub but inside AWS. It's faster, cheaper, and integrates with IAM permissions — so your EC2 can pull images without any passwords.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ ENV VARS ═══════════════════════════════ -->
+  <div id="env-vars" class="step-card">
+    <div class="step-header">
+      <div class="step-num">11</div>
+      <div>
+        <div class="section-title">Step 11 — Run Everything</div>
+        <h2 style="margin:0; font-size:22px;">Apply Terraform & Go Live</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-label">bash — Full Terraform apply sequence</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre>cd terraform/
+
+<span class="cm"># Preview what will be created (always do this first!)</span>
+terraform plan -out=tfplan
+
+<span class="cm"># Review the plan output, then apply:</span>
+terraform apply tfplan
+
+<span class="cm"># ── This will create: ─────────────────────────────</span>
+<span class="cm"># + aws_vpc.main</span>
+<span class="cm"># + aws_subnet.public</span>
+<span class="cm"># + aws_subnet.private (x2)</span>
+<span class="cm"># + aws_internet_gateway.igw</span>
+<span class="cm"># + aws_nat_gateway.nat</span>
+<span class="cm"># + aws_security_group.alb / api / redis</span>
+<span class="cm"># + aws_instance.api (EC2)</span>
+<span class="cm"># + aws_elasticache_cluster.redis</span>
+<span class="cm"># + aws_s3_bucket.react</span>
+<span class="cm"># + aws_cloudfront_distribution.react</span>
+<span class="cm"># ─ ~15-20 minutes total ──────────────────────────</span>
+
+<span class="cm"># After apply, get your URLs:</span>
+terraform output alb_dns_name
+terraform output cloudfront_url
+terraform output redis_endpoint</pre>
+      </div>
+
+      <h3 style="margin-top:24px;">🧪 Verify Everything Works</h3>
+      <div class="code-label">bash — End-to-end health checks</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># 1. Check the Spring Boot health endpoint</span>
+ALB=$(terraform output -raw alb_dns_name)
+curl http://$ALB/actuator/health
+<span class="cm"># Expected: {"status":"UP","components":{"redis":{"status":"UP"}}}</span>
+
+<span class="cm"># 2. Confirm Redis is reachable from API (in health response)</span>
+curl http://$ALB/actuator/health | python3 -m json.tool
+
+<span class="cm"># 3. Check React is loading</span>
+CF=$(terraform output -raw cloudfront_url)
+curl -I https://$CF
+<span class="cm"># Expected: HTTP/2 200</span>
+
+<span class="cm"># 4. Test CORS: React → API</span>
+curl -H "Origin: https://$CF" \
+     -H "Access-Control-Request-Method: GET" \
+     -X OPTIONS http://$ALB/api/test -v</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ CLEANUP ═══════════════════════════════ -->
+  <div id="cleanup" class="step-card" style="border-top-color: #da1e28;">
+    <div class="step-header">
+      <div class="step-num" style="background:#da1e28;">🧹</div>
+      <div>
+        <div class="section-title" style="color:#da1e28;">IMPORTANT — Teardown</div>
+        <h2 style="margin:0; font-size:22px;">Destroying the Temp Environment</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="info-box info-danger">
+        🚨 <strong>Always destroy temp environments when done!</strong> Running AWS resources cost money 24/7. Even a small temp env with NAT Gateway can cost $30-50/month if left running.
+      </div>
+
+      <div class="code-label">bash — Safe teardown sequence</div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+        <pre><span class="cm"># 1. Empty the S3 bucket first (Terraform can't delete non-empty buckets)</span>
+BUCKET=$(terraform output -raw react_bucket_name)
+aws s3 rm s3://$BUCKET --recursive
+
+<span class="cm"># 2. Destroy ALL infrastructure with one command</span>
+cd terraform/
+terraform destroy
+
+<span class="cm"># Type 'yes' when prompted</span>
+<span class="cm"># This removes everything: VPC, EC2, Redis, S3, CloudFront...</span>
+
+<span class="cm"># 3. Delete the ECR repository and images</span>
+aws ecr delete-repository \
+  --repository-name temp-spring-api \
+  --force
+
+<span class="cm"># 4. Confirm nothing is running (should be empty)</span>
+aws ec2 describe-instances \
+  --filters "Name=tag:Environment,Values=temporary" \
+  --query 'Reservations[].Instances[].InstanceId'</pre>
+      </div>
+
+      <div style="margin-top:20px; background:#fff1f1; border:1px solid #da1e28; padding:16px;">
+        <div style="font-weight:700; margin-bottom:12px; color:#da1e28;">💰 Estimated hourly costs while running:</div>
+        <table style="width:100%; font-size:13px; border-collapse:collapse;">
+          <tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:8px 12px; font-family:'IBM Plex Mono',monospace;">NAT Gateway</td>
+            <td style="padding:8px 12px; color:#da1e28; font-weight:700;">~$0.045/hr</td>
+            <td style="padding:8px 12px; color:#6f6f6f;">Highest cost item</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e0e0e0; background:#fef2f2;">
+            <td style="padding:8px 12px; font-family:'IBM Plex Mono',monospace;">EC2 t3.small</td>
+            <td style="padding:8px 12px; color:#da1e28; font-weight:700;">~$0.023/hr</td>
+            <td style="padding:8px 12px; color:#6f6f6f;">Linux on-demand</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:8px 12px; font-family:'IBM Plex Mono',monospace;">ElastiCache t3.micro</td>
+            <td style="padding:8px 12px; color:#da1e28; font-weight:700;">~$0.017/hr</td>
+            <td style="padding:8px 12px; color:#6f6f6f;">Redis node</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px; font-family:'IBM Plex Mono',monospace;">CloudFront + S3</td>
+            <td style="padding:8px 12px; color:#24a148; font-weight:700;">~$0.001/hr</td>
+            <td style="padding:8px 12px; color:#6f6f6f;">Pay-per-request</td>
+          </tr>
+        </table>
+        <div style="margin-top:10px; font-size:13px; color:#da1e28; font-weight:700;">Total: ~$0.09/hr = ~$2.10/day if left running</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ INTERVIEW ═══════════════════════════════ -->
+  <div id="interview" class="step-card" style="border-top-color: #8a3ffc;">
+    <div class="step-header">
+      <div class="step-num" style="background:#8a3ffc;">🎤</div>
+      <div>
+        <div class="section-title" style="color:#8a3ffc;">Interview Prep</div>
+        <h2 style="margin:0; font-size:22px;">Q&A — Prove You Understand the Setup</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <p style="font-size:14px; line-height:1.7; margin-bottom:24px;">
+        Click each question to reveal a strong, detailed answer. These cover common interview topics around AWS networking, security, and infrastructure decisions.
+      </p>
+
+      <div style="border:1px solid #e0e0e0;">
+
+        <!-- Q1 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>1. Why put Redis in a private subnet instead of a public one?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p><strong>Redis is a cache/data store — it should never be directly accessible from the internet.</strong> Placing it in a private subnet means it has no public IP and no direct internet route. The only way to reach it is from within the VPC.</p>
+            <p>We then use a <strong>Security Group rule that only allows port 6379 from the EC2 API's security group</strong>. This means even other resources inside the VPC can't reach Redis unless they have that specific security group attached.</p>
+            <p>This follows the <strong>principle of least privilege</strong> and <strong>defense in depth</strong> — two core security concepts. If the EC2 instance were somehow compromised, Redis would still be an additional layer behind the security group.</p>
+            <div style="margin-top:12px;"><span class="tag tag-purple">Security Principle</span> <span class="tag tag-blue">Least Privilege</span> <span class="tag tag-teal">Defense in Depth</span></div>
+          </div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>2. What is the difference between a Security Group and a Network ACL?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <table style="width:100%; font-size:13px; border-collapse:collapse; margin-bottom:12px;">
+              <thead><tr style="background:#f4f4f4;"><th style="padding:8px 12px; text-align:left;">Feature</th><th style="padding:8px 12px; text-align:left;">Security Group</th><th style="padding:8px 12px; text-align:left;">Network ACL</th></tr></thead>
+              <tbody>
+                <tr style="border-bottom:1px solid #e0e0e0;"><td style="padding:8px 12px;">Level</td><td style="padding:8px 12px;">Instance level</td><td style="padding:8px 12px;">Subnet level</td></tr>
+                <tr style="background:#f4f4f4; border-bottom:1px solid #e0e0e0;"><td style="padding:8px 12px;">Stateful?</td><td style="padding:8px 12px;">✅ Yes — return traffic auto-allowed</td><td style="padding:8px 12px;">❌ No — must allow both directions</td></tr>
+                <tr style="border-bottom:1px solid #e0e0e0;"><td style="padding:8px 12px;">Rule type</td><td style="padding:8px 12px;">Allow only</td><td style="padding:8px 12px;">Allow + Deny</td></tr>
+                <tr style="background:#f4f4f4;"><td style="padding:8px 12px;">Use case</td><td style="padding:8px 12px;">Fine-grained per-resource control</td><td style="padding:8px 12px;">Block IP ranges at subnet level</td></tr>
+              </tbody>
+            </table>
+            <p><strong>In this setup we use Security Groups</strong> because they're stateful (easier to manage) and allow us to reference other security groups as sources — a powerful pattern not available in NACLs. NACLs are useful as an additional layer to block known-bad IP ranges.</p>
+          </div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>3. Why use Terraform instead of just clicking in the AWS Console?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p>Several key reasons:</p>
+            <ul style="padding-left:20px; line-height:1.9;">
+              <li><strong>Reproducibility:</strong> Run <code>terraform apply</code> in any AWS account/region and get an identical environment. No "it works on my setup" problems.</li>
+              <li><strong>Version control:</strong> Infrastructure changes are tracked in Git with commit history, code reviews, and rollback capability.</li>
+              <li><strong>Speed:</strong> Creating 15+ resources manually in the console takes 45+ minutes. Terraform does it in one command.</li>
+              <li><strong>Drift detection:</strong> <code>terraform plan</code> shows you if someone manually changed something in the console — it detects configuration drift.</li>
+              <li><strong>Clean teardown:</strong> <code>terraform destroy</code> removes everything it created — no orphaned resources, no forgotten NAT Gateways racking up charges.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>4. Explain the VPC architecture: what is a NAT Gateway and why do we need it?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p>Our Spring Boot EC2 instance lives in a <strong>private subnet with no public IP</strong>. This is secure — attackers can't directly reach it. But the server still needs to <em>reach out</em> to the internet: to pull Docker images from ECR, download OS updates, call external APIs, etc.</p>
+            <p>A <strong>NAT (Network Address Translation) Gateway</strong> solves this: it sits in the public subnet and acts as a one-way door. Private resources can send traffic <em>out</em> through it, but no inbound connections can originate from the internet.</p>
+            <p>Analogy: It's like a hotel concierge. Guests in private rooms (private subnet) can ask the concierge to go get things from outside (outbound traffic), but strangers can't walk directly into the private rooms (no inbound).</p>
+            <div style="margin-top:12px;"><span class="tag tag-blue">Private Subnet</span> <span class="tag tag-teal">Outbound Only</span> <span class="tag tag-yellow">Cost: $0.045/hr</span></div>
+          </div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>5. Why serve the React app from S3 + CloudFront instead of EC2?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p><strong>React is a static site after <code>npm run build</code></strong> — just HTML, CSS, and JavaScript files. There's no reason to waste an EC2 instance serving static files.</p>
+            <ul style="padding-left:20px; line-height:1.9;">
+              <li><strong>Cost:</strong> S3 + CloudFront costs pennies vs. ~$20/month for EC2</li>
+              <li><strong>Scale:</strong> CloudFront has 400+ edge locations globally. Zero configuration needed to handle millions of users.</li>
+              <li><strong>Security:</strong> No servers to patch or harden — the S3 bucket is private, only CloudFront can access it via Origin Access Control (OAC).</li>
+              <li><strong>HTTPS:</strong> CloudFront provides SSL/TLS certificates automatically via ACM.</li>
+              <li><strong>SPA routing:</strong> We configure CloudFront to return <code>index.html</code> on 404s, which is how React Router works.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>6. How does Spring Boot connect to Redis securely in this setup?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p>The connection is secured at multiple layers:</p>
+            <ol style="padding-left:20px; line-height:1.9;">
+              <li><strong>Network isolation:</strong> Both EC2 and Redis are in the same private subnet — no traffic leaves AWS.</li>
+              <li><strong>Security Group enforcement:</strong> Redis port 6379 only accepts connections from the EC2's security group ID — not even other EC2 instances in the same subnet can connect unless they have that security group.</li>
+              <li><strong>Private DNS:</strong> Spring Boot connects using the ElastiCache internal DNS name (e.g., <code>temp-redis.xyz.cache.amazonaws.com</code>), which only resolves inside the VPC.</li>
+              <li><strong>No credentials in code:</strong> The Redis hostname is injected via the <code>REDIS_HOST</code> environment variable, set in the EC2 userdata script. Never hardcoded.</li>
+            </ol>
+            <p>For production, you'd add <strong>TLS encryption</strong> on the Redis connection and store the endpoint in <strong>AWS Secrets Manager</strong> instead of environment variables.</p>
+          </div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>7. What is an Application Load Balancer and why do we use one here?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p>An <strong>Application Load Balancer (ALB)</strong> operates at Layer 7 (HTTP/HTTPS) and serves multiple purposes here:</p>
+            <ul style="padding-left:20px; line-height:1.9;">
+              <li><strong>Bridge between subnets:</strong> The ALB lives in the public subnet and forwards traffic to EC2 in the private subnet — our EC2 never needs a public IP.</li>
+              <li><strong>Health checks:</strong> ALB pings <code>/actuator/health</code> every 30 seconds. If EC2 becomes unhealthy, ALB stops routing traffic to it.</li>
+              <li><strong>SSL termination:</strong> You attach an ACM certificate to the ALB. HTTPS decryption happens at the ALB; EC2 only handles plain HTTP internally.</li>
+              <li><strong>Routing rules:</strong> You can route <code>/api/*</code> to one target group and <code>/admin/*</code> to another — all from one endpoint.</li>
+              <li><strong>Horizontal scaling:</strong> When you add more EC2 instances, the ALB automatically distributes traffic across all of them.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Q8 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>8. What would you change to make this production-ready?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p>Several improvements for production:</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
+              <div>
+                <div style="font-weight:700; margin-bottom:8px;">🔒 Security</div>
+                <ul style="font-size:13px; padding-left:16px; line-height:1.9;">
+                  <li>Enable Redis AUTH + TLS</li>
+                  <li>Store secrets in AWS Secrets Manager</li>
+                  <li>Enable VPC Flow Logs</li>
+                  <li>Enable GuardDuty threat detection</li>
+                  <li>Remove AdministratorAccess — use least-privilege IAM</li>
+                </ul>
+              </div>
+              <div>
+                <div style="font-weight:700; margin-bottom:8px;">🚀 Reliability</div>
+                <ul style="font-size:13px; padding-left:16px; line-height:1.9;">
+                  <li>Multi-AZ for EC2 (Auto Scaling Group)</li>
+                  <li>Redis Replication Group (multi-AZ)</li>
+                  <li>Terraform remote state in S3 + DynamoDB lock</li>
+                  <li>CI/CD pipeline (GitHub Actions / CodePipeline)</li>
+                  <li>CloudWatch alarms + SNS alerts</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Q9 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>9. What is Terraform state and why does it matter?</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <p>Terraform keeps a <strong>state file (<code>terraform.tfstate</code>)</strong> that maps your configuration to real AWS resources. Without it, Terraform wouldn't know that the <code>aws_instance.api</code> in your code corresponds to instance ID <code>i-0abc123</code> in AWS.</p>
+            <p><strong>Problems with local state (default):</strong></p>
+            <ul style="padding-left:20px; line-height:1.9; font-size:13px;">
+              <li>If you lose the file, Terraform loses track of your infrastructure</li>
+              <li>Team members can't share it safely</li>
+              <li>Concurrent applies can corrupt the file</li>
+            </ul>
+            <p><strong>Solution — Remote State in S3:</strong></p>
+            <div class="code-block" style="margin-top:8px;">
+              <pre style="font-size:12px;"><span class="kw">terraform</span> {
+  backend <span class="str">"s3"</span> {
+    bucket         = <span class="str">"my-terraform-state-bucket"</span>
+    key            = <span class="str">"temp-env/terraform.tfstate"</span>
+    region         = <span class="str">"us-east-1"</span>
+    dynamodb_table = <span class="str">"terraform-state-lock"</span> <span class="cm"># prevents concurrent apply</span>
+    encrypt        = <span class="fn">true</span>
+  }
+}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Q10 -->
+        <div class="qa-item">
+          <div class="qa-q" onclick="toggleQA(this)">
+            <span>10. Walk me through what happens when a user opens the React app and makes an API call.</span>
+            <svg class="chevron" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="qa-a">
+            <ol style="padding-left:20px; line-height:2; font-size:13px;">
+              <li>User types the CloudFront URL in their browser</li>
+              <li>DNS resolves to the nearest CloudFront edge node (global CDN)</li>
+              <li>CloudFront serves cached React files from S3 via OAC (no public S3 access)</li>
+              <li>Browser loads React app, which renders the UI</li>
+              <li>User triggers an action → React calls <code>REACT_APP_API_URL/api/data</code></li>
+              <li>Request hits the <strong>ALB</strong> in the public subnet (port 443)</li>
+              <li>ALB checks the security group — allows traffic from internet</li>
+              <li>ALB health-checks and routes to EC2 (port 8080) in the private subnet</li>
+              <li>Spring Boot checks Redis for cached data — connects via internal DNS to ElastiCache</li>
+              <li>If cache hit: returns data immediately. If miss: queries DB, stores in Redis, returns data</li>
+              <li>Response flows back: EC2 → ALB → User</li>
+            </ol>
+            <p style="margin-top:8px;">The entire path from browser to Redis <strong>never exposes Redis to the internet</strong>. All internal communication stays within the VPC on the private subnet.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ REFERENCES ═══════════════════════════════ -->
+  <div id="refs" class="step-card" style="border-top-color: #009d9a;">
+    <div class="step-header">
+      <div class="step-num" style="background:#009d9a;">📚</div>
+      <div>
+        <div class="section-title" style="color:#009d9a;">References & Further Learning</div>
+        <h2 style="margin:0; font-size:22px;">Official Documentation Links</h2>
+      </div>
+    </div>
+    <div class="step-body">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px;">
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; color:var(--ibm-blue); margin-bottom:12px;">🌐 AWS Networking</div>
+          <ul style="list-style:none; padding:0; font-size:13px; line-height:2.2;">
+            <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html" class="ref-link" target="_blank">Amazon VPC User Guide</a></li>
+            <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html" class="ref-link" target="_blank">Security Groups</a></li>
+            <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html" class="ref-link" target="_blank">NAT Gateways</a></li>
+            <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html" class="ref-link" target="_blank">Application Load Balancer</a></li>
+          </ul>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; color:#da1e28; margin-bottom:12px;">⚡ ElastiCache / Redis</div>
+          <ul style="list-style:none; padding:0; font-size:13px; line-height:2.2;">
+            <li><a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/WhatIs.html" class="ref-link" target="_blank">ElastiCache for Redis</a></li>
+            <li><a href="https://docs.spring.io/spring-data/redis/reference/redis.html" class="ref-link" target="_blank">Spring Data Redis</a></li>
+            <li><a href="https://redis.io/docs/manual/security/" class="ref-link" target="_blank">Redis Security Best Practices</a></li>
+          </ul>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; color:#009d9a; margin-bottom:12px;">☁️ CloudFront / S3</div>
+          <ul style="list-style:none; padding:0; font-size:13px; line-height:2.2;">
+            <li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html" class="ref-link" target="_blank">CloudFront Developer Guide</a></li>
+            <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteHosting.html" class="ref-link" target="_blank">S3 Static Website Hosting</a></li>
+            <li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html" class="ref-link" target="_blank">CloudFront OAC (S3 security)</a></li>
+          </ul>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; color:#8a3ffc; margin-bottom:12px;">⚙️ Terraform</div>
+          <ul style="list-style:none; padding:0; font-size:13px; line-height:2.2;">
+            <li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" class="ref-link" target="_blank">Terraform AWS Provider Docs</a></li>
+            <li><a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" class="ref-link" target="_blank">AWS Getting Started Tutorial</a></li>
+            <li><a href="https://developer.hashicorp.com/terraform/language/state/remote" class="ref-link" target="_blank">Remote State Management</a></li>
+          </ul>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; color:#24a148; margin-bottom:12px;">🖥 EC2 / Docker / ECR</div>
+          <ul style="list-style:none; padding:0; font-size:13px; line-height:2.2;">
+            <li><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html" class="ref-link" target="_blank">Amazon EC2 User Guide</a></li>
+            <li><a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html" class="ref-link" target="_blank">Amazon ECR User Guide</a></li>
+            <li><a href="https://docs.docker.com/build/building/multi-stage/" class="ref-link" target="_blank">Docker Multi-Stage Builds</a></li>
+          </ul>
+        </div>
+        <div style="border:1px solid #e0e0e0; padding:16px; background:#fff;">
+          <div style="font-weight:700; color:#f1c21b; margin-bottom:12px;">🔑 IAM & Security</div>
+          <ul style="list-style:none; padding:0; font-size:13px; line-height:2.2;">
+            <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html" class="ref-link" target="_blank">AWS IAM User Guide</a></li>
+            <li><a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html" class="ref-link" target="_blank">AWS Secrets Manager</a></li>
+            <li><a href="https://aws.amazon.com/architecture/well-architected/" class="ref-link" target="_blank">AWS Well-Architected Framework</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; background:#161616; padding:24px; text-align:center;">
+        <div style="font-family:'IBM Plex Mono',monospace; color:#4589ff; font-size:13px; margin-bottom:8px;">GUIDE COMPLETE</div>
+        <div style="color:#fff; font-size:20px; font-weight:700; margin-bottom:8px;">You're Ready to Deploy ✓</div>
+        <div style="color:#8d8d8d; font-size:13px; max-width:500px; margin:0 auto;">
+          Run <code style="color:#42be65;">terraform apply</code> to spin up your stack. Run <code style="color:#da1e28;">terraform destroy</code> when done. Never leave temp environments running unattended.
+        </div>
+        <div style="margin-top:16px; color:#6f6f6f; font-size:11px; font-family:'IBM Plex Mono',monospace;">
+          Built with IBM Design Language · AWS Best Practices · Terraform 1.7+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- end max-width wrapper -->
+</div><!-- end main-content -->
+
+<script>
+// Sidebar toggle
+let sidebarOpen = true;
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main-content');
+  if (window.innerWidth <= 768) {
+    sidebar.classList.toggle('mobile-open');
+  } else {
+    sidebarOpen = !sidebarOpen;
+    sidebar.classList.toggle('hidden');
+    main.classList.toggle('full');
+  }
+}
+
+// Scroll to section
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Update active nav
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+}
+
+// Copy code
+function copyCode(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  const text = pre.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ copied';
+    btn.style.background = 'var(--ibm-green)';
+    btn.style.color = '#fff';
+    setTimeout(() => {
+      btn.textContent = 'copy';
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 2000);
+  });
+}
+
+// Tab switching
+function switchTab(btn, panelId) {
+  const container = btn.closest('.step-body');
+  container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  container.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+// QA accordion
+function toggleQA(el) {
+  const answer = el.nextElementSibling;
+  const chevron = el.querySelector('.chevron');
+  const isOpen = answer.classList.contains('open');
+  answer.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
+}
+
+// Progress bar
+window.addEventListener('scroll', () => {
+  const el = document.documentElement;
+  const scrolled = (el.scrollTop || document.body.scrollTop);
+  const total = el.scrollHeight - el.clientHeight;
+  const pct = (scrolled / total) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+// Highlight active nav on scroll
+const sections = ['overview','prereqs','iam','terraform-setup','vpc','security','ec2','redis','react','cloudconfig','docker','env-vars','cleanup','interview','refs'];
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.getBoundingClientRect().top <= 120) current = id;
+  });
+  if (current) {
+    document.querySelectorAll('.nav-item').forEach(n => {
+      n.classList.toggle('active', n.getAttribute('onclick')?.includes(current));
+    });
+  }
+});
+</script>
+</body>
+</html>
