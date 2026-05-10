@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beginner Tutorial: Train and Run a Small Language Model with Docker, Hugging Face, LoRA, and Ollama</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ibm: {
+              blue: '#0f62fe',
+              navy: '#001d6c',
+              cyan: '#1192e8',
+              gray: '#f4f4f4',
+              dark: '#161616'
+            }
+          },
+          boxShadow: {
+            glow: '0 0 0 4px rgba(15, 98, 254, 0.12)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .codeblock { white-space: pre-wrap; word-break: break-word; }
+    .glass { backdrop-filter: blur(12px); background: rgba(255,255,255,0.86); }
+    .dark .glass { background: rgba(22,22,22,0.86); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-ibm-dark dark:text-slate-100">
+  <!-- Header -->
+  <header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 glass">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p class="text-xs font-bold uppercase tracking-widest text-ibm-blue">SLM Training Tutorial</p>
+        <h1 class="text-lg md:text-2xl font-black">Train and Run a Small Language Model with Docker + LoRA + Ollama</h1>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="toggleDark()" class="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-semibold hover:shadow-glow">
+          🌗 Dark / Light
+        </button>
+        <button onclick="openModal('quickStartModal')" class="rounded-xl bg-ibm-blue px-3 py-2 text-sm font-bold text-white hover:bg-ibm-navy">
+          🚀 Quick Start
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-ibm-navy via-ibm-blue to-ibm-cyan text-white">
+    <div class="mx-auto max-w-7xl px-4 py-12 md:py-16 grid md:grid-cols-2 gap-8 items-center">
+      <div>
+        <p class="text-sm uppercase tracking-widest font-bold text-blue-100">Beginner friendly • Windows Terminal • Docker based</p>
+        <h2 class="mt-3 text-4xl md:text-6xl font-black leading-tight">Build your own Java DTO assistant SLM</h2>
+        <p class="mt-5 text-lg text-blue-50">
+          This tutorial explains how the Docker project works, how Ollama runs a custom local model,
+          how Hugging Face + PyTorch fine-tunes an SLM with LoRA, and how to test everything from Windows Terminal.
+        </p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="#steps" class="rounded-xl bg-white px-5 py-3 font-bold text-ibm-navy hover:bg-blue-50">Start Tutorial</a>
+          <a href="#commands" class="rounded-xl border border-white px-5 py-3 font-bold text-white hover:bg-white/10">Copy Commands</a>
+        </div>
+      </div>
+      <div class="rounded-3xl bg-white/10 p-5 border border-white/20 shadow-2xl">
+        <h3 class="font-black text-xl mb-4">What you are building</h3>
+        <div class="space-y-3">
+          <div class="rounded-2xl bg-white/10 p-4"><b>1. Ollama Custom Model</b><br><span class="text-blue-50">A local Java DTO assistant using a Modelfile.</span></div>
+          <div class="rounded-2xl bg-white/10 p-4"><b>2. Hugging Face LoRA Training</b><br><span class="text-blue-50">Fine-tune a small model on Java DTO examples.</span></div>
+          <div class="rounded-2xl bg-white/10 p-4"><b>3. FastAPI Model Server</b><br><span class="text-blue-50">Run your trained adapter behind a local API.</span></div>
+          <div class="rounded-2xl bg-white/10 p-4"><b>4. Docker Compose Dev Lab</b><br><span class="text-blue-50">One command starts the full environment.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Layout -->
+  <main class="mx-auto max-w-7xl px-4 py-10 grid lg:grid-cols-[280px_1fr] gap-8">
+    <!-- TOC -->
+    <aside class="lg:sticky lg:top-24 h-max rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
+      <h3 class="font-black text-lg mb-3">Table of Contents</h3>
+      <nav class="space-y-2 text-sm">
+        <a class="block hover:text-ibm-blue" href="#overview">Overview</a>
+        <a class="block hover:text-ibm-blue" href="#architecture">Architecture</a>
+        <a class="block hover:text-ibm-blue" href="#steps">Step-by-step Tutorial</a>
+        <a class="block hover:text-ibm-blue" href="#commands">Windows Commands</a>
+        <a class="block hover:text-ibm-blue" href="#dataset">Dataset Format</a>
+        <a class="block hover:text-ibm-blue" href="#lora">LoRA Explained</a>
+        <a class="block hover:text-ibm-blue" href="#ollama">Ollama Explained</a>
+        <a class="block hover:text-ibm-blue" href="#troubleshooting">Troubleshooting</a>
+        <a class="block hover:text-ibm-blue" href="#references">Reference Docs</a>
+      </nav>
+    </aside>
+
+    <!-- Content -->
+    <div class="space-y-10">
+      <!-- Overview -->
+      <section id="overview" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">Plain-English Overview</h2>
+        <p class="mt-4 text-lg leading-8">
+          A Small Language Model, or SLM, is a smaller AI text model that can run locally or on smaller hardware.
+          Instead of building a model from zero, you start with a pretrained model and teach it your style, task,
+          and examples. In this project, the task is: <b>generate Java DTO classes using Lombok, Jakarta Validation,
+          and Swagger annotations.</b>
+        </p>
+        <div class="mt-6 grid md:grid-cols-3 gap-4">
+          <infocard-el title="Docker Compose" icon="🐳" text="Starts all services: training container, API server, and Ollama." modal="dockerModal"></infocard-el>
+          <infocard-el title="LoRA Training" icon="🧠" text="Trains small adapter weights instead of the whole model." modal="loraModal"></infocard-el>
+          <infocard-el title="Ollama" icon="🦙" text="Runs a custom local model from a Modelfile." modal="ollamaModal"></infocard-el>
+        </div>
+      </section>
+
+      <!-- Architecture -->
+      <section id="architecture" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">How the System Works</h2>
+        <p class="mt-4 leading-8">
+          The project has two model paths. The first path is an immediate Ollama custom model using a Modelfile.
+          The second path is actual LoRA fine-tuning using Hugging Face Transformers, PyTorch, and PEFT.
+        </p>
+
+        <div class="mt-6 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+          <svg viewBox="0 0 1100 520" class="min-w-[900px] w-full bg-slate-50 dark:bg-slate-950">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L7,3 z" fill="#0f62fe" />
+              </marker>
+            </defs>
+            <rect x="40" y="40" width="250" height="100" rx="20" fill="#d0e2ff" stroke="#0f62fe" />
+            <text x="165" y="80" text-anchor="middle" font-weight="800" fill="#001d6c">Windows Terminal</text>
+            <text x="165" y="108" text-anchor="middle" fill="#001d6c">docker compose commands</text>
+
+            <rect x="390" y="40" width="280" height="100" rx="20" fill="#e8daff" stroke="#8a3ffc" />
+            <text x="530" y="80" text-anchor="middle" font-weight="800" fill="#491d8b">Docker Compose</text>
+            <text x="530" y="108" text-anchor="middle" fill="#491d8b">starts local services</text>
+
+            <rect x="790" y="40" width="250" height="100" rx="20" fill="#bae6ff" stroke="#1192e8" />
+            <text x="915" y="80" text-anchor="middle" font-weight="800" fill="#003a6d">Ollama</text>
+            <text x="915" y="108" text-anchor="middle" fill="#003a6d">java-dto-assistant</text>
+
+            <rect x="60" y="235" width="260" height="110" rx="20" fill="#defbe6" stroke="#24a148" />
+            <text x="190" y="275" text-anchor="middle" font-weight="800" fill="#0e6027">Dataset</text>
+            <text x="190" y="304" text-anchor="middle" fill="#0e6027">Java DTO examples</text>
+
+            <rect x="420" y="230" width="260" height="120" rx="20" fill="#fff1f1" stroke="#da1e28" />
+            <text x="550" y="275" text-anchor="middle" font-weight="800" fill="#a2191f">Hugging Face Training</text>
+            <text x="550" y="304" text-anchor="middle" fill="#a2191f">Transformers + PyTorch + PEFT</text>
+
+            <rect x="800" y="235" width="250" height="110" rx="20" fill="#f6f2ff" stroke="#6929c4" />
+            <text x="925" y="275" text-anchor="middle" font-weight="800" fill="#491d8b">LoRA Adapter</text>
+            <text x="925" y="304" text-anchor="middle" fill="#491d8b">small trained weights</text>
+
+            <rect x="420" y="410" width="260" height="80" rx="20" fill="#edf5ff" stroke="#0f62fe" />
+            <text x="550" y="445" text-anchor="middle" font-weight="800" fill="#001d6c">FastAPI</text>
+            <text x="550" y="470" text-anchor="middle" fill="#001d6c">serves trained adapter</text>
+
+            <line x1="290" y1="90" x2="390" y2="90" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)" />
+            <line x1="670" y1="90" x2="790" y2="90" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)" />
+            <line x1="320" y1="290" x2="420" y2="290" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)" />
+            <line x1="680" y1="290" x2="800" y2="290" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)" />
+            <line x1="550" y1="350" x2="550" y2="410" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)" />
+          </svg>
+        </div>
+
+        <button onclick="openModal('architectureModal')" class="mt-5 rounded-xl bg-ibm-blue px-4 py-2 text-white font-bold">More details</button>
+      </section>
+
+      <!-- Steps -->
+      <section id="steps" class="space-y-5">
+        <h2 class="text-3xl font-black text-ibm-blue">Step-by-step Tutorial</h2>
+
+        <step-el number="1" title="Install the basics" modal="step1Modal">
+          Install Docker Desktop for Windows. Use Windows Terminal or PowerShell. You do not need Python installed on Windows because Python runs inside Docker.
+        </step-el>
+
+        <step-el number="2" title="Unzip and start the project" modal="step2Modal">
+          Unzip the project, copy `.env.example` to `.env`, then run `docker compose up --build -d`.
+        </step-el>
+
+        <step-el number="3" title="Understand the Docker services" modal="step3Modal">
+          Docker Compose starts `slm-dev`, `slm-api`, `ollama`, and `ollama-setup`.
+        </step-el>
+
+        <step-el number="4" title="Build the custom Ollama model" modal="step4Modal">
+          Build `java-dto-assistant` from a Modelfile using `qwen2.5-coder:0.5b` as the base model.
+        </step-el>
+
+        <step-el number="5" title="Prepare the Java DTO dataset" modal="step5Modal">
+          Convert examples into JSONL rows where each row has a prompt and a correct Java DTO answer.
+        </step-el>
+
+        <step-el number="6" title="Fine-tune with LoRA" modal="step6Modal">
+          Run the training script. LoRA creates a small adapter instead of changing every model weight.
+        </step-el>
+
+        <step-el number="7" title="Test the trained model" modal="step7Modal">
+          Use `infer.py` or the FastAPI service to generate Java DTO code from your fine-tuned adapter.
+        </step-el>
+
+        <step-el number="8" title="Improve results" modal="step8Modal">
+          Add more high-quality examples, use a code-focused base model, test outputs, and repeat.
+        </step-el>
+      </section>
+
+      <!-- Commands -->
+      <section id="commands" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">Windows Terminal Commands</h2>
+        <p class="mt-4">Use these commands in PowerShell or Windows Terminal.</p>
+
+        <command-el title="Start the full Docker environment">unzip slm-lora-java-dto-custom-ollama-builder.zip
+cd slm-lora-java-dto-complete
+copy .env.example .env
+docker compose up --build -d</command-el>
+
+        <command-el title="Build the custom Ollama model inside Docker">docker compose exec -e OLLAMA_BASE_URL=http://ollama:11434 -e OLLAMA_MODEL=java-dto-assistant slm-dev python scripts/build_custom_ollama_model.py</command-el>
+
+        <command-el title="Verify Ollama models from Windows host">curl http://localhost:11434/api/tags</command-el>
+
+        <command-el title="Test the custom Ollama model inside Docker">docker compose exec -e OLLAMA_BASE_URL=http://ollama:11434 -e OLLAMA_MODEL=java-dto-assistant slm-dev python scripts/query_ollama.py --prompt "Create a Java 21 DTO named OrderRequest with Lombok Builder, Swagger Schema examples, and Jakarta Validation."</command-el>
+
+        <command-el title="Train the LoRA adapter">docker compose exec slm-dev python scripts/prepare_dataset.py
+docker compose exec slm-dev python scripts/train_lora.py</command-el>
+
+        <command-el title="Restart and test the trained adapter API">docker compose restart slm-api
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/generate -H "Content-Type: application/json" -d "{\"prompt\":\"Create a Java DTO named PatientIntakeRequest with Lombok Builder and Jakarta Validation.\",\"max_new_tokens\":220}"</command-el>
+      </section>
+
+      <!-- Dataset -->
+      <section id="dataset" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">Dataset Format</h2>
+        <p class="mt-4 leading-8">
+          The training dataset uses JSONL. JSONL means each line is a separate JSON object.
+          For simple causal language model fine-tuning, one common beginner format is a single `text` field that includes the instruction and the answer.
+        </p>
+        <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 overflow-x-auto codeblock"><code>{"text":"### Instruction:\nCreate a Java DTO named OrderRequest.\n\n### Response:\nimport jakarta.validation.constraints.NotBlank;\n..."}</code></pre>
+        <button onclick="openModal('datasetModal')" class="mt-5 rounded-xl bg-ibm-blue px-4 py-2 text-white font-bold">Dataset best practices</button>
+      </section>
+
+      <!-- LoRA -->
+      <section id="lora" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">LoRA Explained Simply</h2>
+        <p class="mt-4 leading-8">
+          Full fine-tuning updates the whole model. That can be expensive. LoRA adds small trainable layers to parts of the model.
+          You train those smaller layers, called adapters. This is faster and uses less memory.
+        </p>
+        <div class="mt-6 grid md:grid-cols-2 gap-4">
+          <div class="rounded-2xl bg-red-50 dark:bg-red-950/30 p-5 border border-red-200 dark:border-red-800">
+            <h3 class="font-black text-red-700 dark:text-red-300">Full Fine-tuning</h3>
+            <p class="mt-2">Updates most or all model weights. Better control, but expensive.</p>
+          </div>
+          <div class="rounded-2xl bg-green-50 dark:bg-green-950/30 p-5 border border-green-200 dark:border-green-800">
+            <h3 class="font-black text-green-700 dark:text-green-300">LoRA Fine-tuning</h3>
+            <p class="mt-2">Trains small adapter weights. Good for local experiments and task specialization.</p>
+          </div>
+        </div>
+        <button onclick="openModal('loraDeepModal')" class="mt-5 rounded-xl bg-ibm-blue px-4 py-2 text-white font-bold">More on LoRA settings</button>
+      </section>
+
+      <!-- Ollama -->
+      <section id="ollama" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">Ollama Custom Model Explained</h2>
+        <p class="mt-4 leading-8">
+          Ollama lets you run local models and create custom models with a Modelfile. A Modelfile is like a Dockerfile for a model.
+          It can say which base model to use, what system prompt to apply, and what generation parameters to set.
+        </p>
+        <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 overflow-x-auto codeblock"><code>FROM qwen2.5-coder:0.5b
+
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9
+PARAMETER num_ctx 8192
+
+SYSTEM """
+You are JavaDtoSLM...
+"""</code></pre>
+        <button onclick="openModal('ollamaDeepModal')" class="mt-5 rounded-xl bg-ibm-blue px-4 py-2 text-white font-bold">How Ollama fits with LoRA</button>
+      </section>
+
+      <!-- Troubleshooting -->
+      <section id="troubleshooting" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">Troubleshooting</h2>
+        <div class="mt-5 space-y-4">
+          <trouble-el title="Ollama is up, but java-dto-assistant is missing" fix="Run the custom model builder inside Docker. The base model may exist, but the Modelfile model was not created." command="docker compose exec -e OLLAMA_BASE_URL=http://ollama:11434 -e OLLAMA_MODEL=java-dto-assistant slm-dev python scripts/build_custom_ollama_model.py"></trouble-el>
+          <trouble-el title="Connection refused to localhost:11434" fix="Use localhost only from Windows host. Use http://ollama:11434 from inside Docker containers." command="docker compose ps&#10;docker compose logs -f ollama ollama-setup"></trouble-el>
+          <trouble-el title="Training is slow" fix="CPU training is expected to be slow. Use distilgpt2 for a demo, or use a GPU machine for larger SLMs." command="docker compose exec slm-dev python scripts/check_env.py"></trouble-el>
+          <trouble-el title="Model output is poor" fix="Add more clean examples. Small datasets teach format, but larger datasets teach consistency." command="docker compose exec slm-dev python scripts/prepare_dataset.py"></trouble-el>
+        </div>
+      </section>
+
+      <!-- References -->
+      <section id="references" class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <h2 class="text-3xl font-black text-ibm-blue">Reference Docs</h2>
+        <p class="mt-4">Use these references when you want to go deeper.</p>
+        <div class="mt-5 grid md:grid-cols-2 gap-4">
+          <refcard-el title="Ollama Modelfile Reference" url="https://docs.ollama.com/modelfile" text="Official reference for FROM, PARAMETER, SYSTEM, TEMPLATE, ADAPTER, and model customization."></refcard-el>
+          <refcard-el title="Ollama API Docs" url="https://github.com/ollama/ollama/blob/main/docs/api.md" text="API examples for /api/generate, /api/create, model creation, and local inference."></refcard-el>
+          <refcard-el title="Hugging Face PEFT" url="https://huggingface.co/docs/peft/index" text="Official PEFT documentation for parameter-efficient fine-tuning methods such as LoRA."></refcard-el>
+          <refcard-el title="PEFT LoRA Reference" url="https://huggingface.co/docs/peft/package_reference/lora" text="Details for LoRA configuration, target modules, rank, alpha, and dropout."></refcard-el>
+          <refcard-el title="Transformers Fine-tuning" url="https://huggingface.co/docs/transformers/en/training" text="Official guide for fine-tuning pretrained models with Hugging Face Transformers."></refcard-el>
+          <refcard-el title="Causal Language Modeling" url="https://huggingface.co/docs/transformers/en/tasks/language_modeling" text="Explains text-generation model training and causal language modeling."></refcard-el>
+          <refcard-el title="PyTorch" url="https://pytorch.org/" text="Deep learning framework used under the training code."></refcard-el>
+          <refcard-el title="Docker Compose" url="https://docs.docker.com/compose/" text="Runs multiple containers as one local development environment."></refcard-el>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200 dark:border-slate-700 py-8">
+    <div class="mx-auto max-w-7xl px-4 text-sm text-slate-600 dark:text-slate-300">
+      <p><b>Training advice:</b> Start small, verify each step, improve the dataset, then scale to better code models or GPU training.</p>
+    </div>
+  </footer>
+
+  <!-- Modal Shell -->
+  <div id="modalBackdrop" class="fixed inset-0 hidden z-50 bg-black/60 p-4" onclick="closeModalFromBackdrop(event)">
+    <div class="mx-auto mt-10 max-w-3xl rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+        <h3 id="modalTitle" class="text-2xl font-black text-ibm-blue">Details</h3>
+        <button onclick="closeModal()" class="rounded-xl px-3 py-2 font-black hover:bg-slate-100 dark:hover:bg-slate-800">✕</button>
+      </div>
+      <div id="modalBody" class="p-6 leading-8 max-h-[70vh] overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- Templates for custom pseudo components are created by JS below -->
+  <script>
+    function toggleDark() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+
+    function copyText(id) {
+      const el = document.getElementById(id);
+      navigator.clipboard.writeText(el.innerText);
+      const btn = document.querySelector(`[data-copy="${id}"]`);
+      if (btn) {
+        const old = btn.innerText;
+        btn.innerText = "Copied!";
+        setTimeout(() => btn.innerText = old, 1200);
+      }
+    }
+
+    const modalContent = {
+      quickStartModal: {
+        title: "Quick Start for Windows Terminal",
+        body: `
+          <p>Use Docker for everything. You do not need Python installed directly on Windows.</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">unzip slm-lora-java-dto-custom-ollama-builder.zip
+cd slm-lora-java-dto-complete
+copy .env.example .env
+docker compose up --build -d</pre>
+          <p class="mt-4">Then build the custom Ollama model inside Docker:</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">docker compose exec -e OLLAMA_BASE_URL=http://ollama:11434 -e OLLAMA_MODEL=java-dto-assistant slm-dev python scripts/build_custom_ollama_model.py</pre>
+        `
+      },
+      dockerModal: {
+        title: "Docker Compose in Simple Terms",
+        body: `
+          <p>Docker Compose is a tool that starts several containers together. Think of it as a remote control for your local AI lab.</p>
+          <ul class="list-disc pl-6 mt-3">
+            <li><b>slm-dev:</b> Python training container.</li>
+            <li><b>slm-api:</b> API server for the fine-tuned LoRA adapter.</li>
+            <li><b>ollama:</b> Local model runtime.</li>
+            <li><b>ollama-setup:</b> Helper that pulls the base model and creates the custom model.</li>
+          </ul>
+          <p class="mt-4"><a class="text-ibm-blue font-bold underline" href="https://docs.docker.com/compose/" target="_blank">Docker Compose documentation</a></p>
+        `
+      },
+      loraModal: {
+        title: "LoRA in Simple Terms",
+        body: `
+          <p>LoRA stands for Low-Rank Adaptation. Instead of changing the whole model, it trains small adapter layers.</p>
+          <p class="mt-3">This is useful because a full model may have hundreds of millions or billions of parameters. Training all of them can require a large GPU. LoRA lets you train a smaller set of weights.</p>
+          <p class="mt-4"><a class="text-ibm-blue font-bold underline" href="https://huggingface.co/docs/peft/index" target="_blank">Hugging Face PEFT documentation</a></p>
+        `
+      },
+      ollamaModal: {
+        title: "Ollama in Simple Terms",
+        body: `
+          <p>Ollama runs local language models and lets you create a customized model from a Modelfile.</p>
+          <p class="mt-3">A Modelfile can set a base model, a system prompt, generation parameters, templates, and adapters.</p>
+          <p class="mt-4"><a class="text-ibm-blue font-bold underline" href="https://docs.ollama.com/modelfile" target="_blank">Ollama Modelfile reference</a></p>
+        `
+      },
+      architectureModal: {
+        title: "Two Model Paths",
+        body: `
+          <h4 class="font-black text-lg">Path A: Fast custom Ollama model</h4>
+          <p>This path uses <code>qwen2.5-coder:0.5b</code> plus a Modelfile. It is fast to set up and good for local prompting.</p>
+          <h4 class="font-black text-lg mt-5">Path B: Real LoRA fine-tuning</h4>
+          <p>This path uses Hugging Face Transformers, PyTorch, and PEFT. It trains adapter weights on your Java DTO dataset. You can test this through <code>infer.py</code> or <code>slm-api</code>.</p>
+          <h4 class="font-black text-lg mt-5">Why both?</h4>
+          <p>Ollama is great for local serving. Hugging Face is great for training. They can work together, but exported fine-tuned models often need conversion before Ollama can run them.</p>
+        `
+      },
+      step1Modal: {
+        title: "Step 1: Install the basics",
+        body: `
+          <p>Install Docker Desktop for Windows. Make sure Docker Desktop is running before using <code>docker compose</code>.</p>
+          <p>You can use PowerShell, Windows Terminal, or VS Code Terminal.</p>
+          <ul class="list-disc pl-6 mt-3">
+            <li>Docker runs the Python training environment.</li>
+            <li>Docker runs Ollama.</li>
+            <li>Docker gives containers a shared network so they can talk using service names like <code>ollama</code>.</li>
+          </ul>
+        `
+      },
+      step2Modal: {
+        title: "Step 2: Start the project",
+        body: `
+          <p>The <code>.env</code> file controls the model name, dataset path, and output folder.</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">copy .env.example .env
+docker compose up --build -d</pre>
+          <p class="mt-4">The first build can take a while because Docker installs Python packages and Ollama pulls the model.</p>
+        `
+      },
+      step3Modal: {
+        title: "Step 3: Understand the services",
+        body: `
+          <table class="w-full text-sm mt-2 border border-slate-200 dark:border-slate-700">
+            <tr class="bg-slate-100 dark:bg-slate-800"><th class="p-2 text-left">Service</th><th class="p-2 text-left">What it does</th></tr>
+            <tr><td class="p-2 font-bold">slm-dev</td><td class="p-2">Training and scripting container.</td></tr>
+            <tr><td class="p-2 font-bold">slm-api</td><td class="p-2">FastAPI server for the trained adapter.</td></tr>
+            <tr><td class="p-2 font-bold">ollama</td><td class="p-2">Runs local Ollama models.</td></tr>
+            <tr><td class="p-2 font-bold">ollama-setup</td><td class="p-2">Pulls the base model and creates the custom model.</td></tr>
+          </table>
+        `
+      },
+      step4Modal: {
+        title: "Step 4: Build the custom Ollama model",
+        body: `
+          <p>This creates <code>java-dto-assistant</code> from <code>ollama/Modelfile.java-dto-assistant</code>.</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">docker compose exec -e OLLAMA_BASE_URL=http://ollama:11434 -e OLLAMA_MODEL=java-dto-assistant slm-dev python scripts/build_custom_ollama_model.py</pre>
+          <p class="mt-4">Inside Docker, use <code>http://ollama:11434</code>. From Windows host, use <code>http://localhost:11434</code>.</p>
+        `
+      },
+      step5Modal: {
+        title: "Step 5: Prepare the dataset",
+        body: `
+          <p>The dataset generator creates Java examples and writes JSONL training rows.</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">docker compose exec slm-dev python scripts/prepare_dataset.py</pre>
+          <p class="mt-4">For better training, add many clean examples. Include the exact style you want: imports, annotations, field names, validation messages, and Swagger examples.</p>
+        `
+      },
+      step6Modal: {
+        title: "Step 6: Fine-tune with LoRA",
+        body: `
+          <p>The training script loads the base model, tokenizes your JSONL dataset, adds LoRA adapters, then trains for a small number of steps.</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">docker compose exec slm-dev python scripts/train_lora.py</pre>
+          <p class="mt-4">The adapter is saved to <code>outputs/java-dto-lora</code>.</p>
+        `
+      },
+      step7Modal: {
+        title: "Step 7: Test the trained model",
+        body: `
+          <p>Direct test:</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">docker compose exec slm-dev python scripts/infer.py --prompt "Create a Java DTO named OrderRequest with Lombok Builder and Jakarta Validation."</pre>
+          <p class="mt-4">API test:</p>
+          <pre class="mt-4 rounded-2xl bg-slate-950 text-blue-50 p-4 codeblock">docker compose restart slm-api
+curl -s http://localhost:8000/health</pre>
+        `
+      },
+      step8Modal: {
+        title: "Step 8: Improve results",
+        body: `
+          <ul class="list-disc pl-6">
+            <li>Add more examples of the exact DTO style you want.</li>
+            <li>Use a code-focused base model for better Java output.</li>
+            <li>Keep examples consistent.</li>
+            <li>Remove bad or confusing examples.</li>
+            <li>Test with prompts that look like real user requests.</li>
+            <li>Use GPU training when moving beyond simple experiments.</li>
+          </ul>
+        `
+      },
+      datasetModal: {
+        title: "Dataset Best Practices",
+        body: `
+          <ul class="list-disc pl-6">
+            <li><b>Quality beats quantity at first.</b> Ten excellent examples are better than 100 broken examples.</li>
+            <li><b>Use consistent style.</b> If you want Lombok <code>@Builder</code>, show it every time.</li>
+            <li><b>Include imports.</b> The model learns complete Java files better when examples are complete.</li>
+            <li><b>Add edge cases.</b> Error DTOs, search DTOs, upload DTOs, HIPAA-conscious DTOs, geospatial DTOs.</li>
+            <li><b>Do not include secrets.</b> Never train on passwords, API keys, tokens, private customer records, or PHI.</li>
+          </ul>
+        `
+      },
+      loraDeepModal: {
+        title: "LoRA Settings Explained",
+        body: `
+          <ul class="list-disc pl-6">
+            <li><b>r:</b> LoRA rank. Higher means more capacity but more memory.</li>
+            <li><b>lora_alpha:</b> Scaling factor for adapter updates.</li>
+            <li><b>target_modules:</b> Parts of the model where LoRA adapters are inserted.</li>
+            <li><b>lora_dropout:</b> Helps reduce overfitting.</li>
+            <li><b>max_steps:</b> Number of training updates. Small demos use low values; real training needs more testing.</li>
+          </ul>
+          <p class="mt-4"><a class="text-ibm-blue font-bold underline" href="https://huggingface.co/docs/peft/package_reference/lora" target="_blank">PEFT LoRA reference</a></p>
+        `
+      },
+      ollamaDeepModal: {
+        title: "Ollama + LoRA Relationship",
+        body: `
+          <p>The project's immediate Ollama model is a Modelfile-customized model. The Hugging Face LoRA adapter is separate.</p>
+          <p class="mt-3">To run a fully fine-tuned Hugging Face model in Ollama, you usually need to merge/export the adapter and convert the model into a format Ollama can use, such as GGUF for supported architectures.</p>
+          <p class="mt-3">For beginner work, first learn the full flow: dataset → training → adapter → inference. Then learn model conversion.</p>
+          <p class="mt-4"><a class="text-ibm-blue font-bold underline" href="https://github.com/ollama/ollama/blob/main/docs/api.md" target="_blank">Ollama API docs</a></p>
+        `
+      }
+    };
+
+    function openModal(id) {
+      const data = modalContent[id] || { title: 'Details', body: '<p>No details found.</p>' };
+      document.getElementById('modalTitle').innerText = data.title;
+      document.getElementById('modalBody').innerHTML = data.body;
+      document.getElementById('modalBackdrop').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modalBackdrop').classList.add('hidden');
+    }
+
+    function closeModalFromBackdrop(e) {
+      if (e.target.id === 'modalBackdrop') closeModal();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Convert pseudo-components into HTML
+    class InfoCard extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title');
+        const icon = this.getAttribute('icon');
+        const text = this.getAttribute('text');
+        const modal = this.getAttribute('modal');
+        this.outerHTML = `
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-5">
+            <div class="text-3xl">${icon}</div>
+            <h3 class="mt-3 text-xl font-black">${title}</h3>
+            <p class="mt-2 text-slate-600 dark:text-slate-300">${text}</p>
+            <button onclick="openModal('${modal}')" class="mt-4 rounded-xl border border-ibm-blue px-3 py-2 text-sm font-bold text-ibm-blue hover:bg-blue-50 dark:hover:bg-slate-800">More details</button>
+          </div>`;
+      }
+    }
+
+    class Step extends HTMLElement {
+      connectedCallback() {
+        const number = this.getAttribute('number');
+        const title = this.getAttribute('title');
+        const modal = this.getAttribute('modal');
+        const body = this.innerHTML;
+        this.outerHTML = `
+          <article class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+            <div class="flex flex-col md:flex-row gap-4 md:items-start">
+              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-ibm-blue text-white text-xl font-black">${number}</div>
+              <div class="flex-1">
+                <h3 class="text-2xl font-black">${title}</h3>
+                <p class="mt-2 leading-8 text-slate-700 dark:text-slate-300">${body}</p>
+                <button onclick="openModal('${modal}')" class="mt-4 rounded-xl bg-ibm-blue px-4 py-2 text-white font-bold">More details</button>
+              </div>
+            </div>
+          </article>`;
+      }
+    }
+
+    class Command extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title');
+        const id = 'cmd-' + Math.random().toString(36).slice(2);
+        const code = this.textContent.trim();
+        this.outerHTML = `
+          <div class="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="flex items-center justify-between bg-slate-100 dark:bg-slate-800 px-4 py-3">
+              <h3 class="font-black">${title}</h3>
+              <button data-copy="${id}" onclick="copyText('${id}')" class="rounded-lg bg-ibm-blue px-3 py-1 text-sm font-bold text-white">Copy</button>
+            </div>
+            <pre id="${id}" class="bg-slate-950 text-blue-50 p-4 overflow-x-auto codeblock"><code>${escapeHtml(code)}</code></pre>
+          </div>`;
+      }
+    }
+
+    class Trouble extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title');
+        const fix = this.getAttribute('fix');
+        const command = this.getAttribute('command');
+        const id = 'trouble-' + Math.random().toString(36).slice(2);
+        this.outerHTML = `
+          <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-5">
+            <h3 class="font-black text-amber-800 dark:text-amber-200">⚠️ ${title}</h3>
+            <p class="mt-2">${fix}</p>
+            <div class="mt-3 rounded-xl overflow-hidden">
+              <button data-copy="${id}" onclick="copyText('${id}')" class="mb-2 rounded-lg bg-amber-600 px-3 py-1 text-sm font-bold text-white">Copy fix command</button>
+              <pre id="${id}" class="bg-slate-950 text-blue-50 p-4 codeblock overflow-x-auto">${command.replaceAll('&#10;', '\n')}</pre>
+            </div>
+          </div>`;
+      }
+    }
+
+    class RefCard extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title');
+        const url = this.getAttribute('url');
+        const text = this.getAttribute('text');
+        this.outerHTML = `
+          <a href="${url}" target="_blank" class="block rounded-2xl border border-slate-200 dark:border-slate-700 p-5 hover:shadow-glow bg-slate-50 dark:bg-slate-950">
+            <h3 class="font-black text-ibm-blue">${title}</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">${text}</p>
+            <p class="mt-3 text-xs break-all text-slate-500">${url}</p>
+          </a>`;
+      }
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    customElements.define('infocard-el', InfoCard);
+    customElements.define('step-el', Step);
+    customElements.define('command-el', Command);
+    customElements.define('trouble-el', Trouble);
+    customElements.define('refcard-el', RefCard);
+
+    // Browser does not allow custom element names without hyphens. Convert uppercase pseudo-tags manually.
+    document.body.innerHTML = document.body.innerHTML
+      .replaceAll('<infocard-el', '<infocard-el')
+      .replaceAll('</infocard-el>', '</infocard-el>')
+      .replaceAll('<step-el', '<step-el')
+      .replaceAll('</step-el>', '</step-el>')
+      .replaceAll('<command-el', '<command-el')
+      .replaceAll('</command-el>', '</command-el>')
+      .replaceAll('<trouble-el', '<trouble-el')
+      .replaceAll('</trouble-el>', '</trouble-el>')
+      .replaceAll('<refcard-el', '<refcard-el')
+      .replaceAll('</refcard-el>', '</refcard-el>');
+  </script>
+</body>
+</html>

@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Java Spring 21 — Code Review Field Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        // IBM Carbon Design System palette
+        ibm: {
+          50:  '#edf5ff',
+          100: '#d0e2ff',
+          200: '#a6c8ff',
+          300: '#78a9ff',
+          400: '#4589ff',
+          500: '#0f62fe', // IBM signature blue
+          600: '#0043ce',
+          700: '#002d9c',
+          800: '#001d6c',
+          900: '#001141',
+        },
+        gray10:  '#f4f4f4',
+        gray20:  '#e0e0e0',
+        gray30:  '#c6c6c6',
+        gray70:  '#525252',
+        gray80:  '#393939',
+        gray90:  '#262626',
+        gray100: '#161616',
+      },
+      fontFamily: {
+        sans:  ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        mono:  ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        serif: ['"IBM Plex Serif"', 'serif'],
+      },
+    }
+  }
+}
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    background:
+      linear-gradient(180deg, #ffffff 0%, #f4f4f4 100%);
+    color: #161616;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(15,98,254,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,98,254,0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .ibm-stripe {
+    background: linear-gradient(90deg,#001141 0%, #002d9c 25%, #0043ce 50%, #0f62fe 75%, #4589ff 100%);
+  }
+  .ticker {
+    background: repeating-linear-gradient(
+      90deg,
+      #0f62fe 0 40px,
+      #0043ce 40px 80px
+    );
+  }
+  details summary { list-style: none; cursor: pointer; }
+  details summary::-webkit-details-marker { display: none; }
+  details[open] summary .chev { transform: rotate(90deg); }
+  .chev { transition: transform .2s ease; }
+  pre code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .codeblock {
+    background: #161616;
+    color: #f4f4f4;
+    border-left: 3px solid #0f62fe;
+    overflow-x: auto;
+  }
+  .kw { color:#78a9ff; font-weight:500; }
+  .ann { color:#ff7eb6; }
+  .str { color:#42be65; }
+  .cmt { color:#8d8d8d; font-style: italic; }
+  .typ { color:#3ddbd9; }
+  .num { color:#ee5396; }
+  .modal-back {
+    background: rgba(22,22,22,0.78);
+    backdrop-filter: blur(4px);
+  }
+  .pulse-dot::before {
+    content:'';
+    position:absolute;
+    inset:-4px;
+    border-radius:9999px;
+    background: rgba(15,98,254,0.35);
+    animation: pulse 2s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { transform: scale(.8); opacity:.8; }
+    100% { transform: scale(1.8); opacity:0; }
+  }
+  .phase-card { transition: all .25s ease; }
+  .phase-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 40px -20px rgba(15,98,254,0.45);
+    border-color: #0f62fe;
+  }
+  .quiz-opt {
+    transition: all .15s ease;
+  }
+  .quiz-opt:hover { background:#edf5ff; border-color:#0f62fe; }
+  .quiz-opt.correct {
+    background:#defbe6; border-color:#24a148; color:#0e6027;
+  }
+  .quiz-opt.wrong {
+    background:#fff1f1; border-color:#da1e28; color:#a2191f;
+  }
+  .quiz-opt.locked { pointer-events:none; }
+  .progress-bar {
+    background: linear-gradient(90deg,#0f62fe,#4589ff);
+    transition: width .35s ease;
+  }
+  .pill {
+    font-family:"IBM Plex Mono", monospace;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .severity-critical { background:#fff1f1; color:#a2191f; border:1px solid #da1e28; }
+  .severity-high     { background:#fff8e1; color:#8a6d00; border:1px solid #f1c21b; }
+  .severity-medium   { background:#edf5ff; color:#0043ce; border:1px solid #0f62fe; }
+  .severity-low      { background:#f4f4f4; color:#525252; border:1px solid #c6c6c6; }
+  .anchor-offset { scroll-margin-top: 90px; }
+  .corner-tag::after {
+    content:'';
+    position:absolute; top:0; right:0;
+    width:0; height:0;
+    border-style: solid;
+    border-width: 0 22px 22px 0;
+    border-color: transparent #0f62fe transparent transparent;
+  }
+  /* Cinematic loader for SVG arrows */
+  @keyframes dash { to { stroke-dashoffset: 0; } }
+  .arrow-anim {
+    stroke-dasharray: 8;
+    stroke-dashoffset: 100;
+    animation: dash 6s linear infinite;
+  }
+</style>
+</head>
+<body class="text-gray100">
+
+<!-- =================== TOP BAR =================== -->
+<div class="ticker h-1 w-full"></div>
+<header class="sticky top-0 z-40 bg-white border-b border-gray20 backdrop-blur">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-6">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 bg-ibm-500 grid place-items-center">
+        <span class="text-white font-mono font-bold text-sm">J21</span>
+      </div>
+      <div class="leading-tight">
+        <div class="font-semibold text-sm">Spring Review Field Guide</div>
+        <div class="text-[11px] font-mono text-gray70 tracking-wider">v1.0 / JAVA 21 / SPRING BOOT 3.5.13</div>
+      </div>
+    </div>
+    <nav class="hidden md:flex gap-5 text-sm ml-auto text-gray80">
+      <a href="#diagram"   class="hover:text-ibm-500">Diagram</a>
+      <a href="#phases"    class="hover:text-ibm-500">Phases</a>
+      <a href="#java21"    class="hover:text-ibm-500">Java 21</a>
+      <a href="#concurrency" class="hover:text-ibm-500">Concurrency</a>
+      <a href="#testing"   class="hover:text-ibm-500">Testing</a>
+      <a href="#config"    class="hover:text-ibm-500">Config</a>
+      <a href="#findings"  class="hover:text-ibm-500">Findings</a>
+      <a href="#quiz"      class="hover:text-ibm-500 font-medium">Quiz →</a>
+    </nav>
+  </div>
+</header>
+
+<!-- =================== HERO =================== -->
+<section class="relative grid-bg border-b border-gray20">
+  <div class="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-12 gap-8 items-end">
+    <div class="md:col-span-8">
+      <div class="pill text-ibm-600 mb-4">/ field guide / interactive</div>
+      <h1 class="font-serif text-5xl md:text-6xl leading-[1.05] tracking-tight">
+        A structured way to <span class="text-ibm-500">review</span> Java&nbsp;Spring code &mdash; without missing things.
+      </h1>
+      <p class="mt-6 text-gray80 text-lg max-w-2xl leading-relaxed">
+        Five phases, deep-dive panels, runnable code examples, an end-to-end request diagram,
+        and a 10-question quiz. Built for engineers reviewing Spring Boot 3.5.x apps on Java 21.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="#diagram" class="bg-ibm-500 hover:bg-ibm-600 text-white px-5 py-3 text-sm font-medium">Start with the diagram →</a>
+        <a href="#quiz" class="bg-white border border-gray30 hover:border-ibm-500 px-5 py-3 text-sm font-medium">Skip to quiz</a>
+      </div>
+    </div>
+    <div class="md:col-span-4">
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-gray70 mb-3">/ at-a-glance</div>
+        <ul class="space-y-2 text-sm">
+          <li class="flex justify-between border-b border-gray20 pb-2"><span>Phases</span><span class="font-mono text-ibm-600">5</span></li>
+          <li class="flex justify-between border-b border-gray20 pb-2"><span>Code examples</span><span class="font-mono text-ibm-600">28+</span></li>
+          <li class="flex justify-between border-b border-gray20 pb-2"><span>Anti-patterns</span><span class="font-mono text-ibm-600">19</span></li>
+          <li class="flex justify-between border-b border-gray20 pb-2"><span>External refs</span><span class="font-mono text-ibm-600">22</span></li>
+          <li class="flex justify-between"><span>Quiz items</span><span class="font-mono text-ibm-600">10</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== SVG DIAGRAM =================== -->
+<section id="diagram" class="anchor-offset border-b border-gray20">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="flex items-end justify-between mb-6">
+      <div>
+        <div class="pill text-ibm-600 mb-2">/ 01 / process diagram</div>
+        <h2 class="font-serif text-3xl">Request lifecycle &amp; review checkpoints</h2>
+        <p class="text-gray70 mt-2 max-w-2xl text-sm">
+          Trace one HTTP request from boundary to database. Each stop is a review checkpoint —
+          click to reveal what to look for, code samples, and references.
+        </p>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray20 p-4 md:p-6 overflow-x-auto">
+      <svg viewBox="0 0 1200 460" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#0f62fe"/>
+          </marker>
+          <linearGradient id="ibmgrad" x1="0" x2="1">
+            <stop offset="0%" stop-color="#0f62fe"/>
+            <stop offset="100%" stop-color="#4589ff"/>
+          </linearGradient>
+        </defs>
+
+        <!-- header strip -->
+        <rect x="0" y="0" width="1200" height="32" fill="#161616"/>
+        <text x="20" y="21" fill="#fff" font-family="IBM Plex Mono" font-size="12">// HTTP_REQUEST → PERSISTENCE → HTTP_RESPONSE</text>
+        <text x="1080" y="21" fill="#78a9ff" font-family="IBM Plex Mono" font-size="11">trace_id: 0x4f...c1</text>
+
+        <!-- Client -->
+        <g class="diagram-node" data-node="client" style="cursor:pointer;">
+          <rect x="20" y="120" width="140" height="100" fill="white" stroke="#0f62fe" stroke-width="2"/>
+          <rect x="20" y="120" width="140" height="22" fill="#0f62fe"/>
+          <text x="30" y="136" fill="white" font-family="IBM Plex Mono" font-size="11">CLIENT</text>
+          <text x="30" y="170" font-family="IBM Plex Sans" font-size="14" font-weight="600">Browser / SPA</text>
+          <text x="30" y="190" font-family="IBM Plex Sans" font-size="11" fill="#525252">curl, fetch, RestTemplate</text>
+          <text x="30" y="208" font-family="IBM Plex Mono" font-size="10" fill="#0f62fe">POST /api/orders</text>
+        </g>
+
+        <!-- Filters / Security -->
+        <g class="diagram-node" data-node="filter" style="cursor:pointer;">
+          <rect x="200" y="120" width="160" height="100" fill="white" stroke="#0f62fe" stroke-width="2"/>
+          <rect x="200" y="120" width="160" height="22" fill="#0f62fe"/>
+          <text x="210" y="136" fill="white" font-family="IBM Plex Mono" font-size="11">FILTER CHAIN</text>
+          <text x="210" y="170" font-family="IBM Plex Sans" font-size="14" font-weight="600">Spring Security</text>
+          <text x="210" y="190" font-family="IBM Plex Sans" font-size="11" fill="#525252">Auth · CORS · CSRF</text>
+          <text x="210" y="208" font-family="IBM Plex Mono" font-size="10" fill="#0f62fe">@PreAuthorize</text>
+          <circle cx="345" cy="135" r="5" fill="#da1e28"/>
+        </g>
+
+        <!-- Controller -->
+        <g class="diagram-node" data-node="controller" style="cursor:pointer;">
+          <rect x="400" y="120" width="160" height="100" fill="white" stroke="#0f62fe" stroke-width="2"/>
+          <rect x="400" y="120" width="160" height="22" fill="#0f62fe"/>
+          <text x="410" y="136" fill="white" font-family="IBM Plex Mono" font-size="11">CONTROLLER</text>
+          <text x="410" y="170" font-family="IBM Plex Sans" font-size="14" font-weight="600">@RestController</text>
+          <text x="410" y="190" font-family="IBM Plex Sans" font-size="11" fill="#525252">@Valid · DTO mapping</text>
+          <text x="410" y="208" font-family="IBM Plex Mono" font-size="10" fill="#0f62fe">ResponseEntity&lt;T&gt;</text>
+        </g>
+
+        <!-- Service -->
+        <g class="diagram-node" data-node="service" style="cursor:pointer;">
+          <rect x="600" y="120" width="160" height="100" fill="white" stroke="#0f62fe" stroke-width="2"/>
+          <rect x="600" y="120" width="160" height="22" fill="#0f62fe"/>
+          <text x="610" y="136" fill="white" font-family="IBM Plex Mono" font-size="11">SERVICE</text>
+          <text x="610" y="170" font-family="IBM Plex Sans" font-size="14" font-weight="600">@Service</text>
+          <text x="610" y="190" font-family="IBM Plex Sans" font-size="11" fill="#525252">@Transactional · rules</text>
+          <text x="610" y="208" font-family="IBM Plex Mono" font-size="10" fill="#0f62fe">business logic</text>
+        </g>
+
+        <!-- Repository -->
+        <g class="diagram-node" data-node="repo" style="cursor:pointer;">
+          <rect x="800" y="120" width="160" height="100" fill="white" stroke="#0f62fe" stroke-width="2"/>
+          <rect x="800" y="120" width="160" height="22" fill="#0f62fe"/>
+          <text x="810" y="136" fill="white" font-family="IBM Plex Mono" font-size="11">REPOSITORY</text>
+          <text x="810" y="170" font-family="IBM Plex Sans" font-size="14" font-weight="600">JpaRepository</text>
+          <text x="810" y="190" font-family="IBM Plex Sans" font-size="11" fill="#525252">@Query · @EntityGraph</text>
+          <text x="810" y="208" font-family="IBM Plex Mono" font-size="10" fill="#0f62fe">Spring Data JPA</text>
+        </g>
+
+        <!-- Database -->
+        <g class="diagram-node" data-node="db" style="cursor:pointer;">
+          <rect x="1000" y="120" width="180" height="100" fill="white" stroke="#0f62fe" stroke-width="2"/>
+          <rect x="1000" y="120" width="180" height="22" fill="#0f62fe"/>
+          <text x="1010" y="136" fill="white" font-family="IBM Plex Mono" font-size="11">DATABASE</text>
+          <text x="1010" y="170" font-family="IBM Plex Sans" font-size="14" font-weight="600">PostgreSQL</text>
+          <text x="1010" y="190" font-family="IBM Plex Sans" font-size="11" fill="#525252">HikariCP pool · Flyway</text>
+          <text x="1010" y="208" font-family="IBM Plex Mono" font-size="10" fill="#0f62fe">SELECT · INSERT</text>
+        </g>
+
+        <!-- arrows -->
+        <line x1="160" y1="170" x2="200" y2="170" stroke="#0f62fe" stroke-width="2" marker-end="url(#arr)" class="arrow-anim"/>
+        <line x1="360" y1="170" x2="400" y2="170" stroke="#0f62fe" stroke-width="2" marker-end="url(#arr)" class="arrow-anim"/>
+        <line x1="560" y1="170" x2="600" y2="170" stroke="#0f62fe" stroke-width="2" marker-end="url(#arr)" class="arrow-anim"/>
+        <line x1="760" y1="170" x2="800" y2="170" stroke="#0f62fe" stroke-width="2" marker-end="url(#arr)" class="arrow-anim"/>
+        <line x1="960" y1="170" x2="1000" y2="170" stroke="#0f62fe" stroke-width="2" marker-end="url(#arr)" class="arrow-anim"/>
+
+        <!-- Cross-cutting concerns lane -->
+        <rect x="20" y="280" width="1160" height="120" fill="#edf5ff" stroke="#a6c8ff" stroke-dasharray="4 4"/>
+        <text x="40" y="305" font-family="IBM Plex Mono" font-size="11" fill="#0043ce">// CROSS-CUTTING CONCERNS</text>
+
+        <g class="diagram-node" data-node="logging" style="cursor:pointer;">
+          <rect x="40" y="320" width="170" height="60" fill="white" stroke="#0043ce"/>
+          <text x="55" y="343" font-family="IBM Plex Sans" font-size="13" font-weight="600">Logging &amp; Tracing</text>
+          <text x="55" y="362" font-family="IBM Plex Mono" font-size="10" fill="#525252">SLF4J · Logback · MDC</text>
+        </g>
+        <g class="diagram-node" data-node="config" style="cursor:pointer;">
+          <rect x="230" y="320" width="170" height="60" fill="white" stroke="#0043ce"/>
+          <text x="245" y="343" font-family="IBM Plex Sans" font-size="13" font-weight="600">Configuration</text>
+          <text x="245" y="362" font-family="IBM Plex Mono" font-size="10" fill="#525252">application.yml · @Value</text>
+        </g>
+        <g class="diagram-node" data-node="exception" style="cursor:pointer;">
+          <rect x="420" y="320" width="190" height="60" fill="white" stroke="#0043ce"/>
+          <text x="435" y="343" font-family="IBM Plex Sans" font-size="13" font-weight="600">Exception Handling</text>
+          <text x="435" y="362" font-family="IBM Plex Mono" font-size="10" fill="#525252">@RestControllerAdvice</text>
+        </g>
+        <g class="diagram-node" data-node="async" style="cursor:pointer;">
+          <rect x="630" y="320" width="170" height="60" fill="white" stroke="#0043ce"/>
+          <text x="645" y="343" font-family="IBM Plex Sans" font-size="13" font-weight="600">Async &amp; Threads</text>
+          <text x="645" y="362" font-family="IBM Plex Mono" font-size="10" fill="#525252">@Async · Virtual Threads</text>
+        </g>
+        <g class="diagram-node" data-node="actuator" style="cursor:pointer;">
+          <rect x="820" y="320" width="170" height="60" fill="white" stroke="#0043ce"/>
+          <text x="835" y="343" font-family="IBM Plex Sans" font-size="13" font-weight="600">Observability</text>
+          <text x="835" y="362" font-family="IBM Plex Mono" font-size="10" fill="#525252">Actuator · Micrometer</text>
+        </g>
+        <g class="diagram-node" data-node="testing" style="cursor:pointer;">
+          <rect x="1010" y="320" width="170" height="60" fill="white" stroke="#0043ce"/>
+          <text x="1025" y="343" font-family="IBM Plex Sans" font-size="13" font-weight="600">Testing</text>
+          <text x="1025" y="362" font-family="IBM Plex Mono" font-size="10" fill="#525252">JUnit 5 · Mockito · TC</text>
+        </g>
+
+        <text x="20" y="440" font-family="IBM Plex Mono" font-size="10" fill="#525252">► tap any node to inspect review checkpoints</text>
+      </svg>
+    </div>
+
+    <div class="mt-3 flex items-center gap-2 text-xs text-gray70 font-mono">
+      <span class="relative inline-block w-2 h-2 rounded-full bg-ibm-500 pulse-dot"></span>
+      <span>interactive — click a node above</span>
+    </div>
+  </div>
+</section>
+
+<!-- =================== PHASES (5) =================== -->
+<section id="phases" class="anchor-offset border-b border-gray20">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 02 / methodology</div>
+    <h2 class="font-serif text-3xl mb-2">The five-phase review</h2>
+    <p class="text-gray70 mb-8 max-w-2xl text-sm">Each phase builds the next. Click a card to expand checkpoints, code, and references.</p>
+
+    <div class="grid md:grid-cols-5 gap-4" id="phaseGrid">
+      <!-- phase cards injected via JS -->
+    </div>
+
+    <!-- expanded phase content -->
+    <div id="phaseDetail" class="mt-8"></div>
+  </div>
+</section>
+
+<!-- =================== JAVA 21 SECTION =================== -->
+<section id="java21" class="anchor-offset border-b border-gray20 bg-gray10">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 03 / language features</div>
+    <h2 class="font-serif text-3xl mb-2">Java 21 features &mdash; what to praise, what to flag</h2>
+    <p class="text-gray70 mb-8 max-w-2xl text-sm">
+      Java 21 is the LTS baseline. Reviewers should reward idiomatic use of records, sealed types,
+      pattern matching, and virtual threads &mdash; and challenge legacy idioms that ignore them.
+    </p>
+
+    <div class="grid md:grid-cols-2 gap-5" id="javaFeatures"></div>
+  </div>
+</section>
+
+<!-- =================== CONCURRENCY DEEP DIVE =================== -->
+<section id="concurrency" class="anchor-offset border-b border-gray20">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 04 / concurrency</div>
+    <h2 class="font-serif text-3xl mb-2">Threads, virtual threads, futures &amp; queues</h2>
+    <p class="text-gray70 mb-8 max-w-3xl text-sm">
+      Concurrency is where Spring apps quietly fall over. Java 21 introduced production-ready
+      virtual threads. Most reviewers underestimate this section &mdash; do not.
+    </p>
+
+    <div class="grid md:grid-cols-3 gap-5" id="concurrencyCards"></div>
+
+    <div class="mt-8 grid md:grid-cols-2 gap-5">
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ enable virtual threads in spring boot 3.5.x</div>
+        <pre class="codeblock p-4 text-sm"><code id="vthreadCode"></code></pre>
+        <p class="text-xs text-gray70 mt-3">One property turns on virtual threads for Tomcat and <code class="font-mono">@Async</code>. Use Boot 3.5.x for full integration.</p>
+      </div>
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ completablefuture — common review pitfalls</div>
+        <pre class="codeblock p-4 text-sm"><code id="cfCode"></code></pre>
+        <p class="text-xs text-gray70 mt-3">Always pass an explicit executor. The default ForkJoinPool.commonPool() is shared globally.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== TESTING =================== -->
+<section id="testing" class="anchor-offset border-b border-gray20 bg-gray10">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 05 / testing &amp; coverage</div>
+    <h2 class="font-serif text-3xl mb-2">Mockito, slices, Testcontainers &amp; JaCoCo</h2>
+    <p class="text-gray70 mb-8 max-w-3xl text-sm">
+      A passing build is not a green light. Walk the test pyramid and demand each level is honest.
+    </p>
+
+    <div class="overflow-x-auto bg-white border border-gray20">
+      <table class="w-full text-sm">
+        <thead class="bg-gray100 text-white text-left">
+          <tr>
+            <th class="px-4 py-3 font-mono text-xs">LAYER</th>
+            <th class="px-4 py-3 font-mono text-xs">SLICE / TOOL</th>
+            <th class="px-4 py-3 font-mono text-xs">WHAT TO VERIFY</th>
+            <th class="px-4 py-3 font-mono text-xs">SMELL TO FLAG</th>
+          </tr>
+        </thead>
+        <tbody id="testTable"></tbody>
+      </table>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-5 mt-8">
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ mockito service test — the canonical pattern</div>
+        <pre class="codeblock p-4"><code id="mockitoCode"></code></pre>
+      </div>
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ testcontainers integration test</div>
+        <pre class="codeblock p-4"><code id="tcCode"></code></pre>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white border border-gray20 p-5">
+      <div class="pill text-ibm-600 mb-3">/ jacoco — pom.xml fragment with quality gate</div>
+      <pre class="codeblock p-4"><code id="jacocoCode"></code></pre>
+      <p class="text-xs text-gray70 mt-3">Coverage targets are not the goal &mdash; they are a floor. Set gates per package; meaningful tests beat percentage theatre.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =================== CONFIG / LOGGING / LOMBOK =================== -->
+<section id="config" class="anchor-offset border-b border-gray20">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 06 / configuration · logging · lombok</div>
+    <h2 class="font-serif text-3xl mb-2">Properties, profiles, structured logging &amp; Lombok</h2>
+    <p class="text-gray70 mb-8 max-w-3xl text-sm">
+      The boring layers are where production incidents hide. Read them as carefully as the code.
+    </p>
+
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ application.yml — recommended baseline</div>
+        <pre class="codeblock p-4"><code id="ymlCode"></code></pre>
+      </div>
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ @ConfigurationProperties — typed &amp; validated</div>
+        <pre class="codeblock p-4"><code id="cfgPropsCode"></code></pre>
+      </div>
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ structured logging with MDC</div>
+        <pre class="codeblock p-4"><code id="mdcCode"></code></pre>
+      </div>
+      <div class="bg-white border border-gray20 p-5">
+        <div class="pill text-ibm-600 mb-3">/ lombok — when to allow, when to refuse</div>
+        <pre class="codeblock p-4"><code id="lombokCode"></code></pre>
+        <p class="text-xs text-gray70 mt-3">
+          Lombok is fine for value objects but Java 21 records often replace it. Refuse <code class="font-mono">@Data</code> on JPA entities &mdash; it generates broken <code class="font-mono">equals/hashCode</code> for managed entities.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white border border-gray20 p-5">
+      <div class="pill text-ibm-600 mb-3">/ time &amp; timezones — the silent bug factory</div>
+      <pre class="codeblock p-4"><code id="timeCode"></code></pre>
+      <p class="text-xs text-gray70 mt-3">
+        Storage in UTC; presentation in the user's zone. Never use <code class="font-mono">java.util.Date</code> in new code; the <code class="font-mono">java.time</code> API is mandatory.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- =================== FINDINGS / SEVERITY =================== -->
+<section id="findings" class="anchor-offset border-b border-gray20 bg-gray10">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 07 / output</div>
+    <h2 class="font-serif text-3xl mb-2">Severity model &amp; example findings</h2>
+    <p class="text-gray70 mb-8 max-w-3xl text-sm">
+      Findings without severity are noise. Use a four-tier scale &mdash; everyone on the team should
+      know what each level means before the review hits inbox.
+    </p>
+
+    <div class="grid md:grid-cols-4 gap-3" id="severityGrid"></div>
+
+    <div class="mt-8 overflow-x-auto bg-white border border-gray20">
+      <table class="w-full text-sm">
+        <thead class="bg-gray100 text-white text-left">
+          <tr>
+            <th class="px-4 py-3 font-mono text-xs">FINDING</th>
+            <th class="px-4 py-3 font-mono text-xs">PHASE</th>
+            <th class="px-4 py-3 font-mono text-xs">SEVERITY</th>
+            <th class="px-4 py-3 font-mono text-xs">RECOMMENDED FIX</th>
+          </tr>
+        </thead>
+        <tbody id="findingsTable"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- =================== QUIZ =================== -->
+<section id="quiz" class="anchor-offset border-b border-gray20">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-600 mb-2">/ 08 / assessment</div>
+    <h2 class="font-serif text-3xl mb-2">10-question review quiz</h2>
+    <p class="text-gray70 mb-6 max-w-3xl text-sm">
+      Each question reflects a real review encounter. Read the snippet, pick the strongest answer,
+      then read the rationale. Score updates live.
+    </p>
+
+    <div class="bg-white border border-gray20 p-2 flex items-center gap-3 mb-6">
+      <div class="flex-1 h-2 bg-gray20 relative">
+        <div id="quizBar" class="progress-bar absolute inset-y-0 left-0" style="width:0%"></div>
+      </div>
+      <div class="font-mono text-xs text-gray80 w-32 text-right">
+        <span id="quizScore">0</span> / 10 · <span id="quizPct">0%</span>
+      </div>
+    </div>
+
+    <div id="quizContainer" class="space-y-5"></div>
+
+    <div id="quizSummary" class="hidden mt-8 bg-ibm-500 text-white p-6">
+      <div class="font-mono text-xs opacity-80">/ result</div>
+      <div class="font-serif text-3xl mt-2" id="quizFinal"></div>
+      <p class="text-sm opacity-90 mt-2" id="quizMessage"></p>
+    </div>
+  </div>
+</section>
+
+<!-- =================== REFERENCES =================== -->
+<section class="border-b border-gray20 bg-gray100 text-white">
+  <div class="max-w-7xl mx-auto px-6 py-14">
+    <div class="pill text-ibm-300 mb-2">/ 09 / references</div>
+    <h2 class="font-serif text-3xl mb-6">External references &amp; further reading</h2>
+    <div class="grid md:grid-cols-3 gap-5" id="refsGrid"></div>
+  </div>
+</section>
+
+<!-- =================== FOOTER =================== -->
+<footer class="bg-gray100 text-gray30 text-xs">
+  <div class="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div class="font-mono">// Java Spring 21 — Code Review Field Guide · IBM Plex typeface · Carbon-inspired palette</div>
+    <div class="flex items-center gap-3">
+      <span class="w-2 h-2 bg-ibm-300"></span>
+      <span class="w-2 h-2 bg-ibm-500"></span>
+      <span class="w-2 h-2 bg-ibm-700"></span>
+      <span class="w-2 h-2 bg-white"></span>
+    </div>
+  </div>
+</footer>
+
+<!-- =================== MODAL =================== -->
+<div id="modal" class="fixed inset-0 z-50 hidden modal-back items-center justify-center p-4">
+  <div class="bg-white max-w-3xl w-full max-h-[88vh] overflow-y-auto border border-ibm-500 relative corner-tag">
+    <div class="ibm-stripe h-1 w-full"></div>
+    <div class="p-6 md:p-8">
+      <button onclick="closeModal()" class="absolute top-3 right-3 text-gray70 hover:text-ibm-500 text-2xl leading-none">&times;</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== SCRIPTS =================== -->
+<script>
+/* ====================================================================
+   DATA
+==================================================================== */
+
+/* ---- diagram nodes content ---- */
+const NODES = {
+  client: {
+    title: "Client / API Consumer",
+    pill: "OUTSIDE THE BOUNDARY",
+    body: `
+      <p class="mb-3">The first thing reviewers forget: the client is part of your trust boundary. Anything you receive is suspect.</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>Confirm <em>which</em> clients call this API (browser, mobile, partner system).</li>
+        <li>Verify content negotiation: <code class="font-mono bg-gray10 px-1">Accept</code> headers respected, JSON only unless documented.</li>
+        <li>Check rate limits and idempotency requirements (<code class="font-mono bg-gray10 px-1">Idempotency-Key</code> header for POSTs that retry).</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="cmt">// Example: idempotent order create</span>
+POST /api/v1/orders HTTP/1.1
+Content-Type: application/json
+Idempotency-Key: 7c4f...e1
+Authorization: Bearer eyJhbGci...
+
+{ "customerId": 42, "items": [...] }</code></pre>`,
+    refs: [["MDN — HTTP idempotency","https://developer.mozilla.org/en-US/docs/Glossary/Idempotent"]]
+  },
+  filter: {
+    title: "Spring Security Filter Chain",
+    pill: "AUTH · CORS · CSRF",
+    body: `
+      <p class="mb-3">Every request runs through this chain before any controller is reached. A misconfigured chain is the single highest-impact issue you can find.</p>
+      <h4 class="font-semibold mt-4 mb-2 text-sm">Checkpoints</h4>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>One <code class="font-mono bg-gray10 px-1">SecurityFilterChain</code> bean — no <code class="font-mono bg-gray10 px-1">permitAll()</code> on sensitive paths.</li>
+        <li>CSRF disabled <em>only</em> for stateless REST APIs that use bearer tokens.</li>
+        <li>CORS uses an explicit origin list; never <code class="font-mono bg-gray10 px-1">"*"</code> in production.</li>
+        <li>Method-level security with <code class="font-mono bg-gray10 px-1">@PreAuthorize</code> for fine-grained rules.</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="ann">@Configuration</span>
+<span class="ann">@EnableWebSecurity</span>
+<span class="ann">@EnableMethodSecurity</span>
+<span class="kw">public class</span> <span class="typ">SecurityConfig</span> {
+
+  <span class="ann">@Bean</span>
+  <span class="typ">SecurityFilterChain</span> chain(<span class="typ">HttpSecurity</span> http) <span class="kw">throws</span> <span class="typ">Exception</span> {
+    <span class="kw">return</span> http
+      .csrf(<span class="typ">AbstractHttpConfigurer</span>::disable)         <span class="cmt">// stateless API</span>
+      .cors(<span class="typ">Customizer</span>.withDefaults())
+      .authorizeHttpRequests(a -> a
+        .requestMatchers(<span class="str">"/actuator/health"</span>).permitAll()
+        .requestMatchers(<span class="str">"/api/admin/**"</span>).hasRole(<span class="str">"ADMIN"</span>)
+        .anyRequest().authenticated())
+      .oauth2ResourceServer(o -> o.jwt(<span class="typ">Customizer</span>.withDefaults()))
+      .build();
+  }
+}</code></pre>`,
+    refs: [
+      ["Spring Security reference","https://docs.spring.io/spring-security/reference/"],
+      ["OWASP API Security Top 10","https://owasp.org/API-Security/editions/2023/en/0x11-t10/"]
+    ]
+  },
+  controller: {
+    title: "@RestController",
+    pill: "HTTP BOUNDARY",
+    body: `
+      <p class="mb-3">Controllers translate HTTP into method calls. They should be the <em>thinnest</em> layer in your app.</p>
+      <h4 class="font-semibold mt-4 mb-2 text-sm">Smells</h4>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>Business logic in the controller (calculations, branching on domain state).</li>
+        <li>Missing <code class="font-mono bg-gray10 px-1">@Valid</code> on request bodies.</li>
+        <li>Returning entities directly instead of DTOs (leaks JPA fields, breaks evolution).</li>
+        <li>Generic <code class="font-mono bg-gray10 px-1">Exception</code> handling inside the controller.</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="ann">@RestController</span>
+<span class="ann">@RequestMapping</span>(<span class="str">"/api/v1/orders"</span>)
+<span class="kw">public class</span> <span class="typ">OrderController</span> {
+
+  <span class="kw">private final</span> <span class="typ">OrderService</span> service;
+
+  <span class="cmt">// constructor injection — explicit, testable</span>
+  <span class="kw">public</span> <span class="typ">OrderController</span>(<span class="typ">OrderService</span> service) {
+    <span class="kw">this</span>.service = service;
+  }
+
+  <span class="ann">@PostMapping</span>
+  <span class="kw">public</span> <span class="typ">ResponseEntity</span>&lt;<span class="typ">OrderResponse</span>&gt; create(
+        <span class="ann">@Valid</span> <span class="ann">@RequestBody</span> <span class="typ">OrderRequest</span> req) {
+
+    <span class="typ">OrderResponse</span> body = service.place(req);
+    <span class="kw">return</span> <span class="typ">ResponseEntity</span>
+      .created(<span class="typ">URI</span>.create(<span class="str">"/api/v1/orders/"</span> + body.id()))
+      .body(body);
+  }
+}</code></pre>`,
+    refs: [
+      ["Spring MVC docs","https://docs.spring.io/spring-framework/reference/web/webmvc.html"]
+    ]
+  },
+  service: {
+    title: "@Service — business logic core",
+    pill: "TRANSACTIONAL BOUNDARY",
+    body: `
+      <p class="mb-3">The service layer is where domain rules live and where transactions begin. Watch the boundary carefully.</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li><code class="font-mono bg-gray10 px-1">@Transactional</code> placed here, on <em>public</em> methods.</li>
+        <li>Use <code class="font-mono bg-gray10 px-1">@Transactional(readOnly = true)</code> for queries — Hibernate skips dirty checks.</li>
+        <li>Self-invocation will not trigger the proxy. <code class="font-mono bg-gray10 px-1">this.foo()</code> bypasses AOP.</li>
+        <li>External I/O (HTTP, message broker) inside a long transaction = held DB connection. Pull I/O out of the boundary.</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="ann">@Service</span>
+<span class="kw">public class</span> <span class="typ">OrderService</span> {
+
+  <span class="ann">@Transactional</span>
+  <span class="kw">public</span> <span class="typ">OrderResponse</span> place(<span class="typ">OrderRequest</span> req) {
+    <span class="typ">Order</span> o = <span class="typ">Order</span>.from(req);
+    o.applyPricing(pricing.quote(req));    <span class="cmt">// domain rule</span>
+    repo.save(o);
+    events.publish(<span class="kw">new</span> <span class="typ">OrderPlaced</span>(o.id()));
+    <span class="kw">return</span> <span class="typ">OrderResponse</span>.of(o);
+  }
+
+  <span class="ann">@Transactional</span>(readOnly = <span class="kw">true</span>)
+  <span class="kw">public</span> <span class="typ">OrderResponse</span> get(<span class="typ">Long</span> id) {
+    <span class="kw">return</span> repo.findById(id)
+       .map(<span class="typ">OrderResponse</span>::of)
+       .orElseThrow(() -> <span class="kw">new</span> <span class="typ">NotFoundException</span>(id));
+  }
+}</code></pre>`,
+    refs: [
+      ["Spring transaction docs","https://docs.spring.io/spring-framework/reference/data-access/transaction.html"]
+    ]
+  },
+  repo: {
+    title: "@Repository — data access",
+    pill: "JPA · QUERIES",
+    body: `
+      <p class="mb-3">Spring Data hides a lot of complexity. Reviewers should make it visible again.</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>N+1 queries: enable <code class="font-mono bg-gray10 px-1">spring.jpa.show-sql=true</code> in dev and watch logs.</li>
+        <li>Use <code class="font-mono bg-gray10 px-1">@EntityGraph</code> or fetch joins to load associations explicitly.</li>
+        <li>Native queries with concatenated user input = SQL injection. Always use bind parameters.</li>
+        <li>Pageable everywhere — never return unbounded lists.</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="ann">@Repository</span>
+<span class="kw">public interface</span> <span class="typ">OrderRepository</span>
+       <span class="kw">extends</span> <span class="typ">JpaRepository</span>&lt;<span class="typ">Order</span>, <span class="typ">Long</span>&gt; {
+
+  <span class="ann">@EntityGraph</span>(attributePaths = {<span class="str">"items"</span>, <span class="str">"customer"</span>})
+  <span class="typ">Optional</span>&lt;<span class="typ">Order</span>&gt; findById(<span class="typ">Long</span> id);
+
+  <span class="ann">@Query</span>(<span class="str">"select o from Order o where o.status = :s"</span>)
+  <span class="typ">Page</span>&lt;<span class="typ">Order</span>&gt; byStatus(<span class="ann">@Param</span>(<span class="str">"s"</span>) <span class="typ">Status</span> s, <span class="typ">Pageable</span> p);
+}</code></pre>`,
+    refs: [
+      ["Spring Data JPA","https://docs.spring.io/spring-data/jpa/reference/"],
+      ["Vlad Mihalcea — N+1 problem","https://vladmihalcea.com/n-plus-1-query-problem/"]
+    ]
+  },
+  db: {
+    title: "Database & connection pool",
+    pill: "PERSISTENCE",
+    body: `
+      <p class="mb-3">The pool is your application's blood pressure. Misconfigure it and the symptoms look like everything else.</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>HikariCP defaults are sane but verify <code class="font-mono bg-gray10 px-1">maximum-pool-size</code> against DB max connections.</li>
+        <li>Migrations: Flyway or Liquibase, version-controlled, never <code class="font-mono bg-gray10 px-1">ddl-auto=update</code> in production.</li>
+        <li>Set <code class="font-mono bg-gray10 px-1">connectionTimeout</code> aggressively — fail fast beats hanging.</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="cmt"># application.yml</span>
+spring:
+  datasource:
+    url: jdbc:postgresql://${"$"}{DB_HOST}:5432/${"$"}{DB_NAME}
+    username: ${"$"}{DB_USER}
+    password: ${"$"}{DB_PASS}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000
+      leak-detection-threshold: 30000
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: false        <span class="cmt"># critical: disable OSIV</span>
+  flyway:
+    enabled: true
+    locations: classpath:db/migration</code></pre>`,
+    refs: [
+      ["HikariCP — about pool sizing","https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"],
+      ["Flyway docs","https://documentation.red-gate.com/flyway"]
+    ]
+  },
+  logging: {
+    title: "Logging & tracing",
+    pill: "SLF4J · LOGBACK · MDC",
+    body: `
+      <p class="mb-3">Logs are your post-mortem. Make them structured, contextual, and free of secrets.</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>SLF4J as the API; Logback as the implementation (Boot default).</li>
+        <li>JSON logs in production via <code class="font-mono bg-gray10 px-1">logstash-logback-encoder</code>.</li>
+        <li>MDC carries request/trace IDs across async boundaries.</li>
+        <li>No PII (passwords, SSNs, tokens, full credit cards) — search the codebase.</li>
+      </ul>
+      <pre class="codeblock p-4 text-xs"><code><span class="kw">private static final</span> <span class="typ">Logger</span> log = <span class="typ">LoggerFactory</span>.getLogger(<span class="typ">OrderService</span>.<span class="kw">class</span>);
+
+log.info(<span class="str">"order placed id={} customer={} total={}"</span>,
+         o.id(), o.customerId(), o.total());
+
+<span class="cmt">// don't:  log.info("order " + o); -- string concat, no structure</span>
+<span class="cmt">// don't:  log.info("user pw=" + pw); -- PII leak</span></code></pre>`,
+    refs: [
+      ["SLF4J manual","https://www.slf4j.org/manual.html"],
+      ["logstash-logback-encoder","https://github.com/logfellow/logstash-logback-encoder"]
+    ]
+  },
+  config: {
+    title: "Configuration",
+    pill: "PROFILES · PROPERTIES",
+    body: `
+      <p class="mb-3">Configuration drift between environments is a leading cause of "works on my machine."</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>One <code class="font-mono bg-gray10 px-1">application.yml</code> + per-profile overlays (<code class="font-mono bg-gray10 px-1">application-prod.yml</code>).</li>
+        <li><code class="font-mono bg-gray10 px-1">@ConfigurationProperties</code> with <code class="font-mono bg-gray10 px-1">@Validated</code> beats scattered <code class="font-mono bg-gray10 px-1">@Value</code>.</li>
+        <li>Secrets via env vars or Vault — never committed.</li>
+      </ul>
+      <p class="text-xs text-gray70">See section <a href="#config" class="text-ibm-500 underline">Configuration · Logging · Lombok</a> below for a full example.</p>`,
+    refs: [
+      ["Spring Boot externalized config","https://docs.spring.io/spring-boot/reference/features/external-config.html"]
+    ]
+  },
+  exception: {
+    title: "Exception handling",
+    pill: "@RESTCONTROLLERADVICE",
+    body: `
+      <p class="mb-3">A consistent error contract is part of your API. Surface it deliberately.</p>
+      <pre class="codeblock p-4 text-xs"><code><span class="ann">@RestControllerAdvice</span>
+<span class="kw">public class</span> <span class="typ">ApiExceptionHandler</span> {
+
+  <span class="ann">@ExceptionHandler</span>(<span class="typ">NotFoundException</span>.<span class="kw">class</span>)
+  <span class="typ">ResponseEntity</span>&lt;<span class="typ">ProblemDetail</span>&gt; notFound(<span class="typ">NotFoundException</span> e) {
+    <span class="typ">ProblemDetail</span> pd = <span class="typ">ProblemDetail</span>
+       .forStatusAndDetail(<span class="typ">HttpStatus</span>.NOT_FOUND, e.getMessage());
+    pd.setType(<span class="typ">URI</span>.create(<span class="str">"https://api.example.com/errors/not-found"</span>));
+    <span class="kw">return</span> <span class="typ">ResponseEntity</span>.status(404).body(pd);
+  }
+
+  <span class="ann">@ExceptionHandler</span>(<span class="typ">MethodArgumentNotValidException</span>.<span class="kw">class</span>)
+  <span class="typ">ProblemDetail</span> validation(<span class="typ">MethodArgumentNotValidException</span> e) { ... }
+}</code></pre>
+      <p class="text-xs text-gray70 mt-3">Use <code class="font-mono">ProblemDetail</code> from RFC 7807 — Spring 6 provides it natively.</p>`,
+    refs: [
+      ["RFC 7807 — Problem Details","https://www.rfc-editor.org/rfc/rfc7807"]
+    ]
+  },
+  async: {
+    title: "Async & threads",
+    pill: "@ASYNC · VIRTUAL THREADS",
+    body: `
+      <p class="mb-3">Spring Boot 3.5.x integrates virtual threads cleanly. Reviewers should ask: which executor backs <code class="font-mono">@Async</code>?</p>
+      <p class="text-xs text-gray70">See <a href="#concurrency" class="text-ibm-500 underline">the concurrency section</a> for a deep dive.</p>`,
+    refs: []
+  },
+  actuator: {
+    title: "Observability",
+    pill: "ACTUATOR · MICROMETER",
+    body: `
+      <p class="mb-3">If you cannot see it, you cannot fix it. Spring Boot Actuator + Micrometer is the floor.</p>
+      <ul class="list-disc list-inside text-sm space-y-1 text-gray80 mb-4">
+        <li>Expose <em>only</em> the actuator endpoints you need: <code class="font-mono bg-gray10 px-1">health, info, metrics, prometheus</code>.</li>
+        <li>Secure them — they are not safe by default in any non-trivial deployment.</li>
+        <li>Custom business metrics via <code class="font-mono bg-gray10 px-1">MeterRegistry</code>: counters, timers, gauges.</li>
+      </ul>`,
+    refs: [
+      ["Spring Boot Actuator","https://docs.spring.io/spring-boot/reference/actuator/index.html"],
+      ["Micrometer","https://micrometer.io/docs"]
+    ]
+  },
+  testing: {
+    title: "Testing",
+    pill: "JUNIT 5 · MOCKITO · TESTCONTAINERS",
+    body: `
+      <p class="mb-3">A test pyramid that is honest at every layer.</p>
+      <p class="text-xs text-gray70">See <a href="#testing" class="text-ibm-500 underline">the testing section</a> for full examples.</p>`,
+    refs: []
+  }
+};
+
+/* ---- phase definitions ---- */
+const PHASES = [
+  {
+    n: 1, name:"Orient", subtitle:"Understand the lay of the land",
+    goal: "Know what the app does and how it ships before reading code.",
+    items: [
+      "Read the README; capture stale or missing docs as a finding.",
+      "Inspect <code>pom.xml</code> / <code>build.gradle</code>: Spring Boot version, JDK, plugins (JaCoCo, SpotBugs, Checkstyle).",
+      "Map top-level packages — layered or feature-based?",
+      "Note CI config, Dockerfile, and deployment target (Kubernetes? bare ECS?).",
+      "Run the build once. A red baseline tells you a lot."
+    ],
+    code: `<span class="cmt"># Quick health check on a Spring Boot project</span>
+mvn -v && java --version
+mvn -q dependency:tree | head -50
+mvn -q help:effective-pom | grep -E '(spring-boot|jdk|java.version)'
+
+<span class="cmt"># or for Gradle</span>
+./gradlew dependencies --configuration runtimeClasspath`,
+    refs: [
+      ["Spring Boot 3.5 reference","https://docs.spring.io/spring-boot/reference/"],
+      ["Spring Initializr","https://start.spring.io/"]
+    ]
+  },
+  {
+    n: 2, name:"Mental Map", subtitle:"Trace one request end-to-end",
+    goal: "Be able to narrate a single POST request from filter chain to row insert.",
+    items: [
+      "Find <code>@SpringBootApplication</code>; identify all <code>@RestController</code> beans.",
+      "Pick a domain entity (<em>Order</em>, <em>User</em>) and follow it down: controller → service → repo.",
+      "Confirm <code>@Valid</code> on every <code>@RequestBody</code>; verify status codes match REST semantics.",
+      "Check that <code>@Transactional</code> sits on services, not repositories or controllers.",
+      "Spot N+1 candidates — any <code>findAll()</code> on an entity with a lazy collection."
+    ],
+    code: `<span class="ann">@RestController</span>
+<span class="ann">@RequestMapping</span>(<span class="str">"/api/v1/orders"</span>)
+<span class="kw">public class</span> <span class="typ">OrderController</span> {
+  <span class="kw">private final</span> <span class="typ">OrderService</span> service;
+  <span class="kw">public</span> <span class="typ">OrderController</span>(<span class="typ">OrderService</span> service) { <span class="kw">this</span>.service = service; }
+
+  <span class="ann">@PostMapping</span>
+  <span class="typ">ResponseEntity</span>&lt;<span class="typ">OrderResponse</span>&gt; create(<span class="ann">@Valid</span> <span class="ann">@RequestBody</span> <span class="typ">OrderRequest</span> req) {
+    <span class="kw">return</span> <span class="typ">ResponseEntity</span>.status(201).body(service.place(req));
+  }
+}`,
+    refs: [
+      ["RestController docs","https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller.html"],
+      ["Bean Validation 3.0","https://beanvalidation.org/3.0/"]
+    ]
+  },
+  {
+    n: 3, name:"Architecture", subtitle:"Layering, DI, transactions",
+    goal: "Confirm the design holds up under change.",
+    items: [
+      "Constructor injection only — <code>@Autowired</code> on fields is a smell.",
+      "Layer purity: no <code>@Repository</code> in controllers, no SQL in services.",
+      "<code>@Transactional</code> on public service methods; readOnly for queries.",
+      "Self-invocation does not trigger AOP — flag <code>this.foo()</code> calling a transactional method.",
+      "Global <code>@RestControllerAdvice</code>; consistent error DTO (<code>ProblemDetail</code>).",
+      "No hardcoded secrets — verify with grep for <code>password=</code>, <code>apiKey=</code>."
+    ],
+    code: `<span class="cmt">// ❌ Field injection — hides dependencies</span>
+<span class="ann">@Service</span>
+<span class="kw">public class</span> <span class="typ">BadService</span> {
+  <span class="ann">@Autowired</span> <span class="typ">OrderRepository</span> repo;        <span class="cmt">// can't unit test cleanly</span>
+}
+
+<span class="cmt">// ✅ Constructor injection — explicit, final, testable</span>
+<span class="ann">@Service</span>
+<span class="kw">public class</span> <span class="typ">GoodService</span> {
+  <span class="kw">private final</span> <span class="typ">OrderRepository</span> repo;
+  <span class="kw">public</span> <span class="typ">GoodService</span>(<span class="typ">OrderRepository</span> repo) { <span class="kw">this</span>.repo = repo; }
+}`,
+    refs: [
+      ["Why constructor injection","https://reflectoring.io/constructor-injection/"]
+    ]
+  },
+  {
+    n: 4, name:"Code Quality", subtitle:"Java 21 idioms, readability",
+    goal: "Reward modern Java; flag stale C-style code.",
+    items: [
+      "Records for DTOs and value objects.",
+      "Pattern matching with <code>switch</code> instead of nested <code>instanceof</code>.",
+      "<code>Optional</code> as a return type, never as a parameter or field.",
+      "Streams: max 2 levels of nesting; pull complex logic into named methods.",
+      "Methods under ~30 lines; classes under ~250 lines as a guideline.",
+      "All TODO / FIXME comments reference a ticket."
+    ],
+    code: `<span class="cmt">// ✅ Record DTO — concise, immutable, validated</span>
+<span class="kw">public record</span> <span class="typ">OrderRequest</span>(
+    <span class="ann">@NotNull</span> <span class="typ">Long</span> customerId,
+    <span class="ann">@NotEmpty</span> <span class="typ">List</span>&lt;<span class="typ">LineItem</span>&gt; items,
+    <span class="typ">String</span> note) {}
+
+<span class="cmt">// ✅ Pattern matching for switch — Java 21</span>
+<span class="typ">String</span> describe(<span class="typ">Shape</span> s) {
+  <span class="kw">return switch</span> (s) {
+    <span class="kw">case</span> <span class="typ">Circle</span> c    -> <span class="str">"radius "</span> + c.radius();
+    <span class="kw">case</span> <span class="typ">Square</span> sq   -> <span class="str">"side "</span>   + sq.side();
+    <span class="kw">case</span> <span class="kw">null</span>          -> <span class="str">"unknown"</span>;
+  };
+}`,
+    refs: [
+      ["JEP 440 — Record Patterns","https://openjdk.org/jeps/440"],
+      ["JEP 441 — Pattern matching for switch","https://openjdk.org/jeps/441"]
+    ]
+  },
+  {
+    n: 5, name:"Security & Reliability", subtitle:"Highest-impact findings",
+    goal: "Don't ship until these are clear.",
+    items: [
+      "<code>SecurityFilterChain</code> bean configured; sensitive paths require auth.",
+      "<code>@PreAuthorize</code> annotations match business rules (RBAC / ABAC).",
+      "CORS: explicit origins, no wildcards in production.",
+      "Native queries use bind parameters — never string concatenation.",
+      "File uploads validate content type, size, and filename (path traversal).",
+      "Logs free of PII. Actuator endpoints secured.",
+      "Tests: unit (Mockito), slice (<code>@WebMvcTest</code>, <code>@DataJpaTest</code>), integration (Testcontainers)."
+    ],
+    code: `<span class="ann">@PreAuthorize</span>(<span class="str">"hasRole('ADMIN') and #orderId == authentication.principal.orderId"</span>)
+<span class="kw">public</span> <span class="kw">void</span> cancel(<span class="typ">Long</span> orderId) { ... }
+
+<span class="cmt">// ❌ SQL injection — string concat</span>
+em.createNativeQuery(<span class="str">"select * from t where name = '"</span> + name + <span class="str">"'"</span>);
+
+<span class="cmt">// ✅ Bind parameter</span>
+em.createNativeQuery(<span class="str">"select * from t where name = :n"</span>)
+  .setParameter(<span class="str">"n"</span>, name);`,
+    refs: [
+      ["OWASP Top 10","https://owasp.org/www-project-top-ten/"],
+      ["Spring Security method security","https://docs.spring.io/spring-security/reference/servlet/authorization/method-security.html"]
+    ]
+  }
+];
+
+/* ---- Java 21 features ---- */
+const JAVA_FEATURES = [
+  {
+    name:"Records",
+    when:"Immutable DTOs, API request/response, value objects.",
+    smell:"Used for entities, mutable state, or as JPA <code>@Entity</code>.",
+    code:`<span class="kw">public record</span> <span class="typ">Money</span>(<span class="typ">BigDecimal</span> amount, <span class="typ">Currency</span> currency) {
+  <span class="kw">public</span> <span class="typ">Money</span> {
+    <span class="typ">Objects</span>.requireNonNull(amount);
+    <span class="kw">if</span> (amount.signum() &lt; 0) <span class="kw">throw new</span> <span class="typ">IllegalArgumentException</span>(<span class="str">"negative"</span>);
+  }
+}`
+  },
+  {
+    name:"Sealed classes",
+    when:"Closed type hierarchies — domain events, state machines.",
+    smell:"Used to fake enums, or where simple inheritance would do.",
+    code:`<span class="kw">public sealed interface</span> <span class="typ">PaymentResult</span>
+       <span class="kw">permits</span> <span class="typ">Approved</span>, <span class="typ">Declined</span>, <span class="typ">Pending</span> {}
+
+<span class="kw">public record</span> <span class="typ">Approved</span>(<span class="typ">String</span> auth)    <span class="kw">implements</span> <span class="typ">PaymentResult</span> {}
+<span class="kw">public record</span> <span class="typ">Declined</span>(<span class="typ">String</span> reason) <span class="kw">implements</span> <span class="typ">PaymentResult</span> {}
+<span class="kw">public record</span> <span class="typ">Pending</span>(<span class="typ">String</span> ref)     <span class="kw">implements</span> <span class="typ">PaymentResult</span> {}`
+  },
+  {
+    name:"Pattern matching for switch",
+    when:"Branching on a sealed hierarchy or external types.",
+    smell:"Mixed with old-style instanceof + cast chains.",
+    code:`<span class="typ">String</span> describe(<span class="typ">PaymentResult</span> r) {
+  <span class="kw">return switch</span> (r) {
+    <span class="kw">case</span> <span class="typ">Approved</span>(<span class="typ">String</span> a) -> <span class="str">"ok "</span> + a;
+    <span class="kw">case</span> <span class="typ">Declined</span>(<span class="typ">String</span> d) -> <span class="str">"no: "</span> + d;
+    <span class="kw">case</span> <span class="typ">Pending</span> p          -> <span class="str">"wait: "</span> + p.ref();
+  };
+}`
+  },
+  {
+    name:"Text blocks",
+    when:"Multi-line SQL, JSON, GraphQL, or HTML literals.",
+    smell:"Used for short business strings or wrapped error messages.",
+    code:`<span class="kw">var</span> sql = <span class="str">"""
+    select o.id, o.total, c.name
+      from orders o
+      join customers c on c.id = o.customer_id
+     where o.status = ?
+    """</span>;`
+  },
+  {
+    name:"Virtual threads (JEP 444)",
+    when:"High-concurrency I/O — request handlers, fan-out clients.",
+    smell:"Used for CPU-bound work, or pinned by <code>synchronized</code> on long sections.",
+    code:`<span class="kw">try</span> (<span class="kw">var</span> exec = <span class="typ">Executors</span>.newVirtualThreadPerTaskExecutor()) {
+  <span class="typ">List</span>&lt;<span class="typ">Future</span>&lt;<span class="typ">Quote</span>&gt;&gt; futures = vendors.stream()
+      .map(v -> exec.submit(() -> v.fetch()))
+      .toList();
+  <span class="kw">return</span> futures.stream().map(<span class="typ">Future</span>::get).toList();
+}`
+  },
+  {
+    name:"Switch expressions",
+    when:"Returning a value based on a closed set of cases.",
+    smell:"Switch <em>statement</em> still used with break and fall-through.",
+    code:`<span class="kw">int</span> fee = <span class="kw">switch</span> (tier) {
+  <span class="kw">case</span> BRONZE -> <span class="num">5</span>;
+  <span class="kw">case</span> SILVER -> <span class="num">3</span>;
+  <span class="kw">case</span> GOLD   -> <span class="num">0</span>;
+};`
+  }
+];
+
+/* ---- Concurrency cards ---- */
+const CONCURRENCY = [
+  {
+    title:"Virtual threads",
+    body:"Cheap to create, mounted on platform threads only when running. One per request is now realistic.",
+    bullets:[
+      "Use <code>Executors.newVirtualThreadPerTaskExecutor()</code> for I/O fan-out.",
+      "Avoid long <code>synchronized</code> blocks — they pin the carrier thread.",
+      "Replace pooled <code>ExecutorService</code> with virtual when work is I/O bound."
+    ]
+  },
+  {
+    title:"CompletableFuture",
+    body:"Composable async pipelines. Powerful, but easy to misuse.",
+    bullets:[
+      "Always pass an explicit <code>Executor</code> — don't rely on commonPool().",
+      "Handle failures with <code>.exceptionally()</code> or <code>.handle()</code>.",
+      "Combine with <code>allOf</code> / <code>anyOf</code> for fan-out / first-result."
+    ]
+  },
+  {
+    title:"Blocking queues",
+    body:"<code>BlockingQueue&lt;T&gt;</code> backs producer/consumer designs without explicit locks.",
+    bullets:[
+      "<code>LinkedBlockingQueue</code> for unbounded; <code>ArrayBlockingQueue</code> for bounded backpressure.",
+      "Producers <code>put()</code>, consumers <code>take()</code> — both block as needed.",
+      "Prefer to message brokers when work stays in-process."
+    ]
+  },
+  {
+    title:"@Async and TaskExecutor",
+    body:"Spring's annotation-driven async. In Boot 3.5.x, virtual threads back it when enabled.",
+    bullets:[
+      "<code>@EnableAsync</code> is required.",
+      "<code>@Async</code> on public methods only — same proxy rule as <code>@Transactional</code>.",
+      "Configure a <code>ThreadPoolTaskExecutor</code> bean unless using virtual threads."
+    ]
+  },
+  {
+    title:"Scheduled tasks",
+    body:"<code>@Scheduled</code> for recurring work; use cron, fixed-rate, or fixed-delay.",
+    bullets:[
+      "Single-threaded by default — long jobs block the next tick. Use a <code>TaskScheduler</code>.",
+      "Use <code>ShedLock</code> if running multiple instances to avoid duplicate runs.",
+      "Quartz or external schedulers for distributed cron."
+    ]
+  },
+  {
+    title:"Time, clocks, and zones",
+    body:"All wall-clock decisions go through <code>java.time</code>. Inject a <code>Clock</code> for testability.",
+    bullets:[
+      "Persist instants in UTC; render in user zone.",
+      "Never use <code>java.util.Date</code> in new code.",
+      "Inject <code>Clock</code>; tests use <code>Clock.fixed(...)</code> for determinism."
+    ]
+  }
+];
+
+/* ---- Test table ---- */
+const TEST_TABLE = [
+  ["Unit", "<code class='font-mono'>@ExtendWith(MockitoExtension.class)</code>", "Service rules with all collaborators mocked.", "Tests assert mocks instead of behavior."],
+  ["Controller slice", "<code class='font-mono'>@WebMvcTest</code>", "Routing, JSON binding, validation, status codes.", "<code>@SpringBootTest</code> used where a slice would do."],
+  ["Repository slice", "<code class='font-mono'>@DataJpaTest</code>", "Custom queries against an in-memory or TC database.", "Production runs PostgreSQL but tests use H2."],
+  ["Integration", "<code class='font-mono'>@SpringBootTest</code> + Testcontainers", "Full-context flows over a real database.", "No DB at all — happy-path mocks only."],
+  ["Security", "<code class='font-mono'>@WithMockUser</code> / <code>@WithMockJwt</code>", "RBAC and resource-level rules.", "Security entirely disabled in tests."]
+];
+
+/* ---- Findings ---- */
+const FINDINGS = [
+  ["Missing <code>@Valid</code> on POST /orders body","Phase 5","critical","Add <code>@Valid</code>; ensure <code>@RestControllerAdvice</code> maps validation to ProblemDetail."],
+  ["Field injection used in OrderService","Phase 3","high","Switch to constructor injection; mark fields <code>final</code>."],
+  ["CORS allows all origins","Phase 5","high","Configure explicit allowed origins per environment."],
+  ["<code>@Transactional</code> on private method in PaymentService","Phase 3","medium","Promote to public; or split into a separately-injected bean."],
+  ["No <code>@RestControllerAdvice</code> for global exception handling","Phase 3","medium","Add advice with <code>ProblemDetail</code> mappings."],
+  ["Hardcoded DB password in application.properties","Phase 3","critical","Move to env var or Vault; rotate the credential."],
+  ["N+1 in <code>CustomerRepository.findAll()</code>","Phase 4","medium","Add <code>@EntityGraph</code> or use a fetch join."],
+  ["TODO comments without ticket references (23)","Phase 4","low","Tag each with a ticket; remove dead ones."],
+  ["<code>open-in-view: true</code> in production","Phase 3","high","Disable OSIV; load associations explicitly inside transactions."],
+  ["Actuator <code>/env</code> exposed unauthenticated","Phase 5","critical","Restrict actuator endpoints; require auth."]
+];
+
+/* ---- Severity definitions ---- */
+const SEVERITY = [
+  ["Critical","critical","Data breach risk, auth bypass, or production crash. Block the release."],
+  ["High","high","Security weakness, data integrity risk, or large performance hit. Fix this sprint."],
+  ["Medium","medium","Maintainability or minor reliability concern. Next sprint."],
+  ["Low","low","Style or doc nit. Cleanup window."]
+];
+
+/* ---- Quiz ---- */
+const QUIZ = [
+  {
+    q:"Which annotation should be on the <em>service</em> method, not the controller?",
+    code:`<span class="ann">@RestController</span>
+<span class="kw">class</span> <span class="typ">OrderController</span> {
+  <span class="ann">@PostMapping</span>(<span class="str">"/orders"</span>)
+  <span class="ann">@???</span>
+  <span class="typ">Order</span> create(<span class="ann">@Valid</span> <span class="ann">@RequestBody</span> <span class="typ">Req</span> r) { ... }
+}`,
+    options:[
+      ["@Transactional","Correct. Transactions belong on service methods so the boundary matches the use case, not the HTTP request.","ok"],
+      ["@RequestMapping","Wrong. <code>@RequestMapping</code> belongs on web layer methods.","no"],
+      ["@Async","Wrong. <code>@Async</code> is for fire-and-forget flows, not transactional ones.","no"],
+      ["@Validated","Wrong. <code>@Validated</code> enables validation; it doesn't replace transaction management.","no"],
+    ]
+  },
+  {
+    q:"What is wrong with this dependency injection?",
+    code:`<span class="ann">@Service</span>
+<span class="kw">public class</span> <span class="typ">OrderService</span> {
+  <span class="ann">@Autowired</span>
+  <span class="kw">private</span> <span class="typ">OrderRepository</span> repo;
+  <span class="ann">@Autowired</span>
+  <span class="kw">private</span> <span class="typ">PricingClient</span> pricing;
+}`,
+    options:[
+      ["Should use constructor injection","Correct. Field injection hides dependencies, prevents <code>final</code>, and is hostile to plain unit tests.","ok"],
+      ["Should use @Inject instead","Wrong. <code>@Inject</code> is JSR-330 but doesn't fix the field-injection issue.","no"],
+      ["Should add @Lazy to both fields","Wrong. <code>@Lazy</code> defers creation; it doesn't address the design smell.","no"],
+      ["Nothing — this is idiomatic","Wrong. Spring has recommended constructor injection since 4.3 (2016).","no"],
+    ]
+  },
+  {
+    q:"Which Java 21 feature best fits this <em>immutable</em> DTO?",
+    code:`<span class="kw">public class</span> <span class="typ">OrderRequest</span> {
+  <span class="kw">private final</span> <span class="typ">Long</span> customerId;
+  <span class="kw">private final</span> <span class="typ">List</span>&lt;<span class="typ">LineItem</span>&gt; items;
+  <span class="cmt">// + ctor + getters + equals/hashCode + toString ...</span>
+}`,
+    options:[
+      ["A record","Correct. Records replace the boilerplate with one line and provide value semantics.","ok"],
+      ["A sealed class","Wrong. Sealed classes restrict <em>subtyping</em>, not boilerplate.","no"],
+      ["@Data from Lombok","Partially. It removes boilerplate but a record is the native, modern answer.","no"],
+      ["An interface","Wrong. Interfaces don't carry state.","no"],
+    ]
+  },
+  {
+    q:"Which configuration property turns on virtual threads in Spring Boot 3.5.x?",
+    code:`<span class="cmt"># application.yml</span>
+spring:
+  threads:
+    virtual:
+      enabled: ???`,
+    options:[
+      ["true","Correct. <code>spring.threads.virtual.enabled=true</code> wires virtual threads into Tomcat and <code>@Async</code>.","ok"],
+      ["loom","Wrong. There is no such value.","no"],
+      ["jep444","Wrong. The JEP number is the spec; Boot uses a boolean property.","no"],
+      ["1","Wrong. The property is boolean — <code>true</code> is the convention.","no"],
+    ]
+  },
+  {
+    q:"Which line is a SQL injection risk?",
+    code:`<span class="kw">var</span> a = em.createQuery(<span class="str">"select u from User u where u.name = :n"</span>)
+       .setParameter(<span class="str">"n"</span>, name);
+<span class="kw">var</span> b = em.createNativeQuery(<span class="str">"select * from u where name = '"</span> + name + <span class="str">"'"</span>);
+<span class="kw">var</span> c = jdbc.query(<span class="str">"select * from u where name = ?"</span>, mapper, name);`,
+    options:[
+      ["Line b — string concatenation","Correct. <code>name</code> is interpolated unescaped — classic SQLi.","ok"],
+      ["Line a — uses JPQL","Wrong. JPQL with bind parameters is safe.","no"],
+      ["Line c — uses ? placeholder","Wrong. Positional placeholders bind safely.","no"],
+      ["All are equally safe","Wrong. Concatenation is never safe.","no"],
+    ]
+  },
+  {
+    q:"What is the bug in this transactional method?",
+    code:`<span class="ann">@Service</span>
+<span class="kw">public class</span> <span class="typ">PaymentService</span> {
+  <span class="ann">@Transactional</span>
+  <span class="kw">private void</span> charge(<span class="typ">Order</span> o) { ... }
+  <span class="kw">public void</span> place(<span class="typ">Order</span> o) { charge(o); }
+}`,
+    options:[
+      ["@Transactional on a private method has no effect","Correct. Spring's proxy AOP cannot intercept private methods or self-invocation.","ok"],
+      ["The method should be static","Wrong. Static methods cannot be proxied either; that's worse.","no"],
+      ["Missing @Async","Wrong. Async is unrelated to the transaction boundary issue.","no"],
+      ["Should use @Transactional(readOnly=true)","Wrong. The visibility issue must be fixed first.","no"],
+    ]
+  },
+  {
+    q:"Which Mockito test layer is best for verifying request validation?",
+    code:`<span class="cmt">// Goal: assert that POST /orders with bad JSON returns 400</span>`,
+    options:[
+      ["@WebMvcTest with MockMvc","Correct. The controller slice loads MVC infrastructure without the full context.","ok"],
+      ["@SpringBootTest","Heavy and slow for a validation check; flag if used here.","no"],
+      ["@DataJpaTest","Wrong layer — that's for repositories.","no"],
+      ["Plain JUnit, no Spring","You'd be testing your DTO, not the request lifecycle.","no"],
+    ]
+  },
+  {
+    q:"What's wrong with this CompletableFuture call?",
+    code:`<span class="typ">CompletableFuture</span>.supplyAsync(() -> client.fetch())
+  .thenApply(<span class="typ">Result</span>::map)
+  .join();`,
+    options:[
+      ["No explicit Executor — falls back to ForkJoinPool.commonPool()","Correct. Sharing the common pool with other library code creates head-of-line blocking under load.","ok"],
+      ["Missing @Async","Wrong. <code>@Async</code> is unrelated.","no"],
+      ["join() should be get()","Wrong. <code>join()</code> is fine for unchecked exceptions.","no"],
+      ["Nothing — this is fine","Wrong. The default pool is a common production foot-gun.","no"],
+    ]
+  },
+  {
+    q:"Which logging line is a privacy violation?",
+    code:`log.info(<span class="str">"order placed id={} total={}"</span>, id, total);
+log.debug(<span class="str">"login attempt user={} pw={}"</span>, user, password);
+log.warn(<span class="str">"rate limit hit ip={}"</span>, ip);`,
+    options:[
+      ["The debug line — logs the password","Correct. Credentials and tokens never go to logs, regardless of level.","ok"],
+      ["The info line — logs an order id","Wrong. IDs are fine; correlate them in tracing.","no"],
+      ["The warn line — logs an IP","IPs may be PII in some jurisdictions, but the password log is the unambiguous violation.","no"],
+      ["All three are fine","Wrong. The password line is a clear violation.","no"],
+    ]
+  },
+  {
+    q:"Which Lombok annotation should you refuse on a JPA <code>@Entity</code>?",
+    code:`<span class="ann">@Entity</span>
+<span class="ann">@???</span>
+<span class="kw">public class</span> <span class="typ">Customer</span> {
+  <span class="ann">@Id</span> <span class="kw">private</span> <span class="typ">Long</span> id;
+  <span class="kw">private</span> <span class="typ">String</span> name;
+  <span class="kw">private</span> <span class="typ">List</span>&lt;<span class="typ">Order</span>&gt; orders;   <span class="cmt">// lazy</span>
+}`,
+    options:[
+      ["@Data","Correct. <code>@Data</code> generates <code>equals/hashCode</code> over <em>all</em> fields, including lazy collections — triggers loads and breaks identity.","ok"],
+      ["@Getter","Wrong. <code>@Getter</code> alone is harmless on entities.","no"],
+      ["@RequiredArgsConstructor","Wrong. Constructor generation is fine.","no"],
+      ["@Slf4j","Wrong. <code>@Slf4j</code> only generates a logger field.","no"],
+    ]
+  },
+];
+
+/* ---- Reference list ---- */
+const REFS = [
+  ["Spring Boot 3.5 reference","https://docs.spring.io/spring-boot/reference/"],
+  ["Spring Framework reference","https://docs.spring.io/spring-framework/reference/"],
+  ["Spring Security","https://docs.spring.io/spring-security/reference/"],
+  ["Spring Data JPA","https://docs.spring.io/spring-data/jpa/reference/"],
+  ["Spring Boot Actuator","https://docs.spring.io/spring-boot/reference/actuator/"],
+  ["Bean Validation 3.0","https://beanvalidation.org/3.0/"],
+  ["JEP 441 — Pattern Matching for switch","https://openjdk.org/jeps/441"],
+  ["JEP 440 — Record Patterns","https://openjdk.org/jeps/440"],
+  ["JEP 444 — Virtual Threads","https://openjdk.org/jeps/444"],
+  ["Testcontainers","https://java.testcontainers.org/"],
+  ["JUnit 5 user guide","https://junit.org/junit5/docs/current/user-guide/"],
+  ["Mockito documentation","https://site.mockito.org/"],
+  ["JaCoCo","https://www.eclemma.org/jacoco/"],
+  ["HikariCP — pool sizing","https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"],
+  ["Flyway migrations","https://documentation.red-gate.com/flyway"],
+  ["RFC 7807 — Problem Details","https://www.rfc-editor.org/rfc/rfc7807"],
+  ["OWASP Top 10","https://owasp.org/www-project-top-ten/"],
+  ["OWASP API Security Top 10","https://owasp.org/API-Security/editions/2023/en/0x11-t10/"],
+  ["Vlad Mihalcea — Hibernate","https://vladmihalcea.com/"],
+  ["Project Lombok","https://projectlombok.org/"],
+  ["Micrometer","https://micrometer.io/docs"],
+  ["Reflectoring — Spring articles","https://reflectoring.io/"],
+];
+
+/* ====================================================================
+   RENDERING
+==================================================================== */
+
+/* ---- Phases grid ---- */
+function renderPhases(){
+  const grid = document.getElementById('phaseGrid');
+  grid.innerHTML = PHASES.map((p,i) => `
+    <button data-phase="${i}" class="phase-card text-left bg-white border border-gray20 p-5 group">
+      <div class="flex items-start justify-between mb-3">
+        <div class="font-mono text-xs text-ibm-500">PHASE 0${p.n}</div>
+        <div class="w-7 h-7 bg-ibm-500 text-white grid place-items-center font-mono text-sm group-hover:bg-ibm-700">${p.n}</div>
+      </div>
+      <div class="font-serif text-xl mb-1">${p.name}</div>
+      <div class="text-xs text-gray70">${p.subtitle}</div>
+      <div class="mt-4 text-xs font-mono text-ibm-500 group-hover:text-ibm-700">expand →</div>
+    </button>
+  `).join('');
+  grid.querySelectorAll('[data-phase]').forEach(b=>{
+    b.addEventListener('click', ()=> openPhase(parseInt(b.dataset.phase,10)));
+  });
+}
+
+function openPhase(idx){
+  const p = PHASES[idx];
+  const refsHtml = p.refs.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener" class="text-ibm-500 underline hover:text-ibm-700">${t}</a>`).join(' · ');
+  document.getElementById('phaseDetail').innerHTML = `
+    <div class="bg-white border-l-4 border-ibm-500 border border-gray20 p-6 md:p-8">
+      <div class="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <div class="pill text-ibm-600">PHASE 0${p.n} / ${p.name.toUpperCase()}</div>
+          <h3 class="font-serif text-2xl mt-1">${p.subtitle}</h3>
+        </div>
+        <div class="text-xs text-gray70 italic max-w-md">${p.goal}</div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h4 class="font-semibold text-sm mb-3 uppercase tracking-wider">Checkpoints</h4>
+          <ul class="space-y-2 text-sm text-gray80">
+            ${p.items.map(it=>`<li class="flex gap-2"><span class="text-ibm-500 mt-1">▸</span><span>${it}</span></li>`).join('')}
+          </ul>
+          ${refsHtml ? `<div class="mt-5 pt-4 border-t border-gray20 text-xs">${refsHtml}</div>` : ''}
+        </div>
+        <div>
+          <h4 class="font-semibold text-sm mb-3 uppercase tracking-wider">Code reference</h4>
+          <pre class="codeblock p-4 text-xs"><code>${p.code}</code></pre>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('phaseDetail').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+/* ---- Java 21 cards ---- */
+function renderJava(){
+  document.getElementById('javaFeatures').innerHTML = JAVA_FEATURES.map(f => `
+    <div class="bg-white border border-gray20 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-serif text-xl">${f.name}</div>
+        <span class="pill bg-ibm-50 text-ibm-700 px-2 py-1">java 21</span>
+      </div>
+      <div class="text-xs uppercase tracking-wider text-gray70 mt-2">Praise when</div>
+      <div class="text-sm text-gray90 mb-3">${f.when}</div>
+      <div class="text-xs uppercase tracking-wider text-gray70">Flag when</div>
+      <div class="text-sm text-gray90 mb-3">${f.smell}</div>
+      <pre class="codeblock p-3 text-xs"><code>${f.code}</code></pre>
+    </div>
+  `).join('');
+}
+
+/* ---- Concurrency cards ---- */
+function renderConcurrency(){
+  document.getElementById('concurrencyCards').innerHTML = CONCURRENCY.map(c => `
+    <div class="bg-white border border-gray20 p-5 flex flex-col">
+      <div class="font-serif text-xl mb-2">${c.title}</div>
+      <p class="text-sm text-gray80 mb-3">${c.body}</p>
+      <ul class="text-xs space-y-1 text-gray70 list-disc list-inside mt-auto">
+        ${c.bullets.map(b=>`<li>${b}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+
+/* ---- Tests table ---- */
+function renderTests(){
+  document.getElementById('testTable').innerHTML = TEST_TABLE.map((row,i) => `
+    <tr class="${i%2===0?'bg-white':'bg-gray10'} border-t border-gray20">
+      <td class="px-4 py-3 font-medium">${row[0]}</td>
+      <td class="px-4 py-3">${row[1]}</td>
+      <td class="px-4 py-3 text-gray80">${row[2]}</td>
+      <td class="px-4 py-3 text-gray70 text-xs italic">${row[3]}</td>
+    </tr>
+  `).join('');
+}
+
+/* ---- Findings table & severity grid ---- */
+function renderFindings(){
+  document.getElementById('severityGrid').innerHTML = SEVERITY.map(([n,k,d]) => `
+    <div class="bg-white border border-gray20 p-4">
+      <span class="pill severity-${k} px-2 py-1">${n}</span>
+      <p class="text-sm mt-3 text-gray80">${d}</p>
+    </div>
+  `).join('');
+
+  document.getElementById('findingsTable').innerHTML = FINDINGS.map(([f,p,s,fix],i) => `
+    <tr class="${i%2===0?'bg-white':'bg-gray10'} border-t border-gray20 align-top">
+      <td class="px-4 py-3">${f}</td>
+      <td class="px-4 py-3 font-mono text-xs text-gray70">${p}</td>
+      <td class="px-4 py-3"><span class="pill severity-${s} px-2 py-1">${s}</span></td>
+      <td class="px-4 py-3 text-sm text-gray80">${fix}</td>
+    </tr>
+  `).join('');
+}
+
+/* ---- References ---- */
+function renderRefs(){
+  document.getElementById('refsGrid').innerHTML = REFS.map(([t,u]) => `
+    <a href="${u}" target="_blank" rel="noopener" class="block bg-gray90 border border-gray80 hover:border-ibm-500 p-4 transition group">
+      <div class="font-mono text-[10px] text-ibm-300 uppercase tracking-wider">→ external</div>
+      <div class="text-white text-sm mt-2 group-hover:text-ibm-300">${t}</div>
+      <div class="text-gray30 text-[11px] font-mono mt-2 truncate">${u.replace(/^https?:\/\//,'')}</div>
+    </a>
+  `).join('');
+}
+
+/* ---- Quiz ---- */
+let quizState = QUIZ.map(()=>({answered:false, correct:false}));
+
+function renderQuiz(){
+  document.getElementById('quizContainer').innerHTML = QUIZ.map((item,qi) => `
+    <div class="bg-white border border-gray20 p-5" data-q="${qi}">
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="pill bg-ibm-50 text-ibm-700 px-2 py-1">Q${(qi+1).toString().padStart(2,'0')}</span>
+        <h4 class="font-serif text-lg leading-snug">${item.q}</h4>
+      </div>
+      ${item.code ? `<pre class="codeblock p-3 text-xs mb-4"><code>${item.code}</code></pre>` : ''}
+      <div class="grid md:grid-cols-2 gap-2">
+        ${item.options.map((opt,oi) => `
+          <button class="quiz-opt text-left text-sm bg-white border border-gray20 px-4 py-3"
+                  data-q="${qi}" data-o="${oi}">
+            <span class="font-mono text-xs text-gray70 mr-2">${String.fromCharCode(65+oi)}</span>
+            <span>${opt[0]}</span>
+          </button>
+        `).join('')}
+      </div>
+      <div class="quiz-feedback hidden mt-4 text-sm border-l-4 pl-4 py-2"></div>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.quiz-opt').forEach(b=>{
+    b.addEventListener('click', ()=> answerQuiz(parseInt(b.dataset.q,10), parseInt(b.dataset.o,10)));
+  });
+}
+
+function answerQuiz(qi, oi){
+  if (quizState[qi].answered) return;
+  const item = QUIZ[qi];
+  const card = document.querySelector(`[data-q="${qi}"]`);
+  const opts = card.querySelectorAll('.quiz-opt');
+  const correctIdx = item.options.findIndex(o => o[2] === 'ok');
+  const isCorrect = (oi === correctIdx);
+
+  opts.forEach((b,i) => {
+    b.classList.add('locked');
+    if (i === correctIdx) b.classList.add('correct');
+    else if (i === oi) b.classList.add('wrong');
+  });
+
+  const fb = card.querySelector('.quiz-feedback');
+  fb.classList.remove('hidden');
+  fb.classList.add(isCorrect ? 'border-green-500' : 'border-red-500', isCorrect ? 'bg-green-50' : 'bg-red-50');
+  fb.innerHTML = `
+    <div class="font-semibold ${isCorrect?'text-green-700':'text-red-700'} mb-1">
+      ${isCorrect ? '✓ Correct' : '✗ Not quite'}
+    </div>
+    <div class="text-gray80">${item.options[oi][1]}</div>
+    ${!isCorrect ? `<div class="mt-2 text-xs text-gray70 italic">Best answer: ${item.options[correctIdx][0]} — ${item.options[correctIdx][1]}</div>` : ''}
+  `;
+
+  quizState[qi] = {answered:true, correct:isCorrect};
+  updateQuizScore();
+}
+
+function updateQuizScore(){
+  const score   = quizState.filter(s=>s.correct).length;
+  const done    = quizState.filter(s=>s.answered).length;
+  const pct     = Math.round((score / QUIZ.length) * 100);
+  document.getElementById('quizScore').textContent = score;
+  document.getElementById('quizPct').textContent   = pct + '%';
+  document.getElementById('quizBar').style.width   = pct + '%';
+
+  if (done === QUIZ.length){
+    const sum = document.getElementById('quizSummary');
+    sum.classList.remove('hidden');
+    document.getElementById('quizFinal').textContent = `${score} / ${QUIZ.length} — ${pct}%`;
+    let msg;
+    if (pct === 100) msg = "Flawless. You're ready to lead a Spring code review.";
+    else if (pct >= 80) msg = "Strong. Re-read any missed item and you're set.";
+    else if (pct >= 60) msg = "Solid foundation. Revisit phases 3 and 5 before reviewing solo.";
+    else msg = "Good start — work back through the phase sections, then retry.";
+    document.getElementById('quizMessage').textContent = msg;
+  }
+}
+
+/* ---- Modal for diagram nodes ---- */
+function openModal(key){
+  const n = NODES[key];
+  if (!n) return;
+  const refs = n.refs && n.refs.length
+    ? `<div class="mt-5 pt-4 border-t border-gray20 text-xs">
+         <div class="pill text-gray70 mb-2">/ references</div>
+         ${n.refs.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener" class="block text-ibm-500 hover:text-ibm-700 underline mb-1">→ ${t}</a>`).join('')}
+       </div>`
+    : '';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="pill text-ibm-600 mb-2">${n.pill}</div>
+    <h3 class="font-serif text-2xl mb-4">${n.title}</h3>
+    ${n.body}
+    ${refs}`;
+  const m = document.getElementById('modal');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(){
+  const m = document.getElementById('modal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+  document.body.style.overflow = '';
+}
+document.getElementById('modal').addEventListener('click',(e)=>{
+  if (e.target.id === 'modal') closeModal();
+});
+document.addEventListener('keydown',(e)=>{
+  if (e.key === 'Escape') closeModal();
+});
+
+document.querySelectorAll('.diagram-node').forEach(n=>{
+  n.addEventListener('click', ()=> openModal(n.dataset.node));
+  n.addEventListener('mouseenter', ()=>{
+    n.querySelector('rect').setAttribute('stroke-width','3');
+  });
+  n.addEventListener('mouseleave', ()=>{
+    n.querySelector('rect').setAttribute('stroke-width','2');
+  });
+});
+
+/* ---- Inline code blocks ---- */
+const VTHREAD = `<span class="cmt"># application.yml — Spring Boot 3.5.x</span>
+spring:
+  threads:
+    virtual:
+      enabled: <span class="kw">true</span>
+  task:
+    execution:
+      thread-name-prefix: app-async-
+
+<span class="cmt"># That's it. Tomcat workers, @Async tasks, and</span>
+<span class="cmt"># scheduled executions all become virtual threads.</span>`;
+
+const CF = `<span class="cmt">// ❌ Default pool — head-of-line blocking under load</span>
+<span class="typ">CompletableFuture</span>.supplyAsync(() -> client.fetch())
+  .thenApply(<span class="typ">Result</span>::map);
+
+<span class="cmt">// ✅ Explicit executor — bounded, named, observable</span>
+<span class="kw">var</span> exec = <span class="typ">Executors</span>.newVirtualThreadPerTaskExecutor();
+<span class="typ">CompletableFuture</span>.supplyAsync(() -> client.fetch(), exec)
+  .thenApply(<span class="typ">Result</span>::map)
+  .exceptionally(ex -> {
+    log.error(<span class="str">"vendor call failed"</span>, ex);
+    <span class="kw">return</span> <span class="typ">Result</span>.empty();
+  });`;
+
+const MOCKITO = `<span class="ann">@ExtendWith</span>(<span class="typ">MockitoExtension</span>.<span class="kw">class</span>)
+<span class="kw">class</span> <span class="typ">OrderServiceTest</span> {
+
+  <span class="ann">@Mock</span>  <span class="typ">OrderRepository</span> repo;
+  <span class="ann">@Mock</span>  <span class="typ">PricingClient</span>    pricing;
+  <span class="ann">@InjectMocks</span> <span class="typ">OrderService</span> sut;
+
+  <span class="ann">@Test</span>
+  <span class="kw">void</span> places_order_with_priced_total() {
+    <span class="kw">var</span> req = <span class="kw">new</span> <span class="typ">OrderRequest</span>(<span class="num">1L</span>, <span class="typ">List</span>.of(<span class="kw">new</span> <span class="typ">LineItem</span>(<span class="str">"sku"</span>, <span class="num">2</span>)), <span class="kw">null</span>);
+    when(pricing.quote(req)).thenReturn(<span class="kw">new</span> <span class="typ">Money</span>(<span class="kw">new</span> <span class="typ">BigDecimal</span>(<span class="str">"19.98"</span>), USD));
+    when(repo.save(any())).thenAnswer(inv -> inv.getArgument(<span class="num">0</span>));
+
+    <span class="kw">var</span> resp = sut.place(req);
+
+    assertThat(resp.total()).isEqualTo(<span class="str">"19.98"</span>);
+    verify(repo).save(any(<span class="typ">Order</span>.<span class="kw">class</span>));
+  }
+}`;
+
+const TC = `<span class="ann">@Testcontainers</span>
+<span class="ann">@SpringBootTest</span>
+<span class="kw">class</span> <span class="typ">OrderApiIT</span> {
+
+  <span class="ann">@Container</span>
+  <span class="kw">static</span> <span class="typ">PostgreSQLContainer</span>&lt;?&gt; db =
+      <span class="kw">new</span> <span class="typ">PostgreSQLContainer</span>&lt;&gt;(<span class="str">"postgres:16"</span>);
+
+  <span class="ann">@DynamicPropertySource</span>
+  <span class="kw">static</span> <span class="kw">void</span> props(<span class="typ">DynamicPropertyRegistry</span> r) {
+    r.add(<span class="str">"spring.datasource.url"</span>,      db::getJdbcUrl);
+    r.add(<span class="str">"spring.datasource.username"</span>, db::getUsername);
+    r.add(<span class="str">"spring.datasource.password"</span>, db::getPassword);
+  }
+
+  <span class="ann">@Autowired</span> <span class="typ">TestRestTemplate</span> http;
+
+  <span class="ann">@Test</span>
+  <span class="kw">void</span> createsOrder() {
+    <span class="kw">var</span> resp = http.postForEntity(<span class="str">"/api/v1/orders"</span>, <span class="kw">new</span> <span class="typ">OrderRequest</span>(...), <span class="typ">OrderResponse</span>.<span class="kw">class</span>);
+    assertThat(resp.getStatusCode()).isEqualTo(<span class="typ">HttpStatus</span>.CREATED);
+  }
+}`;
+
+const JACOCO = `<span class="ann">&lt;plugin&gt;</span>
+  <span class="ann">&lt;groupId&gt;</span>org.jacoco<span class="ann">&lt;/groupId&gt;</span>
+  <span class="ann">&lt;artifactId&gt;</span>jacoco-maven-plugin<span class="ann">&lt;/artifactId&gt;</span>
+  <span class="ann">&lt;version&gt;</span>0.8.12<span class="ann">&lt;/version&gt;</span>
+  <span class="ann">&lt;executions&gt;</span>
+    <span class="ann">&lt;execution&gt;</span>
+      <span class="ann">&lt;goals&gt;&lt;goal&gt;</span>prepare-agent<span class="ann">&lt;/goal&gt;&lt;/goals&gt;</span>
+    <span class="ann">&lt;/execution&gt;</span>
+    <span class="ann">&lt;execution&gt;</span>
+      <span class="ann">&lt;id&gt;</span>report<span class="ann">&lt;/id&gt;</span>
+      <span class="ann">&lt;phase&gt;</span>verify<span class="ann">&lt;/phase&gt;</span>
+      <span class="ann">&lt;goals&gt;&lt;goal&gt;</span>report<span class="ann">&lt;/goal&gt;&lt;/goals&gt;</span>
+    <span class="ann">&lt;/execution&gt;</span>
+    <span class="ann">&lt;execution&gt;</span>
+      <span class="ann">&lt;id&gt;</span>check<span class="ann">&lt;/id&gt;</span>
+      <span class="ann">&lt;goals&gt;&lt;goal&gt;</span>check<span class="ann">&lt;/goal&gt;&lt;/goals&gt;</span>
+      <span class="ann">&lt;configuration&gt;&lt;rules&gt;&lt;rule&gt;</span>
+        <span class="ann">&lt;element&gt;</span>BUNDLE<span class="ann">&lt;/element&gt;</span>
+        <span class="ann">&lt;limits&gt;&lt;limit&gt;</span>
+          <span class="ann">&lt;counter&gt;</span>LINE<span class="ann">&lt;/counter&gt;</span>
+          <span class="ann">&lt;value&gt;</span>COVEREDRATIO<span class="ann">&lt;/value&gt;</span>
+          <span class="ann">&lt;minimum&gt;</span>0.80<span class="ann">&lt;/minimum&gt;</span>
+        <span class="ann">&lt;/limit&gt;&lt;/limits&gt;</span>
+      <span class="ann">&lt;/rule&gt;&lt;/rules&gt;&lt;/configuration&gt;</span>
+    <span class="ann">&lt;/execution&gt;</span>
+  <span class="ann">&lt;/executions&gt;</span>
+<span class="ann">&lt;/plugin&gt;</span>`;
+
+const YML = `spring:
+  application.name: orders-api
+  profiles.active: ${"$"}{ACTIVE_PROFILE:dev}
+
+  datasource:
+    url:      ${"$"}{DB_URL}
+    username: ${"$"}{DB_USER}
+    password: ${"$"}{DB_PASS}
+    hikari:
+      maximum-pool-size: <span class="num">20</span>
+      connection-timeout: <span class="num">3000</span>
+
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: <span class="kw">false</span>
+    properties.hibernate.jdbc.batch_size: <span class="num">50</span>
+
+  threads.virtual.enabled: <span class="kw">true</span>
+
+management:
+  endpoints.web.exposure.include: health,info,metrics,prometheus
+  endpoint.health.probes.enabled: <span class="kw">true</span>
+
+logging:
+  level.root: INFO
+  level.com.example: DEBUG
+  pattern.level: <span class="str">"%5p [trace=%X{traceId} span=%X{spanId}]"</span>`;
+
+const CFGPROPS = `<span class="ann">@ConfigurationProperties</span>(prefix = <span class="str">"app.payments"</span>)
+<span class="ann">@Validated</span>
+<span class="kw">public record</span> <span class="typ">PaymentsProps</span>(
+  <span class="ann">@NotBlank</span> <span class="typ">String</span> apiUrl,
+  <span class="ann">@NotBlank</span> <span class="typ">String</span> apiKey,
+  <span class="ann">@Min</span>(<span class="num">100</span>) <span class="kw">int</span> timeoutMs,
+  <span class="ann">@DefaultValue</span>(<span class="str">"3"</span>) <span class="kw">int</span> retries
+) {}
+
+<span class="cmt">// Enable in main app or a @Configuration class</span>
+<span class="ann">@EnableConfigurationProperties</span>(<span class="typ">PaymentsProps</span>.<span class="kw">class</span>)
+<span class="kw">public class</span> <span class="typ">App</span> { ... }
+
+<span class="cmt">// Inject anywhere</span>
+<span class="kw">public</span> <span class="typ">PaymentClient</span>(<span class="typ">PaymentsProps</span> props) { ... }`;
+
+const MDC = `<span class="kw">import</span> org.slf4j.MDC;
+
+<span class="ann">@Component</span>
+<span class="kw">public class</span> <span class="typ">RequestIdFilter</span> <span class="kw">implements</span> <span class="typ">Filter</span> {
+  <span class="ann">@Override</span>
+  <span class="kw">public void</span> doFilter(<span class="typ">ServletRequest</span> req, <span class="typ">ServletResponse</span> res, <span class="typ">FilterChain</span> chain)
+        <span class="kw">throws</span> <span class="typ">IOException</span>, <span class="typ">ServletException</span> {
+    <span class="kw">try</span> {
+      MDC.put(<span class="str">"requestId"</span>, <span class="typ">UUID</span>.randomUUID().toString());
+      chain.doFilter(req, res);
+    } <span class="kw">finally</span> {
+      MDC.clear();
+    }
+  }
+}
+
+<span class="cmt">// Anywhere downstream:</span>
+log.info(<span class="str">"placing order"</span>);   <span class="cmt">// emits with requestId on every line</span>`;
+
+const LOMBOK = `<span class="cmt">// ✅ OK — getters on a service-layer DTO</span>
+<span class="ann">@Getter</span>
+<span class="ann">@RequiredArgsConstructor</span>
+<span class="kw">public class</span> <span class="typ">PriceQuote</span> { ... }
+
+<span class="cmt">// ✅ Better — Java 21 record replaces Lombok @Value</span>
+<span class="kw">public record</span> <span class="typ">PriceQuote</span>(<span class="typ">Money</span> total, <span class="typ">Duration</span> validFor) {}
+
+<span class="cmt">// ❌ Refuse on JPA entities — broken equals/hashCode</span>
+<span class="ann">@Entity</span>
+<span class="ann">@Data</span>
+<span class="kw">public class</span> <span class="typ">Customer</span> {            <span class="cmt">// triggers lazy loads in equals()</span>
+  <span class="ann">@Id</span> <span class="kw">private</span> <span class="typ">Long</span> id;
+  <span class="ann">@OneToMany</span> <span class="kw">private</span> <span class="typ">List</span>&lt;<span class="typ">Order</span>&gt; orders;
+}`;
+
+const TIME = `<span class="cmt">// ❌ Legacy — non-thread-safe, mutable</span>
+<span class="typ">Date</span> now = <span class="kw">new</span> <span class="typ">Date</span>();
+<span class="typ">SimpleDateFormat</span> sdf = <span class="kw">new</span> <span class="typ">SimpleDateFormat</span>(<span class="str">"yyyy-MM-dd"</span>);
+
+<span class="cmt">// ✅ Modern — immutable, zone-aware, testable</span>
+<span class="ann">@Configuration</span>
+<span class="kw">class</span> <span class="typ">TimeConfig</span> {
+  <span class="ann">@Bean</span> <span class="typ">Clock</span> clock() { <span class="kw">return</span> <span class="typ">Clock</span>.systemUTC(); }
+}
+
+<span class="ann">@Service</span>
+<span class="kw">public class</span> <span class="typ">OrderService</span> {
+  <span class="kw">private final</span> <span class="typ">Clock</span> clock;
+  <span class="kw">public</span> <span class="typ">OrderService</span>(<span class="typ">Clock</span> clock) { <span class="kw">this</span>.clock = clock; }
+
+  <span class="kw">void</span> place(<span class="typ">Order</span> o) {
+    o.setPlacedAt(<span class="typ">Instant</span>.now(clock));    <span class="cmt">// stored as UTC</span>
+  }
+}
+
+<span class="cmt">// In tests:</span>
+<span class="typ">Clock</span> fixed = <span class="typ">Clock</span>.fixed(<span class="typ">Instant</span>.parse(<span class="str">"2026-05-10T12:00:00Z"</span>), <span class="typ">ZoneOffset</span>.UTC);`;
+
+document.getElementById('vthreadCode').innerHTML  = VTHREAD;
+document.getElementById('cfCode').innerHTML       = CF;
+document.getElementById('mockitoCode').innerHTML  = MOCKITO;
+document.getElementById('tcCode').innerHTML       = TC;
+document.getElementById('jacocoCode').innerHTML   = JACOCO;
+document.getElementById('ymlCode').innerHTML      = YML;
+document.getElementById('cfgPropsCode').innerHTML = CFGPROPS;
+document.getElementById('mdcCode').innerHTML      = MDC;
+document.getElementById('lombokCode').innerHTML   = LOMBOK;
+document.getElementById('timeCode').innerHTML     = TIME;
+
+/* ---- init ---- */
+renderPhases();
+renderJava();
+renderConcurrency();
+renderTests();
+renderFindings();
+renderRefs();
+renderQuiz();
+openPhase(0);
+</script>
+</body>
+</html>
