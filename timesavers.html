@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motion vs Reclaim — AI Scheduling</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=IBM+Plex+Serif:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ibm-blue-10:#edf5ff;--ibm-blue-20:#d0e2ff;--ibm-blue-30:#a6c8ff;
+      --ibm-blue-40:#78a9ff;--ibm-blue-50:#4589ff;--ibm-blue-60:#0f62fe;
+      --ibm-blue-70:#0043ce;--ibm-blue-80:#002d9c;--ibm-blue-90:#001d6c;
+      --ibm-blue-100:#001141;
+      --ibm-gray-10:#f4f4f4;--ibm-gray-20:#e0e0e0;--ibm-gray-30:#c6c6c6;
+      --ibm-gray-40:#a8a8a8;--ibm-gray-50:#8d8d8d;--ibm-gray-60:#6f6f6f;
+      --ibm-gray-70:#525252;--ibm-gray-80:#393939;--ibm-gray-90:#262626;
+      --ibm-gray-100:#161616;
+      --ibm-white:#ffffff;
+      --ibm-cyan-40:#33b1ff;--ibm-cyan-60:#0072c3;
+      --ibm-purple-40:#be95ff;--ibm-purple-50:#a56eff;
+      --ibm-purple-60:#8a3ffc;--ibm-purple-70:#6929c4;--ibm-purple-80:#491d8b;
+    }
+    [data-theme="dark"] {
+      --bg-base:var(--ibm-gray-100);--bg-layer-01:var(--ibm-gray-90);
+      --bg-layer-02:var(--ibm-gray-80);--bg-layer-03:var(--ibm-gray-70);
+      --border-subtle:var(--ibm-gray-80);--border-strong:var(--ibm-gray-60);
+      --text-primary:var(--ibm-white);--text-secondary:var(--ibm-gray-30);
+      --text-helper:var(--ibm-gray-50);
+      --interactive:var(--ibm-blue-60);--interactive-hover:var(--ibm-blue-50);
+      --motion-accent:var(--ibm-blue-40);--motion-bg:rgba(15,98,254,0.12);
+      --motion-border:rgba(120,169,255,0.3);
+      --reclaim-accent:var(--ibm-purple-40);--reclaim-bg:rgba(138,63,252,0.12);
+      --reclaim-border:rgba(190,149,255,0.3);
+      --tag-blue-bg:var(--ibm-blue-80);--tag-blue-text:var(--ibm-blue-30);
+      --tag-purple-bg:rgba(105,41,196,0.45);--tag-purple-text:var(--ibm-purple-40);
+      --hero-line:rgba(78,169,255,0.15);
+    }
+    [data-theme="light"] {
+      --bg-base:var(--ibm-white);--bg-layer-01:var(--ibm-gray-10);
+      --bg-layer-02:var(--ibm-gray-20);--bg-layer-03:var(--ibm-gray-30);
+      --border-subtle:var(--ibm-gray-20);--border-strong:var(--ibm-gray-40);
+      --text-primary:var(--ibm-gray-100);--text-secondary:var(--ibm-gray-70);
+      --text-helper:var(--ibm-gray-60);
+      --interactive:var(--ibm-blue-60);--interactive-hover:var(--ibm-blue-70);
+      --motion-accent:var(--ibm-blue-60);--motion-bg:var(--ibm-blue-10);
+      --motion-border:var(--ibm-blue-20);
+      --reclaim-accent:var(--ibm-purple-60);--reclaim-bg:#f6f2ff;
+      --reclaim-border:#e8daff;
+      --tag-blue-bg:var(--ibm-blue-10);--tag-blue-text:var(--ibm-blue-70);
+      --tag-purple-bg:#f6f2ff;--tag-purple-text:var(--ibm-purple-70);
+      --hero-line:rgba(15,98,254,0.1);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg-base);color:var(--text-primary);font-size:14px;line-height:1.5;transition:background .3s,color .3s;-webkit-font-smoothing:antialiased;}
+
+    .container{max-width:1056px;margin:0 auto;padding:0 16px;}
+    @media(min-width:672px){.container{padding:0 32px;}}
+    @media(min-width:1056px){.container{padding:0 48px;}}
+
+    /* NAV */
+    .topbar{position:sticky;top:0;z-index:100;background:var(--bg-layer-01);border-bottom:1px solid var(--border-subtle);transition:background .3s;}
+    .topbar-inner{display:flex;align-items:center;justify-content:space-between;height:48px;}
+    .topbar-brand{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:var(--text-secondary);letter-spacing:.8px;text-transform:uppercase;}
+    .topbar-brand span{color:var(--ibm-blue-40);}
+    [data-theme="light"] .topbar-brand span{color:var(--ibm-blue-60);}
+    .nav-links{display:none;gap:0;}
+    @media(min-width:672px){.nav-links{display:flex;}}
+    .nav-link{font-size:13px;color:var(--text-secondary);text-decoration:none;padding:0 14px;height:48px;display:flex;align-items:center;transition:color .15s,background .15s;white-space:nowrap;}
+    .nav-link:hover{color:var(--text-primary);background:var(--bg-layer-02);}
+
+    /* THEME TOGGLE */
+    .theme-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg-layer-02);border:1px solid var(--border-subtle);padding:6px 12px;color:var(--text-secondary);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;transition:background .15s,color .15s;}
+    .theme-toggle:hover{background:var(--bg-layer-03);color:var(--text-primary);}
+    .toggle-track{width:32px;height:16px;background:var(--ibm-gray-60);border-radius:8px;position:relative;transition:background .2s;flex-shrink:0;}
+    [data-theme="light"] .toggle-track{background:var(--ibm-blue-60);}
+    .toggle-thumb{width:12px;height:12px;background:var(--ibm-white);border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;}
+    [data-theme="light"] .toggle-thumb{left:18px;}
+
+    /* HERO */
+    .hero{background:var(--bg-layer-01);border-bottom:1px solid var(--border-subtle);padding:64px 0 80px;position:relative;overflow:hidden;}
+    .hero-grid{position:absolute;inset:0;pointer-events:none;}
+    .hero-grid::before{content:'';position:absolute;inset:0;background-image:linear-gradient(var(--hero-line) 1px,transparent 1px),linear-gradient(90deg,var(--hero-line) 1px,transparent 1px);background-size:64px 64px;}
+    .hero-eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--motion-accent);margin-bottom:24px;}
+    .hero-eyebrow::before{content:'';width:24px;height:1px;background:var(--motion-accent);}
+    .hero-title{font-family:'IBM Plex Serif',serif;font-weight:300;line-height:1.1;margin-bottom:24px;font-size:44px;}
+    @media(min-width:672px){.hero-title{font-size:56px;}}
+    @media(min-width:1056px){.hero-title{font-size:64px;}}
+    .hero-title .blue{color:var(--ibm-blue-40);}
+    [data-theme="light"] .hero-title .blue{color:var(--ibm-blue-60);}
+    .hero-title .purple{color:var(--ibm-purple-40);}
+    [data-theme="light"] .hero-title .purple{color:var(--ibm-purple-60);}
+    .hero-title .vs{font-family:'IBM Plex Mono',monospace;font-size:.4em;font-weight:400;color:var(--text-helper);vertical-align:middle;margin:0 .35em;letter-spacing:2px;}
+    .hero-sub{font-size:16px;font-weight:300;color:var(--text-secondary);max-width:540px;line-height:1.65;margin-bottom:40px;}
+    .hero-ctas{display:flex;flex-wrap:wrap;gap:1px;}
+
+    /* BUTTONS */
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:400;letter-spacing:.16px;text-decoration:none;cursor:pointer;border:none;transition:background .15s;white-space:nowrap;}
+    .btn-primary{background:var(--ibm-blue-60);color:#fff;}
+    .btn-primary:hover{background:var(--ibm-blue-70);}
+    .btn-purple{background:var(--ibm-purple-60);color:#fff;}
+    .btn-purple:hover{background:var(--ibm-purple-70);}
+    .btn-ghost{background:transparent;color:var(--motion-accent);border:1px solid var(--motion-accent);}
+    .btn-ghost:hover{background:var(--motion-bg);}
+    .btn::after{content:'→';}
+
+    /* SECTIONS */
+    .section{padding:64px 0;border-bottom:1px solid var(--border-subtle);}
+    @media(max-width:671px){.section{padding:48px 0;}}
+    .section:last-child{border-bottom:none;}
+    .sec-label{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--motion-accent);margin-bottom:8px;}
+    .sec-title{font-family:'IBM Plex Serif',serif;font-size:28px;font-weight:300;line-height:36px;margin-bottom:8px;}
+    .sec-desc{color:var(--text-secondary);font-size:14px;font-weight:300;margin-bottom:40px;max-width:480px;}
+
+    /* CARDS */
+    .two-col{display:grid;grid-template-columns:1fr;gap:1px;}
+    @media(min-width:672px){.two-col{grid-template-columns:1fr 1fr;}}
+
+    .verdict-card{background:var(--bg-layer-01);border:1px solid var(--border-subtle);padding:32px;position:relative;overflow:hidden;transition:background .2s;}
+    .verdict-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+    .verdict-card.mc::before{background:var(--ibm-blue-60);}
+    .verdict-card.rc::before{background:var(--ibm-purple-60);}
+    .verdict-card:hover{background:var(--bg-layer-02);}
+
+    .ctag{display:inline-flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;margin-bottom:20px;}
+    .ctag.blue{background:var(--tag-blue-bg);color:var(--tag-blue-text);}
+    .ctag.purple{background:var(--tag-purple-bg);color:var(--tag-purple-text);}
+
+    .card-name{font-family:'IBM Plex Serif',serif;font-size:30px;font-weight:300;line-height:1.1;margin-bottom:14px;}
+    .card-name.blue{color:var(--ibm-blue-40);}
+    [data-theme="light"] .card-name.blue{color:var(--ibm-blue-60);}
+    .card-name.purple{color:var(--ibm-purple-40);}
+    [data-theme="light"] .card-name.purple{color:var(--ibm-purple-60);}
+
+    .card-desc{font-size:14px;font-weight:300;color:var(--text-secondary);line-height:1.65;margin-bottom:24px;}
+    .clist{list-style:none;margin-bottom:28px;}
+    .clist li{font-size:13px;color:var(--text-secondary);padding:8px 0;border-bottom:1px solid var(--border-subtle);display:flex;align-items:flex-start;gap:10px;line-height:1.4;}
+    .clist li:last-child{border-bottom:none;}
+    .ci{flex-shrink:0;margin-top:1px;}
+    .ci.blue{color:var(--ibm-blue-40);}[data-theme="light"] .ci.blue{color:var(--ibm-blue-60);}
+    .ci.purple{color:var(--ibm-purple-40);}[data-theme="light"] .ci.purple{color:var(--ibm-purple-60);}
+    .bf-label{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-helper);margin-bottom:5px;}
+    .bf-text{font-size:13px;color:var(--text-secondary);font-weight:300;line-height:1.5;}
+
+    /* TABS */
+    .tab-bar{display:flex;border-bottom:1px solid var(--border-subtle);}
+    .tab-btn{font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:400;padding:14px 20px;cursor:pointer;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-secondary);transition:color .15s,border-color .15s,background .15s;margin-bottom:-1px;white-space:nowrap;}
+    .tab-btn:hover{background:var(--bg-layer-02);color:var(--text-primary);}
+    .tab-btn.ab{color:var(--ibm-blue-40);border-bottom-color:var(--ibm-blue-60);background:var(--bg-layer-01);}
+    [data-theme="light"] .tab-btn.ab{color:var(--ibm-blue-60);}
+    .tab-btn.ap{color:var(--ibm-purple-40);border-bottom-color:var(--ibm-purple-60);background:var(--bg-layer-01);}
+    [data-theme="light"] .tab-btn.ap{color:var(--ibm-purple-60);}
+    .tab-panel{background:var(--bg-layer-01);border:1px solid var(--border-subtle);border-top:none;padding:40px 32px;}
+    @media(max-width:671px){.tab-panel{padding:24px 16px;}}
+
+    .panel-hdr{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:18px;}
+    .dlink{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:400;color:var(--text-helper);text-decoration:none;letter-spacing:.3px;transition:color .15s;}
+    .dlink:hover{color:var(--ibm-blue-40);}
+    [data-theme="light"] .dlink:hover{color:var(--ibm-blue-60);}
+    .dsep{color:var(--border-strong);font-family:monospace;}
+    .panel-intro{font-size:14px;font-weight:300;color:var(--text-secondary);line-height:1.65;margin-bottom:28px;max-width:620px;}
+    .panel-intro strong{font-weight:600;color:var(--text-primary);}
+
+    .feat-grid{display:grid;grid-template-columns:1fr;gap:1px;}
+    @media(min-width:672px){.feat-grid{grid-template-columns:1fr 1fr;}}
+    .fi{background:var(--bg-layer-02);padding:20px 24px;transition:background .15s;}
+    .fi:hover{background:var(--bg-layer-03);}
+    .fi-icon{font-size:18px;margin-bottom:10px;display:block;}
+    .fi-name{font-size:13px;font-weight:600;margin-bottom:6px;}
+    .fi-name.blue{color:var(--ibm-blue-40);}[data-theme="light"] .fi-name.blue{color:var(--ibm-blue-60);}
+    .fi-name.purple{color:var(--ibm-purple-40);}[data-theme="light"] .fi-name.purple{color:var(--ibm-purple-60);}
+    .fi-desc{font-size:13px;font-weight:300;color:var(--text-secondary);line-height:1.55;}
+    .panel-ctas{display:flex;flex-wrap:wrap;gap:1px;margin-top:28px;}
+    .panel-dlinks{display:flex;flex-wrap:wrap;gap:16px;padding:14px 0;}
+
+    /* TABLE */
+    .tbl-wrap{border:1px solid var(--border-subtle);overflow:hidden;}
+    @media(max-width:671px){.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}}
+    table.ctbl{width:100%;border-collapse:collapse;}
+    .ctbl thead th{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase;padding:14px 20px;text-align:left;background:var(--bg-layer-02);border-bottom:2px solid var(--border-strong);}
+    .ctbl thead th:nth-child(1){width:20%;color:var(--text-helper);}
+    .ctbl thead th:nth-child(2){color:var(--ibm-blue-40);border-bottom-color:var(--ibm-blue-60);}
+    [data-theme="light"] .ctbl thead th:nth-child(2){color:var(--ibm-blue-60);}
+    .ctbl thead th:nth-child(3){color:var(--ibm-purple-40);border-bottom-color:var(--ibm-purple-60);}
+    [data-theme="light"] .ctbl thead th:nth-child(3){color:var(--ibm-purple-60);}
+    .ctbl tbody tr{border-bottom:1px solid var(--border-subtle);transition:background .1s;}
+    .ctbl tbody tr:hover{background:var(--bg-layer-01);}
+    .ctbl tbody tr:last-child{border-bottom:none;}
+    .ctbl td{padding:16px 20px;font-size:13px;vertical-align:top;line-height:1.55;}
+    .ctbl td:first-child{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--text-helper);background:var(--bg-layer-01);white-space:nowrap;}
+    .ctbl td:nth-child(2){color:var(--text-secondary);}
+    .ctbl td:nth-child(3){color:var(--text-secondary);border-left:1px solid var(--border-subtle);}
+    .tbadge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:2px 6px;margin-bottom:5px;}
+    .tbadge.blue{background:var(--tag-blue-bg);color:var(--tag-blue-text);}
+    .tbadge.purple{background:var(--tag-purple-bg);color:var(--tag-purple-text);}
+
+    /* PERSONA */
+    .persona-card{background:var(--bg-layer-01);border:1px solid var(--border-subtle);padding:32px;}
+    @media(max-width:671px){.persona-card{padding:24px 20px;}}
+    .plist{list-style:none;}
+    .plist li{display:flex;align-items:flex-start;gap:10px;padding:9px 0;font-size:13px;color:var(--text-secondary);border-bottom:1px solid var(--border-subtle);line-height:1.5;font-weight:300;}
+    .plist li:last-child{border-bottom:none;}
+    .parr{font-family:'IBM Plex Mono',monospace;font-size:12px;flex-shrink:0;margin-top:1px;}
+    .parr.blue{color:var(--ibm-blue-40);}[data-theme="light"] .parr.blue{color:var(--ibm-blue-60);}
+    .parr.purple{color:var(--ibm-purple-40);}[data-theme="light"] .parr.purple{color:var(--ibm-purple-60);}
+    .uc-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;padding-top:20px;border-top:1px solid var(--border-subtle);}
+    .uctag{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:400;color:var(--text-helper);text-decoration:none;padding:4px 8px;border:1px solid var(--border-subtle);transition:border-color .15s,color .15s;}
+    .uctag:hover{color:var(--ibm-blue-40);border-color:var(--ibm-blue-40);}
+    [data-theme="light"] .uctag:hover{color:var(--ibm-blue-60);border-color:var(--ibm-blue-60);}
+
+    /* RESOURCES */
+    .resource-block{background:var(--bg-layer-01);border:1px solid var(--border-subtle);padding:32px;}
+    @media(max-width:671px){.resource-block{padding:24px 20px;}}
+    .rlist{list-style:none;margin-bottom:28px;}
+    .rlist li{border-bottom:1px solid var(--border-subtle);}
+    .rlist li:last-child{border-bottom:none;}
+    .rlist a{display:flex;align-items:center;justify-content:space-between;padding:11px 0;font-size:13px;color:var(--text-secondary);text-decoration:none;transition:color .15s;font-weight:300;}
+    .rlist a:hover{color:var(--text-primary);}
+    .rarr{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-helper);opacity:0;transition:opacity .15s;}
+    .rlist a:hover .rarr{opacity:1;}
+
+    /* FINAL CTA */
+    .final-cta{background:var(--ibm-blue-90);padding:80px 0;position:relative;overflow:hidden;}
+    [data-theme="light"] .final-cta{background:var(--ibm-gray-100);}
+    .final-cta::before{content:'';position:absolute;top:-50%;right:-10%;width:40%;height:200%;background:radial-gradient(ellipse,rgba(15,98,254,0.3) 0%,transparent 60%);pointer-events:none;}
+    .final-cta .container{position:relative;z-index:1;}
+    .f-label{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--ibm-blue-40);margin-bottom:14px;}
+    .f-title{font-family:'IBM Plex Serif',serif;font-size:36px;font-weight:300;color:#fff;margin-bottom:14px;line-height:1.2;}
+    @media(min-width:672px){.f-title{font-size:48px;}}
+    .f-title .blue{color:var(--ibm-blue-40);}
+    .f-body{font-size:14px;font-weight:300;color:rgba(255,255,255,0.6);max-width:520px;line-height:1.7;margin-bottom:36px;}
+    .f-body strong{color:rgba(255,255,255,0.9);font-weight:500;}
+    .f-ctas{display:flex;flex-wrap:wrap;gap:1px;}
+
+    /* FOOTER */
+    footer{background:var(--bg-layer-01);border-top:1px solid var(--border-subtle);padding:24px 0;}
+    .foot-inner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;}
+    .foot-note{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-helper);letter-spacing:.3px;}
+    .foot-links{display:flex;gap:16px;}
+    .foot-links a{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-helper);text-decoration:none;transition:color .15s;}
+    .foot-links a:hover{color:var(--ibm-blue-40);}
+    [data-theme="light"] .foot-links a:hover{color:var(--ibm-blue-60);}
+
+    /* REVEAL */
+    .rev{opacity:0;transform:translateY(16px);transition:opacity .5s ease,transform .5s ease;}
+    .rev.visible{opacity:1;transform:translateY(0);}
+    .rev-d1{transition-delay:.1s;}.rev-d2{transition-delay:.2s;}
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="topbar">
+  <div class="container">
+    <div class="topbar-inner">
+      <span class="topbar-brand"><span></span> Carbon · AI Tools</span>
+      <nav class="nav-links">
+        <a href="#verdict" class="nav-link">Verdict</a>
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#compare" class="nav-link">Compare</a>
+        <a href="#who" class="nav-link">Who It's For</a>
+        <a href="#docs" class="nav-link">Docs</a>
+      </nav>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <span id="tlabel">Light</span>
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-grid" aria-hidden="true"></div>
+  <div class="container" style="position:relative;z-index:1;">
+    <div class="hero-eyebrow">AI Scheduling · 2025 Comparison</div>
+    <h1 class="hero-title">
+      <span class="blue">Motion</span>
+      <span class="vs">vs</span>
+      <span class="purple">Reclaim</span>
+    </h1>
+    <p class="hero-sub">Two AI calendar tools. Motion proactively owns your schedule. Reclaim defends what matters. Find your fit.</p>
+    <div class="hero-ctas">
+      <a href="https://www.usemotion.com/" target="_blank" rel="noopener" class="btn btn-primary">Motion</a>
+      <a href="https://reclaim.ai/" target="_blank" rel="noopener" class="btn btn-purple">Reclaim</a>
+      <a href="#compare" class="btn btn-ghost">Compare</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- VERDICT -->
+<section class="section" id="verdict">
+  <div class="container">
+    <div class="rev">
+      <p class="sec-label">01 / TL;DR</p>
+      <h2 class="sec-title">Quick Verdict</h2>
+      <p class="sec-desc">Decide in 30 seconds which tool fits before going deeper.</p>
+    </div>
+    <div class="two-col rev rev-d1">
+      <div class="verdict-card mc">
+        <span class="ctag blue">Motion · Proactive</span>
+        <div class="card-name blue">Full AI Autopilot</div>
+        <p class="card-desc">Motion takes complete control of your calendar — auto-scheduling every task, meeting, and project block by priority and deadline. Zero manual scheduling required.</p>
+        <ul class="clist">
+          <li><span class="ci blue">◆</span>AI fills your entire calendar daily</li>
+          <li><span class="ci blue">◆</span>Built-in tasks, projects &amp; notes</li>
+          <li><span class="ci blue">◆</span>Team workload balancing view</li>
+          <li><span class="ci blue">◆</span>AI chat for instant adjustments</li>
+        </ul>
+        <div class="bf-label">Best for</div>
+        <div class="bf-text">High-output individuals and teams who want AI to own their entire schedule with no manual input.</div>
+      </div>
+      <div class="verdict-card rc">
+        <span class="ctag purple">Reclaim · Defensive</span>
+        <div class="card-name purple">AI Calendar Guard</div>
+        <p class="card-desc">Reclaim layers over your existing calendar, protecting focus blocks, habits, and breaks — automatically rescheduling around life's interruptions. Your rules, AI-enforced.</p>
+        <ul class="clist">
+          <li><span class="ci purple">◆</span>Protects habits &amp; focus time</li>
+          <li><span class="ci purple">◆</span>Auto-reschedules on conflicts</li>
+          <li><span class="ci purple">◆</span>Asana, Jira, Linear integrations</li>
+          <li><span class="ci purple">◆</span>Smart meeting booking links</li>
+        </ul>
+        <div class="bf-label">Best for</div>
+        <div class="bf-text">Professionals with existing workflows who need AI to guard their time without replacing their setup.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="rev">
+      <p class="sec-label">02 / Features</p>
+      <h2 class="sec-title">Deep Dive</h2>
+      <p class="sec-desc">Full breakdown of core capabilities for each platform.</p>
+    </div>
+    <div class="rev rev-d1">
+      <div class="tab-bar">
+        <button id="tab-m" class="tab-btn ab" onclick="switchTab('motion')">Motion</button>
+        <button id="tab-r" class="tab-btn" onclick="switchTab('reclaim')">Reclaim</button>
+      </div>
+
+      <!-- Motion panel -->
+      <div id="pm" class="tab-panel">
+        <div class="panel-hdr">
+          <span class="ctag blue" style="margin:0;">Motion</span>
+          <span class="dsep">|</span>
+          <a href="https://www.usemotion.com/" target="_blank" rel="noopener" class="dlink">usemotion.com ↗</a>
+          <a href="https://www.usemotion.com/help" target="_blank" rel="noopener" class="dlink">Docs ↗</a>
+          <a href="https://www.usemotion.com/pricing" target="_blank" rel="noopener" class="dlink">Pricing ↗</a>
+        </div>
+        <p class="panel-intro">Motion is the <strong>#1 rated productivity platform for the AI era</strong>, trusted by 1M+ professionals. It replaces your calendar, task manager, and project tool with a single AI-powered superapp that schedules everything automatically.</p>
+        <div class="feat-grid">
+          <div class="fi"><span class="fi-icon">🤖</span><div class="fi-name blue">Full AI Auto-Scheduling</div><div class="fi-desc">Analyzes tasks, priorities, and deadlines then fills your calendar with optimally-timed work blocks — recalculating continuously as things shift.</div></div>
+          <div class="fi"><span class="fi-icon">📋</span><div class="fi-name blue">Built-in Task &amp; Project Mgmt</div><div class="fi-desc">Native task manager and project hub directly connected to your calendar. Create tasks, track milestones, see them scheduled instantly. No app-switching.</div></div>
+          <div class="fi"><span class="fi-icon">💬</span><div class="fi-name blue">AI Chat Interface</div><div class="fi-desc">Tell Motion what to adjust in plain language. "Reschedule my 3pm", "push the deadline two days" — the AI handles it across your entire calendar.</div></div>
+          <div class="fi"><span class="fi-icon">👥</span><div class="fi-name blue">Team Workload View</div><div class="fi-desc">Live visibility into team capacity and task load. Identify bottlenecks, balance assignments, and prevent burnout before it happens.</div></div>
+          <div class="fi"><span class="fi-icon">📅</span><div class="fi-name blue">Aggressive Calendar Takeover</div><div class="fi-desc">Every available slot gets filled with high-value work by priority. Zero idle calendar time — Motion maximizes throughput across your entire week.</div></div>
+          <div class="fi"><span class="fi-icon">🤝</span><div class="fi-name blue">AI Meeting Assistant</div><div class="fi-desc">Smart booking links, auto meeting notes, action item extraction, and follow-up tasks — all flowing back into your project and task system automatically.</div></div>
+        </div>
+        <div class="panel-ctas"><a href="https://app.usemotion.com/checkout" target="_blank" rel="noopener" class="btn btn-primary">Start free trial</a></div>
+        <div class="panel-dlinks">
+          <a href="https://www.usemotion.com/features/ai-calendar" target="_blank" rel="noopener" class="dlink">AI Calendar ↗</a>
+          <a href="https://www.usemotion.com/features/ai-task-manager" target="_blank" rel="noopener" class="dlink">AI Tasks ↗</a>
+          <a href="https://www.usemotion.com/features/ai-meeting-assistant" target="_blank" rel="noopener" class="dlink">AI Meetings ↗</a>
+          <a href="https://www.usemotion.com/features/ai-chat" target="_blank" rel="noopener" class="dlink">AI Chat ↗</a>
+          <a href="https://www.usemotion.com/features/integrations" target="_blank" rel="noopener" class="dlink">Integrations ↗</a>
+        </div>
+      </div>
+
+      <!-- Reclaim panel -->
+      <div id="pr" class="tab-panel" style="display:none;">
+        <div class="panel-hdr">
+          <span class="ctag purple" style="margin:0;">Reclaim</span>
+          <span class="dsep">|</span>
+          <a href="https://reclaim.ai/" target="_blank" rel="noopener" class="dlink">reclaim.ai ↗</a>
+          <a href="https://help.reclaim.ai/" target="_blank" rel="noopener" class="dlink">Help Center ↗</a>
+          <a href="https://reclaim.ai/pricing" target="_blank" rel="noopener" class="dlink">Pricing ↗</a>
+        </div>
+        <p class="panel-intro">Reclaim is an <strong>AI-powered calendar layer</strong> for Google Calendar and Outlook that creates 40% more time for teams by protecting habits, defending focus sessions, and scheduling meetings around real-life constraints.</p>
+        <div class="feat-grid">
+          <div class="fi"><span class="fi-icon">🛡️</span><div class="fi-name purple">Habit &amp; Focus Protection</div><div class="fi-desc">Set recurring habits — morning deep work, gym, reviews — and Reclaim auto-blocks the best times, defending them intelligently against meeting overload.</div></div>
+          <div class="fi"><span class="fi-icon">🔄</span><div class="fi-name purple">Auto-Reschedule Engine</div><div class="fi-desc">When priorities shift, Reclaim instantly recalculates and moves affected tasks and habits to the next optimal slot. Defensive, not disruptive.</div></div>
+          <div class="fi"><span class="fi-icon">🧠</span><div class="fi-name purple">Smart Meetings</div><div class="fi-desc">Finds the best meeting time across all attendees considering focus windows, buffer preferences, and time-of-day patterns — fewer conflicts, better timing.</div></div>
+          <div class="fi"><span class="fi-icon">🔗</span><div class="fi-name purple">Asana &amp; Jira Integration</div><div class="fi-desc">Pulls tasks directly from existing project tools and auto-schedules them in your calendar. No re-entry, no duplication — your current stack stays intact.</div></div>
+          <div class="fi"><span class="fi-icon">📊</span><div class="fi-name purple">Time Tracking &amp; Analytics</div><div class="fi-desc">Detailed breakdown of where your time goes across meetings, deep work, and personal time. Workforce analytics for managers to understand team allocation.</div></div>
+          <div class="fi"><span class="fi-icon">⏸️</span><div class="fi-name purple">Buffer Time &amp; Breaks</div><div class="fi-desc">Auto-schedules recovery gaps between meetings. Prevents back-to-back exhaustion with AI-managed breathing room built into your day.</div></div>
+        </div>
+        <div class="panel-ctas"><a href="https://app.reclaim.ai/signup" target="_blank" rel="noopener" class="btn btn-purple">Get started free</a></div>
+        <div class="panel-dlinks">
+          <a href="https://reclaim.ai/features/habits" target="_blank" rel="noopener" class="dlink">Habits ↗</a>
+          <a href="https://reclaim.ai/features/focus-time" target="_blank" rel="noopener" class="dlink">Focus Time ↗</a>
+          <a href="https://reclaim.ai/features/smart-meetings" target="_blank" rel="noopener" class="dlink">Smart Meetings ↗</a>
+          <a href="https://reclaim.ai/features/tasks" target="_blank" rel="noopener" class="dlink">Tasks ↗</a>
+          <a href="https://reclaim.ai/features/time-tracking" target="_blank" rel="noopener" class="dlink">Time Tracking ↗</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE TABLE -->
+<section class="section" id="compare">
+  <div class="container">
+    <div class="rev">
+      <p class="sec-label">03 / Head-to-Head</p>
+      <h2 class="sec-title">Side by Side</h2>
+      <p class="sec-desc">Same category — fundamentally different philosophy.</p>
+    </div>
+    <div class="tbl-wrap rev rev-d1">
+      <table class="ctbl">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Motion</th>
+            <th>Reclaim</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Approach</td>
+            <td><div class="tbadge blue">Proactive</div><br>Fills your entire calendar from scratch. AI decides when everything happens.</td>
+            <td><div class="tbadge purple">Defensive</div><br>Layers over your existing calendar. Protects key time from being overwritten.</td>
+          </tr>
+          <tr>
+            <td>Task Mgmt</td>
+            <td><div class="tbadge blue">Built-in</div><br>Native task &amp; project manager. No external tools required.</td>
+            <td><div class="tbadge purple">Integrated</div><br>Pulls from Asana, Jira, Linear. Works with your current stack.</td>
+          </tr>
+          <tr>
+            <td>Setup</td>
+            <td><div class="tbadge blue">Moderate</div><br>Full platform onboarding. Powerful once configured.</td>
+            <td><div class="tbadge purple">Fast</div><br>Overlay on Google / Outlook. Live in minutes.</td>
+          </tr>
+          <tr>
+            <td>Calendar UX</td>
+            <td><div class="tbadge blue">Replaces</div><br>Motion becomes your primary calendar interface.</td>
+            <td><div class="tbadge purple">Overlays</div><br>Google or Outlook stays your main UI. Reclaim works behind the scenes.</td>
+          </tr>
+          <tr>
+            <td>Teams</td>
+            <td><div class="tbadge blue">Workload</div><br>Team workload view, project dashboards, capacity planning.</td>
+            <td><div class="tbadge purple">Analytics</div><br>People analytics, team scheduling patterns, workforce time data.</td>
+          </tr>
+          <tr>
+            <td>Pricing</td>
+            <td><div class="tbadge blue">Trial → Paid</div><br>Free trial. Individual &amp; team plans. <a href="https://www.usemotion.com/pricing" target="_blank" rel="noopener" class="dlink">See pricing ↗</a></td>
+            <td><div class="tbadge purple">Freemium</div><br>Free tier available. Pro &amp; team plans. <a href="https://reclaim.ai/pricing" target="_blank" rel="noopener" class="dlink">See pricing ↗</a></td>
+          </tr>
+          <tr>
+            <td>AI Style</td>
+            <td><div class="tbadge blue">Aggressive</div><br>Fills every slot. Maximizes throughput. Zero idle time.</td>
+            <td><div class="tbadge purple">Adaptive</div><br>Reschedules around changes. Preserves habits. Protects recovery time.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- WHO -->
+<section class="section" id="who">
+  <div class="container">
+    <div class="rev">
+      <p class="sec-label">04 / Fit</p>
+      <h2 class="sec-title">Who Should Use Which</h2>
+      <p class="sec-desc">Match your work style and existing stack to the right tool.</p>
+    </div>
+    <div class="two-col rev rev-d1">
+      <div class="persona-card">
+        <span class="ctag blue" style="margin-bottom:20px;display:inline-flex;">Choose Motion if you…</span>
+        <ul class="plist">
+          <li><span class="parr blue">→</span>Manage heavy task load and want AI to decide <em>when</em> everything happens</li>
+          <li><span class="parr blue">→</span>Lead a team and need workload visibility and project tracking</li>
+          <li><span class="parr blue">→</span>Want to replace your task manager, calendar, and notes with one tool</li>
+          <li><span class="parr blue">→</span>Feel overwhelmed by manual scheduling and want complete AI autopilot</li>
+          <li><span class="parr blue">→</span>Run a service business, agency, or startup at high velocity</li>
+          <li><span class="parr blue">→</span>Want AI chat to adjust your schedule without touching the calendar</li>
+        </ul>
+        <div class="uc-links">
+          <a href="https://www.usemotion.com/use-cases/startups" target="_blank" rel="noopener" class="uctag">Startups ↗</a>
+          <a href="https://www.usemotion.com/use-cases/marketing-agencies" target="_blank" rel="noopener" class="uctag">Agencies ↗</a>
+          <a href="https://www.usemotion.com/use-cases/executive-teams" target="_blank" rel="noopener" class="uctag">Executives ↗</a>
+          <a href="https://www.usemotion.com/use-cases/law-firms" target="_blank" rel="noopener" class="uctag">Law Firms ↗</a>
+        </div>
+      </div>
+      <div class="persona-card">
+        <span class="ctag purple" style="margin-bottom:20px;display:inline-flex;">Choose Reclaim if you…</span>
+        <ul class="plist">
+          <li><span class="parr purple">→</span>Already use Asana, Jira, or Linear and want tasks auto-scheduled</li>
+          <li><span class="parr purple">→</span>Struggle to protect deep work from relentless meeting overload</li>
+          <li><span class="parr purple">→</span>Want recurring habits — gym, reviews, learning — to actually stick</li>
+          <li><span class="parr purple">→</span>Prefer keeping Google Calendar or Outlook as your primary UI</li>
+          <li><span class="parr purple">→</span>Work on an engineering, product, or marketing team with existing tooling</li>
+          <li><span class="parr purple">→</span>Want time analytics to understand where your hours actually go</li>
+        </ul>
+        <div class="uc-links">
+          <a href="https://reclaim.ai/teams/engineering" target="_blank" rel="noopener" class="uctag">Engineering ↗</a>
+          <a href="https://reclaim.ai/teams/product" target="_blank" rel="noopener" class="uctag">Product ↗</a>
+          <a href="https://reclaim.ai/teams/marketing" target="_blank" rel="noopener" class="uctag">Marketing ↗</a>
+          <a href="https://reclaim.ai/teams/sales" target="_blank" rel="noopener" class="uctag">Sales ↗</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCS -->
+<section class="section" id="docs">
+  <div class="container">
+    <div class="rev">
+      <p class="sec-label">05 / Resources</p>
+      <h2 class="sec-title">Official Docs &amp; Links</h2>
+      <p class="sec-desc">Everything you need to get started or go deeper on either platform.</p>
+    </div>
+    <div class="two-col rev rev-d1">
+      <div class="resource-block">
+        <span class="ctag blue" style="margin-bottom:24px;display:inline-flex;">Motion</span>
+        <ul class="rlist">
+          <li><a href="https://www.usemotion.com/" target="_blank" rel="noopener">Main Website<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/pricing" target="_blank" rel="noopener">Pricing Plans<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/help" target="_blank" rel="noopener">Knowledge Base &amp; Docs<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/features/ai-calendar" target="_blank" rel="noopener">AI Calendar Feature<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/features/ai-task-manager" target="_blank" rel="noopener">AI Task Manager<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/features/ai-meeting-assistant" target="_blank" rel="noopener">AI Meeting Assistant<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/features/ai-chat" target="_blank" rel="noopener">AI Chat<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/features/integrations" target="_blank" rel="noopener">Integrations<span class="rarr">→</span></a></li>
+          <li><a href="https://www.usemotion.com/blog" target="_blank" rel="noopener">Blog &amp; Resources<span class="rarr">→</span></a></li>
+        </ul>
+        <a href="https://app.usemotion.com/checkout" target="_blank" rel="noopener" class="btn btn-primary" style="width:100%;justify-content:space-between;">Start free trial</a>
+      </div>
+      <div class="resource-block">
+        <span class="ctag purple" style="margin-bottom:24px;display:inline-flex;">Reclaim</span>
+        <ul class="rlist">
+          <li><a href="https://reclaim.ai/" target="_blank" rel="noopener">Main Website<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/pricing" target="_blank" rel="noopener">Pricing Plans<span class="rarr">→</span></a></li>
+          <li><a href="https://help.reclaim.ai/" target="_blank" rel="noopener">Help Center &amp; Docs<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/features/habits" target="_blank" rel="noopener">AI Habits<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/features/tasks" target="_blank" rel="noopener">AI Tasks<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/features/smart-meetings" target="_blank" rel="noopener">Smart Meetings<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/features/focus-time" target="_blank" rel="noopener">AI Focus Time<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/features/time-tracking" target="_blank" rel="noopener">Time Tracking<span class="rarr">→</span></a></li>
+          <li><a href="https://reclaim.ai/blog" target="_blank" rel="noopener">Blog<span class="rarr">→</span></a></li>
+        </ul>
+        <a href="https://app.reclaim.ai/signup" target="_blank" rel="noopener" class="btn btn-purple" style="width:100%;justify-content:space-between;">Get started free</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="final-cta">
+  <div class="container">
+    <div class="f-label">Final Recommendation</div>
+    <h2 class="f-title">Can't decide?<br><span class="blue">Run both.</span></h2>
+    <p class="f-body">Many power users run <strong>Motion</strong> for AI-driven scheduling of deep project work, while using <strong>Reclaim</strong> to protect habits and pull in Asana or Jira tasks. They're not competitors — they're complementary layers of the same calendar strategy.</p>
+    <div class="f-ctas">
+      <a href="https://app.usemotion.com/checkout" target="_blank" rel="noopener" class="btn btn-primary">Try Motion</a>
+      <a href="https://app.reclaim.ai/signup" target="_blank" rel="noopener" class="btn btn-purple">Try Reclaim</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <div class="foot-inner">
+      <span class="foot-note">Independent comparison · No affiliation with Motion or Reclaim</span>
+      <div class="foot-links">
+        <a href="https://www.usemotion.com/" target="_blank" rel="noopener">usemotion.com</a>
+        <a href="https://reclaim.ai/" target="_blank" rel="noopener">reclaim.ai</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function toggleTheme(){
+    const h=document.documentElement;
+    const isLight=h.getAttribute('data-theme')==='light';
+    h.setAttribute('data-theme',isLight?'dark':'light');
+    document.getElementById('tlabel').textContent=isLight?'Light':'Dark';
+  }
+  document.getElementById('tlabel').textContent=
+    document.documentElement.getAttribute('data-theme')==='light'?'Dark':'Light';
+
+  function switchTab(t){
+    document.getElementById('pm').style.display=t==='motion'?'block':'none';
+    document.getElementById('pr').style.display=t==='reclaim'?'block':'none';
+    document.getElementById('tab-m').className='tab-btn'+(t==='motion'?' ab':'');
+    document.getElementById('tab-r').className='tab-btn'+(t==='reclaim'?' ap':'');
+  }
+
+  const ro=new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){e.target.classList.add('visible');ro.unobserve(e.target);}
+    });
+  },{threshold:0.06});
+  document.querySelectorAll('.rev').forEach(el=>ro.observe(el));
+</script>
+</body>
+</html>
