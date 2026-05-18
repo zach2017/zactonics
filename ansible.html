@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Ansible · ZooKeeper · ETL Pipeline Tutorial</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-dark"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-light" disabled/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          heading: ['Syne', 'sans-serif'],
+          body: ['Outfit', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+        colors: {
+          ansible:  { DEFAULT: '#e85d26', light: '#f97316', dark: '#c2410c' },
+          zk:       { DEFAULT: '#0ea5e9', light: '#38bdf8', dark: '#0284c7' },
+          es:       { DEFAULT: '#10b981', light: '#34d399', dark: '#059669' },
+          etl:      { DEFAULT: '#8b5cf6', light: '#a78bfa', dark: '#7c3aed' },
+          play:     { DEFAULT: '#f59e0b', light: '#fbbf24', dark: '#d97706' },
+          js:       { DEFAULT: '#ec4899', light: '#f472b6', dark: '#db2777' },
+        }
+      }
+    }
+  }
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  .dark ::-webkit-scrollbar-thumb { background: #334155; }
+  :not(.dark) ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+  body { font-family: 'Outfit', sans-serif; transition: background .25s, color .25s; }
+
+  /* Sidebar */
+  #sidebar { transition: transform .3s ease; }
+
+  /* Nav item active glow */
+  .nav-item.active { box-shadow: inset 3px 0 0 currentColor; }
+
+  /* Code blocks */
+  pre code.hljs { border-radius: 0 0 10px 10px !important; font-size: 13px !important; line-height: 1.7 !important; }
+  .code-wrap pre { margin: 0; }
+
+  /* Section accordion */
+  .sub-body { overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1), opacity .3s; max-height: 0; opacity: 0; }
+  .sub-body.open { max-height: 9999px; opacity: 1; }
+
+  /* Modal */
+  #modal-overlay { transition: opacity .25s; }
+  #modal-box { transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .25s; }
+
+  /* Badge pulse */
+  @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(232,93,38,.5); } 70% { box-shadow: 0 0 0 8px rgba(232,93,38,0); } 100% { box-shadow: 0 0 0 0 rgba(232,93,38,0); } }
+  .pulse { animation: pulse-ring 2s infinite; }
+
+  /* Progress bar */
+  #progress-bar { transition: width .4s ease; }
+
+  /* Fade-in on section switch */
+  @keyframes fadein { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+  .section-fade { animation: fadein .35s ease forwards; }
+
+  /* Tag cloud hover */
+  .tag:hover { transform: translateY(-2px) scale(1.05); }
+  .tag { transition: transform .15s, box-shadow .15s; }
+
+  /* copy btn */
+  .copy-btn { transition: background .15s, color .15s, transform .1s; }
+  .copy-btn:active { transform: scale(.95); }
+
+  /* More info btn */
+  .more-btn { transition: all .18s; }
+  .more-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+
+  /* Mobile overlay */
+  #mob-overlay { display: none; }
+  @media (max-width: 768px) {
+    #sidebar { transform: translateX(-100%); position: fixed; z-index: 50; }
+    #sidebar.open { transform: translateX(0); }
+    #mob-overlay.show { display: block; }
+  }
+</style>
+</head>
+<body class="dark:bg-[#070b10] bg-slate-50 dark:text-slate-300 text-slate-700 min-h-screen">
+
+<!-- Progress Bar -->
+<div class="fixed top-0 left-0 right-0 h-[3px] z-50 dark:bg-slate-900 bg-slate-200">
+  <div id="progress-bar" class="h-full bg-gradient-to-r from-ansible to-play w-0 rounded-full"></div>
+</div>
+
+<!-- Mobile Overlay -->
+<div id="mob-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeSidebar()"></div>
+
+<!-- Layout -->
+<div class="flex min-h-screen">
+
+  <!-- ══════════════════ SIDEBAR ══════════════════ -->
+  <aside id="sidebar" class="w-64 shrink-0 dark:bg-[#0c1118] bg-white border-r dark:border-slate-800 border-slate-200 flex flex-col h-screen sticky top-0 overflow-y-auto shadow-xl">
+
+    <!-- Logo / Header -->
+    <div class="p-5 border-b dark:border-slate-800 border-slate-200">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ansible to-play flex items-center justify-center text-white text-sm font-bold pulse">A</div>
+        <div>
+          <div class="text-[10px] font-bold tracking-[.2em] uppercase dark:text-slate-500 text-slate-400">DevOps Guide</div>
+          <div class="text-xs font-bold dark:text-slate-200 text-slate-800 font-heading">v2025 Edition</div>
+        </div>
+      </div>
+      <p class="text-[11px] dark:text-slate-500 text-slate-400 leading-relaxed">Ansible automation · ZooKeeper cluster · ETL from Elasticsearch</p>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 p-3 space-y-1">
+      <div class="text-[10px] font-bold tracking-[.15em] uppercase dark:text-slate-600 text-slate-400 px-2 py-2">Sections</div>
+
+      <button onclick="switchSection('ansible')" id="nav-ansible"
+        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-ansible hover:dark:bg-slate-800 hover:bg-slate-100 active">
+        <span class="text-lg">⚙️</span>
+        <div><div class="text-[10px] opacity-60 uppercase tracking-wide font-semibold">Part 1</div>
+        <div class="text-sm font-semibold font-heading">Ansible Basics</div></div>
+      </button>
+
+      <button onclick="switchSection('zookeeper')" id="nav-zookeeper"
+        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-zk hover:dark:bg-slate-800 hover:bg-slate-100">
+        <span class="text-lg">🦁</span>
+        <div><div class="text-[10px] opacity-60 uppercase tracking-wide font-semibold">Part 2</div>
+        <div class="text-sm font-semibold font-heading">ZooKeeper Setup</div></div>
+      </button>
+
+      <button onclick="switchSection('elasticsearch')" id="nav-elasticsearch"
+        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-es hover:dark:bg-slate-800 hover:bg-slate-100">
+        <span class="text-lg">🔍</span>
+        <div><div class="text-[10px] opacity-60 uppercase tracking-wide font-semibold">Part 3</div>
+        <div class="text-sm font-semibold font-heading">Elasticsearch</div></div>
+      </button>
+
+      <button onclick="switchSection('etl')" id="nav-etl"
+        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-etl hover:dark:bg-slate-800 hover:bg-slate-100">
+        <span class="text-lg">🔄</span>
+        <div><div class="text-[10px] opacity-60 uppercase tracking-wide font-semibold">Part 4</div>
+        <div class="text-sm font-semibold font-heading">ETL Deployment</div></div>
+      </button>
+
+      <button onclick="switchSection('playbook')" id="nav-playbook"
+        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-play hover:dark:bg-slate-800 hover:bg-slate-100">
+        <span class="text-lg">▶️</span>
+        <div><div class="text-[10px] opacity-60 uppercase tracking-wide font-semibold">Part 5</div>
+        <div class="text-sm font-semibold font-heading">Playbooks & Run</div></div>
+      </button>
+
+      <button onclick="switchSection('javascript')" id="nav-javascript"
+        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-js hover:dark:bg-slate-800 hover:bg-slate-100">
+        <span class="text-lg">🟨</span>
+        <div><div class="text-[10px] opacity-60 uppercase tracking-wide font-semibold">Part 6</div>
+        <div class="text-sm font-semibold font-heading">JS Automation</div></div>
+      </button>
+    </nav>
+
+    <!-- Stack Tags -->
+    <div class="p-4 border-t dark:border-slate-800 border-slate-200">
+      <div class="text-[10px] font-bold tracking-widest uppercase dark:text-slate-600 text-slate-400 mb-3">Tech Stack</div>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="tag text-[10px] px-2 py-0.5 rounded-full font-mono bg-ansible/10 text-ansible border border-ansible/20 cursor-default">Ansible 2.16</span>
+        <span class="tag text-[10px] px-2 py-0.5 rounded-full font-mono bg-zk/10 text-zk border border-zk/20 cursor-default">ZooKeeper 3.9</span>
+        <span class="tag text-[10px] px-2 py-0.5 rounded-full font-mono bg-es/10 text-es border border-es/20 cursor-default">ES 8.x</span>
+        <span class="tag text-[10px] px-2 py-0.5 rounded-full font-mono bg-etl/10 text-etl border border-etl/20 cursor-default">Python 3.11</span>
+        <span class="tag text-[10px] px-2 py-0.5 rounded-full font-mono bg-play/10 text-play border border-play/20 cursor-default">systemd</span>
+        <span class="tag text-[10px] px-2 py-0.5 rounded-full font-mono bg-js/10 text-js border border-js/20 cursor-default">Node.js</span>
+      </div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <div class="p-4 border-t dark:border-slate-800 border-slate-200">
+      <button onclick="toggleTheme()" class="w-full flex items-center justify-between px-3 py-2 rounded-lg dark:bg-slate-800 bg-slate-100 hover:dark:bg-slate-700 hover:bg-slate-200 transition-colors text-sm font-medium">
+        <span id="theme-label" class="dark:text-slate-300 text-slate-600">🌙 Dark Mode</span>
+        <div id="theme-toggle" class="w-10 h-5 rounded-full bg-gradient-to-r from-ansible to-play relative transition-all">
+          <div id="toggle-knob" class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"></div>
+        </div>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ══════════════════ MAIN CONTENT ══════════════════ -->
+  <main class="flex-1 min-w-0">
+
+    <!-- Top Bar -->
+    <div class="sticky top-0 z-30 dark:bg-[#070b10]/90 bg-slate-50/90 backdrop-blur border-b dark:border-slate-800 border-slate-200 px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden p-2 rounded-lg dark:bg-slate-800 bg-slate-200 dark:text-slate-300 text-slate-600 hover:bg-slate-300 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div id="breadcrumb" class="text-sm dark:text-slate-400 text-slate-500 font-body">
+          <span class="dark:text-slate-600 text-slate-400">Tutorial</span>
+          <span class="mx-2 dark:text-slate-700 text-slate-300">/</span>
+          <span id="bc-section" class="font-semibold dark:text-slate-200 text-slate-700">Ansible Basics</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="openModal('references')"
+          class="more-btn text-xs font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-ansible to-play text-white shadow-lg">
+          📚 References
+        </button>
+        <button onclick="openModal('about')"
+          class="more-btn text-xs font-semibold px-3 py-1.5 rounded-full dark:bg-slate-800 bg-slate-200 dark:text-slate-300 text-slate-600 border dark:border-slate-700 border-slate-300">
+          ℹ️ About
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ SECTIONS ═══ -->
+    <div class="p-6 lg:p-10 max-w-4xl">
+
+      <!-- ── ANSIBLE ── -->
+      <section id="sec-ansible" class="section-fade">
+        <div class="flex items-start justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-ansible bg-ansible/10 border border-ansible/20 rounded-full px-3 py-1 mb-3">⚙️ Part 1</div>
+            <h1 class="font-heading text-4xl font-extrabold dark:text-white text-slate-900 leading-tight">Ansible Fundamentals</h1>
+            <div class="w-12 h-1 bg-ansible rounded-full mt-3"></div>
+          </div>
+          <button onclick="openModal('ansible-info')" class="more-btn px-4 py-2 rounded-xl bg-ansible/10 border border-ansible/30 text-ansible text-sm font-bold hover:bg-ansible/20">
+            💡 More Info
+          </button>
+        </div>
+
+        <!-- Sub: What is Ansible -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded bg-ansible/20 text-ansible text-xs font-bold flex items-center justify-center">1</span>
+              <span class="font-heading font-bold dark:text-slate-100 text-slate-800">What is Ansible?</span>
+            </div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body open">
+            <div class="px-5 pb-5 pt-1">
+              <p class="dark:text-slate-400 text-slate-600 leading-relaxed mb-4">Ansible is an <strong class="dark:text-white text-slate-900">agentless IT automation</strong> tool that uses SSH to configure systems, deploy software, and orchestrate complex workflows — all defined in human-readable YAML. No agents to install on remote hosts; just SSH access and Python.</p>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-center">
+                  <div class="text-2xl mb-1">📋</div><div class="text-xs font-bold dark:text-slate-300 text-slate-700">Playbooks</div><div class="text-[11px] dark:text-slate-500 text-slate-400 mt-0.5">YAML automation</div>
+                </div>
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-center">
+                  <div class="text-2xl mb-1">🧩</div><div class="text-xs font-bold dark:text-slate-300 text-slate-700">Roles</div><div class="text-[11px] dark:text-slate-500 text-slate-400 mt-0.5">Reusable modules</div>
+                </div>
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-center">
+                  <div class="text-2xl mb-1">📦</div><div class="text-xs font-bold dark:text-slate-300 text-slate-700">Inventory</div><div class="text-[11px] dark:text-slate-500 text-slate-400 mt-0.5">Host management</div>
+                </div>
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-center">
+                  <div class="text-2xl mb-1">🔔</div><div class="text-xs font-bold dark:text-slate-300 text-slate-700">Handlers</div><div class="text-[11px] dark:text-slate-500 text-slate-400 mt-0.5">Event-driven tasks</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub: Directory Layout -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded bg-ansible/20 text-ansible text-xs font-bold flex items-center justify-center">2</span>
+              <span class="font-heading font-bold dark:text-slate-100 text-slate-800">Project Directory Layout</span>
+            </div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <p class="dark:text-slate-400 text-slate-600 mb-3 text-sm">Standard Ansible project structure used throughout this tutorial:</p>
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-ansible uppercase tracking-wider">bash</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono hover:dark:bg-slate-600 hover:bg-slate-300" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-bash">project/
+├── inventory/
+│   ├── hosts.ini
+│   └── group_vars/
+│       ├── all.yml
+│       ├── zookeeper.yml
+│       └── etl.yml
+├── roles/
+│   ├── zookeeper/
+│   │   ├── tasks/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── templates/zoo.cfg.j2
+│   │   └── defaults/main.yml
+│   └── etl_app/
+│       ├── tasks/main.yml
+│       ├── templates/
+│       └── defaults/main.yml
+└── site.yml               # master playbook</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub: Inventory -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded bg-ansible/20 text-ansible text-xs font-bold flex items-center justify-center">3</span>
+              <span class="font-heading font-bold dark:text-slate-100 text-slate-800">Inventory File</span>
+            </div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <p class="dark:text-slate-400 text-slate-600 mb-3 text-sm">Define your host groups for ZooKeeper, ETL workers, and Elasticsearch:</p>
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-ansible uppercase tracking-wider">ini</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-ini"># inventory/hosts.ini
+[zookeeper]
+zk1.example.com ansible_user=ubuntu
+zk2.example.com ansible_user=ubuntu
+zk3.example.com ansible_user=ubuntu
+
+[etl_workers]
+etl1.example.com ansible_user=ubuntu
+etl2.example.com ansible_user=ubuntu
+
+[elasticsearch]
+es1.example.com ansible_user=ubuntu
+es2.example.com ansible_user=ubuntu
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_private_key_file=~/.ssh/id_rsa</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub: ansible.cfg -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3">
+              <span class="w-6 h-6 rounded bg-ansible/20 text-ansible text-xs font-bold flex items-center justify-center">4</span>
+              <span class="font-heading font-bold dark:text-slate-100 text-slate-800">ansible.cfg Configuration</span>
+            </div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-ansible uppercase tracking-wider">ini</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-ini"># ansible.cfg
+[defaults]
+inventory         = ./inventory/hosts.ini
+roles_path        = ./roles
+remote_user       = ubuntu
+host_key_checking = False
+stdout_callback   = yaml
+retry_files_enabled = False
+
+[privilege_escalation]
+become        = True
+become_method = sudo
+become_user   = root</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end mt-6">
+          <button onclick="switchSection('zookeeper')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zk/10 border border-zk/30 text-zk font-bold text-sm hover:bg-zk/20 transition-all">ZooKeeper Setup <span>→</span></button>
+        </div>
+      </section>
+
+      <!-- ── ZOOKEEPER ── -->
+      <section id="sec-zookeeper" class="section-fade hidden">
+        <div class="flex items-start justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-zk bg-zk/10 border border-zk/20 rounded-full px-3 py-1 mb-3">🦁 Part 2</div>
+            <h1 class="font-heading text-4xl font-extrabold dark:text-white text-slate-900 leading-tight">ZooKeeper Setup</h1>
+            <div class="w-12 h-1 bg-zk rounded-full mt-3"></div>
+          </div>
+          <button onclick="openModal('zk-info')" class="more-btn px-4 py-2 rounded-xl bg-zk/10 border border-zk/30 text-zk text-sm font-bold hover:bg-zk/20">
+            💡 More Info
+          </button>
+        </div>
+
+        <!-- What is ZK -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-zk/20 text-zk text-xs font-bold flex items-center justify-center">1</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">What is ZooKeeper?</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body open">
+            <div class="px-5 pb-5 pt-1">
+              <p class="dark:text-slate-400 text-slate-600 leading-relaxed mb-4">Apache ZooKeeper is a distributed coordination service used for leader election, distributed locks, configuration management, and service discovery. In an ETL pipeline, ZooKeeper coordinates partition ownership so workers don't process duplicate data.</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200">
+                  <div class="text-xs font-bold text-zk mb-1">⚡ Leader Election</div>
+                  <div class="text-xs dark:text-slate-400 text-slate-500">Automatically elects a leader node in distributed systems</div>
+                </div>
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200">
+                  <div class="text-xs font-bold text-zk mb-1">🔒 Distributed Locks</div>
+                  <div class="text-xs dark:text-slate-400 text-slate-500">Prevents race conditions across ETL workers</div>
+                </div>
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200">
+                  <div class="text-xs font-bold text-zk mb-1">⚙️ Config Store</div>
+                  <div class="text-xs dark:text-slate-400 text-slate-500">Central, consistent configuration across nodes</div>
+                </div>
+                <div class="p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200">
+                  <div class="text-xs font-bold text-zk mb-1">🗺️ Service Discovery</div>
+                  <div class="text-xs dark:text-slate-400 text-slate-500">Nodes register ephemeral znodes on startup</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZK Tasks -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-zk/20 text-zk text-xs font-bold flex items-center justify-center">2</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">ZooKeeper Role Tasks</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-zk uppercase tracking-wider">yaml</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-yaml"># roles/zookeeper/tasks/main.yml
+---
+- name: Create zookeeper group
+  group:
+    name: "{{ zookeeper_group }}"
+    state: present
+
+- name: Create zookeeper user
+  user:
+    name: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    system: yes
+    shell: /sbin/nologin
+
+- name: Create required directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    mode: "0755"
+  loop:
+    - "{{ zookeeper_install_dir }}"
+    - "{{ zookeeper_data_dir }}"
+    - "{{ zookeeper_log_dir }}"
+
+- name: Download ZooKeeper tarball
+  get_url:
+    url: "{{ zookeeper_mirror }}/zookeeper-{{ zookeeper_version }}/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
+    dest: "/tmp/zookeeper-{{ zookeeper_version }}.tar.gz"
+
+- name: Extract ZooKeeper
+  unarchive:
+    src: "/tmp/zookeeper-{{ zookeeper_version }}.tar.gz"
+    dest: "{{ zookeeper_install_dir }}"
+    remote_src: yes
+    extra_opts: ["--strip-components=1"]
+    owner: "{{ zookeeper_user }}"
+    creates: "{{ zookeeper_install_dir }}/bin/zkServer.sh"
+
+- name: Write myid file
+  copy:
+    content: "{{ zookeeper_myid }}"
+    dest: "{{ zookeeper_data_dir }}/myid"
+
+- name: Deploy zoo.cfg from template
+  template:
+    src: zoo.cfg.j2
+    dest: "{{ zookeeper_install_dir }}/conf/zoo.cfg"
+  notify: Restart ZooKeeper
+
+- name: Enable and start ZooKeeper
+  systemd:
+    name: zookeeper
+    enabled: yes
+    state: started</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- zoo.cfg Template -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-zk/20 text-zk text-xs font-bold flex items-center justify-center">3</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">zoo.cfg Jinja2 Template</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-zk uppercase tracking-wider">jinja2</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-django"># roles/zookeeper/templates/zoo.cfg.j2
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir={{ zookeeper_data_dir }}
+clientPort={{ zookeeper_client_port }}
+maxClientCnxns=60
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=1
+
+# Dynamic server list built from inventory group
+{% for host in groups['zookeeper'] %}
+server.{{ loop.index }}={{ hostvars[host]['ansible_host'] | default(host) }}:{{ zookeeper_leader_port }}:{{ zookeeper_election_port }}
+{% endfor %}</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Handlers -->
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-zk/20 text-zk text-xs font-bold flex items-center justify-center">4</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Handlers</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-zk uppercase tracking-wider">yaml</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-yaml"># roles/zookeeper/handlers/main.yml
+---
+- name: Restart ZooKeeper
+  systemd:
+    name: zookeeper
+    state: restarted
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between mt-6">
+          <button onclick="switchSection('ansible')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl dark:bg-slate-800 bg-slate-100 dark:text-slate-300 text-slate-600 font-bold text-sm hover:dark:bg-slate-700 hover:bg-slate-200 transition-all">← Ansible</button>
+          <button onclick="switchSection('elasticsearch')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-es/10 border border-es/30 text-es font-bold text-sm hover:bg-es/20 transition-all">Elasticsearch →</button>
+        </div>
+      </section>
+
+      <!-- ── ELASTICSEARCH ── -->
+      <section id="sec-elasticsearch" class="section-fade hidden">
+        <div class="flex items-start justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-es bg-es/10 border border-es/20 rounded-full px-3 py-1 mb-3">🔍 Part 3</div>
+            <h1 class="font-heading text-4xl font-extrabold dark:text-white text-slate-900 leading-tight">Elasticsearch Source</h1>
+            <div class="w-12 h-1 bg-es rounded-full mt-3"></div>
+          </div>
+          <button onclick="openModal('es-info')" class="more-btn px-4 py-2 rounded-xl bg-es/10 border border-es/30 text-es text-sm font-bold hover:bg-es/20">💡 More Info</button>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-es/20 text-es text-xs font-bold flex items-center justify-center">1</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Connection Config (group_vars)</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body open">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-es uppercase tracking-wider">yaml</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-yaml"># inventory/group_vars/all.yml
+---
+elasticsearch:
+  hosts:
+    - "{{ hostvars[groups['elasticsearch'][0]].ansible_host }}:9200"
+    - "{{ hostvars[groups['elasticsearch'][1]].ansible_host }}:9200"
+  index_pattern: "events-*"
+  scroll_size: 1000
+  scroll_timeout: "2m"
+  username: "elastic"
+  password: "{{ vault_es_password }}"   # stored in Ansible Vault
+  use_ssl: true
+  verify_certs: true
+  ca_cert: /etc/ssl/certs/es-ca.crt</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-es/20 text-es text-xs font-bold flex items-center justify-center">2</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Ansible Vault for Secrets</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="mb-3 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
+                🔐 Never commit plaintext passwords. Use Ansible Vault to encrypt sensitive values at rest.
+              </div>
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-es uppercase tracking-wider">bash</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-bash"># Create a new vault file
+ansible-vault create inventory/group_vars/all/vault.yml
+
+# vault.yml contents (encrypted at rest):
+# vault_es_password: "s3cur3P@ss!"
+# vault_db_password: "db_s3cr3t!"
+
+# Encrypt an existing file
+ansible-vault encrypt inventory/group_vars/all/vault.yml
+
+# Run playbook with vault password prompt
+ansible-playbook site.yml --ask-vault-pass
+
+# Or with a vault password file (CI/CD)
+ansible-playbook site.yml --vault-password-file ~/.vault_pass</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-es/20 text-es text-xs font-bold flex items-center justify-center">3</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">ES Query Template (Jinja2)</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-es uppercase tracking-wider">jinja2</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-django">{# roles/etl_app/templates/es_query.json.j2 #}
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "{{ etl_start_date | default('now-1d') }}",
+              "lt":  "{{ etl_end_date  | default('now') }}"
+            }
+          }
+        }
+        {% if etl_filter_terms is defined %}
+        ,{
+          "terms": {
+            "{{ etl_filter_field }}": {{ etl_filter_terms | to_json }}
+          }
+        }
+        {% endif %}
+      ]
+    }
+  },
+  "_source": {{ etl_source_fields | to_json }},
+  "sort": [{ "@timestamp": "asc" }]
+}</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between mt-6">
+          <button onclick="switchSection('zookeeper')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl dark:bg-slate-800 bg-slate-100 dark:text-slate-300 text-slate-600 font-bold text-sm transition-all">← ZooKeeper</button>
+          <button onclick="switchSection('etl')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-etl/10 border border-etl/30 text-etl font-bold text-sm hover:bg-etl/20 transition-all">ETL Deployment →</button>
+        </div>
+      </section>
+
+      <!-- ── ETL ── -->
+      <section id="sec-etl" class="section-fade hidden">
+        <div class="flex items-start justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-etl bg-etl/10 border border-etl/20 rounded-full px-3 py-1 mb-3">🔄 Part 4</div>
+            <h1 class="font-heading text-4xl font-extrabold dark:text-white text-slate-900 leading-tight">ETL App Deployment</h1>
+            <div class="w-12 h-1 bg-etl rounded-full mt-3"></div>
+          </div>
+          <button onclick="openModal('etl-info')" class="more-btn px-4 py-2 rounded-xl bg-etl/10 border border-etl/30 text-etl text-sm font-bold hover:bg-etl/20">💡 More Info</button>
+        </div>
+
+        <!-- Architecture -->
+        <div class="mb-4 p-5 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white shadow-sm">
+          <h3 class="font-heading font-bold dark:text-slate-100 text-slate-800 mb-4">Pipeline Architecture</h3>
+          <div class="flex flex-wrap gap-2 items-center justify-center text-sm">
+            <div class="px-4 py-3 rounded-xl bg-es/10 border border-es/30 text-es font-bold text-center"><div class="text-lg">🔍</div><div class="text-xs mt-1">Elasticsearch</div><div class="text-[10px] opacity-60">Scroll API</div></div>
+            <div class="text-2xl dark:text-slate-600 text-slate-300 font-bold">→</div>
+            <div class="px-4 py-3 rounded-xl bg-zk/10 border border-zk/30 text-zk font-bold text-center"><div class="text-lg">🦁</div><div class="text-xs mt-1">ZooKeeper</div><div class="text-[10px] opacity-60">Partition lock</div></div>
+            <div class="text-2xl dark:text-slate-600 text-slate-300 font-bold">→</div>
+            <div class="px-4 py-3 rounded-xl bg-etl/10 border border-etl/30 text-etl font-bold text-center"><div class="text-lg">⚙️</div><div class="text-xs mt-1">Transform</div><div class="text-[10px] opacity-60">Enrich + validate</div></div>
+            <div class="text-2xl dark:text-slate-600 text-slate-300 font-bold">→</div>
+            <div class="px-4 py-3 rounded-xl bg-play/10 border border-play/30 text-play font-bold text-center"><div class="text-lg">🗄️</div><div class="text-xs mt-1">Destination</div><div class="text-[10px] opacity-60">Postgres / S3</div></div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-etl/20 text-etl text-xs font-bold flex items-center justify-center">1</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">ETL Role Tasks</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body open">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-etl uppercase tracking-wider">yaml</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-yaml"># roles/etl_app/tasks/main.yml
+---
+- name: Create ETL system user
+  user:
+    name: "{{ etl_user }}"
+    group: "{{ etl_group }}"
+    system: yes
+    shell: /sbin/nologin
+
+- name: Create ETL directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ etl_user }}"
+    mode: "0750"
+  loop:
+    - "{{ etl_install_dir }}"
+    - "{{ etl_config_dir }}"
+    - "{{ etl_log_dir }}"
+
+- name: Install system dependencies
+  apt:
+    name:
+      - python3.11
+      - python3.11-venv
+      - python3-pip
+      - libpq-dev
+    state: present
+    update_cache: yes
+
+- name: Create Python virtual environment
+  command: "python3.11 -m venv {{ etl_venv_dir }}"
+  args:
+    creates: "{{ etl_venv_dir }}/bin/activate"
+
+- name: Copy application source
+  synchronize:
+    src: files/etl_app/
+    dest: "{{ etl_install_dir }}/src/"
+    delete: yes
+  notify: Restart ETL workers
+
+- name: Install Python dependencies
+  pip:
+    requirements: "{{ etl_install_dir }}/src/requirements.txt"
+    virtualenv: "{{ etl_venv_dir }}"
+  notify: Restart ETL workers
+
+- name: Deploy ETL config
+  template:
+    src: etl_config.yml.j2
+    dest: "{{ etl_config_dir }}/config.yml"
+    mode: "0640"
+  notify: Restart ETL workers
+
+- name: Enable ETL worker instances
+  systemd:
+    name: "etl-worker@{{ item }}"
+    enabled: yes
+    state: started
+  loop: "{{ range(1, etl_workers + 1) | list }}"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-etl/20 text-etl text-xs font-bold flex items-center justify-center">2</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Python Worker — Full Skeleton</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-etl uppercase tracking-wider">python</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-python"># src/worker.py
+import argparse, yaml, json, logging
+from kazoo.client import KazooClient
+from kazoo.exceptions import NodeExistsError
+from elasticsearch import Elasticsearch
+import psycopg2
+
+def claim_partition(zk, worker_id, root):
+    """Claim the lowest unclaimed partition via ZooKeeper ephemeral node."""
+    for partition in range(100):
+        path = f"{root}/partition-{partition:04d}"
+        try:
+            zk.create(path, value=str(worker_id).encode(),
+                      ephemeral=True, makepath=True)
+            logging.info(f"Worker {worker_id} claimed partition {partition}")
+            return partition
+        except NodeExistsError:
+            continue
+    raise RuntimeError("No free partitions available")
+
+def scroll_elasticsearch(es, cfg, query):
+    """Yield batches of documents using the Scroll API."""
+    resp = es.search(
+        index=cfg["index"],
+        body=query,
+        scroll=cfg["scroll_timeout"],
+        size=cfg["scroll_size"],
+    )
+    scroll_id = resp["_scroll_id"]
+    hits = resp["hits"]["hits"]
+    while hits:
+        yield hits
+        resp = es.scroll(scroll_id=scroll_id,
+                         scroll=cfg["scroll_timeout"])
+        scroll_id = resp["_scroll_id"]
+        hits = resp["hits"]["hits"]
+    es.clear_scroll(scroll_id=scroll_id)
+
+def transform(doc):
+    src = doc["_source"]
+    return {
+        "ts":         src["@timestamp"],
+        "event_type": src.get("event_type", "unknown"),
+        "user_id":    src.get("user_id"),
+        "payload":    json.dumps(src.get("payload", {})),
+    }
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--worker-id", type=int, required=True)
+    parser.add_argument("--config",    required=True)
+    parser.add_argument("--query",     required=True)
+    args = parser.parse_args()
+
+    with open(args.config) as f: cfg = yaml.safe_load(f)
+    with open(args.query)  as f: query = json.load(f)
+
+    zk = KazooClient(hosts=cfg["zookeeper"]["hosts"])
+    zk.start()
+    partition = claim_partition(
+        zk, args.worker_id, cfg["zookeeper"]["root_path"])
+
+    # Inject partition shard filter into ES query
+    query["query"]["bool"]["filter"].append(
+        {"term": {"partition": partition}})
+
+    es = Elasticsearch(
+        cfg["elasticsearch"]["hosts"],
+        http_auth=(cfg["elasticsearch"]["username"],
+                   cfg["elasticsearch"]["password"]),
+        use_ssl=cfg["elasticsearch"]["use_ssl"],
+        ca_certs=cfg["elasticsearch"]["ca_cert"],
+    )
+
+    conn = psycopg2.connect(
+        host=cfg["destination"]["host"],
+        port=cfg["destination"]["port"],
+        dbname=cfg["destination"]["database"],
+        user=cfg["destination"]["username"],
+        password=cfg["destination"]["password"],
+    )
+
+    with conn.cursor() as cur:
+        for batch in scroll_elasticsearch(
+                es, cfg["elasticsearch"], query):
+            rows = [transform(doc) for doc in batch]
+            cur.executemany(
+                "INSERT INTO events "
+                "(ts, event_type, user_id, payload) "
+                "VALUES (%(ts)s,%(event_type)s,"
+                "%(user_id)s,%(payload)s) "
+                "ON CONFLICT DO NOTHING",
+                rows)
+            conn.commit()
+            logging.info(
+                f"Loaded {len(rows)} rows "
+                f"(partition {partition})")
+    zk.stop()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s")
+    main()</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between mt-6">
+          <button onclick="switchSection('elasticsearch')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl dark:bg-slate-800 bg-slate-100 dark:text-slate-300 text-slate-600 font-bold text-sm transition-all">← Elasticsearch</button>
+          <button onclick="switchSection('playbook')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-play/10 border border-play/30 text-play font-bold text-sm hover:bg-play/20 transition-all">Playbooks →</button>
+        </div>
+      </section>
+
+      <!-- ── PLAYBOOK ── -->
+      <section id="sec-playbook" class="section-fade hidden">
+        <div class="flex items-start justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-play bg-play/10 border border-play/20 rounded-full px-3 py-1 mb-3">▶️ Part 5</div>
+            <h1 class="font-heading text-4xl font-extrabold dark:text-white text-slate-900 leading-tight">Playbooks & Execution</h1>
+            <div class="w-12 h-1 bg-play rounded-full mt-3"></div>
+          </div>
+          <button onclick="openModal('play-info')" class="more-btn px-4 py-2 rounded-xl bg-play/10 border border-play/30 text-play text-sm font-bold hover:bg-play/20">💡 More Info</button>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-play/20 text-play text-xs font-bold flex items-center justify-center">1</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Master Playbook (site.yml)</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body open">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-play uppercase tracking-wider">yaml</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-yaml"># site.yml
+---
+- name: Deploy ZooKeeper cluster
+  hosts: zookeeper
+  become: yes
+  roles:
+    - role: zookeeper
+  tags: [zookeeper]
+
+- name: Deploy ETL workers
+  hosts: etl_workers
+  become: yes
+  roles:
+    - role: etl_app
+  tags: [etl]</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-play/20 text-play text-xs font-bold flex items-center justify-center">2</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Rolling Upgrade Playbook</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-play uppercase tracking-wider">yaml</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-yaml"># upgrade_zookeeper.yml
+---
+- name: Rolling ZooKeeper upgrade
+  hosts: zookeeper
+  become: yes
+  serial: 1             # one node at a time
+  max_fail_percentage: 0
+
+  pre_tasks:
+    - name: Wait for quorum before upgrading
+      command: >
+        {{ zookeeper_install_dir }}/bin/zkServer.sh status
+      register: zk_status
+      until: >
+        'Mode: follower' in zk_status.stdout or
+        'Mode: leader'   in zk_status.stdout
+      retries: 10
+      delay: 5
+
+  roles:
+    - role: zookeeper
+      vars:
+        zookeeper_version: "{{ new_zk_version }}"
+
+  post_tasks:
+    - name: Verify ZooKeeper is healthy post-upgrade
+      wait_for:
+        port: "{{ zookeeper_client_port }}"
+        timeout: 30</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-play/20 text-play text-xs font-bold flex items-center justify-center">3</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Essential Ansible Commands</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-play uppercase tracking-wider">bash</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-bash"># Ping all hosts
+ansible all -m ping
+
+# Dry-run full playbook
+ansible-playbook site.yml --check --diff
+
+# Run only ETL tags
+ansible-playbook site.yml --tags etl
+
+# Target a single host
+ansible-playbook site.yml --limit etl1.example.com
+
+# Override variable at runtime
+ansible-playbook site.yml -e "etl_batch_size=1000"
+
+# Check ZooKeeper status on all ZK nodes
+ansible zookeeper -m shell \
+  -a "/opt/zookeeper/bin/zkServer.sh status"
+
+# Tail ETL worker logs
+ansible etl_workers -m shell \
+  -a "tail -n 50 /var/log/etl/worker-1.log"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between mt-6">
+          <button onclick="switchSection('etl')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl dark:bg-slate-800 bg-slate-100 dark:text-slate-300 text-slate-600 font-bold text-sm transition-all">← ETL App</button>
+          <button onclick="switchSection('javascript')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-js/10 border border-js/30 text-js font-bold text-sm hover:bg-js/20 transition-all">JS Automation →</button>
+        </div>
+      </section>
+
+      <!-- ── JAVASCRIPT ── -->
+      <section id="sec-javascript" class="section-fade hidden">
+        <div class="flex items-start justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-js bg-js/10 border border-js/20 rounded-full px-3 py-1 mb-3">🟨 Part 6</div>
+            <h1 class="font-heading text-4xl font-extrabold dark:text-white text-slate-900 leading-tight">JavaScript Automation</h1>
+            <div class="w-12 h-1 bg-js rounded-full mt-3"></div>
+            <p class="dark:text-slate-400 text-slate-500 mt-2 text-sm">Use Node.js to trigger Ansible, query Elasticsearch, and interact with ZooKeeper from your CI/CD pipeline or monitoring tools.</p>
+          </div>
+          <button onclick="openModal('js-info')" class="more-btn px-4 py-2 rounded-xl bg-js/10 border border-js/30 text-js text-sm font-bold hover:bg-js/20">💡 More Info</button>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-js/20 text-js text-xs font-bold flex items-center justify-center">1</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Trigger Ansible Playbook from Node.js</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body open">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-js uppercase tracking-wider">javascript</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-javascript">// deploy.js — trigger Ansible from Node.js CI
+const { execFile } = require('child_process');
+const path = require('path');
+
+/**
+ * Run an Ansible playbook programmatically.
+ * @param {string} playbook - path to .yml playbook
+ * @param {object} options  - extra vars, tags, limit
+ */
+function runPlaybook(playbook, options = {}) {
+  return new Promise((resolve, reject) => {
+    const args = [playbook];
+
+    if (options.extraVars) {
+      args.push('-e', JSON.stringify(options.extraVars));
+    }
+    if (options.tags) {
+      args.push('--tags', options.tags.join(','));
+    }
+    if (options.limit) {
+      args.push('--limit', options.limit);
+    }
+    if (process.env.VAULT_PASSWORD_FILE) {
+      args.push('--vault-password-file',
+                process.env.VAULT_PASSWORD_FILE);
+    }
+
+    const proc = execFile('ansible-playbook', args, {
+      cwd: path.resolve(__dirname, '../ansible'),
+      env: { ...process.env, ANSIBLE_FORCE_COLOR: '1' },
+    });
+
+    proc.stdout.on('data', d => process.stdout.write(d));
+    proc.stderr.on('data', d => process.stderr.write(d));
+
+    proc.on('close', code => {
+      code === 0
+        ? resolve({ success: true, code })
+        : reject(new Error(`Playbook exited with code ${code}`));
+    });
+  });
+}
+
+// Usage: deploy only ETL workers with increased batch size
+runPlaybook('site.yml', {
+  tags: ['etl'],
+  extraVars: { etl_batch_size: 2000 },
+})
+  .then(() => console.log('✅ ETL deployment complete'))
+  .catch(err => { console.error('❌', err.message); process.exit(1); });</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-js/20 text-js text-xs font-bold flex items-center justify-center">2</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">Query Elasticsearch with Node.js</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-js uppercase tracking-wider">javascript</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-javascript">// es-client.js — Elasticsearch scroll consumer
+const { Client } = require('@elastic/elasticsearch');
+
+const es = new Client({
+  nodes: ['https://es1.example.com:9200',
+          'https://es2.example.com:9200'],
+  auth: {
+    username: process.env.ES_USER,
+    password: process.env.ES_PASS,
+  },
+  tls: { ca: require('fs').readFileSync('/etc/ssl/es-ca.crt') },
+});
+
+/**
+ * Async generator: scroll through all matching docs.
+ */
+async function* scrollDocs(index, query, batchSize = 500) {
+  const { body: init } = await es.search({
+    index,
+    scroll: '2m',
+    size: batchSize,
+    body: query,
+  });
+
+  let scrollId = init._scroll_id;
+  let hits = init.hits.hits;
+
+  while (hits.length > 0) {
+    yield hits;
+    const { body: next } = await es.scroll({
+      scroll_id: scrollId,
+      scroll: '2m',
+    });
+    scrollId = next._scroll_id;
+    hits = next.hits.hits;
+  }
+
+  await es.clearScroll({ body: { scroll_id: scrollId } });
+}
+
+// Example: count events by type over last 24 hours
+async function aggregateByType() {
+  const query = {
+    query: {
+      range: {
+        '@timestamp': { gte: 'now-1d', lt: 'now' },
+      },
+    },
+  };
+
+  const counts = {};
+  for await (const batch of scrollDocs('events-*', query)) {
+    for (const hit of batch) {
+      const type = hit._source.event_type ?? 'unknown';
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+  }
+  console.table(counts);
+}
+
+aggregateByType().catch(console.error);</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-js/20 text-js text-xs font-bold flex items-center justify-center">3</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">ZooKeeper Client in Node.js</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-js uppercase tracking-wider">javascript</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-javascript">// zk-monitor.js — watch ETL worker partitions
+const zookeeper = require('node-zookeeper-client');
+
+const ZK_HOSTS = 'zk1:2181,zk2:2181,zk3:2181';
+const ETL_ROOT = '/etl/workers';
+
+const client = zookeeper.createClient(ZK_HOSTS, {
+  sessionTimeout: 10000,
+  retries: 3,
+});
+
+function watchPartitions() {
+  client.getChildren(
+    ETL_ROOT,
+    // Watcher fires on any children change
+    event => {
+      console.log(`[ZK] ${event.type} on ${event.path}`);
+      watchPartitions(); // re-register watcher
+    },
+    (err, children) => {
+      if (err) {
+        console.error('[ZK] Error:', err);
+        return;
+      }
+      console.log(
+        `[ZK] Active partitions (${children.length}):`,
+        children.sort()
+      );
+    }
+  );
+}
+
+client.once('connected', () => {
+  console.log('[ZK] Connected to', ZK_HOSTS);
+  watchPartitions();
+});
+
+client.connect();
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  client.close();
+  process.exit(0);
+});</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection mb-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-[#0c1118] bg-white overflow-hidden shadow-sm">
+          <button onclick="toggleSub(this)" class="sub-toggle w-full flex justify-between items-center px-5 py-4 hover:dark:bg-slate-800/50 hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-3"><span class="w-6 h-6 rounded bg-js/20 text-js text-xs font-bold flex items-center justify-center">4</span><span class="font-heading font-bold dark:text-slate-100 text-slate-800">package.json — Dependencies</span></div>
+            <svg class="sub-arrow w-4 h-4 dark:text-slate-500 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <div class="sub-body">
+            <div class="px-5 pb-5 pt-1">
+              <div class="code-wrap rounded-xl overflow-hidden border dark:border-slate-700 border-slate-200">
+                <div class="flex items-center justify-between px-4 py-2 dark:bg-slate-900 bg-slate-100 border-b dark:border-slate-700 border-slate-200">
+                  <span class="text-xs font-bold font-mono text-js uppercase tracking-wider">json</span>
+                  <button class="copy-btn text-xs px-2.5 py-1 rounded-md dark:bg-slate-700 bg-slate-200 dark:text-slate-300 text-slate-600 font-mono" onclick="copyCode(this)">Copy</button>
+                </div>
+                <pre><code class="language-json">{
+  "name": "etl-automation",
+  "version": "1.0.0",
+  "scripts": {
+    "deploy": "node deploy.js",
+    "monitor": "node zk-monitor.js",
+    "query": "node es-client.js"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.12.0",
+    "node-zookeeper-client": "^1.1.3"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-start mt-6">
+          <button onclick="switchSection('playbook')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl dark:bg-slate-800 bg-slate-100 dark:text-slate-300 text-slate-600 font-bold text-sm transition-all">← Playbooks</button>
+        </div>
+      </section>
+
+    </div><!-- /max-w -->
+  </main>
+</div><!-- /flex -->
+
+<!-- ══════════════════ MODAL ══════════════════ -->
+<div id="modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm opacity-0 pointer-events-none">
+  <div id="modal-box" class="relative w-full max-w-lg dark:bg-[#0c1118] bg-white rounded-2xl border dark:border-slate-700 border-slate-200 shadow-2xl opacity-0 -translate-y-4 overflow-hidden">
+    <div id="modal-header" class="px-6 py-4 border-b dark:border-slate-800 border-slate-200 flex items-center justify-between">
+      <h2 id="modal-title" class="font-heading text-lg font-bold dark:text-white text-slate-900"></h2>
+      <button onclick="closeModal()" class="w-7 h-7 flex items-center justify-center rounded-lg dark:bg-slate-800 bg-slate-100 dark:text-slate-400 text-slate-500 hover:dark:bg-slate-700 hover:bg-slate-200 transition-colors text-sm font-bold">✕</button>
+    </div>
+    <div id="modal-body" class="px-6 py-5 max-h-[70vh] overflow-y-auto text-sm dark:text-slate-400 text-slate-600 leading-relaxed space-y-4"></div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// Highlight.js init
+// ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  hljs.highlightAll();
+  updateProgress();
+});
+
+// ──────────────────────────────────────────────
+// Theme toggle
+// ──────────────────────────────────────────────
+let dark = true;
+function toggleTheme() {
+  dark = !dark;
+  document.documentElement.classList.toggle('dark', dark);
+  document.getElementById('theme-label').textContent = dark ? '🌙 Dark Mode' : '☀️ Light Mode';
+  document.getElementById('hljs-dark').disabled = !dark;
+  document.getElementById('hljs-light').disabled = dark;
+  const knob = document.getElementById('toggle-knob');
+  knob.style.right = dark ? '2px' : 'auto';
+  knob.style.left  = dark ? 'auto' : '2px';
+}
+
+// ──────────────────────────────────────────────
+// Section switching
+// ──────────────────────────────────────────────
+const SECTIONS = ['ansible','zookeeper','elasticsearch','etl','playbook','javascript'];
+const NAV_COLORS = { ansible:'text-ansible', zookeeper:'text-zk', elasticsearch:'text-es', etl:'text-etl', playbook:'text-play', javascript:'text-js' };
+const LABELS = { ansible:'Ansible Basics', zookeeper:'ZooKeeper Setup', elasticsearch:'Elasticsearch', etl:'ETL Deployment', playbook:'Playbooks & Run', javascript:'JS Automation' };
+
+function switchSection(id) {
+  SECTIONS.forEach(s => {
+    const sec = document.getElementById('sec-' + s);
+    const nav = document.getElementById('nav-' + s);
+    if (s === id) {
+      sec.classList.remove('hidden');
+      sec.classList.add('section-fade');
+      nav.classList.add('active');
+      // Re-trigger animation
+      sec.style.animation = 'none';
+      sec.offsetHeight;
+      sec.style.animation = '';
+    } else {
+      sec.classList.add('hidden');
+      nav.classList.remove('active');
+    }
+  });
+  document.getElementById('bc-section').textContent = LABELS[id];
+  updateProgress();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (window.innerWidth < 768) closeSidebar();
+}
+
+function updateProgress() {
+  const idx = SECTIONS.findIndex(s => !document.getElementById('sec-' + s).classList.contains('hidden'));
+  const pct = ((idx + 1) / SECTIONS.length) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+// ──────────────────────────────────────────────
+// Accordion subsections
+// ──────────────────────────────────────────────
+function toggleSub(btn) {
+  const body = btn.nextElementSibling;
+  const arrow = btn.querySelector('.sub-arrow');
+  const open = body.classList.toggle('open');
+  arrow.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+}
+
+// ──────────────────────────────────────────────
+// Copy code
+// ──────────────────────────────────────────────
+function copyCode(btn) {
+  const code = btn.closest('.code-wrap').querySelector('code');
+  navigator.clipboard.writeText(code.innerText).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('dark:bg-green-900/40','bg-green-100','dark:text-green-400','text-green-600');
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.classList.remove('dark:bg-green-900/40','bg-green-100','dark:text-green-400','text-green-600');
+    }, 2000);
+  });
+}
+
+// ──────────────────────────────────────────────
+// Sidebar (mobile)
+// ──────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('mob-overlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mob-overlay').classList.remove('show');
+}
+
+// ──────────────────────────────────────────────
+// Modal content
+// ──────────────────────────────────────────────
+const MODALS = {
+  'references': {
+    title: '📚 References & Official Docs',
+    html: `
+      <div class="space-y-3">
+        <p class="text-xs dark:text-slate-500 text-slate-500 uppercase font-bold tracking-wider">Ansible</p>
+        <a href="https://docs.ansible.com/ansible/latest/index.html" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-ansible/40 hover:border-ansible/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-ansible transition-colors text-sm">Ansible Documentation</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">docs.ansible.com — official reference</div></div>
+          <span class="text-ansible opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+        <a href="https://galaxy.ansible.com" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-ansible/40 hover:border-ansible/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-ansible transition-colors text-sm">Ansible Galaxy</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">Community roles & collections</div></div>
+          <span class="text-ansible opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+        <a href="https://docs.ansible.com/ansible/latest/vault_guide/index.html" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-ansible/40 hover:border-ansible/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-ansible transition-colors text-sm">Ansible Vault Guide</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">Encrypting secrets at rest</div></div>
+          <span class="text-ansible opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+
+        <p class="text-xs dark:text-slate-500 text-slate-500 uppercase font-bold tracking-wider pt-2">ZooKeeper</p>
+        <a href="https://zookeeper.apache.org/doc/current/" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-zk/40 hover:border-zk/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-zk transition-colors text-sm">ZooKeeper Documentation</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">Apache ZooKeeper official docs</div></div>
+          <span class="text-zk opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+        <a href="https://kazoo.readthedocs.io/en/latest/" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-zk/40 hover:border-zk/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-zk transition-colors text-sm">Kazoo (Python ZK client)</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">kazoo.readthedocs.io</div></div>
+          <span class="text-zk opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+
+        <p class="text-xs dark:text-slate-500 text-slate-500 uppercase font-bold tracking-wider pt-2">Elasticsearch</p>
+        <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-es/40 hover:border-es/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-es transition-colors text-sm">Elasticsearch Reference</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">elastic.co — official reference</div></div>
+          <span class="text-es opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+        <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-es/40 hover:border-es/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-es transition-colors text-sm">Scroll API</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">Paginating large result sets</div></div>
+          <span class="text-es opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+        <a href="https://www.elastic.co/guide/en/elasticsearch/client/javascript-api/current/index.html" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-es/40 hover:border-es/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-es transition-colors text-sm">ES JavaScript Client</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">@elastic/elasticsearch npm package</div></div>
+          <span class="text-es opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+
+        <p class="text-xs dark:text-slate-500 text-slate-500 uppercase font-bold tracking-wider pt-2">Python Libraries</p>
+        <a href="https://elasticsearch-py.readthedocs.io/" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-etl/40 hover:border-etl/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-etl transition-colors text-sm">elasticsearch-py</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">Official Python Elasticsearch client</div></div>
+          <span class="text-etl opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+        <a href="https://www.npmjs.com/package/node-zookeeper-client" target="_blank" class="flex items-center justify-between p-3 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 hover:dark:border-js/40 hover:border-js/40 group transition-colors">
+          <div><div class="font-semibold dark:text-white text-slate-900 group-hover:text-js transition-colors text-sm">node-zookeeper-client</div><div class="text-xs dark:text-slate-500 text-slate-400 mt-0.5">Node.js ZooKeeper client on npm</div></div>
+          <span class="text-js opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </a>
+      </div>
+    `
+  },
+  'about': {
+    title: 'ℹ️ About This Tutorial',
+    html: `
+      <p>This interactive tutorial covers the full stack for deploying and running a production-grade ETL pipeline orchestrated with Ansible.</p>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200">
+        <div class="text-xs font-bold uppercase tracking-wider dark:text-slate-500 text-slate-400 mb-3">What you'll learn</div>
+        <ul class="space-y-2 text-sm">
+          <li class="flex gap-2"><span class="text-ansible">⚙️</span> Structure Ansible projects with roles, inventory, and Vault</li>
+          <li class="flex gap-2"><span class="text-zk">🦁</span> Deploy a 3-node ZooKeeper cluster with Ansible roles</li>
+          <li class="flex gap-2"><span class="text-es">🔍</span> Configure Elasticsearch as an ETL data source using Scroll API</li>
+          <li class="flex gap-2"><span class="text-etl">🔄</span> Build a Python ETL worker with ZK partition coordination</li>
+          <li class="flex gap-2"><span class="text-play">▶️</span> Run rolling upgrades with zero downtime</li>
+          <li class="flex gap-2"><span class="text-js">🟨</span> Automate deployments and monitoring from Node.js</li>
+        </ul>
+      </div>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200">
+        <div class="text-xs font-bold uppercase tracking-wider dark:text-slate-500 text-slate-400 mb-2">Prerequisites</div>
+        <ul class="space-y-1 text-sm dark:text-slate-400 text-slate-500">
+          <li>• Linux/macOS with Python 3.11+ and Ansible 2.16+</li>
+          <li>• SSH key access to target hosts</li>
+          <li>• Basic YAML and Python familiarity</li>
+          <li>• A running Elasticsearch 8.x cluster</li>
+        </ul>
+      </div>
+    `
+  },
+  'ansible-info': {
+    title: '⚙️ More About Ansible',
+    html: `
+      <p>Ansible is maintained by Red Hat (IBM) and has become the de-facto standard for infrastructure automation. It uses an <strong>agentless push model</strong> — control node SSHes into managed nodes and runs Python modules remotely, then cleans up.</p>
+      <div class="p-4 rounded-xl dark:bg-amber-900/20 bg-amber-50 border dark:border-amber-800/40 border-amber-200 text-sm">
+        <div class="font-bold dark:text-amber-300 text-amber-700 mb-2">💡 Pro Tips</div>
+        <ul class="space-y-1 dark:text-amber-400/80 text-amber-700 text-xs">
+          <li>• Use <code class="dark:bg-amber-900/40 bg-amber-100 px-1 rounded font-mono">--check --diff</code> in CI to catch drift before merging</li>
+          <li>• Keep secrets in Ansible Vault and rotate them with <code class="dark:bg-amber-900/40 bg-amber-100 px-1 rounded font-mono">ansible-vault rekey</code></li>
+          <li>• Use <code class="dark:bg-amber-900/40 bg-amber-100 px-1 rounded font-mono">molecule</code> for role unit testing</li>
+          <li>• Prefer <code class="dark:bg-amber-900/40 bg-amber-100 px-1 rounded font-mono">ansible-lint</code> in your CI pipeline</li>
+        </ul>
+      </div>
+      <p class="text-sm">Ansible 2.16 introduced <strong>event-driven Ansible (EDA)</strong> — reacting to events from monitoring systems to trigger remediation playbooks automatically. Combined with AWX (upstream of Ansible Tower), this enables powerful self-healing infrastructure.</p>
+      <div class="flex gap-2 flex-wrap mt-1">
+        <a href="https://docs.ansible.com" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-ansible/10 border border-ansible/30 text-ansible font-semibold hover:bg-ansible/20 transition-colors">📖 Docs</a>
+        <a href="https://github.com/ansible/ansible" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-ansible/10 border border-ansible/30 text-ansible font-semibold hover:bg-ansible/20 transition-colors">⭐ GitHub</a>
+        <a href="https://www.ansible.com/blog" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-ansible/10 border border-ansible/30 text-ansible font-semibold hover:bg-ansible/20 transition-colors">📰 Blog</a>
+      </div>
+    `
+  },
+  'zk-info': {
+    title: '🦁 More About ZooKeeper',
+    html: `
+      <p>ZooKeeper was originally developed at Yahoo! and is now an Apache top-level project. It provides a filesystem-like tree of <strong>znodes</strong> which can be persistent, ephemeral, or sequential, forming the building blocks for distributed coordination primitives.</p>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-zk text-zk mb-2">Quorum & Leader Election</div>
+        <p class="text-xs dark:text-slate-400 text-slate-500">ZooKeeper requires a <strong>majority quorum</strong> to make progress. With 3 nodes, it can tolerate 1 failure. With 5 nodes, it tolerates 2. Always deploy an <em>odd</em> number of nodes (3 or 5) — adding a 4th node gives no additional fault tolerance.</p>
+      </div>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-zk text-zk mb-2">Alternative: Apache Curator</div>
+        <p class="text-xs dark:text-slate-400 text-slate-500">Apache Curator (used by Kafka, HBase) wraps the raw ZooKeeper client with higher-level recipes: leader election, distributed locks, distributed queues, and service discovery out of the box.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-1">
+        <a href="https://zookeeper.apache.org" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-zk/10 border border-zk/30 text-zk font-semibold hover:bg-zk/20 transition-colors">📖 Official Site</a>
+        <a href="https://curator.apache.org" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-zk/10 border border-zk/30 text-zk font-semibold hover:bg-zk/20 transition-colors">🧪 Apache Curator</a>
+      </div>
+    `
+  },
+  'es-info': {
+    title: '🔍 More About Elasticsearch',
+    html: `
+      <p>Elasticsearch is a distributed search and analytics engine built on Apache Lucene. It stores documents as JSON and provides near-real-time full-text search, aggregations, and geo queries.</p>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-es text-es mb-2">Scroll API vs. Search After</div>
+        <p class="text-xs dark:text-slate-400 text-slate-500 mb-2">The Scroll API (used in this tutorial) keeps a <strong>point-in-time snapshot</strong> of the index and is ideal for large exports. For live-data pagination, prefer <code class="font-mono">search_after</code> with a PIT (Point In Time) token — introduced in ES 7.x — which is more efficient and stateless.</p>
+      </div>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-es text-es mb-2">Index Lifecycle Management (ILM)</div>
+        <p class="text-xs dark:text-slate-400 text-slate-500">Configure ILM policies to automatically roll over, shrink, and delete indices based on age or size. This keeps your ETL source lean and your storage costs predictable.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-1">
+        <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-es/10 border border-es/30 text-es font-semibold hover:bg-es/20 transition-colors">📖 Scroll API</a>
+        <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-es/10 border border-es/30 text-es font-semibold hover:bg-es/20 transition-colors">♻️ ILM</a>
+      </div>
+    `
+  },
+  'etl-info': {
+    title: '🔄 More About ETL Design',
+    html: `
+      <p>This ETL pattern uses ZooKeeper for <strong>competing consumer</strong> coordination — each worker registers an ephemeral node and claims a shard. If a worker dies, its ephemeral node disappears and another worker can claim that shard.</p>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-etl text-etl mb-2">Idempotency</div>
+        <p class="text-xs dark:text-slate-400 text-slate-500">The <code class="font-mono">ON CONFLICT DO NOTHING</code> in the INSERT ensures re-runs are safe. For more complex transformations, add a <code class="font-mono">content_hash</code> column and only update rows when the hash changes.</p>
+      </div>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-etl text-etl mb-2">Observability</div>
+        <p class="text-xs dark:text-slate-400 text-slate-500">Instrument workers with Prometheus metrics (rows processed/s, lag, errors). Expose a <code class="font-mono">/metrics</code> endpoint with <code class="font-mono">prometheus_client</code> and scrape from Grafana for real-time dashboards.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-1">
+        <a href="https://kafka.apache.org" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-etl/10 border border-etl/30 text-etl font-semibold hover:bg-etl/20 transition-colors">🔀 Kafka alternative</a>
+        <a href="https://airflow.apache.org" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-etl/10 border border-etl/30 text-etl font-semibold hover:bg-etl/20 transition-colors">✈️ Apache Airflow</a>
+      </div>
+    `
+  },
+  'play-info': {
+    title: '▶️ More About Running Ansible',
+    html: `
+      <p>In production, Ansible is typically run from a CI/CD pipeline or through <strong>AWX / Ansible Tower</strong> — a web UI that provides RBAC, job scheduling, and centralized logging for all playbook runs.</p>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-play text-play mb-2">GitHub Actions Example</div>
+        <pre class="text-xs dark:text-slate-400 text-slate-500 font-mono whitespace-pre overflow-x-auto">- name: Deploy ETL
+  run: |
+    ansible-playbook site.yml \\
+      --tags etl \\
+      --vault-password-file .vault_pass \\
+      -e "etl_batch_size=1000"</pre>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-1">
+        <a href="https://github.com/ansible/awx" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-play/10 border border-play/30 text-play font-semibold hover:bg-play/20 transition-colors">🏗️ AWX (open-source Tower)</a>
+        <a href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-play/10 border border-play/30 text-play font-semibold hover:bg-play/20 transition-colors">📦 Built-in Modules</a>
+      </div>
+    `
+  },
+  'js-info': {
+    title: '🟨 More About JS Automation',
+    html: `
+      <p>Node.js bridges the gap between developer tooling and infrastructure. From package scripts to CI webhooks, JavaScript lets you trigger, monitor, and react to infrastructure changes without leaving the Node ecosystem.</p>
+      <div class="p-4 rounded-xl dark:bg-slate-900 bg-slate-50 border dark:border-slate-700 border-slate-200 text-sm">
+        <div class="font-bold dark:text-js text-js mb-2">Useful npm packages</div>
+        <ul class="space-y-1 text-xs dark:text-slate-400 text-slate-500 font-mono">
+          <li><span class="dark:text-js text-js">@elastic/elasticsearch</span> — official ES client</li>
+          <li><span class="dark:text-js text-js">node-zookeeper-client</span> — pure-JS ZK client</li>
+          <li><span class="dark:text-js text-js">execa</span> — better child_process for CLI tools</li>
+          <li><span class="dark:text-js text-js">pino</span> — fast structured logging</li>
+          <li><span class="dark:text-js text-js">dotenv</span> — load secrets from .env files</li>
+        </ul>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-1">
+        <a href="https://www.npmjs.com/package/@elastic/elasticsearch" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-js/10 border border-js/30 text-js font-semibold hover:bg-js/20 transition-colors">📦 ES npm client</a>
+        <a href="https://www.npmjs.com/package/node-zookeeper-client" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-js/10 border border-js/30 text-js font-semibold hover:bg-js/20 transition-colors">📦 ZK npm client</a>
+        <a href="https://nodejs.org/docs/latest/api/" target="_blank" class="text-xs px-3 py-1.5 rounded-full bg-js/10 border border-js/30 text-js font-semibold hover:bg-js/20 transition-colors">📖 Node.js API</a>
+      </div>
+    `
+  },
+};
+
+function openModal(id) {
+  const data = MODALS[id];
+  if (!data) return;
+  document.getElementById('modal-title').textContent = data.title;
+  document.getElementById('modal-body').innerHTML = data.html;
+  const overlay = document.getElementById('modal-overlay');
+  const box     = document.getElementById('modal-box');
+  overlay.classList.remove('pointer-events-none');
+  overlay.style.opacity = '1';
+  box.style.opacity = '1';
+  box.style.transform = 'translateY(0)';
+  // Re-highlight any code in modal
+  overlay.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+}
+
+function closeModal() {
+  const overlay = document.getElementById('modal-overlay');
+  const box     = document.getElementById('modal-box');
+  overlay.style.opacity = '0';
+  box.style.opacity = '0';
+  box.style.transform = 'translateY(-16px)';
+  setTimeout(() => overlay.classList.add('pointer-events-none'), 250);
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>
