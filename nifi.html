@@ -208,6 +208,7 @@ nav{position:sticky;top:0;z-index:200;background:var(--b100);border-bottom:2px s
     <a href="#aws-sns" class="nav-link">AWS SNS</a>
     <a href="#nifi-aws" class="nav-link">NiFi + AWS</a>
     <a href="#golang" class="nav-link">Go Custom</a>
+    <a href="#docker-demo" class="nav-link">🐳 Docker Demo</a>
   </div>
 </nav>
 
@@ -1889,466 +1890,513 @@ nav{position:sticky;top:0;z-index:200;background:var(--b100);border-bottom:2px s
 
 
 <!-- ═══════════════════════════ AWS SQS -->
-<section class="section" id="aws-sqs" style="background:var(--aws-light);">
+
+
+<!-- ═══════════════════════════ AWS SNS -->
+
+
+<!-- ═══════════════════════════ NIFI + AWS COMBINED ARCHITECTURE -->
+
+
+
+<!-- ═══════════════════════════ DOCKER DEMO -->
+<section class="section" id="docker-demo" style="background:var(--b100);">
+<div class="container">
+  <div class="sh" style="color:white;">
+    <div class="label" style="color:var(--nifi);">Section 9 — Local Development</div>
+    <h2 style="color:white;">🐳 Docker Compose — Run the Full Stack Locally</h2>
+    <div class="divider" style="background:linear-gradient(90deg,var(--nifi),var(--aws),var(--go));"></div>
+    <p style="color:rgba(255,255,255,.7);margin-top:.9rem;">Spin up NiFi + Kafka + ZooKeeper + LocalStack (AWS emulator) on your laptop in under 5 minutes. No cloud account needed — LocalStack emulates SQS, SNS, and S3 locally.</p>
+  </div>
+
+  <!-- Quick start card -->
+  <div class="card" style="background:var(--b90);border-color:#333;padding:1.5rem;margin-bottom:1.5rem;">
+    <div class="badge b-nifi" style="margin-bottom:.75rem;">⚡ 3-Command Quick Start</div>
+    <div class="code-block" style="margin-bottom:1rem;">
+<span class="cmt"># 1. Create the project folder</span>
+mkdir freshmart-demo && cd freshmart-demo
+
+<span class="cmt"># 2. Download the compose file (or create it below)</span>
+curl -O https://raw.githubusercontent.com/apache/nifi/main/nifi-docker/dockerhub/Dockerfile
+
+<span class="cmt"># 3. Start everything (first run pulls images ~2GB, takes a few minutes)</span>
+docker compose up -d
+
+<span class="cmt"># 4. Wait ~60 seconds for NiFi to start, then open:</span>
+<span class="str">https://localhost:8443/nifi</span>   <span class="cmt"># NiFi canvas (user: admin / pass: freshmart123!)</span>
+<span class="str">http://localhost:8080</span>          <span class="cmt"># Kafka UI — browse topics</span>
+<span class="str">http://localhost:4566</span>          <span class="cmt"># LocalStack — SQS/SNS/S3 endpoint</span>
+    </div>
+    <div class="g2">
+      <div>
+        <div class="badge b-nifi" style="margin-bottom:.5rem;">Services included</div>
+        <ul style="font-size:.85rem;line-height:1.9;color:rgba(255,255,255,.7);padding-left:1.2rem;margin-top:.4rem;">
+          <li>🌊 Apache NiFi 1.24 (HTTPS, single-user)</li>
+          <li>📨 Apache Kafka 3.6 (KRaft mode — no ZooKeeper needed!)</li>
+          <li>🖥️ Kafka UI (browse topics and messages)</li>
+          <li>☁️ LocalStack (emulates SQS, SNS, S3 locally)</li>
+          <li>🔧 LocalStack initializer (creates queues + topics)</li>
+        </ul>
+      </div>
+      <div>
+        <div class="badge b-aws" style="margin-bottom:.5rem;">System requirements</div>
+        <ul style="font-size:.85rem;line-height:1.9;color:rgba(255,255,255,.7);padding-left:1.2rem;margin-top:.4rem;">
+          <li>Docker Desktop 4.x+ (Mac/Windows/Linux)</li>
+          <li>4 GB RAM minimum (8 GB recommended)</li>
+          <li>Docker Compose v2 (included in Docker Desktop)</li>
+          <li>Ports free: 8443, 9092, 8080, 4566</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- docker-compose.yml -->
+  <div class="card" style="background:#0d0d20;border-color:#333;padding:1.5rem;margin-bottom:1.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">
+      <div class="badge b-nifi">📄 docker-compose.yml — Save this file and run <code style="font-size:.8em;">docker compose up -d</code></div>
+    </div>
+    <div class="code-block" style="font-size:.77em;">
+<span class="cmt"># docker-compose.yml — FreshMart Local Demo Stack</span>
+<span class="cmt"># Requires: Docker Desktop 4.x, 4GB+ RAM free</span>
+<span class="kw">version</span>: <span class="str">'3.8'</span>
+
+<span class="kw">services</span>:
+
+  <span class="cmt"># ── APACHE NIFI ────────────────────────────────────────</span>
+  <span class="attr">nifi</span>:
+    <span class="kw">image</span>: <span class="str">apache/nifi:1.24.0</span>
+    <span class="kw">container_name</span>: <span class="str">freshmart-nifi</span>
+    <span class="kw">ports</span>:
+      - <span class="str">"8443:8443"</span>    <span class="cmt"># NiFi HTTPS web UI</span>
+    <span class="kw">environment</span>:
+      SINGLE_USER_CREDENTIALS_USERNAME: <span class="str">admin</span>
+      SINGLE_USER_CREDENTIALS_PASSWORD: <span class="str">freshmart123!</span>
+      <span class="cmt"># Point NiFi's AWS processors at LocalStack instead of real AWS</span>
+      AWS_DEFAULT_REGION: <span class="str">us-east-1</span>
+      AWS_ACCESS_KEY_ID: <span class="str">test</span>           <span class="cmt"># LocalStack accepts any value</span>
+      AWS_SECRET_ACCESS_KEY: <span class="str">test</span>       <span class="cmt"># LocalStack accepts any value</span>
+      NIFI_SENSITIVE_PROPS_KEY: <span class="str">freshmart-demo-key-12chars</span>
+    <span class="kw">volumes</span>:
+      - nifi-data:/opt/nifi/nifi-current/data
+      - nifi-logs:/opt/nifi/nifi-current/logs
+      - nifi-conf:/opt/nifi/nifi-current/conf
+      <span class="cmt"># Mount your Go processor binaries into NiFi:</span>
+      - ./go-processors:/opt/fm/processors
+      <span class="cmt"># Mount sample vendor CSVs for GetFile demos:</span>
+      - ./sample-data:/opt/fm/sample-data
+    <span class="kw">depends_on</span>:
+      kafka: { <span class="kw">condition</span>: service_healthy }
+      localstack: { <span class="kw">condition</span>: service_healthy }
+    <span class="kw">healthcheck</span>:
+      test: [ <span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-fks"</span>, <span class="str">"https://localhost:8443/nifi-api/system-diagnostics"</span> ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    <span class="kw">networks</span>: [ freshmart ]
+
+  <span class="cmt"># ── APACHE KAFKA (KRaft mode — no ZooKeeper needed) ────</span>
+  <span class="attr">kafka</span>:
+    <span class="kw">image</span>: <span class="str">apache/kafka:3.7.0</span>
+    <span class="kw">container_name</span>: <span class="str">freshmart-kafka</span>
+    <span class="kw">ports</span>:
+      - <span class="str">"9092:9092"</span>    <span class="cmt"># Kafka broker (for local producers/consumers)</span>
+    <span class="kw">environment</span>:
+      KAFKA_NODE_ID: <span class="num">1</span>
+      KAFKA_PROCESS_ROLES: <span class="str">broker,controller</span>
+      KAFKA_LISTENERS: <span class="str">PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093</span>
+      KAFKA_ADVERTISED_LISTENERS: <span class="str">PLAINTEXT://kafka:9092</span>
+      KAFKA_CONTROLLER_QUORUM_VOTERS: <span class="str">1@kafka:9093</span>
+      KAFKA_CONTROLLER_LISTENER_NAMES: <span class="str">CONTROLLER</span>
+      KAFKA_INTER_BROKER_LISTENER_NAME: <span class="str">PLAINTEXT</span>
+      KAFKA_LOG_DIRS: <span class="str">/var/kafka-data</span>
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: <span class="str">'true'</span>
+      KAFKA_DEFAULT_REPLICATION_FACTOR: <span class="num">1</span>
+      KAFKA_NUM_PARTITIONS: <span class="num">3</span>
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: <span class="num">1</span>
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: <span class="num">1</span>
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: <span class="num">1</span>
+      CLUSTER_ID: <span class="str">freshmart-local-cluster-01</span>
+    <span class="kw">volumes</span>:
+      - kafka-data:/var/kafka-data
+    <span class="kw">healthcheck</span>:
+      test: [ <span class="str">"CMD"</span>, <span class="str">"/opt/kafka/bin/kafka-broker-api-versions.sh"</span>,
+              <span class="str">"--bootstrap-server"</span>, <span class="str">"kafka:9092"</span> ]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+    <span class="kw">networks</span>: [ freshmart ]
+
+  <span class="cmt"># ── KAFKA UI — browse topics and messages ──────────────</span>
+  <span class="attr">kafka-ui</span>:
+    <span class="kw">image</span>: <span class="str">provectuslabs/kafka-ui:latest</span>
+    <span class="kw">container_name</span>: <span class="str">freshmart-kafka-ui</span>
+    <span class="kw">ports</span>:
+      - <span class="str">"8080:8080"</span>    <span class="cmt"># Open http://localhost:8080</span>
+    <span class="kw">environment</span>:
+      KAFKA_CLUSTERS_0_NAME: <span class="str">freshmart-local</span>
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: <span class="str">kafka:9092</span>
+      DYNAMIC_CONFIG_ENABLED: <span class="str">'true'</span>
+    <span class="kw">depends_on</span>:
+      kafka: { <span class="kw">condition</span>: service_healthy }
+    <span class="kw">networks</span>: [ freshmart ]
+
+  <span class="cmt"># ── LOCALSTACK — emulates AWS SQS, SNS, S3 locally ─────</span>
+  <span class="attr">localstack</span>:
+    <span class="kw">image</span>: <span class="str">localstack/localstack:3.4</span>
+    <span class="kw">container_name</span>: <span class="str">freshmart-localstack</span>
+    <span class="kw">ports</span>:
+      - <span class="str">"4566:4566"</span>    <span class="cmt"># All AWS services on this single port</span>
+    <span class="kw">environment</span>:
+      SERVICES: <span class="str">sqs,sns,s3</span>
+      DEFAULT_REGION: <span class="str">us-east-1</span>
+      DEBUG: <span class="str">'0'</span>
+      DATA_DIR: <span class="str">/var/lib/localstack/data</span>
+    <span class="kw">volumes</span>:
+      - localstack-data:/var/lib/localstack
+      - ./init-aws:/etc/localstack/init/ready.d   <span class="cmt"># auto-setup scripts</span>
+    <span class="kw">healthcheck</span>:
+      test: [ <span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-f"</span>, <span class="str">"http://localhost:4566/_localstack/health"</span> ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    <span class="kw">networks</span>: [ freshmart ]
+
+  <span class="cmt"># ── AWS RESOURCE INITIALIZER — creates queues/topics/buckets</span>
+  <span class="attr">aws-init</span>:
+    <span class="kw">image</span>: <span class="str">amazon/aws-cli:2.15.0</span>
+    <span class="kw">container_name</span>: <span class="str">freshmart-aws-init</span>
+    <span class="kw">depends_on</span>:
+      localstack: { <span class="kw">condition</span>: service_healthy }
+    <span class="kw">environment</span>:
+      AWS_DEFAULT_REGION: <span class="str">us-east-1</span>
+      AWS_ACCESS_KEY_ID: <span class="str">test</span>
+      AWS_SECRET_ACCESS_KEY: <span class="str">test</span>
+      AWS_ENDPOINT_URL: <span class="str">http://localstack:4566</span>
+    <span class="kw">entrypoint</span>: [ <span class="str">"/bin/sh"</span>, <span class="str">"-c"</span> ]
+    <span class="kw">command</span>:
+      - |
+        <span class="fn">echo</span> <span class="str">"⏳ Creating FreshMart AWS resources in LocalStack..."</span>
+
+        <span class="cmt"># SQS Standard Queue</span>
+        aws sqs create-queue           --queue-name freshmart-inventory-updates           --endpoint-url http://localstack:4566
+
+        <span class="cmt"># SQS FIFO Queue (name must end in .fifo)</span>
+        aws sqs create-queue           --queue-name freshmart-urgent-alerts.fifo           --attributes FifoQueue=true,ContentBasedDeduplication=true           --endpoint-url http://localstack:4566
+
+        <span class="cmt"># SQS Dead-Letter Queue</span>
+        aws sqs create-queue           --queue-name freshmart-dlq           --endpoint-url http://localstack:4566
+
+        <span class="cmt"># SNS Topic for product recalls</span>
+        aws sns create-topic           --name freshmart-product-recalls           --endpoint-url http://localstack:4566
+
+        <span class="cmt"># S3 Bucket for data lake</span>
+        aws s3 mb s3://freshmart-data-lake           --endpoint-url http://localstack:4566
+
+        <span class="fn">echo</span> <span class="str">"✅ All FreshMart AWS resources created!"</span>
+        <span class="fn">echo</span> <span class="str">"   SQS queues: freshmart-inventory-updates, freshmart-urgent-alerts.fifo, freshmart-dlq"</span>
+        <span class="fn">echo</span> <span class="str">"   SNS topics: freshmart-product-recalls"</span>
+        <span class="fn">echo</span> <span class="str">"   S3 buckets: freshmart-data-lake"</span>
+    <span class="kw">restart</span>: <span class="str">no</span>
+    <span class="kw">networks</span>: [ freshmart ]
+
+<span class="kw">volumes</span>:
+  nifi-data:
+  nifi-logs:
+  nifi-conf:
+  kafka-data:
+  localstack-data:
+
+<span class="kw">networks</span>:
+  <span class="attr">freshmart</span>:
+    <span class="kw">driver</span>: <span class="str">bridge</span>
+    </div>
+  </div>
+
+  <!-- Config files grid -->
+  <div class="g2" style="margin-bottom:1.5rem;">
+    <!-- NiFi AWS controller config -->
+    <div class="card" style="background:#0d0d20;border-color:#333;padding:1.5rem;">
+      <div class="badge b-aws" style="margin-bottom:.75rem;">⚙️ Configure NiFi to talk to LocalStack</div>
+      <p style="font-size:.84rem;color:rgba(255,255,255,.65);margin-bottom:.75rem;">After NiFi starts, create an AWSCredentialsProviderControllerService in NiFi UI, then configure each AWS processor to use LocalStack's endpoint instead of real AWS:</p>
+      <div class="code-block" style="font-size:.77em;">
+<span class="cmt"># In NiFi UI → Controller Services → Add Service:</span>
+<span class="cmt"># Type: AWSCredentialsProviderControllerService</span>
+<span class="cmt"># Credential Strategy: Access Key</span>
+Access Key ID:     test
+Secret Key:        test
+
+<span class="cmt"># For each AWS processor (PutSQS, GetSQS, PublishSNS, PutS3Object):</span>
+<span class="cmt"># Add this property to override the AWS endpoint:</span>
+Endpoint Override URL: <span class="str">http://localstack:4566</span>
+
+<span class="cmt"># SQS Queue URL format for LocalStack:</span>
+Queue URL: <span class="str">http://localstack:4566/000000000000/freshmart-inventory-updates</span>
+
+<span class="cmt"># SNS Topic ARN format for LocalStack:</span>
+ARN: <span class="str">arn:aws:sns:us-east-1:000000000000:freshmart-product-recalls</span>
+      </div>
+    </div>
+
+    <!-- Kafka topics setup -->
+    <div class="card" style="background:#0d0d20;border-color:#333;padding:1.5rem;">
+      <div class="badge b-blue" style="margin-bottom:.75rem;">📨 Create Kafka Topics (optional — auto-creates on use)</div>
+      <div class="code-block" style="font-size:.77em;">
+<span class="cmt"># Topics are auto-created when first used.</span>
+<span class="cmt"># To create them explicitly with custom settings:</span>
+
+docker exec freshmart-kafka   /opt/kafka/bin/kafka-topics.sh   --bootstrap-server kafka:9092 --create   --topic pos-sales   --partitions 3   --replication-factor 1
+
+docker exec freshmart-kafka   /opt/kafka/bin/kafka-topics.sh   --bootstrap-server kafka:9092 --create   --topic vendor-deliveries   --partitions 3   --replication-factor 1
+
+<span class="cmt"># List all topics:</span>
+docker exec freshmart-kafka   /opt/kafka/bin/kafka-topics.sh   --bootstrap-server kafka:9092 --list
+
+<span class="cmt"># Send a test message:</span>
+echo <span class="str">'{"sku":"BAN-001","qty":100}'</span> |   docker exec -i freshmart-kafka   /opt/kafka/bin/kafka-console-producer.sh   --bootstrap-server kafka:9092   --topic vendor-deliveries
+      </div>
+    </div>
+  </div>
+
+  <!-- Sample data + Verify steps -->
+  <div class="g2" style="margin-bottom:1.5rem;">
+    <div class="card" style="background:#0d0d20;border-color:#333;padding:1.5rem;">
+      <div class="badge b-nifi" style="margin-bottom:.75rem;">📁 Sample Data Files to Test Flows</div>
+      <p style="font-size:.84rem;color:rgba(255,255,255,.65);margin-bottom:.75rem;">Create a <code style="font-size:.8em;">sample-data/</code> folder next to your docker-compose.yml with these test files:</p>
+      <div class="code-block" style="font-size:.77em;">
+<span class="cmt"># sample-data/dole-delivery-2024-03-15.csv</span>
+item_code,qty,unit_price,vendor_id
+DOLE-BAN-001,120,0.32,DOLE
+DOLE-PNA-002,48,1.20,DOLE
+DOLE-STR-010,24,2.50,DOLE
+DEL-APL-001,200,0.65,DEL-MONTE
+DEL-APL-002,150,0.78,DEL-MONTE
+
+<span class="cmt"># sample-data/complaint-001.json</span>
+{
+  <span class="str">"sku"</span>: <span class="str">"DOLE-STR-010"</span>,
+  <span class="str">"complaint"</span>: <span class="str">"Strawberries were moldy"</span>,
+  <span class="str">"severity"</span>: <span class="str">"HIGH"</span>,
+  <span class="str">"complaint_count"</span>: <span class="num">5</span>,
+  <span class="str">"store_id"</span>: <span class="str">"FRESHMART-042"</span>,
+  <span class="str">"timestamp"</span>: <span class="str">"2024-03-15T09:30:00Z"</span>
+}
+      </div>
+    </div>
+    <div class="card" style="background:#0d0d20;border-color:#333;padding:1.5rem;">
+      <div class="badge b-ok" style="margin-bottom:.75rem;">✅ Verify Everything is Running</div>
+      <div class="code-block" style="font-size:.77em;">
+<span class="cmt"># Check all containers are healthy:</span>
+docker compose ps
+
+<span class="cmt"># Expected output:</span>
+<span class="str">freshmart-nifi       running (healthy)</span>
+<span class="str">freshmart-kafka      running (healthy)</span>
+<span class="str">freshmart-kafka-ui   running</span>
+<span class="str">freshmart-localstack running (healthy)</span>
+<span class="str">freshmart-aws-init   exited (0)</span>  <span class="cmt">← normal, it ran once</span>
+
+<span class="cmt"># Verify LocalStack SQS queues were created:</span>
+docker exec freshmart-localstack   awslocal sqs list-queues
+
+<span class="cmt"># Verify S3 bucket:</span>
+docker exec freshmart-localstack   awslocal s3 ls
+
+<span class="cmt"># View NiFi logs:</span>
+docker logs freshmart-nifi -f
+
+<span class="cmt"># Stop everything:</span>
+docker compose down
+
+<span class="cmt"># Stop AND delete all data volumes (clean reset):</span>
+docker compose down -v
+      </div>
+    </div>
+  </div>
+
+  <!-- LocalStack AWS CLI commands -->
+  <div class="card" style="background:#0d0d20;border-color:#333;padding:1.5rem;margin-bottom:1.5rem;">
+    <div class="badge b-aws" style="margin-bottom:.75rem;">☁️ Test SQS + SNS via awslocal CLI (inside LocalStack container)</div>
+    <div class="code-block" style="font-size:.77em;">
+<span class="cmt"># awslocal = aws-cli pre-configured for LocalStack endpoint</span>
+<span class="cmt"># Run these inside the localstack container:</span>
+docker exec -it freshmart-localstack bash
+
+<span class="cmt"># Send a test SQS message:</span>
+awslocal sqs send-message   --queue-url http://localhost:4566/000000000000/freshmart-inventory-updates   --message-body <span class="str">'{"sku":"BAN-CAVENDISH-1LB","qty":5,"alert":"LOW_STOCK"}'</span>
+
+<span class="cmt"># Read it back:</span>
+awslocal sqs receive-message   --queue-url http://localhost:4566/000000000000/freshmart-inventory-updates   --max-number-of-messages 1
+
+<span class="cmt"># Publish an SNS notification:</span>
+awslocal sns publish   --topic-arn arn:aws:sns:us-east-1:000000000000:freshmart-product-recalls   --message <span class="str">'{"event":"PRODUCT_RECALL","sku":"STRAW-PINT-16OZ","severity":"CRITICAL"}'</span>   --subject <span class="str">"RECALL ALERT"</span>
+
+<span class="cmt"># List S3 objects after NiFi archives a file:</span>
+awslocal s3 ls s3://freshmart-data-lake/ --recursive
+    </div>
+  </div>
+
+  <!-- From-zero walkthrough -->
+  <div class="card" style="background:rgba(255,255,255,.04);border-color:var(--nifi);padding:1.5rem;">
+    <div class="badge b-nifi" style="margin-bottom:1rem;">🎯 Complete First-Flow Walkthrough: Vendor CSV → Kafka → SQS</div>
+    <div style="display:flex;flex-direction:column;gap:.9rem;">
+      <div style="display:flex;gap:.9rem;align-items:flex-start;">
+        <div class="step-num step-nifi" style="width:28px;height:28px;font-size:.72rem;flex-shrink:0;">1</div>
+        <div style="font-size:.85rem;color:rgba(255,255,255,.8);">Run <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">docker compose up -d</code> and wait for all services to be healthy (~90 seconds for NiFi).</div>
+      </div>
+      <div style="display:flex;gap:.9rem;align-items:flex-start;">
+        <div class="step-num step-nifi" style="width:28px;height:28px;font-size:.72rem;flex-shrink:0;">2</div>
+        <div style="font-size:.85rem;color:rgba(255,255,255,.8);">Open NiFi at <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">https://localhost:8443/nifi</code> (accept the self-signed cert). Login: <strong>admin</strong> / <strong>freshmart123!</strong></div>
+      </div>
+      <div style="display:flex;gap:.9rem;align-items:flex-start;">
+        <div class="step-num step-nifi" style="width:28px;height:28px;font-size:.72rem;flex-shrink:0;">3</div>
+        <div style="font-size:.85rem;color:rgba(255,255,255,.8);">Drag a <strong>GetFile</strong> processor onto the canvas. Set <em>Input Directory</em> to <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">/opt/fm/sample-data</code> and <em>File Filter</em> to <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">*.csv</code></div>
+      </div>
+      <div style="display:flex;gap:.9rem;align-items:flex-start;">
+        <div class="step-num step-nifi" style="width:28px;height:28px;font-size:.72rem;flex-shrink:0;">4</div>
+        <div style="font-size:.85rem;color:rgba(255,255,255,.8);">Add a <strong>PublishKafka</strong> processor. Set <em>Kafka Brokers</em> to <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">kafka:9092</code> and <em>Topic</em> to <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">vendor-deliveries</code>. Connect GetFile → PublishKafka.</div>
+      </div>
+      <div style="display:flex;gap:.9rem;align-items:flex-start;">
+        <div class="step-num step-nifi" style="width:28px;height:28px;font-size:.72rem;flex-shrink:0;">5</div>
+        <div style="font-size:.85rem;color:rgba(255,255,255,.8);">Add a <strong>PutSQS</strong> processor. Set <em>Queue URL</em> to <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">http://localstack:4566/000000000000/freshmart-inventory-updates</code> and <em>Endpoint Override URL</em> to <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">http://localstack:4566</code>. Connect PublishKafka (success) → PutSQS.</div>
+      </div>
+      <div style="display:flex;gap:.9rem;align-items:flex-start;">
+        <div class="step-num step-nifi" style="width:28px;height:28px;font-size:.72rem;flex-shrink:0;">6</div>
+        <div style="font-size:.85rem;color:rgba(255,255,255,.8);">Right-click canvas → <strong>Start All</strong>. Drop the sample CSV into <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">./sample-data/</code> and watch the flow process it! Check Kafka UI at <code style="font-size:.8em;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px;">http://localhost:8080</code> and verify the message appeared in the SQS queue.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════ OFFICIAL DOCS REFERENCE -->
+<section class="section" id="docs-ref" style="background:#fff;">
 <div class="container">
   <div class="sh">
-    <div class="label" style="color:var(--aws-dark);">Section 5 — Amazon SQS</div>
-    <h2>📬 Amazon SQS: The Deli Counter Queue</h2>
-    <div class="divider"></div>
-    <p style="color:#555;max-width:680px;margin:0 auto;">SQS (Simple Queue Service) is AWS's fully managed message queue — like a <strong>numbered ticket system at the deli counter</strong>. Take a ticket, your order waits safely in line, the deli worker processes exactly one order at a time. Messages are never lost, even if consumers crash mid-processing.</p>
+    <div class="label" style="color:var(--b70);">Section 10 — Documentation</div>
+    <h2>📚 Official Documentation Reference</h2>
+    <div class="divider" style="background:linear-gradient(90deg,var(--nifi),var(--b60),var(--aws),var(--go));"></div>
+    <p style="margin-top:.9rem;color:#555;">All documentation links in one place — organized by technology. All links open the official source.</p>
   </div>
 
   <div class="g3" style="margin-bottom:1.5rem;">
-    <div class="card card-aws">
-      <div style="font-size:2rem;margin-bottom:.5rem;">📋</div>
-      <div class="badge b-aws" style="margin-bottom:.5rem;">Standard Queue</div>
-      <p style="font-size:.85rem;line-height:1.65;margin-bottom:.75rem;">Nearly unlimited throughput. Messages may arrive <strong>out of order</strong> or be delivered <strong>more than once</strong> (at-least-once delivery). Perfect for FreshMart inventory updates where processing speed matters more than strict ordering.</p>
-      <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('sqs-standard')">Standard details</button>
-    </div>
-    <div class="card card-aws">
-      <div style="font-size:2rem;margin-bottom:.5rem;">🎯</div>
-      <div class="badge b-aws" style="margin-bottom:.5rem;">FIFO Queue</div>
-      <p style="font-size:.85rem;line-height:1.65;margin-bottom:.75rem;">Guaranteed <strong>first-in, first-out ordering</strong> plus <strong>exactly-once processing</strong>. Required for vendor payment processing — paying invoice #2 before #1 would be catastrophic. Queue name must end in <code style="font-size:.78rem;">.fifo</code></p>
-      <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('sqs-fifo')">FIFO details</button>
-    </div>
-    <div class="card card-aws">
-      <div style="font-size:2rem;margin-bottom:.5rem;">⚰️</div>
-      <div class="badge b-red" style="margin-bottom:.5rem;">Dead-Letter Queue (DLQ)</div>
-      <p style="font-size:.85rem;line-height:1.65;margin-bottom:.75rem;">After a message fails processing N times (typically 3–5), SQS moves it to a Dead-Letter Queue for investigation. Like the unclaimed deli orders set aside at closing — nothing is ever thrown away, just parked for review.</p>
-      <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('sqs-dlq')">DLQ details</button>
-    </div>
-  </div>
-
-  <!-- SQS Architecture Diagram -->
-  <div class="diagram-wrap" style="margin-bottom:1.5rem;">
-    <svg viewBox="0 0 880 295" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
-      <rect width="880" height="295" fill="white" rx="8"/>
-      <text x="440" y="20" fill="#555" font-size="10" text-anchor="middle" font-style="italic">FreshMart SQS Architecture — 4 Queues, Multiple Producers and Consumers</text>
-      <defs>
-        <marker id="sqa" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#ff9900"/></marker>
-        <marker id="sqe" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#da1e28"/></marker>
-        <marker id="sqg" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#42be65"/></marker>
-      </defs>
-      <!-- Producers -->
-      <rect x="14" y="38" width="130" height="30" rx="4" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
-      <text x="79" y="57" fill="#002d9c" font-size="8.5" font-weight="700" text-anchor="middle">NiFi PutSQS</text>
-      <rect x="14" y="76" width="130" height="30" rx="4" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
-      <text x="79" y="95" fill="#002d9c" font-size="8.5" font-weight="700" text-anchor="middle">Go Microservice</text>
-      <rect x="14" y="114" width="130" height="30" rx="4" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
-      <text x="79" y="133" fill="#002d9c" font-size="8.5" font-weight="700" text-anchor="middle">Kafka Consumer</text>
-      <rect x="14" y="152" width="130" height="30" rx="4" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
-      <text x="79" y="171" fill="#002d9c" font-size="8.5" font-weight="700" text-anchor="middle">AWS Lambda</text>
-      <!-- Arrows -->
-      <path d="M144 53 L226 95" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <path d="M144 91 L226 118" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <path d="M144 129 L226 146" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <path d="M144 167 L226 172" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <!-- SQS Block -->
-      <rect x="226" y="30" width="320" height="228" rx="8" fill="#fffbf0" stroke="#ff9900" stroke-width="2"/>
-      <text x="386" y="50" fill="#c77800" font-size="11" font-weight="700" text-anchor="middle">Amazon SQS</text>
-      <rect x="240" y="58" width="292" height="38" rx="4" fill="white" stroke="#ff9900" stroke-width="1.5"/>
-      <text x="386" y="73" fill="#333" font-size="8.5" font-weight="700" text-anchor="middle">freshmart-inventory-updates</text>
-      <text x="386" y="87" fill="#888" font-size="7.5" text-anchor="middle">Standard · 4-day retention · 256 KB max · ~200 msg/min</text>
-      <rect x="240" y="104" width="292" height="38" rx="4" fill="white" stroke="#ff9900" stroke-width="1.5"/>
-      <text x="386" y="119" fill="#333" font-size="8.5" font-weight="700" text-anchor="middle">freshmart-urgent-alerts.fifo</text>
-      <text x="386" y="133" fill="#888" font-size="7.5" text-anchor="middle">FIFO · Exactly-once · Manager mobile app · 3,000/s max</text>
-      <rect x="240" y="150" width="292" height="38" rx="4" fill="white" stroke="#ff9900" stroke-width="1.5"/>
-      <text x="386" y="165" fill="#333" font-size="8.5" font-weight="700" text-anchor="middle">freshmart-vendor-payments.fifo</text>
-      <text x="386" y="179" fill="#888" font-size="7.5" text-anchor="middle">FIFO · Ordered · Finance system · Dedup ID required</text>
-      <rect x="240" y="196" width="292" height="38" rx="4" fill="#fff1f1" stroke="#da1e28" stroke-width="1.5" stroke-dasharray="5 3"/>
-      <text x="386" y="211" fill="#750e13" font-size="8.5" font-weight="700" text-anchor="middle">freshmart-dlq (Dead Letter Queue)</text>
-      <text x="386" y="225" fill="#888" font-size="7.5" text-anchor="middle">Failed after 5 retries → CloudWatch alert → Engineering on-call</text>
-      <!-- Arrows to consumers -->
-      <path d="M546 77 L616 77" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <path d="M546 123" stroke="#ff9900" stroke-width="0" fill="none"/>
-      <path d="M546 123 L616 123" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <path d="M546 169 L616 169" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#sqa)"/>
-      <path d="M546 215 L616 215" stroke="#da1e28" stroke-width="1.5" fill="none" marker-end="url(#sqe)"/>
-      <!-- Consumers -->
-      <rect x="616" y="58" width="152" height="38" rx="4" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
-      <text x="692" y="73" fill="#044317" font-size="8.5" font-weight="700" text-anchor="middle">Inventory Service</text>
-      <text x="692" y="87" fill="#555" font-size="7.5" text-anchor="middle">Long poll 20s · process &amp; delete</text>
-      <rect x="616" y="104" width="152" height="38" rx="4" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
-      <text x="692" y="119" fill="#044317" font-size="8.5" font-weight="700" text-anchor="middle">Manager Mobile App</text>
-      <text x="692" y="133" fill="#555" font-size="7.5" text-anchor="middle">iOS/Android push notification</text>
-      <rect x="616" y="150" width="152" height="38" rx="4" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
-      <text x="692" y="165" fill="#044317" font-size="8.5" font-weight="700" text-anchor="middle">Finance AP System</text>
-      <text x="692" y="179" fill="#555" font-size="7.5" text-anchor="middle">Ordered payment processing</text>
-      <rect x="616" y="196" width="152" height="38" rx="4" fill="#fff1f1" stroke="#da1e28" stroke-width="1.5"/>
-      <text x="692" y="211" fill="#750e13" font-size="8.5" font-weight="700" text-anchor="middle">CloudWatch Alarm</text>
-      <text x="692" y="225" fill="#555" font-size="7.5" text-anchor="middle">On-call engineer paged</text>
-      <text x="79" y="258" fill="#555" font-size="9" text-anchor="middle">PRODUCERS</text>
-      <text x="386" y="276" fill="#c77800" font-size="9" text-anchor="middle">SQS — fully managed by AWS</text>
-      <text x="692" y="258" fill="#555" font-size="9" text-anchor="middle">CONSUMERS</text>
-    </svg>
-  </div>
-
-  <!-- Go SQS Code Examples -->
-  <div class="g2">
-    <div class="card">
-      <div class="badge b-aws" style="margin-bottom:.75rem;">Go — Send message to SQS</div>
-      <div class="code-block">
-<span class="kw">package</span> main
-
-<span class="kw">import</span> (
-  <span class="str">"context"</span>; <span class="str">"fmt"</span>
-  <span class="str">"github.com/aws/aws-sdk-go-v2/aws"</span>
-  <span class="str">"github.com/aws/aws-sdk-go-v2/config"</span>
-  <span class="str">"github.com/aws/aws-sdk-go-v2/service/sqs"</span>
-  <span class="str">"github.com/aws/aws-sdk-go-v2/service/sqs/types"</span>
-)
-
-<span class="kw">func</span> <span class="fn">SendInventoryAlert</span>(sku <span class="type">string</span>, qty <span class="type">int</span>) <span class="type">error</span> {
-  cfg, _ := config.<span class="fn">LoadDefaultConfig</span>(context.<span class="fn">TODO</span>())
-  client := sqs.<span class="fn">NewFromConfig</span>(cfg)
-
-  qURL := <span class="str">"https://sqs.us-east-1.amazonaws.com/123456789012/freshmart-inventory-updates"</span>
-
-  _, err := client.<span class="fn">SendMessage</span>(context.<span class="fn">TODO</span>(),
-    &sqs.SendMessageInput{
-      QueueUrl: &qURL,
-      MessageBody: aws.<span class="fn">String</span>(fmt.<span class="fn">Sprintf</span>(
-        <span class="str">`{"sku":"%s","qty":%d,"alert":"LOW_STOCK","store":"FM-042"}`</span>,
-        sku, qty)),
-      <span class="cmt">// Attributes for filtering and tracing</span>
-      MessageAttributes: <span class="kw">map</span>[<span class="type">string</span>]types.MessageAttributeValue{
-        <span class="str">"store_id"</span>: {
-          DataType: aws.<span class="fn">String</span>(<span class="str">"String"</span>),
-          StringValue: aws.<span class="fn">String</span>(<span class="str">"FRESHMART-042"</span>),
-        },
-        <span class="str">"alert_type"</span>: {
-          DataType: aws.<span class="fn">String</span>(<span class="str">"String"</span>),
-          StringValue: aws.<span class="fn">String</span>(<span class="str">"LOW_STOCK"</span>),
-        },
-      },
-    })
-  <span class="kw">return</span> err
-}
+    <!-- NiFi Docs -->
+    <div class="card card-nifi" style="padding:1.5rem;">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;">
+        <span style="font-size:1.5rem;">🌊</span>
+        <div class="badge b-nifi">Apache NiFi</div>
       </div>
-      <button class="btn btn-aws" style="margin-top:.75rem;font-size:.72rem;" onclick="openModal('sqs-go-send')">Full SQS Go example</button>
-    </div>
-    <div class="card">
-      <div class="badge b-aws" style="margin-bottom:.75rem;">Go — Long-poll receive + process + delete</div>
-      <div class="code-block">
-<span class="kw">func</span> <span class="fn">PollQueue</span>(client *sqs.Client, qURL <span class="type">string</span>) {
-  <span class="kw">for</span> {
-    <span class="cmt">// Long polling: wait up to 20s for messages</span>
-    <span class="cmt">// Reduces empty polls by ~95%, cuts API costs 80%</span>
-    out, err := client.<span class="fn">ReceiveMessage</span>(
-      context.<span class="fn">TODO</span>(),
-      &sqs.ReceiveMessageInput{
-        QueueUrl:            &qURL,
-        MaxNumberOfMessages: <span class="num">10</span>,
-        WaitTimeSeconds:     <span class="num">20</span>,  <span class="cmt">// long poll</span>
-        VisibilityTimeout:   <span class="num">30</span>,  <span class="cmt">// lock msg 30s</span>
-        MessageAttributeNames: []<span class="type">string</span>{<span class="str">"All"</span>},
-      })
-    <span class="kw">if</span> err != <span class="kw">nil</span> { log.<span class="fn">Println</span>(err); <span class="kw">continue</span> }
-
-    <span class="kw">for</span> _, msg := <span class="kw">range</span> out.Messages {
-      <span class="cmt">// Process the message body</span>
-      err := <span class="fn">processAlert</span>(*msg.Body)
-      <span class="kw">if</span> err != <span class="kw">nil</span> {
-        log.<span class="fn">Printf</span>(<span class="str">"failed: %v"</span>, err)
-        <span class="cmt">// Don't delete — message returns to queue</span>
-        <span class="cmt">// after VisibilityTimeout. After maxReceiveCount</span>
-        <span class="cmt">// failures it moves to the DLQ automatically.</span>
-        <span class="kw">continue</span>
-      }
-      <span class="cmt">// Delete ONLY after successful processing</span>
-      client.<span class="fn">DeleteMessage</span>(context.<span class="fn">TODO</span>(),
-        &sqs.DeleteMessageInput{
-          QueueUrl:      &qURL,
-          ReceiptHandle: msg.ReceiptHandle,
-        })
-    }
-  }
-}
-      </div>
-      <button class="btn btn-aws" style="margin-top:.75rem;font-size:.72rem;" onclick="openModal('sqs-long-poll')">Why long polling?</button>
-    </div>
-  </div>
-</div>
-</section>
-
-<!-- ═══════════════════════════ AWS SNS -->
-<section class="section" id="aws-sns" style="background:#fff;">
-<div class="container">
-  <div class="sh">
-    <div class="label" style="color:var(--aws-dark);">Section 6 — Amazon SNS</div>
-    <h2>📣 Amazon SNS: The Store PA System</h2>
-    <div class="divider"></div>
-    <p style="color:#555;max-width:680px;margin:0 auto;">SNS (Simple Notification Service) is a <strong>publish-once, broadcast-to-many</strong> system. One product recall announcement simultaneously reaches SMS, email, SQS queues, Lambda functions, and Kafka — like FreshMart's PA system reaching every aisle at once.</p>
-  </div>
-
-  <!-- SNS Fan-out Architecture SVG -->
-  <div class="diagram-wrap" style="margin-bottom:1.5rem;">
-    <svg viewBox="0 0 840 310" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
-      <rect width="840" height="310" fill="white" rx="8"/>
-      <defs><marker id="snsa" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#ff9900"/></marker></defs>
-      <text x="420" y="20" fill="#555" font-size="10" text-anchor="middle" font-style="italic">FreshMart SNS Fan-out — Product Recall: One Publish → Five Simultaneous Subscribers</text>
-      <!-- Publisher box -->
-      <rect x="18" y="105" width="148" height="95" rx="7" fill="#fff8ec" stroke="#ff9900" stroke-width="2"/>
-      <text x="92" y="130" fill="#c77800" font-size="9.5" font-weight="700" text-anchor="middle">NiFi / Go Service</text>
-      <text x="92" y="147" fill="#555" font-size="8" text-anchor="middle">PublishSNS processor</text>
-      <text x="92" y="162" fill="#888" font-size="7.5" text-anchor="middle">SKU: STRAW-PINT-16OZ</text>
-      <text x="92" y="176" fill="#888" font-size="7.5" text-anchor="middle">severity: RECALL</text>
-      <text x="92" y="190" fill="#888" font-size="7.5" text-anchor="middle">store: FRESHMART-042</text>
-      <path d="M166 152 L246 152" stroke="#ff9900" stroke-width="2.5" fill="none" marker-end="url(#snsa)"/>
-      <text x="205" y="145" fill="#ff9900" font-size="8.5" text-anchor="middle">1 publish</text>
-      <!-- SNS Topic box -->
-      <rect x="246" y="92" width="175" height="120" rx="8" fill="#fff8ec" stroke="#ff9900" stroke-width="2.5"/>
-      <text x="333" y="118" fill="#c77800" font-size="11" font-weight="700" text-anchor="middle">SNS Topic</text>
-      <text x="333" y="134" fill="#555" font-size="8.5" text-anchor="middle">freshmart-product-recalls</text>
-      <rect x="260" y="142" width="146" height="22" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="333" y="156.5" fill="#888" font-size="7.5" text-anchor="middle">5 active subscriptions</text>
-      <rect x="260" y="170" width="146" height="22" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="333" y="184.5" fill="#888" font-size="7.5" text-anchor="middle">Filter: store_id=FM-042</text>
-      <!-- Fan-out lines -->
-      <path d="M421 115 L500 55" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#snsa)"/>
-      <path d="M421 132 L500 110" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#snsa)"/>
-      <path d="M421 152 L500 165" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#snsa)"/>
-      <path d="M421 170 L500 220" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#snsa)"/>
-      <path d="M421 185 L500 275" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#snsa)"/>
-      <!-- 5 subscriber boxes -->
-      <rect x="500" y="32" width="185" height="42" rx="5" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
-      <text x="592" y="51" fill="#044317" font-size="8.5" font-weight="700" text-anchor="middle">📱 SMS → Store Manager</text>
-      <text x="592" y="65" fill="#555" font-size="7.5" text-anchor="middle">+1-555-FM-MGMT · instant ≈ 1 sec</text>
-      <rect x="500" y="84" width="185" height="42" rx="5" fill="#defbe6" stroke="#198038" stroke-width="1.5"/>
-      <text x="592" y="103" fill="#044317" font-size="8.5" font-weight="700" text-anchor="middle">📧 Email → Vendor Contact</text>
-      <text x="592" y="117" fill="#555" font-size="7.5" text-anchor="middle">vendor@dole.com · SES ≈ 2 sec</text>
-      <rect x="500" y="141" width="185" height="42" rx="5" fill="#fff8ec" stroke="#ff9900" stroke-width="1.5"/>
-      <text x="592" y="160" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">📬 SQS → Manager App</text>
-      <text x="592" y="174" fill="#555" font-size="7.5" text-anchor="middle">urgent-alerts.fifo · ≈ 500ms</text>
-      <rect x="500" y="196" width="185" height="42" rx="5" fill="#f6f2ff" stroke="#6929c4" stroke-width="1.5"/>
-      <text x="592" y="215" fill="#6929c4" font-size="8.5" font-weight="700" text-anchor="middle">λ Lambda → Clear Shelf Signs</text>
-      <text x="592" y="229" fill="#555" font-size="7.5" text-anchor="middle">Updates display fleet · ≈ 200ms</text>
-      <rect x="500" y="251" width="185" height="42" rx="5" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5"/>
-      <text x="592" y="270" fill="#002d9c" font-size="8.5" font-weight="700" text-anchor="middle">📨 Kafka → NiFi Audit Log</text>
-      <text x="592" y="284" fill="#555" font-size="7.5" text-anchor="middle">product-recalls topic · audit trail</text>
-      <!-- Labels -->
-      <text x="92" y="256" fill="#555" font-size="9" text-anchor="middle">PUBLISHER (1)</text>
-      <text x="333" y="268" fill="#c77800" font-size="9" text-anchor="middle">SNS TOPIC (fan-out)</text>
-      <text x="592" y="302" fill="#555" font-size="9" text-anchor="middle">SUBSCRIBERS (5 at once)</text>
-    </svg>
-  </div>
-
-  <div class="g2">
-    <div class="card">
-      <div class="badge b-aws" style="margin-bottom:.75rem;">📣 SNS vs SQS — Know the Difference</div>
-      <div style="display:flex;flex-direction:column;gap:.75rem;">
-        <div style="display:flex;gap:.75rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">📣</span>
-          <div style="font-size:.85rem;"><strong>SNS = One publisher, many subscribers.</strong> Publish once — every subscriber gets a copy instantly. Like the store PA: one announcement, every aisle hears it. Use when multiple systems need to react to the same event simultaneously.</div>
-        </div>
-        <div style="display:flex;gap:.75rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">📬</span>
-          <div style="font-size:.85rem;"><strong>SQS = Queue for one consumer.</strong> Each message is processed by exactly one consumer. Like the deli ticket — one worker, one order. Use when exactly ONE system should handle each message.</div>
-        </div>
-        <div style="display:flex;gap:.75rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">🤝</span>
-          <div style="font-size:.85rem;"><strong>SNS + SQS Fan-out (best of both):</strong> SNS broadcasts → each subscription is an independent SQS queue → each queue has its own consumer. Atomic broadcast with guaranteed per-subscriber delivery.</div>
-        </div>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('sns-sqs-fanout')">Fan-out pattern details</button>
-        <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('sns-filter')">Message filter policies</button>
+      <div style="display:flex;flex-direction:column;gap:.55rem;">
+        <a href="https://nifi.apache.org/documentation.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> NiFi 1.x Documentation Hub
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/html/getting-started.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Getting Started Guide
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/html/user-guide.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> User Interface Guide
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/html/expression-language-guide.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Expression Language Reference
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Administration Guide
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/rest-api/index.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> REST API Reference
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/html/developer-guide.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Developer / Custom Processor Guide
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> All Processors Reference
+        </a>
+        <a href="https://nifi.apache.org/docs/nifi-docs/html/nifi-in-depth.html" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> NiFi In Depth (architecture)
+        </a>
+        <a href="https://hub.docker.com/r/apache/nifi" target="_blank" style="color:var(--nifi-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> NiFi on Docker Hub
+        </a>
       </div>
     </div>
-    <div class="card">
-      <div class="badge b-aws" style="margin-bottom:.75rem;">Go — Publish SNS Recall Alert with Filter Attributes</div>
-      <div class="code-block">
-<span class="kw">func</span> <span class="fn">PublishRecallAlert</span>(sku, reason <span class="type">string</span>) <span class="type">error</span> {
-  cfg, _ := config.<span class="fn">LoadDefaultConfig</span>(context.<span class="fn">TODO</span>())
-  client := sns.<span class="fn">NewFromConfig</span>(cfg)
 
-  topicARN := <span class="str">"arn:aws:sns:us-east-1:123456:freshmart-product-recalls"</span>
-
-  msg, _ := json.<span class="fn">Marshal</span>(<span class="kw">map</span>[<span class="type">string</span>]<span class="kw">interface</span>{}{
-    <span class="str">"event"</span>:     <span class="str">"PRODUCT_RECALL"</span>,
-    <span class="str">"sku"</span>:       sku,
-    <span class="str">"reason"</span>:    reason,
-    <span class="str">"store"</span>:     <span class="str">"FRESHMART-042"</span>,
-    <span class="str">"timestamp"</span>: time.<span class="fn">Now</span>().<span class="fn">UTC</span>().<span class="fn">Format</span>(time.RFC3339),
-  })
-
-  _, err := client.<span class="fn">Publish</span>(context.<span class="fn">TODO</span>(), &sns.PublishInput{
-    TopicArn: &topicARN,
-    Message:  aws.<span class="fn">String</span>(<span class="type">string</span>(msg)),
-    Subject:  aws.<span class="fn">String</span>(<span class="str">"⚠️ RECALL: "</span> + sku),
-    <span class="cmt">// Filter attributes — only FM-042 subscribers receive this</span>
-    MessageAttributes: <span class="kw">map</span>[<span class="type">string</span>]snstypes.MessageAttributeValue{
-      <span class="str">"store_id"</span>: {
-        DataType:    aws.<span class="fn">String</span>(<span class="str">"String"</span>),
-        StringValue: aws.<span class="fn">String</span>(<span class="str">"FRESHMART-042"</span>),
-      },
-      <span class="str">"severity"</span>: {
-        DataType:    aws.<span class="fn">String</span>(<span class="str">"String"</span>),
-        StringValue: aws.<span class="fn">String</span>(<span class="str">"CRITICAL"</span>),
-      },
-    },
-  })
-  <span class="kw">return</span> err
-}
+    <!-- AWS Docs -->
+    <div class="card card-aws" style="padding:1.5rem;">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;">
+        <span style="font-size:1.5rem;">☁️</span>
+        <div class="badge b-aws">Amazon Web Services</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.55rem;">
+        <a href="https://docs.aws.amazon.com/sqs/latest/dg/welcome.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> SQS Developer Guide
+        </a>
+        <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> SQS FIFO Queues Guide
+        </a>
+        <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Dead-Letter Queues
+        </a>
+        <a href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> SNS Developer Guide
+        </a>
+        <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> SNS Message Filter Policies
+        </a>
+        <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-fork-pipeline-architectures.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> SNS Fan-out Architectures
+        </a>
+        <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> S3 User Guide
+        </a>
+        <a href="https://docs.localstack.cloud/overview/" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> LocalStack Documentation
+        </a>
+        <a href="https://aws.github.io/aws-sdk-go-v2/docs/" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> AWS SDK for Go v2
+        </a>
+        <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> IAM Best Practices
+        </a>
       </div>
     </div>
-  </div>
-</div>
-</section>
 
-<!-- ═══════════════════════════ NIFI + AWS COMBINED ARCHITECTURE -->
-<section class="section" id="nifi-aws" style="background:var(--gy10);">
-<div class="container">
-  <div class="sh">
-    <div class="label" style="color:var(--nifi-dark);">Section 7 — Combined Architecture</div>
-    <h2>🏗️ NiFi + Kafka + AWS — The Full FreshMart Picture</h2>
-    <div class="divider"></div>
-    <p style="color:#555;max-width:680px;margin:0 auto;">Every system at FreshMart-042 connected. Store systems feed NiFi, NiFi orchestrates transformations and routing, Kafka streams real-time events, and AWS cloud services handle queuing, broadcasting, and archival.</p>
-  </div>
-
-  <!-- Full Architecture SVG -->
-  <div class="diagram-wrap" style="margin-bottom:1.5rem;border-radius:10px;">
-    <svg viewBox="0 0 940 420" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
-      <rect width="940" height="420" fill="#f8f8f8" rx="8"/>
-      <defs>
-        <marker id="aan" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#e87722"/></marker>
-        <marker id="aak" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#6929c4"/></marker>
-        <marker id="aaa" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5 z" fill="#ff9900"/></marker>
-      </defs>
-      <!-- Zone titles -->
-      <text x="82" y="18" fill="#e87722" font-size="9" font-weight="700" text-anchor="middle">STORE SYSTEMS</text>
-      <text x="314" y="18" fill="#e87722" font-size="9" font-weight="700" text-anchor="middle">NIFI CANVAS</text>
-      <text x="556" y="18" fill="#6929c4" font-size="9" font-weight="700" text-anchor="middle">KAFKA CLUSTER</text>
-      <text x="778" y="18" fill="#c77800" font-size="9" font-weight="700" text-anchor="middle">AWS CLOUD</text>
-      <!-- Zone backgrounds -->
-      <rect x="8" y="24" width="148" height="370" rx="6" fill="white" stroke="#e87722" stroke-width="1" opacity=".5"/>
-      <rect x="164" y="24" width="300" height="370" rx="6" fill="white" stroke="#e87722" stroke-width="1.5"/>
-      <rect x="472" y="24" width="172" height="370" rx="6" fill="#edf5ff" stroke="#6929c4" stroke-width="1.5"/>
-      <rect x="652" y="24" width="280" height="370" rx="6" fill="#fff8ec" stroke="#ff9900" stroke-width="1.5"/>
-      <!-- Store systems -->
-      <rect x="16" y="40" width="132" height="26" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1"/>
-      <text x="82" y="57" fill="#002d9c" font-size="8" font-weight="700" text-anchor="middle">🧾 POS Scanners</text>
-      <rect x="16" y="72" width="132" height="26" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1"/>
-      <text x="82" y="89" fill="#002d9c" font-size="8" font-weight="700" text-anchor="middle">🏷️ Inventory DB</text>
-      <rect x="16" y="104" width="132" height="26" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1"/>
-      <text x="82" y="121" fill="#002d9c" font-size="8" font-weight="700" text-anchor="middle">🚚 Vendor SFTP</text>
-      <rect x="16" y="136" width="132" height="26" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1"/>
-      <text x="82" y="153" fill="#002d9c" font-size="8" font-weight="700" text-anchor="middle">😤 Complaint API</text>
-      <rect x="16" y="168" width="132" height="26" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1"/>
-      <text x="82" y="185" fill="#002d9c" font-size="8" font-weight="700" text-anchor="middle">🌤️ Weather API</text>
-      <rect x="16" y="200" width="132" height="26" rx="3" fill="#edf5ff" stroke="#0f62fe" stroke-width="1"/>
-      <text x="82" y="217" fill="#002d9c" font-size="8" font-weight="700" text-anchor="middle">🖥️ Legacy Oracle DB</text>
-      <!-- Arrows to NiFi -->
-      <path d="M148 53 L168 53" stroke="#e87722" stroke-width="1.5" fill="none" marker-end="url(#aan)"/>
-      <path d="M148 85 L168 85" stroke="#e87722" stroke-width="1.5" fill="none" marker-end="url(#aan)"/>
-      <path d="M148 117 L168 117" stroke="#e87722" stroke-width="1.5" fill="none" marker-end="url(#aan)"/>
-      <path d="M148 149 L168 149" stroke="#e87722" stroke-width="1.5" fill="none" marker-end="url(#aan)"/>
-      <path d="M148 181 L168 181" stroke="#e87722" stroke-width="1.5" fill="none" marker-end="url(#aan)"/>
-      <path d="M148 213 L168 213" stroke="#e87722" stroke-width="1.5" fill="none" marker-end="url(#aan)"/>
-      <!-- NiFi zones -->
-      <rect x="172" y="36" width="284" height="52" rx="4" fill="white" stroke="#e87722" stroke-width="1.5"/>
-      <text x="314" y="53" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">INGEST</text>
-      <text x="314" y="68" fill="#888" font-size="7.5" text-anchor="middle">GetFile · InvokeHTTP · ConsumeKafka · QueryDatabaseTable</text>
-      <rect x="172" y="96" width="284" height="52" rx="4" fill="white" stroke="#e87722" stroke-width="1.5"/>
-      <text x="314" y="113" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">TRANSFORM</text>
-      <text x="314" y="128" fill="#888" font-size="7.5" text-anchor="middle">JoltTransform · SplitRecord · ExecuteStreamCommand (Go)</text>
-      <rect x="172" y="156" width="284" height="52" rx="4" fill="white" stroke="#e87722" stroke-width="1.5"/>
-      <text x="314" y="173" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">ROUTE</text>
-      <text x="314" y="188" fill="#888" font-size="7.5" text-anchor="middle">RouteOnAttribute · MergeRecord · LookupRecord · ValidateRecord</text>
-      <rect x="172" y="216" width="284" height="52" rx="4" fill="white" stroke="#e87722" stroke-width="1.5"/>
-      <text x="314" y="233" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">OUTPUT</text>
-      <text x="314" y="248" fill="#888" font-size="7.5" text-anchor="middle">PublishKafka · PutSQS · PublishSNS · PutDatabaseRecord · PutS3</text>
-      <!-- NiFi → Kafka arrows -->
-      <path d="M456 62 L476 62" stroke="#6929c4" stroke-width="1.5" fill="none" marker-end="url(#aak)"/>
-      <path d="M456 122 L476 140" stroke="#6929c4" stroke-width="1.5" fill="none" marker-end="url(#aak)"/>
-      <path d="M456 232 L476 220" stroke="#6929c4" stroke-width="1.5" fill="none" marker-end="url(#aak)"/>
-      <!-- NiFi → AWS direct -->
-      <path d="M456 242 L656 242" stroke="#ff9900" stroke-width="1.5" fill="none" marker-end="url(#aaa)"/>
-      <text x="556" y="235" fill="#ff9900" font-size="7.5" text-anchor="middle">PutSQS / PublishSNS / PutS3</text>
-      <!-- Kafka topics -->
-      <text x="558" y="42" fill="#6929c4" font-size="8.5" font-weight="700" text-anchor="middle">Kafka Topics</text>
-      <rect x="480" y="50" width="155" height="22" rx="3" fill="white" stroke="#6929c4" stroke-width="1"/>
-      <text x="557" y="65" fill="#333" font-size="7.5" text-anchor="middle">pos-sales</text>
-      <rect x="480" y="78" width="155" height="22" rx="3" fill="white" stroke="#6929c4" stroke-width="1"/>
-      <text x="557" y="93" fill="#333" font-size="7.5" text-anchor="middle">inventory-updates</text>
-      <rect x="480" y="106" width="155" height="22" rx="3" fill="white" stroke="#6929c4" stroke-width="1"/>
-      <text x="557" y="121" fill="#333" font-size="7.5" text-anchor="middle">vendor-deliveries</text>
-      <rect x="480" y="134" width="155" height="22" rx="3" fill="white" stroke="#6929c4" stroke-width="1"/>
-      <text x="557" y="149" fill="#333" font-size="7.5" text-anchor="middle">customer-complaints</text>
-      <rect x="480" y="162" width="155" height="22" rx="3" fill="white" stroke="#6929c4" stroke-width="1"/>
-      <text x="557" y="177" fill="#333" font-size="7.5" text-anchor="middle">product-recalls</text>
-      <rect x="480" y="190" width="155" height="22" rx="3" fill="white" stroke="#6929c4" stroke-width="1"/>
-      <text x="557" y="205" fill="#333" font-size="7.5" text-anchor="middle">display-updates</text>
-      <!-- Kafka → AWS -->
-      <path d="M635 80 L656 120" stroke="#ff9900" stroke-width="1.2" fill="none" marker-end="url(#aaa)"/>
-      <!-- AWS zone -->
-      <text x="792" y="42" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">SQS Queues</text>
-      <rect x="660" y="48" width="264" height="24" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="792" y="64" fill="#555" font-size="7.5" text-anchor="middle">freshmart-inventory-updates (Standard)</text>
-      <rect x="660" y="78" width="264" height="24" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="792" y="94" fill="#555" font-size="7.5" text-anchor="middle">freshmart-urgent-alerts.fifo (FIFO)</text>
-      <rect x="660" y="108" width="264" height="24" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="792" y="124" fill="#555" font-size="7.5" text-anchor="middle">freshmart-vendor-payments.fifo (FIFO)</text>
-      <text x="792" y="154" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">SNS Topics</text>
-      <rect x="660" y="160" width="264" height="24" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="792" y="176" fill="#555" font-size="7.5" text-anchor="middle">freshmart-product-recalls (→ SMS+Email+SQS+λ)</text>
-      <rect x="660" y="190" width="264" height="24" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="792" y="206" fill="#555" font-size="7.5" text-anchor="middle">freshmart-promotions (→ display fleet)</text>
-      <text x="792" y="236" fill="#c77800" font-size="8.5" font-weight="700" text-anchor="middle">S3 Data Lake</text>
-      <rect x="660" y="242" width="264" height="48" rx="3" fill="white" stroke="#ff9900" stroke-width="1"/>
-      <text x="792" y="260" fill="#555" font-size="7.5" text-anchor="middle">s3://freshmart-data-lake/</text>
-      <text x="792" y="275" fill="#888" font-size="7" text-anchor="middle">raw/ · processed/ · archives/ · compliance/</text>
-      <!-- ZooKeeper note -->
-      <text x="557" y="358" fill="#6929c4" font-size="8" text-anchor="middle">🦁 ZooKeeper manages both Kafka cluster AND NiFi cluster</text>
-      <text x="314" y="340" fill="#e87722" font-size="7.5" text-anchor="middle">Go custom processors called via ExecuteStreamCommand</text>
-    </svg>
-  </div>
-
-  <div class="g2">
-    <div class="card" style="border-color:var(--nifi);">
-      <div class="badge b-nifi" style="margin-bottom:.75rem;">🔄 Data Flow Summary</div>
-      <div style="display:flex;flex-direction:column;gap:.65rem;">
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <div class="step-num step-nifi" style="font-size:.72rem;width:26px;height:26px;">1</div>
-          <div style="font-size:.84rem;"><strong>Ingest:</strong> NiFi polls SFTP folders, calls REST APIs, reads Kafka topics, and queries legacy databases — all on configurable schedules.</div>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <div class="step-num step-nifi" style="font-size:.72rem;width:26px;height:26px;">2</div>
-          <div style="font-size:.84rem;"><strong>Transform:</strong> Jolt remaps JSON fields, SplitRecord splits files into rows, Go binaries apply custom business logic (barcode validation, margin calc, freshness check).</div>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <div class="step-num step-nifi" style="font-size:.72rem;width:26px;height:26px;">3</div>
-          <div style="font-size:.84rem;"><strong>Route:</strong> RouteOnAttribute sends HIGH severity complaints to the recall path, DISCOUNT-flagged items to the display update queue, failed records to error logging.</div>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <div class="step-num step-nifi" style="font-size:.72rem;width:26px;height:26px;">4</div>
-          <div style="font-size:.84rem;"><strong>Output:</strong> PublishKafka for real-time streaming, PutSQS for point-to-point alerting, PublishSNS for broadcast fan-out, PutDatabaseRecord for DW loading, PutS3Object for archival.</div>
-        </div>
+    <!-- Go + Kafka + Docker Docs -->
+    <div class="card card-go" style="padding:1.5rem;">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;">
+        <span style="font-size:1.5rem;">🐹</span>
+        <div class="badge b-go">Go + Kafka + Docker</div>
       </div>
-    </div>
-    <div class="card" style="border-color:var(--aws);">
-      <div class="badge b-aws" style="margin-bottom:.75rem;">☁️ AWS Integration Summary</div>
-      <div style="display:flex;flex-direction:column;gap:.65rem;">
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">📬</span>
-          <div style="font-size:.84rem;"><strong>SQS Standard:</strong> Inventory updates from NiFi → <code style="font-size:.78rem;">freshmart-inventory-updates</code> → Go consumer updates warehouse management system in real time.</div>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">🎯</span>
-          <div style="font-size:.84rem;"><strong>SQS FIFO:</strong> Manager urgent alerts and vendor payments flow through FIFO queues — guaranteed order, guaranteed exactly-once. No duplicate payments, no out-of-order alerts.</div>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">📣</span>
-          <div style="font-size:.84rem;"><strong>SNS Fan-out:</strong> One recall event → manager SMS + vendor email + manager app SQS + display Lambda + Kafka audit log. One publish, five independent actions, under 2 seconds.</div>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;">🪣</span>
-          <div style="font-size:.84rem;"><strong>S3 Data Lake:</strong> Everything archived — vendor delivery CSVs, daily sales reports, compliance logs, NiFi provenance exports. Queryable via Athena, visualized in QuickSight.</div>
-        </div>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('aws-iam')">🔐 IAM for NiFi</button>
-        <button class="btn btn-aws" style="font-size:.72rem;" onclick="openModal('aws-deploy')">🚀 Deployment guide</button>
+      <div style="display:flex;flex-direction:column;gap:.55rem;">
+        <a href="https://go.dev/doc/install" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Install Go
+        </a>
+        <a href="https://go.dev/tour/" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> A Tour of Go (interactive)
+        </a>
+        <a href="https://pkg.go.dev/encoding/json" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> encoding/json Package
+        </a>
+        <a href="https://pkg.go.dev/net/http" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> net/http Package
+        </a>
+        <a href="https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/sqs" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> aws-sdk-go-v2/service/sqs
+        </a>
+        <a href="https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/sns" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> aws-sdk-go-v2/service/sns
+        </a>
+        <a href="https://github.com/segmentio/kafka-go" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> kafka-go (segmentio)
+        </a>
+        <a href="https://kafka.apache.org/documentation/" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Apache Kafka Documentation
+        </a>
+        <a href="https://docs.docker.com/compose/" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> Docker Compose Reference
+        </a>
+        <a href="https://jolt-demo.appspot.com/" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.8rem;text-decoration:none;display:flex;align-items:center;gap:.4rem;">
+          <span>→</span> JOLT Transform Playground
+        </a>
       </div>
     </div>
   </div>
@@ -2452,7 +2500,7 @@ func SendAlert(alert InventoryAlert) error {
   return nil
 }</div>` }
 ,'sqs-long-poll':{ title:'🔦 Why Long Polling?', body:`<p><strong>Short polling (default):</strong> Your consumer asks SQS "any messages?" every second. If queue is empty — which is most of the time overnight — you get empty responses and pay for every API call. At $0.40/million requests, polling every second 24/7 costs ~$34/month per queue doing nothing useful.</p><p><strong>Long polling (recommended):</strong> Set <code>WaitTimeSeconds: 20</code>. SQS holds your connection open for up to 20 seconds, returning only when a message arrives (or the 20 seconds expire). Empty responses drop by ~95%.</p><p><strong>FreshMart result:</strong> Switching all 4 queues to long polling reduced SQS API costs from ~$136/month to ~$11/month — an 92% reduction with zero change in message latency.</p><p>In NiFi's GetSQS processor: set "Receive Message Wait Time" to 20 seconds. In Go: set <code>WaitTimeSeconds: 20</code> in ReceiveMessageInput.</p>` }
-,'sns-sqs-fanout':{ title:'📡 SNS + SQS Fan-out Pattern', body:`<p>The fan-out pattern combines SNS and SQS to get broadcast delivery AND guaranteed per-subscriber processing.</p><p><strong>Why not send to 5 SQS queues directly?</strong></p><ul><li>You'd make 5 separate API calls — if the 3rd fails, some subscribers got the message and some didn't</li><li>Inconsistent state, hard to debug, no atomic guarantee</li></ul><p><strong>With SNS fan-out:</strong></p><ul><li>One SNS Publish → atomic fan-out to all 5 subscriptions</li><li>Each subscription is an independent SQS queue</li><li>Each SQS queue has its own consumer processing independently</li><li>If one consumer is slow, it doesn't block the others</li><li>If one consumer fails, its messages stay in its SQS queue safely</li></ul><p><strong>FreshMart implementation:</strong> The recall SNS topic has 5 subscriptions: SMS (Twilio endpoint), Email (SES), SQS (manager app queue), Lambda (display sign updater), and SQS (Kafka bridge). One SNS publish from NiFi's PublishSNS processor triggers all 5 within 2 seconds.</p><a href="https://docs.aws.amazon.com/sns/latest/dg/sns-fork-pipeline-architectures.html" target="_blank" style="color:var(--aws-dark);font-family:monospace;font-size:.82rem;">→ SNS Fork/Fan-out Architecture</a>` }
+}
 ,'sns-filter':{ title:'🔍 SNS Message Filter Policies', body:`<p>Filter policies let subscribers only receive messages matching specific attribute values — critical when you have 200 stores and don't want every store's manager getting every other store's recall alerts.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:1rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.8;overflow-x:auto;"><span style="color:#89b4fa;">// SNS subscription filter policy (set on each subscription):</span>
 // Manager of FRESHMART-042 only gets messages for their store:
 {
@@ -2501,6 +2549,44 @@ docker run -d --name nifi \
   -e SINGLE_USER_CREDENTIALS_USERNAME=admin \
   -e SINGLE_USER_CREDENTIALS_PASSWORD=YourStrongPassword123! \
   apache/nifi:latest</div>` }
+
+,'canvas-detail':{ title:'🖥️ NiFi Canvas — Full Detail', body:`<p>The NiFi canvas is the central workspace where all data flows are built visually.</p><ul><li><strong>Pan:</strong> Hold Shift + drag, or use the scrollbars</li><li><strong>Zoom:</strong> Ctrl/Cmd + scroll wheel, or use the zoom buttons (bottom-right)</li><li><strong>Select multiple:</strong> Drag to draw a selection box, or Ctrl+click individual processors</li><li><strong>Context menu:</strong> Right-click any processor or the canvas background for options</li><li><strong>View mode:</strong> The canvas auto-refreshes every 30 seconds — watch queue counters update live</li></ul><p>The dark dotted grid is just a visual guide — it doesn't affect functionality. Processors can be placed anywhere.</p><a href="https://nifi.apache.org/docs/nifi-docs/html/user-guide.html#User_Interface" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ NiFi User Interface Guide</a>` }
+,'flowfile-detail':{ title:'📋 FlowFile — Complete Reference', body:`<p>A FlowFile is the unit of data in NiFi. Every piece of data — a CSV file, a JSON record, a binary image — becomes a FlowFile.</p><p><strong>Two components:</strong></p><ul><li><strong>Content:</strong> The actual data payload. Stored in NiFi's content repository (a fast local disk directory). Can be any size from 0 bytes to gigabytes.</li><li><strong>Attributes:</strong> Key-value string metadata. Always small. Used for routing decisions, enrichment, and tracing.</li></ul><p><strong>Important built-in attributes:</strong></p><ul><li><code>uuid</code> — unique identifier, used for provenance tracking</li><li><code>filename</code> — original file name (set by GetFile)</li><li><code>path</code> — directory path</li><li><code>entryDate</code> — when it entered the flow (epoch ms)</li><li><code>fileSize</code> — content size in bytes</li><li><code>mime.type</code> — content type (text/csv, application/json, etc.)</li></ul><a href="https://nifi.apache.org/docs/nifi-docs/html/nifi-in-depth.html#intro-to-flowfiles" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ FlowFile Deep Dive</a>` }
+,'backpressure':{ title:'🔄 Back-Pressure Explained', body:`<p>Back-pressure is NiFi's automatic throttle. When a downstream processor is overwhelmed, NiFi prevents upstream processors from generating more data.</p><p><strong>How it works:</strong> Every connection between processors has two configurable thresholds:</p><ul><li><strong>Back Pressure Object Threshold:</strong> default 10,000 FlowFiles. When the queue reaches this, upstream processors are paused.</li><li><strong>Back Pressure Data Size Threshold:</strong> default 1 GB. If queued data exceeds this, upstream pauses.</li></ul><p><strong>Example:</strong> Vendor drops 10,000 CSV files simultaneously. GetFile can read them in 30 seconds, but PutDatabaseRecord (writing to IBM Db2) can only handle 50/sec. Back-pressure kicks in — GetFile pauses automatically when the queue between them hits 10,000. No data loss, no crashes, just smart throttling.</p><p>You can tune thresholds per-connection by right-clicking any connection and choosing "Configure".</p><a href="https://nifi.apache.org/docs/nifi-docs/html/nifi-in-depth.html#queue-and-back-pressure" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ Back-Pressure Documentation</a>` }
+,'provenance':{ title:'📜 Data Provenance', body:`<p>NiFi records every action taken on every FlowFile — automatically, with no configuration needed.</p><p><strong>What gets recorded for each event:</strong></p><ul><li>Event type (RECEIVE, SEND, MODIFY, FORK, JOIN, DROP)</li><li>Processor name and ID</li><li>Timestamp (millisecond precision)</li><li>FlowFile UUID and its lineage (parent/child relationships)</li><li>Content before and after modification</li><li>All attributes at time of event</li></ul><p><strong>How to access:</strong> In NiFi UI, click the top-right "Provenance" icon (magnifying glass), or right-click any processor → View Data Provenance.</p><p><strong>FreshMart use case:</strong> When a food safety auditor asks "prove that this banana delivery was received, validated, and published to Kafka by 8am," you can show the full provenance chain in seconds — every step, every timestamp, even the content before and after transformation.</p><a href="https://nifi.apache.org/docs/nifi-docs/html/user-guide.html#data-provenance" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ Provenance User Guide</a>` }
+,'nifi-cluster':{ title:'🔁 NiFi Cluster + ZooKeeper', body:`<p>NiFi can run as a cluster of multiple nodes, coordinated by Apache ZooKeeper — the same ZooKeeper that manages your Kafka cluster.</p><p><strong>Node roles:</strong></p><ul><li><strong>Primary Node:</strong> Elected by ZooKeeper. Runs scheduled processors that should only fire once (e.g., a daily report). Re-elected automatically if the primary goes down.</li><li><strong>Cluster Coordinator:</strong> Manages cluster membership and configuration. All changes to flows are routed through the coordinator.</li><li><strong>All nodes:</strong> Process FlowFiles in parallel. Each node shares the load.</li></ul><p><strong>Fault tolerance:</strong> If a node crashes mid-processing, its in-flight FlowFiles (stored on disk in the FlowFile repository) are detected by ZooKeeper and can be reassigned. Zero data loss.</p><p><strong>FreshMart setup:</strong> 3-node cluster. Nodes are in different server racks for physical fault isolation. ZooKeeper runs as a 3-node ensemble shared with Kafka.</p><a href="https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#clustering" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ NiFi Clustering Guide</a>` }
+,'nifi-api':{ title:'🔌 NiFi REST API', body:`<p>NiFi has a complete REST API for programmatic control — deploy flows, start/stop processors, monitor queues, all without touching the UI.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Get all processors in a process group\ncurl -X GET "https://localhost:8443/nifi-api/process-groups/root/processors" \\\n     -H "Authorization: Bearer $TOKEN"\n\n# Start a specific processor\ncurl -X PUT "https://localhost:8443/nifi-api/processors/{id}/run-status" \\\n     -H "Content-Type: application/json" \\\n     -d '{"revision":{"version":1},"state":"RUNNING"}'\n\n# Get queue depth for a connection\ncurl "https://localhost:8443/nifi-api/connections/{id}/status"</div><a href="https://nifi.apache.org/docs/nifi-docs/rest-api/index.html" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ NiFi REST API Reference</a>` }
+,'nifi-aws-deploy':{ title:'🚀 Deploying NiFi with AWS', body:`<p>NiFi running on AWS needs IAM credentials to access SQS, SNS, and S3. Best practice: use IAM Roles, not hardcoded access keys.</p><p><strong>Setup steps:</strong></p><ul><li>Create an IAM Role with permissions for SQS SendMessage/ReceiveMessage, SNS Publish, S3 PutObject</li><li>Attach the role to the EC2 instance or ECS task running NiFi</li><li>In NiFi UI, create an <strong>AWSCredentialsProviderControllerService</strong> — set to "Instance Profile" (picks up the IAM role automatically)</li><li>Reference this controller service in all AWS processors (PutSQS, PublishSNS, PutS3Object)</li></ul><p><strong>Recommended instance types:</strong> c5.2xlarge (8 vCPU, 16GB) for production, t3.medium for dev/learning.</p><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ IAM Roles for EC2</a>` }
+,'full-arch':{ title:'🏗️ Full Architecture Walkthrough', body:`<p>The complete FreshMart data pipeline has four zones working together:</p><ul><li><strong>Store Systems:</strong> POS scanners, inventory DB, vendor SFTP, complaint API, weather API, legacy Oracle DB. These are the data sources — they don't know about Kafka or AWS.</li><li><strong>NiFi Canvas:</strong> The integration hub. Ingests from all store systems, transforms and routes data, publishes to Kafka and AWS. No store system talks directly to another — all routing goes through NiFi.</li><li><strong>Kafka Cluster:</strong> The event backbone. Receives enriched events from NiFi. Real-time consumers (inventory, analytics, display signs) read from Kafka topics. NiFi also reads Kafka to feed the data warehouse.</li><li><strong>AWS Cloud:</strong> SQS queues buffer manager alerts and vendor payments with guaranteed delivery. SNS broadcasts recall events to SMS/email/Lambda simultaneously. S3 archives everything for compliance and long-term analytics.</li></ul><p>ZooKeeper coordinates both the Kafka cluster and the NiFi cluster — one ZooKeeper ensemble for both.</p>` }
+,'ui-deep':{ title:'🔍 NiFi UI Walkthrough', body:`<p>Complete guide to every part of the NiFi interface:</p><ul><li><strong>Top menu bar:</strong> Global menu (templates, cluster, user management), play/pause/stop all, search processors, cluster status</li><li><strong>Secondary toolbar:</strong> Breadcrumb showing current process group, action buttons, throughput stats</li><li><strong>Left sidebar:</strong> Component palette — drag Processor, Input Port, Output Port, Funnel, Process Group, Label, Remote Process Group onto canvas</li><li><strong>Canvas:</strong> Where flows live. Right-click background → Start All / Stop All / Select All. Right-click processor → Configure / Start / Stop / View Status / View Provenance</li><li><strong>Processor dialog tabs:</strong> Settings (name, penalty, yield), Scheduling (timer/CRON, threads), Properties (config), Relationships (auto-terminate or connect), Comments</li><li><strong>Status bar (bottom):</strong> Cluster health, active threads, queued FlowFile count, last refresh time</li><li><strong>Right panel:</strong> Appears when you click a processor — shows live stats and config summary</li></ul><a href="https://nifi.apache.org/docs/nifi-docs/html/user-guide.html" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ Complete NiFi User Guide</a>` }
+,'processor-types':{ title:'⚙️ NiFi Processor Categories', body:`<p>NiFi's 300+ processors are organized into categories:</p><ul><li><strong>Ingest:</strong> GetFile, ListFile, GetFTP, InvokeHTTP, ListenHTTP, ConsumeKafka, QueryDatabaseTable, GetSQS, GetDynamoDB</li><li><strong>Transform:</strong> JoltTransformJSON, TransformXml, ConvertRecord, SplitRecord, MergeRecord, ReplaceText, UpdateAttribute, ExecuteScript, ExecuteStreamCommand</li><li><strong>Route:</strong> RouteOnAttribute, RouteOnContent, RouteText, ControlRate, Wait, Notify</li><li><strong>Enrich:</strong> LookupRecord, LookupAttribute, QueryRecord, IdentifyMimeType</li><li><strong>Output:</strong> PutFile, PutFTP, InvokeHTTP, PublishKafka, PutDatabaseRecord, PutSQS, PublishSNS, PutS3Object, PutEmail, PostHTTP</li><li><strong>Validate:</strong> ValidateRecord, ValidateXml, ValidateCsv</li></ul><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;">→ Full Processor Reference</a>` }
+,'proc-http':{ title:'🌐 InvokeHTTP Configuration', body:`<p>InvokeHTTP calls any REST API and turns the response into a FlowFile.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nHTTP Method:        GET\nRemote URL:         https://api.weather.com/v3/wx/forecast/daily\n                    ?geocode=35.1495,-90.0490&units=e\n                    &apiKey=${weather.api.key}\nConnection Timeout: 10 sec\nRead Timeout:       30 sec\nSSL Context Service: StandardSSLContextService\n\n# FlowFile attributes added by InvokeHTTP:\ninvokehttp.status.code:    200\ninvokehttp.status.message: OK\ninvokehttp.response.url:   https://api.weather.com/...</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.InvokeHTTP/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ InvokeHTTP Processor Docs</a>` }
+,'proc-kafka-consume':{ title:'📨 ConsumeKafka Configuration', body:`<p>ConsumeKafka reads messages from a Kafka topic and creates one FlowFile per message (or batch).</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nKafka Brokers:        kafka-01:9092,kafka-02:9092\nTopic Name(s):        customer-complaints\nGroup ID:             nifi-recall-monitor\nAuto Offset Reset:    latest\nMax Poll Records:     100\nMax Uncommitted Time: 1 sec\n\n# For batch consumption (more efficient):\nMessage Demarcator:   (leave empty = one FlowFile per message)\n# OR set to newline to batch messages into one FlowFile</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-kafka-2-6-nar/" target="_blank" style="color:var(--b70);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ ConsumeKafka Processor Docs</a>` }
+,'proc-kafka-pub':{ title:'📤 PublishKafka Configuration', body:`<p>PublishKafka writes FlowFile content as a message to a Kafka topic.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nKafka Brokers:    kafka-01:9092,kafka-02:9092,kafka-03:9092\nTopic Name:       vendor-deliveries\nDelivery Guarantee: Replicated (acks=all) — safest, no data loss\nMessage Key Field: ${sku}  — determines partition routing\nCompression Type:  snappy  — good balance speed/size\n\n# For headers (NiFi 1.13+):\nKafka Header Encoding: UTF-8\n# Then use UpdateAttribute to set headers as attributes\n# e.g. kafka.header.store_id = FRESHMART-042</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-kafka-2-6-nar/" target="_blank" style="color:var(--b70);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ PublishKafka Processor Docs</a>` }
+,'proc-split':{ title:'✂️ SplitRecord Configuration', body:`<p>SplitRecord splits a file with many records into individual FlowFiles — one per record (or N records per FlowFile).</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nRecord Reader:  CSVReader\n  Schema Access: Use String Fields From Header\nRecord Writer:  JsonRecordSetWriter\n  Schema Access: Inherit Record Schema\nRecords Per Split: 1  (one FlowFile per row)\n\n# Result: CSV with 500 rows → 500 FlowFiles\n# Each FlowFile contains one JSON object\n# Attributes include: fragment.index, fragment.count</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.SplitRecord/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ SplitRecord Docs</a>` }
+,'proc-jolt':{ title:'🔄 JoltTransformJSON — Full Guide', body:`<p>JOLT (JSON to JSON Transformation Language) remaps JSON without writing code. The most common operation is "shift" — moving fields from input to output positions.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">// JOLT Shift Spec — Vendor format → FreshMart format:\n[\n  {\n    "operation": "shift",\n    "spec": {\n      "item_code":     "sku",\n      "qty":           "quantity",\n      "unit_price":    "cost_price",\n      "vendor_id":     "supplier.vendor_id",\n      "delivery_date": "received_at",\n      "*":             "&"  // pass-through all others\n    }\n  },\n  {\n    "operation": "default",   // add defaults\n    "spec": {\n      "store_id": "FRESHMART-042",\n      "status":   "PENDING"\n    }\n  }\n]</div><p style="font-size:.82rem;margin-top:.6rem;">Test your JOLT specs at <a href="https://jolt-demo.appspot.com/" target="_blank" style="color:var(--nifi);">jolt-demo.appspot.com</a> before deploying.</p>` }
+,'proc-update-attr':{ title:'🏷️ UpdateAttribute — Expression Language', body:`<p>UpdateAttribute adds or modifies FlowFile attributes using NiFi's Expression Language (EL).</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Add static attributes:\nstore.id = FRESHMART-042\nenvironment = production\nschema.version = 2\n\n# Dynamic attributes using Expression Language:\nprocessed.timestamp = ${now():format('yyyy-MM-dd HH:mm:ss')}\nvendor.code = ${path:substringAfterLast('/')}\nfile.date = ${filename:substringBefore('.')}\nrecord.count.str = Record count: ${record.count}\n\n# Conditional:\nalert.priority = ${severity:equals('HIGH'):ifElse('URGENT', 'NORMAL')}</div><a href="https://nifi.apache.org/docs/nifi-docs/html/expression-language-guide.html" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ NiFi Expression Language Guide</a>` }
+,'proc-route-attr':{ title:'🚦 RouteOnAttribute — Routing Rules', body:`<p>RouteOnAttribute evaluates NiFi Expression Language conditions against FlowFile attributes and routes to named relationships.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># In NiFi UI, add properties (each = a route):\n# Property Name → Expression (evaluates to true/false)\n\n# Route HIGH severity complaints with count >= 3:\nurgent: ${severity:equals('HIGH'):and(${complaint_count:ge(3)})}\n\n# Route produce items with expiry soon:\nexpiring-soon: ${days_until_expiry:le(3)}\n\n# Route large orders:\nbulk-order: ${quantity:ge(100)}\n\n# Unmatched FlowFiles go to "unmatched" relationship\n# (configure to auto-terminate or connect elsewhere)</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.RouteOnAttribute/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ RouteOnAttribute Docs</a>` }
+,'proc-route-content':{ title:'🧪 RouteOnContent — Pattern Matching', body:`<p>RouteOnContent routes based on regex or string matches against the FlowFile's actual content (not attributes).</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nMatch Requirement: content must contain match  (vs. "match entirely")\n\n# Add named routing rules as properties:\nrecall-keywords:  (?i)(SPOILED|RECALL|CONTAMINATED|MOLD)\nhigh-value-item:  "category"\\s*:\\s*"(PREMIUM|ORGANIC)"\njson-error:       "error"\\s*:\\s*true\n\n# Example: any JSON with "SPOILED" anywhere in content\n# gets routed to the 'recall-keywords' relationship</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.RouteOnContent/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ RouteOnContent Docs</a>` }
+,'proc-merge':{ title:'🧲 MergeRecord — Batching Strategy', body:`<p>MergeRecord collects multiple FlowFiles and merges them into one batch — much more efficient for database inserts and Kafka writes.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nRecord Reader:    JsonTreeReader\nRecord Writer:    JsonRecordSetWriter\n\n# Merge strategy: collect until EITHER condition is met:\nMin Records:       1\nMax Records:       500    ← flush when 500 records collected\nMax Bin Age:       10 min ← flush after 10 minutes regardless\nMin Bin Size:      0 B\nMax Bin Size:      10 MB  ← flush if data exceeds 10MB\n\n# Result: instead of 500 individual DB inserts,\n# NiFi makes one bulk insert of 500 rows (60x faster)</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.MergeRecord/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ MergeRecord Docs</a>` }
+,'proc-lookup':{ title:'🔗 LookupRecord — DB Enrichment', body:`<p>LookupRecord enriches records by looking up values from a database, cache, or static map.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># 1. Create a DatabaseRecordLookupService controller service:\n#    JDBC URL: jdbc:postgresql://products-db:5432/catalog\n#    Driver:   org.postgresql.Driver\n#    Lookup key: sku (column to search)\n#    SQL query: SELECT name,category,unit_cost\n#               FROM products WHERE sku=?\n\n# 2. In LookupRecord processor:\nLookup Service:       DatabaseRecordLookupService\nResult RecordPath:    /product_details\nRouting Strategy:     Route to 'matched' or 'unmatched'\n\n# Add a coordinate (defines what value to look up):\nkey: /sku   ← look up the 'sku' field from each record</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.LookupRecord/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ LookupRecord Docs</a>` }
+,'proc-db-query':{ title:'🗃️ QueryDatabaseTable Configuration', body:`<p>QueryDatabaseTable polls a database for new rows since the last run — change-data-capture without a Kafka connector.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nDatabase Connection: DBCPConnectionPool (your JDBC service)\nTable Name:          INVENTORY_CHANGES\nColumns to Return:   sku, qty_change, reason, changed_at\nMax Wait Time:       0 sec\nFetch Size:          1000\n\n# The "tracking" column — NiFi remembers the last value:\nMaximum-Value Columns: changed_at\n# NiFi stores the max value in State Management.\n# Next run: WHERE changed_at > last_max_value\n# This gives you CDC-style incremental polling.</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.QueryDatabaseTable/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ QueryDatabaseTable Docs</a>` }
+,'proc-db-put':{ title:'🗄️ PutDatabaseRecord Configuration', body:`<p>PutDatabaseRecord bulk-inserts or upserts records into any JDBC-compatible database.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nRecord Reader:    JsonTreeReader\nDatabase Type:    IBM DB2 (or Generic)\nStatement Type:   INSERT  (or UPSERT, UPDATE, DELETE)\nTable Name:       DW_SALES_FACT\nCatalog Name:     FMDW\nSchema Name:      PUBLIC\n\n# Performance:\nBatch Size:           100    ← commit every 100 records\nMax Batch Size:       1000   ← flush buffer at 1000\nRollback On Failure:  true   ← atomic batches\n\n# Auto-mapping: column names are matched to JSON field\n# names (case-insensitive). Add a JoltTransform first\n# to rename fields to match DB column names.</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.PutDatabaseRecord/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ PutDatabaseRecord Docs</a>` }
+,'proc-email':{ title:'📧 PutEmail Configuration', body:`<p>PutEmail sends the FlowFile content or a custom message via SMTP.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nSMTP Hostname:    smtp.gmail.com  (or SES SMTP endpoint)\nSMTP Port:        587\nSMTP Username:    nifi-alerts@freshmart.com\nSMTP Password:    (use NiFi Sensitive Properties Key)\nSMTP TLS:         true\n\nFrom:    nifi-alerts@freshmart.com\nTo:      ${manager.email}          ← from FlowFile attribute\nSubject: RECALL ALERT: ${sku} — ${reason}\nMime Type: text/html\nAttach Content: false  (don't attach the FlowFile)\n\n# The email body comes from the FlowFile content,\n# or you can use a template with EL expressions.</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-standard-nar/1.x/org.apache.nifi.processors.standard.PutEmail/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ PutEmail Docs</a>` }
+,'proc-groovy':{ title:'🔀 ExecuteGroovyScript Example', body:`<p>ExecuteGroovyScript lets you run Groovy code directly inside NiFi — useful for complex transformations that JOLT can't handle.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">import groovy.json.JsonSlurper, groovy.json.JsonOutput\n\ndef ff = session.get()\nif (!ff) return\n\ntry {\n  def text = ff.read().text  // read FlowFile content\n  def data = new JsonSlurper().parseText(text)\n\n  // FreshMart business logic: apply vendor discount rules\n  if (data.vendor_id == 'DOLE' && data.qty > 100) {\n    data.discount_pct = 5.0\n    data.discount_reason = 'BULK_VENDOR_DISCOUNT'\n  }\n\n  // Write modified content back\n  ff = session.write(ff, { out ->\n    out.write(JsonOutput.toJson(data).bytes)\n  } as OutputStreamCallback)\n\n  session.transfer(ff, REL_SUCCESS)\n} catch (e) {\n  log.error("Groovy script failed", e)\n  session.transfer(ff, REL_FAILURE)\n}</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-groovyx-nar/" target="_blank" style="color:var(--nifi);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ ExecuteGroovyScript Docs</a>` }
+,'proc-s3':{ title:'🪣 PutS3Object Configuration', body:`<p>PutS3Object archives FlowFiles to Amazon S3 with automatic partitioning.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nBucket:             freshmart-data-lake\nRegion:             us-east-1\nAWS Credentials:    AWSCredentialsProviderControllerService\n\n# Dynamic key with date partitioning:\nObject Key:  raw/vendor-deliveries/\n             ${now():format('yyyy/MM/dd')}/\n             ${filename}\n# Result: raw/vendor-deliveries/2024/03/15/dole-bananas.csv\n\n# Storage class:\nStorage Class:    STANDARD_IA  (for archives)\n# Options: STANDARD, REDUCED_REDUNDANCY, STANDARD_IA,\n#          ONEZONE_IA, INTELLIGENT_TIERING, GLACIER\n\n# Server-side encryption:\nServer-Side Encryption: AES256</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-aws-nar/1.x/org.apache.nifi.processors.aws.s3.PutS3Object/" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ PutS3Object Docs</a>` }
+,'proc-sqs-put':{ title:'📬 PutSQS Configuration', body:`<p>PutSQS sends each FlowFile as a message to an Amazon SQS queue.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nQueue URL:          https://sqs.us-east-1.amazonaws.com/123456/\n                    freshmart-urgent-alerts.fifo\nRegion:             us-east-1\nAWS Credentials:    AWSCredentialsProviderControllerService\nMessage Timeout:    30 sec\n\n# For FIFO queues (required):\nMessage Group ID:         ${store_id}\nMessage Dedup ID:         ${sku}-${store_id}-${entryDate}\n\n# Map FlowFile attributes as SQS message attributes:\nMessage Attribute:  store_id  → String  → ${store_id}\nMessage Attribute:  severity  → String  → ${severity}</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-aws-nar/1.x/org.apache.nifi.processors.aws.sqs.PutSQS/" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ PutSQS Docs</a>` }
+,'proc-sqs-get':{ title:'📭 GetSQS Configuration', body:`<p>GetSQS polls an SQS queue and turns each message into a FlowFile.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nQueue URL:          https://sqs.us-east-1.amazonaws.com/123456/\n                    freshmart-inventory-updates\nRegion:             us-east-1\nAWS Credentials:    AWSCredentialsProviderControllerService\n\n# Polling configuration:\nMax Messages:       10    ← retrieve up to 10 at once\nVisibility Timeout: 30 sec  ← lock time\nReceive Message Wait Time: 20 sec  ← long polling!\n\n# Message attributes to load as FlowFile attributes:\nAttribute Names:    store_id, alert_type\n\n# NiFi auto-deletes successfully processed messages\n# from the queue after routing to 'success' relationship</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-aws-nar/1.x/org.apache.nifi.processors.aws.sqs.GetSQS/" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ GetSQS Docs</a>` }
+,'proc-sns-pub':{ title:'📣 PublishSNS Configuration', body:`<p>PublishSNS broadcasts the FlowFile content as an SNS notification to all subscribers.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Key properties:\nAmazon Resource Name (ARN):\n  arn:aws:sns:us-east-1:123456789012:freshmart-product-recalls\n\nAWS Region:     us-east-1\nAWS Credentials: AWSCredentialsProviderControllerService\n\nSubject:  RECALL: ${sku} — ${reason}\n\n# Message attributes for filter policies:\n# (subscribers with matching filter policies only receive)\nMessage Attribute: store_id  → String → ${store_id}\nMessage Attribute: severity  → String → ${severity}\n\n# Use message structure for protocol-specific messages:\nMessage Structure: json  (send different text to SMS vs email)</div><a href="https://nifi.apache.org/docs/nifi-docs/components/org.apache.nifi/nifi-aws-nar/1.x/org.apache.nifi.processors.aws.sns.PublishSNS/" target="_blank" style="color:var(--aws-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ PublishSNS Docs</a>` }
+,'sqs-go-full':{ title:'Go — Complete SQS Producer + Consumer', body:`<p>Full production-ready Go code for sending and receiving SQS messages.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.78rem;line-height:1.8;overflow-x:auto;">package main\n\nimport (\n    "context"; "encoding/json"; "log"; "os"; "time"\n    "github.com/aws/aws-sdk-go-v2/aws"\n    "github.com/aws/aws-sdk-go-v2/config"\n    "github.com/aws/aws-sdk-go-v2/service/sqs"\n)\n\nfunc main() {\n    cfg, _ := config.LoadDefaultConfig(context.TODO(),\n        config.WithRegion(os.Getenv("AWS_REGION")))\n    client := sqs.NewFromConfig(cfg)\n    qURL  := os.Getenv("SQS_QUEUE_URL")\n\n    // Producer\n    go func() {\n        for {\n            msg := map[string]interface{}{\n                "sku": "BAN-CAVENDISH-1LB", "qty": 42,\n                "ts":  time.Now().Unix(),\n            }\n            body, _ := json.Marshal(msg)\n            client.SendMessage(context.TODO(), &sqs.SendMessageInput{\n                QueueUrl:    &qURL,\n                MessageBody: aws.String(string(body)),\n            })\n            time.Sleep(5 * time.Second)\n        }\n    }()\n\n    // Consumer — long-poll loop\n    for {\n        out, err := client.ReceiveMessage(context.TODO(),\n            &sqs.ReceiveMessageInput{\n                QueueUrl: &qURL, MaxNumberOfMessages: 10,\n                WaitTimeSeconds: 20, VisibilityTimeout: 30,\n            })\n        if err != nil { log.Println(err); continue }\n        for _, msg := range out.Messages {\n            log.Printf("received: %s", *msg.Body)\n            client.DeleteMessage(context.TODO(),\n                &sqs.DeleteMessageInput{\n                    QueueUrl: &qURL,\n                    ReceiptHandle: msg.ReceiptHandle,\n                })\n        }\n    }\n}</div><a href="https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/sqs" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ aws-sdk-go-v2 SQS Reference</a>` }
+,'go-aws-sdk':{ title:'☁️ AWS SDK for Go v2', body:`<p>The official AWS SDK for Go (v2) is a complete rewrite with much better performance and a cleaner API than v1.</p><p><strong>Install:</strong></p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">go get github.com/aws/aws-sdk-go-v2\ngo get github.com/aws/aws-sdk-go-v2/config\ngo get github.com/aws/aws-sdk-go-v2/service/sqs\ngo get github.com/aws/aws-sdk-go-v2/service/sns\ngo get github.com/aws/aws-sdk-go-v2/service/s3</div><p><strong>Authentication order (automatic):</strong></p><ul><li>Environment variables: <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code></li><li>Shared credentials file: <code>~/.aws/credentials</code></li><li>EC2 instance profile / ECS task role (recommended for production)</li><li>IAM role for service accounts (EKS)</li></ul><a href="https://aws.github.io/aws-sdk-go-v2/docs/" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ AWS SDK Go v2 Developer Guide</a>` }
+,'go-http':{ title:'🌐 Go HTTP Server for NiFi', body:`<p>NiFi's InvokeHTTP processor can call any HTTP endpoint. Build your Go service as a standard HTTP server.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">package main\n\nimport (\n    "encoding/json"; "log"; "net/http"\n)\n\nfunc main() {\n    mux := http.NewServeMux()\n\n    // NiFi InvokeHTTP calls this endpoint\n    mux.HandleFunc("/process", func(w http.ResponseWriter, r *http.Request) {\n        var input map[string]interface{}\n        json.NewDecoder(r.Body).Decode(&input)\n\n        // Apply FreshMart business logic\n        input["processed"] = true\n        input["store_id"] = "FRESHMART-042"\n\n        w.Header().Set("Content-Type", "application/json")\n        json.NewEncoder(w).Encode(input)\n    })\n\n    // Health check for NiFi to verify service is up\n    mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {\n        w.WriteHeader(http.StatusOK)\n    })\n\n    log.Println("Listening on :8080")\n    log.Fatal(http.ListenAndServe(":8080", mux))\n}</div><a href="https://pkg.go.dev/net/http" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ Go net/http Package</a>` }
+,'go-json':{ title:'📊 JSON Patterns for NiFi stdin/stdout', body:`<p>The stdin/stdout pattern is the simplest NiFi + Go integration. Your Go program reads one JSON object per line from stdin and writes one JSON per line to stdout.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">package main\n\nimport (\n    "bufio"; "encoding/json"; "fmt"; "os"\n)\n\nfunc main() {\n    scanner := bufio.NewScanner(os.Stdin)\n    scanner.Buffer(make([]byte, 10*1024*1024), 10*1024*1024)  // 10MB\n    for scanner.Scan() {\n        line := scanner.Bytes()\n        if len(line) == 0 { continue }\n\n        var input map[string]interface{}\n        if err := json.Unmarshal(line, &input); err != nil {\n            fmt.Fprintf(os.Stderr, "parse error: %v\\n", err)\n            continue  // skip bad records\n        }\n\n        // Transform: add fields, remove fields, rename\n        input["processed_by"] = "freshmart-go-processor"\n        delete(input, "internal_vendor_ref")\n\n        out, _ := json.Marshal(input)\n        fmt.Println(string(out))  // one JSON per line → stdout\n    }\n}</div><p style="font-size:.82rem;margin-top:.6rem;">Test locally: <code style="font-size:.8rem;">echo '{"sku":"test"}' | ./your-processor</code></p>` }
+,'go-kafka':{ title:'📨 kafka-go — Go Kafka Client', body:`<p>kafka-go is a pure Go Kafka client — no CGo, no librdkafka dependency, single binary deployment.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">go get github.com/segmentio/kafka-go\n\n// Producer\nwriter := &kafka.Writer{\n    Addr:     kafka.TCP("kafka-01:9092"),\n    Topic:    "vendor-deliveries",\n    Balancer: &kafka.LeastBytes{},\n}\nwriter.WriteMessages(ctx, kafka.Message{\n    Key:   []byte(sku),\n    Value: jsonBytes,\n})\n\n// Consumer\nreader := kafka.NewReader(kafka.ReaderConfig{\n    Brokers:   []string{"kafka-01:9092","kafka-02:9092"},\n    GroupID:   "freshmart-go-consumer",\n    Topic:     "pos-sales",\n    MinBytes:  10e3,  // 10KB\n    MaxBytes:  10e6,  // 10MB\n})\nfor {\n    m, _ := reader.ReadMessage(ctx)\n    fmt.Printf("offset %d: %s\\n", m.Offset, m.Value)\n}</div><a href="https://github.com/segmentio/kafka-go" target="_blank" style="color:var(--b70);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ kafka-go on GitHub</a>` }
+,'go-db':{ title:'🗄️ Go Database Patterns', body:`<p>Use database/sql with driver packages for production database access in NiFi processors.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">import (\n    "database/sql"\n    _ "github.com/lib/pq"  // PostgreSQL\n)\n\n// Open once at startup (thread-safe pool)\ndb, err := sql.Open("postgres",\n    "host=db.freshmart.internal dbname=products\n    user=nifi_ro password=$DB_PASS sslmode=require")\ndb.SetMaxOpenConns(10)  // limit connections\ndb.SetMaxIdleConns(5)\n\n// Query (safe against SQL injection)\nvar cost float64\nerr = db.QueryRowContext(ctx,\n    "SELECT unit_cost FROM product_costs WHERE sku=$1",\n    sku).Scan(&cost)\nif err == sql.ErrNoRows {\n    // SKU not found\n}\n\n// Batch insert\nstmt, _ := db.PrepareContext(ctx,\n    "INSERT INTO dw_sales(sku,qty,price) VALUES($1,$2,$3)")\nfor _, row := range rows {\n    stmt.ExecContext(ctx, row.SKU, row.Qty, row.Price)\n}</div><a href="https://pkg.go.dev/database/sql" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ database/sql Package</a>` }
+,'go-test':{ title:'🧪 Testing Go NiFi Processors', body:`<p>Test your Go processors without NiFi — just pipe JSON in and check JSON out.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;">// Unit tests (no NiFi needed)\nfunc TestBarcodeValidator(t *testing.T) {\n    tests := []struct {\n        input   string\n        wantSKU string\n        wantOK  bool\n    }{\n        {`+"`"+`{"item_code":"DOLE-BAN-001","qty":120}`+"`"+`, "BAN-CAVENDISH-1LB", true},\n        {`+"`"+`{"item_code":"UNKNOWN-999"}`+"`"+`, "", false},\n    }\n    for _, tt := range tests {\n        var item DeliveryItem\n        json.Unmarshal([]byte(tt.input), &item)\n        result := process(item)\n        if result.Valid != tt.wantOK {\n            t.Errorf("want valid=%v, got %v", tt.wantOK, result.Valid)\n        }\n    }\n}\n\n// Integration test: run binary, pipe stdin, check stdout\nfunc TestBinaryIntegration(t *testing.T) {\n    cmd := exec.Command("./barcode-validator")\n    cmd.Stdin = strings.NewReader(`+"`"+`{"item_code":"DOLE-BAN-001","qty":5}`+"`"+`)\n    out, _ := cmd.Output()\n    var result Result\n    json.Unmarshal(out, &result)\n    assert.Equal(t, "BAN-CAVENDISH-1LB", result.SKU)\n}</div><p style="font-size:.82rem;margin-top:.6rem;">Run: <code style="font-size:.8rem;">go test ./... -v -race</code></p>` }
+,'go-nifi-invoke':{ title:'🔗 NiFi InvokeHTTP → Go Service Config', body:`<p>Configure NiFi's InvokeHTTP processor to call your Go microservice:</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># NiFi InvokeHTTP Properties:\nHTTP Method:            POST\nRemote URL:             http://go-service:8080/recall-trigger\nContent Type:           application/json\nSend Message Body:      true  ← FlowFile content becomes request body\nConnect Timeout:        5 sec\nRead Timeout:           30 sec\n\n# Optional: add FlowFile attributes as HTTP headers\nAttributes to Send as HTTP Headers:\n  store_id → X-Store-ID\n  severity → X-Severity\n\n# Relationships:\n# success (2xx response) → next processor\n# failure (network error) → retry / LogMessage\n# response (the HTTP response body) → auto-terminate or process</div><p style="font-size:.82rem;margin-top:.6rem;">The Go service response body becomes a new FlowFile in the "response" relationship. You can chain processors on it.</p>` }
+,'go-docker':{ title:'🐳 Docker Deployment for Go + NiFi', body:`<p>Deploy your Go processor as a sidecar container alongside NiFi, or copy the binary into the NiFi container.</p><div style="background:#0d0d1a;color:#cdd6f4;padding:.875rem;border-radius:6px;font-family:monospace;font-size:.8rem;line-height:1.9;overflow-x:auto;"># Dockerfile for Go HTTP microservice\nFROM golang:1.22-alpine AS builder\nWORKDIR /app\nCOPY go.mod go.sum ./\nRUN go mod download\nCOPY . .\nRUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server .\n\nFROM scratch  # minimal final image (~5MB)\nCOPY --from=builder /app/server /server\nCOPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/\nEXPOSE 8080\nENTRYPOINT ["/server"]\n\n# For stdin/stdout processors, copy binary into NiFi container:\n# In docker-compose.yml:\n# nifi:\n#   volumes:\n#     - ./go-processors/barcode-validator:/opt/fm/barcode-validator</div><a href="https://docs.docker.com/language/golang/" target="_blank" style="color:var(--go-dark);font-family:'IBM Plex Mono',monospace;font-size:.82rem;">→ Docker + Go Guide</a>` }
 
 };
 
