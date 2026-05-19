@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<meta name="theme-color" content="#0043CE"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>Problem Solver Pro</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config={theme:{extend:{
+  colors:{
+    b10:'#edf5ff',b20:'#d0e2ff',b30:'#a6c8ff',b40:'#78a9ff',b50:'#4589ff',
+    b60:'#0f62fe',b70:'#0043ce',b80:'#002d9c',b90:'#001d6c',b100:'#001141',
+    g10:'#f4f4f4',g20:'#e0e0e0',g30:'#c6c6c6',g50:'#8d8d8d',
+    g70:'#525252',g80:'#393939',g90:'#262626',g100:'#161616'
+  },
+  fontFamily:{
+    ibm:["'IBM Plex Sans'","sans-serif"],
+    mono:["'IBM Plex Mono'","monospace"]
+  },
+  keyframes:{
+    slideup:{from:{opacity:'0',transform:'translateY(22px)'},to:{opacity:'1',transform:'translateY(0)'}},
+    slidein:{from:{opacity:'0',transform:'translateX(-100%)'},to:{opacity:'1',transform:'translateX(0)'}},
+    pop:{from:{opacity:'0',transform:'scale(.94)'},to:{opacity:'1',transform:'scale(1)'}},
+    fadein:{from:{opacity:'0'},to:{opacity:'1'}}
+  },
+  animation:{
+    slideup:'slideup .32s cubic-bezier(0,0,.2,1)',
+    slidein:'slidein .28s cubic-bezier(0,0,.2,1)',
+    pop:'pop .2s cubic-bezier(0,0,.2,1)',
+    fadein:'fadein .2s ease'
+  }
+}}}
+</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;margin:0;font-family:'IBM Plex Sans',sans-serif;background:#f4f4f4;color:#161616;}
+textarea,input,select{font-family:'IBM Plex Sans',sans-serif;font-size:16px;} /* 16px prevents iOS zoom */
+textarea{resize:vertical;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:#e0e0e0;}
+::-webkit-scrollbar-thumb{background:#8d8d8d;border-radius:2px;}
+
+/* inputs */
+.cds-input{width:100%;background:#f4f4f4;border:none;border-bottom:2px solid #c6c6c6;
+  padding:12px 14px;font-size:16px;font-family:inherit;color:#161616;
+  border-radius:2px 2px 0 0;outline:none;transition:border-color .15s,background .15s;appearance:none;}
+.cds-input:focus{border-bottom-color:#0f62fe;background:#edf5ff;}
+textarea.cds-input{min-height:120px;}
+select.cds-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23525252' d='M8 10L3 5h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;}
+
+/* chips */
+.chip{border:1px solid #c6c6c6;color:#393939;padding:8px 16px;font-size:14px;font-weight:500;
+  cursor:pointer;transition:all .15s;background:#fff;display:inline-flex;align-items:center;touch-action:manipulation;}
+.chip:active{transform:scale(.97);}
+.chip.on{background:#0f62fe;border-color:#0f62fe;color:#fff;}
+.chip:not(.on):hover{border-color:#4589ff;color:#0043ce;background:#edf5ff;}
+
+/* checkboxes */
+.ck-row{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;cursor:pointer;
+  border:1px solid transparent;transition:background .12s;background:#f4f4f4;}
+.ck-row:active{background:#edf5ff;}
+.ck-row.on{background:#d0e2ff;border-color:#78a9ff;}
+.ck-row input[type=checkbox]{width:20px;height:20px;accent-color:#0f62fe;flex-shrink:0;margin-top:2px;cursor:pointer;}
+
+/* drawer overlay */
+#drawer-overlay{position:fixed;inset:0;background:rgba(22,22,22,.65);z-index:400;
+  opacity:0;pointer-events:none;transition:opacity .25s;}
+#drawer-overlay.open{opacity:1;pointer-events:all;}
+#drawer{position:fixed;top:0;left:0;bottom:0;width:min(300px,85vw);background:#001d6c;z-index:500;
+  transform:translateX(-100%);transition:transform .28s cubic-bezier(0,0,.2,1);overflow-y:auto;}
+#drawer.open{transform:translateX(0);}
+
+/* bottom nav (mobile) */
+#bnav{display:none;}
+@media(max-width:639px){
+  #bnav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:200;
+    background:#0043ce;border-top:1px solid #002d9c;height:60px;
+    box-shadow:0 -2px 8px rgba(0,0,0,.25);}
+  #stage{padding-bottom:80px!important;}
+  #rpt{padding-bottom:80px!important;}
+}
+
+/* modal */
+.modal-wrap{position:fixed;inset:0;background:rgba(22,22,22,.75);z-index:600;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:max(48px,env(safe-area-inset-top)) 16px 24px;overflow-y:auto;}
+
+/* safe areas */
+#hdr{padding-top:env(safe-area-inset-top);}
+
+/* print */
+@media print{
+  #hdr,#rail,#pbar,#bnav,#drawer,#drawer-overlay{display:none!important;}
+  #stage{display:none!important;}
+  #rpt{display:block!important;padding:0!important;}
+  .noprint{display:none!important;}
+}
+
+/* smooth card swap */
+.card-enter{animation:slideup .32s cubic-bezier(0,0,.2,1);}
+
+/* focus ring for accessibility */
+button:focus-visible{outline:2px solid #78a9ff;outline-offset:2px;}
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<!-- ════════════════════ DRAWER OVERLAY ════════════════════ -->
+<div id="drawer-overlay" onclick="closeDrawer()"></div>
+
+<!-- ════════════════════ SIDE DRAWER ═══════════════════════ -->
+<nav id="drawer" aria-label="Navigation menu">
+  <div class="flex items-center justify-between px-5 py-4 bg-b80 border-b border-b90">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-b60 flex items-center justify-center font-mono text-xs font-bold text-white">PS</div>
+      <div>
+        <div class="text-white font-bold text-sm leading-tight">Problem Solver Pro</div>
+        <div class="text-b30 text-xs font-mono">McKinsey 7-Step</div>
+      </div>
+    </div>
+    <button onclick="closeDrawer()" class="text-white/60 hover:text-white text-2xl leading-none p-1">✕</button>
+  </div>
+
+  <!-- step list -->
+  <div class="px-4 pt-4 pb-2">
+    <div class="text-b30 text-xs font-bold uppercase tracking-widest mb-3 font-mono">Steps</div>
+    <div id="drawer-steps" class="flex flex-col gap-1"></div>
+  </div>
+
+  <div class="border-t border-b80 mx-4 my-3"></div>
+
+  <!-- actions -->
+  <div class="px-4 flex flex-col gap-2">
+    <div class="text-b30 text-xs font-bold uppercase tracking-widest mb-2 font-mono">Actions</div>
+    <button onclick="closeDrawer();showReport()" class="flex items-center gap-3 px-4 py-3 bg-b80 hover:bg-b70 text-white text-sm font-medium transition w-full text-left">
+      <span class="text-lg">📋</span> View Report
+    </button>
+    <button onclick="closeDrawer();doExport()" class="flex items-center gap-3 px-4 py-3 bg-b80 hover:bg-b70 text-white text-sm font-medium transition w-full text-left">
+      <span class="text-lg">⬇</span> Export JSON
+    </button>
+    <button onclick="closeDrawer();triggerImport()" class="flex items-center gap-3 px-4 py-3 bg-b80 hover:bg-b70 text-white text-sm font-medium transition w-full text-left">
+      <span class="text-lg">⬆</span> Import JSON
+    </button>
+    <button onclick="closeDrawer();viewMD()" class="flex items-center gap-3 px-4 py-3 bg-b80 hover:bg-b70 text-white text-sm font-medium transition w-full text-left">
+      <span class="text-lg">📄</span> View Markdown
+    </button>
+    <button onclick="closeDrawer();window.print()" class="flex items-center gap-3 px-4 py-3 bg-b80 hover:bg-b70 text-white text-sm font-medium transition w-full text-left">
+      <span class="text-lg">🖨</span> Print Report
+    </button>
+    <button onclick="closeDrawer();resetAll()" class="flex items-center gap-3 px-4 py-3 bg-red-900/60 hover:bg-red-900 text-white text-sm font-medium transition w-full text-left">
+      <span class="text-lg">↺</span> Reset All
+    </button>
+  </div>
+
+  <div class="px-5 pt-6 pb-8">
+    <div class="text-b40 text-xs leading-relaxed opacity-70">Progress is auto-saved to your browser. Export JSON to back up your work.</div>
+  </div>
+</nav>
+
+<!-- ════════════════════ HEADER ════════════════════════════ -->
+<header id="hdr" class="bg-b70 text-white sticky top-0 z-100 shadow-lg shrink-0" style="z-index:300">
+  <div class="flex items-center justify-between px-4 h-14">
+    <!-- hamburger -->
+    <button onclick="openDrawer()" class="flex flex-col gap-1.5 p-2 -ml-2 group" aria-label="Open menu">
+      <span class="block w-5 h-0.5 bg-white group-hover:bg-b30 transition"></span>
+      <span class="block w-5 h-0.5 bg-white group-hover:bg-b30 transition"></span>
+      <span class="block w-5 h-0.5 bg-white group-hover:bg-b30 transition"></span>
+    </button>
+
+    <div class="flex items-center gap-2.5 absolute left-1/2 -translate-x-1/2">
+      <div class="w-7 h-7 rounded-full bg-b60 flex items-center justify-center font-mono text-xs font-bold">PS</div>
+      <span class="font-bold text-sm tracking-wide">Problem Solver Pro</span>
+    </div>
+
+    <!-- desktop actions -->
+    <div class="hidden sm:flex items-center gap-1.5">
+      <button onclick="showReport()" class="text-xs border border-white/30 px-2.5 py-1.5 hover:bg-white/10 transition">📋 Report</button>
+      <button onclick="doExport()" class="text-xs border border-white/30 px-2.5 py-1.5 hover:bg-white/10 transition">⬇ JSON</button>
+    </div>
+    <!-- mobile: just report icon -->
+    <button onclick="showReport()" class="sm:hidden text-white/80 hover:text-white p-2" aria-label="Report">📋</button>
+  </div>
+</header>
+
+<!-- ════════════════════ PROGRESS BAR ══════════════════════ -->
+<div id="pbar" class="h-1 bg-b90 shrink-0">
+  <div id="pfill" class="h-full bg-b40 transition-all duration-500" style="width:0%"></div>
+</div>
+
+<!-- ════════════════════ STEP RAIL (tablet+) ═══════════════ -->
+<div id="rail" class="hidden sm:flex bg-b80 px-4 py-2.5 items-center overflow-x-auto shrink-0 gap-0"></div>
+
+<!-- ════════════════════ STAGE ═════════════════════════════ -->
+<main id="stage" class="flex-1 flex items-start justify-center px-3 sm:px-5 py-6 sm:py-10">
+  <div id="mount" class="w-full max-w-2xl"></div>
+</main>
+
+<!-- ════════════════════ REPORT ════════════════════════════ -->
+<div id="rpt" class="hidden px-3 sm:px-5 py-6 sm:py-8 max-w-3xl mx-auto w-full"></div>
+
+<!-- ════════════════════ BOTTOM NAV (mobile) ═══════════════ -->
+<nav id="bnav" aria-label="Bottom navigation">
+  <button onclick="goBack()" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-white/70 hover:text-white active:bg-b80 transition h-full">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    <span class="text-xs font-medium">Back</span>
+  </button>
+  <button onclick="openDrawer()" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-white/70 hover:text-white active:bg-b80 transition h-full">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <span class="text-xs font-medium">Menu</span>
+  </button>
+  <div class="flex-1 flex flex-col items-center justify-center gap-0.5 pointer-events-none">
+    <span id="bnav-prog" class="text-white font-bold text-base font-mono">0%</span>
+    <span class="text-white/50 text-xs">done</span>
+  </div>
+  <button onclick="showReport()" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-white/70 hover:text-white active:bg-b80 transition h-full">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></svg>
+    <span class="text-xs font-medium">Report</span>
+  </button>
+  <button onclick="goNext()" class="flex-1 flex flex-col items-center justify-center gap-0.5 bg-b60 text-white active:bg-b80 transition h-full">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="text-xs font-bold">Next</span>
+  </button>
+</nav>
+
+<!-- ════════════════════ MODAL ══════════════════════════════ -->
+<div id="modal" class="hidden" style="position:fixed;inset:0;z-index:700;">
+  <div class="modal-wrap" id="modal-wrap" onclick="if(event.target===this)closeModal()">
+    <div class="bg-white w-full max-w-lg border-t-4 border-b60 shadow-2xl animate-pop">
+      <div class="bg-b70 text-white px-5 py-3.5 flex justify-between items-center">
+        <h3 id="mtitle" class="font-bold text-sm font-mono tracking-wide">Examples &amp; Tips</h3>
+        <button onclick="closeModal()" class="text-white/60 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center">✕</button>
+      </div>
+      <div id="mbody" class="p-4 space-y-3 overflow-y-auto" style="max-height:60vh;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- hidden file input -->
+<input type="file" id="fin" accept=".json" class="hidden" onchange="doImport(event)"/>
+<!-- toast -->
+<div id="toast" class="fixed z-50 left-1/2 -translate-x-1/2 bottom-20 sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0 bg-g90 text-white text-sm px-5 py-3 shadow-xl rounded-sm opacity-0 translate-y-4 transition-all duration-300 pointer-events-none whitespace-nowrap"></div>
+
+<!-- ════════════════════ JAVASCRIPT ════════════════════════ -->
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STEP / QUESTION DEFINITIONS
+// ═══════════════════════════════════════════════════════════
+const STEPS=[
+{id:1,icon:'🎯',title:'Define the Problem',short:'Define',
+ about:'Precisely articulate the issue. Ask: What exactly are we solving? What are the decision-maker\'s needs, success criteria, and constraints? A sharp definition prevents solving the wrong problem.',
+ mece:'Apply MECE: your problem statement should be neither too broad nor overlapping with separate issues.',
+ qs:[
+  {id:'1_1',type:'textarea',
+   q:'What is the core problem you are trying to solve?',
+   hint:'Write a clear 1–2 sentence problem statement. Be specific about what is wrong — not a solution yet.',
+   ph:'e.g. Our CI/CD pipeline deployment failures increased 40% over the last quarter, causing 6-hour average delays per release cycle…',
+   ex:'define_prob'},
+  {id:'1_2',type:'checkbox',
+   q:'Who is affected by this problem?',
+   hint:'Select all stakeholders whose work or outcomes are directly impacted.',
+   opts:[
+    {v:'dev',l:'Development Team',s:'Engineers, coders, architects'},
+    {v:'devops',l:'DevOps / Platform Engineering',s:'CI/CD, infrastructure, SRE'},
+    {v:'product',l:'Product Management',s:'PMs, owners, roadmap'},
+    {v:'customers',l:'End Users / Customers',s:'External users experiencing impact'},
+    {v:'leadership',l:'Leadership / Executives',s:'Directors, VPs, C-suite'},
+    {v:'qa',l:'QA / Testing',s:'Quality assurance, test automation'},
+    {v:'security',l:'Security / Compliance',s:'InfoSec, audit, regulatory'},
+    {v:'data',l:'Data / Analytics',s:'Data engineers, analysts'},
+   ],ex:'stakeholders'},
+  {id:'1_3',type:'chips',
+   q:'What is the urgency level?',
+   hint:'How quickly does this need to be solved?',
+   opts:['🔴 Critical — blocking now','🟠 High — this sprint','🟡 Medium — this quarter','🟢 Low — strategic / future'],
+   ex:'urgency'},
+  {id:'1_4',type:'textarea',
+   q:'What does success look like? Define measurable outcomes.',
+   hint:'How will you know the problem is solved? Use numbers where possible.',
+   ph:'e.g. Reduce deployment failures to <2% within 60 days; MTTR below 30 minutes; all critical-path tests green in CI…',
+   ex:'success'},
+  {id:'1_5',type:'select',
+   q:'What type of problem is this?',
+   hint:'Problem type shapes your analysis approach.',
+   opts:[
+    {v:'',l:'— Select a type —'},
+    {v:'tech_debt',l:'Technical Debt / Architecture'},
+    {v:'process',l:'Process / Workflow Inefficiency'},
+    {v:'people',l:'Team / People / Skills Gap'},
+    {v:'tooling',l:'Tooling / Infrastructure'},
+    {v:'security',l:'Security / Compliance'},
+    {v:'perf',l:'Performance / Scalability'},
+    {v:'adoption',l:'Adoption / Change Management'},
+    {v:'strategy',l:'Strategy / Direction'},
+    {v:'cx',l:'Customer Experience'},
+    {v:'data',l:'Data Quality / Analytics'},
+    {v:'other',l:'Other'},
+   ],ex:'prob_type'},
+ ]},
+
+{id:2,icon:'🌳',title:'Disaggregate',short:'Break Down',
+ about:'Decompose the problem into smaller, manageable components using MECE logic trees. Generate hypotheses about root causes to reveal leverage points.',
+ mece:'Each branch must be Mutually Exclusive (no overlap) and Collectively Exhaustive (no gaps). Test: can one cause fit two branches? If yes — redefine.',
+ qs:[
+  {id:'2_1',type:'checkbox',
+   q:'Which dimensions of the problem can you identify?',
+   hint:'Break into independent sub-components that together cover the whole problem.',
+   opts:[
+    {v:'people',l:'People',s:'Skills, capacity, roles, culture, motivation'},
+    {v:'process',l:'Process',s:'Workflows, procedures, handoffs, approvals'},
+    {v:'tech',l:'Technology',s:'Systems, tools, code, infrastructure'},
+    {v:'data',l:'Data',s:'Inputs, quality, availability, pipelines'},
+    {v:'external',l:'External Factors',s:'Market, vendors, regulations, customers'},
+    {v:'time',l:'Time / Timeline',s:'Deadlines, scheduling, lead times'},
+    {v:'cost',l:'Cost / Resources',s:'Budget, compute, licensing, headcount'},
+    {v:'quality',l:'Quality / Standards',s:'Testing, compliance, technical standards'},
+   ],ex:'disaggregate',svg:'mece_tree'},
+  {id:'2_2',type:'textarea',
+   q:'List your top 3–5 hypotheses about root causes.',
+   hint:'"We believe [cause] drives [effect] because [evidence]." — one per line.',
+   ph:'1. We believe flaky integration tests cause 60% of CI failures because post-mortems cite non-deterministic results in 6/10 incidents.\n2. We believe staging/prod config drift causes failures because…\n3. We believe…',
+   ex:'hypotheses'},
+  {id:'2_3',type:'chips',
+   q:'What problem structure best fits your decomposition?',
+   hint:'Choose the logic tree style you will use.',
+   opts:['Driver tree (causes→effect)','Issue tree (questions→answers)','Process map (steps→gaps)','Systems map (inputs→outputs)','Risk matrix (likelihood×impact)'],
+   ex:'structures'},
+  {id:'2_4',type:'textarea',
+   q:'What data or evidence do you currently have?',
+   hint:'List metrics, logs, user feedback, or observations that inform your hypotheses.',
+   ph:'e.g. Datadog shows 70% failures in test stage; 3 post-mortems cite non-deterministic test; developer survey: 8/10 rate test env as "unreliable"…',
+   ex:'evidence'},
+ ]},
+
+{id:3,icon:'⚡',title:'Prioritize',short:'Prioritize',
+ about:'Rank issues by impact and effort. Focus resources on the vital few that drive 80% of the solution. Prune low-value branches.',
+ mece:'Your priority list should be MECE — each issue in exactly one bucket, with no gaps across the problem space.',
+ qs:[
+  {id:'3_1',type:'textarea',
+   q:'List the key issues or hypotheses to prioritize (one per line).',
+   hint:'Be specific. Vague items are impossible to score accurately.',
+   ph:'1. Flaky integration tests in CI\n2. Staging/production config drift\n3. No automated rollback mechanism\n4. Missing observability on deployment steps\n5. Long manual approval gates…',
+   ex:'pri_items'},
+  {id:'3_2',type:'checkbox',
+   q:'What criteria will you use to rank them?',
+   hint:'Select the lenses through which you will score each issue.',
+   opts:[
+    {v:'impact',l:'Business Impact',s:'Revenue, customer satisfaction, brand risk'},
+    {v:'freq',l:'Frequency / Recurrence',s:'How often this affects work'},
+    {v:'effort',l:'Implementation Effort',s:'Time, cost, team capacity required'},
+    {v:'risk',l:'Risk if Not Solved',s:'Severity if left unaddressed'},
+    {v:'deps',l:'Blockers / Dependencies',s:'Does solving this unblock other work?'},
+    {v:'confidence',l:'Hypothesis Confidence',s:'How certain are you of the root cause?'},
+    {v:'quick',l:'Quick Win Potential',s:'Can this be solved in 1 sprint?'},
+   ],ex:'pri_criteria'},
+  {id:'3_3',type:'chips',
+   q:'What prioritization method will you use?',
+   hint:'Choose your analytical tool.',
+   opts:["2×2 Impact/Effort Matrix","Pareto 80/20 Analysis","MoSCoW (Must/Should/Could/Won't)","ICE Score (Impact×Confidence×Ease)","Weighted criteria scoring","Team dot voting"],
+   ex:'pri_method',svg:'matrix'},
+  {id:'3_4',type:'textarea',
+   q:'What is your #1 priority issue to solve first, and why?',
+   hint:'Name one item. Justify with impact reasoning.',
+   ph:'e.g. Flaky integration tests — fixing these eliminates 60% of failures (data-backed). High confidence, medium effort (1-sprint fix), unblocks stable deployment metrics…',
+   ex:'top_pri'},
+ ]},
+
+{id:4,icon:'📋',title:'Build a Workplan',short:'Workplan',
+ about:'Create a detailed plan with timelines, owners, data needs, and tasks. Turn analysis into accountable steps.',
+ mece:'Workplan tasks should be MECE — no ownership overlap, and together they cover everything needed to reach the solution.',
+ qs:[
+  {id:'4_1',type:'textarea',
+   q:'List the key work streams or task areas.',
+   hint:'3–6 parallel tracks or sequential phases. Use action verbs. Include owner per stream.',
+   ph:'1. Diagnose — analyze CI failure logs (Owner: DevOps Lead, Week 1)\n2. Stabilize — fix top 4 flaky tests (Owner: Dev Team, Weeks 2–3)\n3. Instrument — add deployment observability (Owner: Platform, Weeks 2–4)\n4. Process — streamline approval gates (Owner: PM, Week 3)…',
+   ex:'workstreams'},
+  {id:'4_2',type:'select',
+   q:'What is the overall target timeline?',
+   hint:'Be realistic — buffer 20% for discovery and iteration.',
+   opts:[
+    {v:'',l:'— Select timeline —'},
+    {v:'1w',l:'1 week (hot fix / incident response)'},
+    {v:'2w',l:'2 weeks (1 sprint)'},
+    {v:'1m',l:'1 month (2 sprints)'},
+    {v:'2m',l:'2 months'},
+    {v:'3m',l:'3 months (quarter)'},
+    {v:'6m',l:'6 months (half-year program)'},
+    {v:'1y',l:'12 months (annual roadmap)'},
+    {v:'ongoing',l:'Ongoing / continuous improvement'},
+   ],ex:'timeline'},
+  {id:'4_3',type:'checkbox',
+   q:'What resources and inputs do you need?',
+   hint:'Check all resource types required to execute.',
+   opts:[
+    {v:'data',l:'Data / Log Access',s:'Observability platforms, analytics, audit logs'},
+    {v:'eng',l:'Engineering Capacity',s:'Developer hours allocated to this work'},
+    {v:'infra',l:'Infrastructure / Environments',s:'Staging, testing, sandbox environments'},
+    {v:'interviews',l:'Stakeholder Interviews',s:'Time from product, customers, or leadership'},
+    {v:'tooling',l:'New Tooling / Licenses',s:'Software procurement needed'},
+    {v:'training',l:'Training / Knowledge',s:'Skill building, documentation, workshops'},
+    {v:'budget',l:'Budget Approval',s:'Spend authority required'},
+    {v:'vendors',l:'External Vendors / Partners',s:'Third-party involvement'},
+   ],ex:'resources'},
+  {id:'4_4',type:'textarea',
+   q:'What are the key risks or blockers to this workplan?',
+   hint:'Top 2–3 things that could derail the plan, with mitigations.',
+   ph:'1. Risk: Engineering bandwidth constrained. Mitigation: negotiate 20% time with PM for 6 weeks.\n2. Risk: Production logs behind compliance firewall. Mitigation: work with security for anonymized access…',
+   ex:'risks'},
+ ]},
+
+{id:5,icon:'🔬',title:'Analyze',short:'Analyze',
+ about:'Gather data and rigorously test your hypotheses. Use quantitative modeling, interviews, benchmarks, and simulations. Stay objective and iterate.',
+ mece:'Test each hypothesis independently (mutually exclusive) while covering all root cause candidates (collectively exhaustive).',
+ qs:[
+  {id:'5_1',type:'chips',
+   q:'Which analytical methods will you use?',
+   hint:'Select all techniques relevant to your problem.',
+   opts:['Log / Error Analysis','A/B Testing','User Interviews','Benchmark Comparison','Statistical Analysis','Load / Stress Testing','Code Review','Survey / NPS','5 Whys / RCA','Cost-Benefit Analysis','Observability Dashboards','Retrospective Analysis'],
+   ex:'methods'},
+  {id:'5_2',type:'textarea',
+   q:'What specific questions must your analysis answer?',
+   hint:'3–5 precise analytical questions, each mapped to a hypothesis from Step 2.',
+   ph:'1. What % of CI failures occur in test vs. build vs. deploy stage over 90 days?\n2. Which config parameters differ between staging and the 12 failed deployments?\n3. What is the correlation between deployment size and failure rate?\n4. How does our MTTR compare to industry benchmark?…',
+   ex:'ana_qs'},
+  {id:'5_3',type:'textarea',
+   q:'What did you find? Summarize your key findings.',
+   hint:'Record findings once analysis is complete. State which hypotheses were confirmed, rejected, or revised.',
+   ph:'Finding 1: 58% of failures traced to 4 tests with race conditions — hypothesis confirmed.\nFinding 2: Config drift was NOT the primary cause — refuted (staging matches prod on 94% of configs).\nFinding 3: Deployments over 500 files changed have 3× failure rate — new insight…',
+   ex:'findings'},
+  {id:'5_4',type:'chips',
+   q:'How confident are you in these findings?',
+   hint:'Honest calibration helps stakeholders weight recommendations correctly.',
+   opts:['⬛ Very High — data-backed, multiple sources','🟦 High — strong evidence, minor gaps','🟨 Medium — directional, needs more data','🟥 Low — early hypotheses, limited data'],
+   ex:'confidence'},
+ ]},
+
+{id:6,icon:'💡',title:'Synthesize',short:'Synthesize',
+ about:'Pull insights into a coherent story. Lead with the answer, then supporting arguments (Pyramid Principle). Highlight trade-offs and risks clearly.',
+ mece:'Recommendations should be MECE — each addresses a distinct root cause, they don\'t overlap in scope, and together they solve the full problem.',
+ qs:[
+  {id:'6_1',type:'textarea',
+   q:'What is your headline recommendation? Lead with the answer.',
+   hint:'1–2 sentences max. The "So what?" — the single most important action or conclusion.',
+   ph:'e.g. Immediately quarantine and fix the 4 flaky integration tests causing 58% of CI failures; implement test reliability scoring and auto-quarantine as a permanent guardrail. This restores deployment cadence within 3 weeks.',
+   ex:'headline'},
+  {id:'6_2',type:'textarea',
+   q:'List your 3–5 supporting recommendations in priority order.',
+   hint:'Each should be actionable, specific, linked to an analysis finding. Include the brief "why".',
+   ph:'1. Fix 4 flaky tests — eliminates 58% of failures (finding 1). 2 engineers, 1 sprint.\n2. Implement deployment size limit of 300 files — reduces tail-risk 3× (finding 3).\n3. Add automated rollback triggers on failure rate threshold.\n4. Weekly deployment health review for early regression detection…',
+   ex:'recommendations'},
+  {id:'6_3',type:'checkbox',
+   q:'What trade-offs or risks should decision-makers know?',
+   hint:'Balanced synthesis acknowledges what is not solved and what new risks recommendations introduce.',
+   opts:[
+    {v:'speed',l:'Speed vs Quality trade-off',s:'Moving faster may increase technical debt'},
+    {v:'cost',l:'Additional cost required',s:'Recommendations require budget or headcount'},
+    {v:'scope',l:'Risk of scope creep',s:'Solution may expand beyond original problem'},
+    {v:'deps',l:'Dependency on other teams',s:'Progress blocked by external stakeholders'},
+    {v:'culture',l:'Cultural / Change management risk',s:'Process changes require team buy-in'},
+    {v:'gaps',l:'Remaining data gaps',s:'Full root cause not perfectly understood yet'},
+    {v:'partial',l:'Partial solution only',s:'Recommendations solve top causes but not all'},
+   ],ex:'tradeoffs'},
+  {id:'6_4',type:'textarea',
+   q:'What is the expected impact if recommendations are implemented?',
+   hint:'Quantify: failures reduced, time saved, cost avoided, velocity gained.',
+   ph:'e.g. Projected 60–70% reduction in deployment failures within 30 days; 6 hours/sprint saved in incident response; enables daily deployments (currently weekly due to risk aversion)…',
+   ex:'impact'},
+ ]},
+
+{id:7,icon:'📣',title:'Communicate',short:'Communicate',
+ about:'Present the solution clearly to stakeholders. Tailor the message, use visuals, prepare for questions. Even great analysis fails without effective buy-in.',
+ mece:'Structure using the Pyramid Principle: lead with the answer, then MECE supporting points — no overlapping arguments, nothing left unsaid.',
+ qs:[
+  {id:'7_1',type:'chips',
+   q:'Who is your primary audience?',
+   hint:'Different audiences need different framings.',
+   opts:['Engineering Leadership (VPs/Directors)','Engineering Team / Technical audience','Product Management','Executive / C-suite','Cross-functional team','External stakeholders / clients','Board / Investors'],
+   ex:'audience'},
+  {id:'7_2',type:'select',
+   q:'What is the primary communication format?',
+   hint:'Match format to audience and decision type.',
+   opts:[
+    {v:'',l:'— Select format —'},
+    {v:'slides',l:'Slide deck / presentation'},
+    {v:'brief',l:'Written brief / memo'},
+    {v:'dashboard',l:'Live dashboard / metrics report'},
+    {v:'workshop',l:'Working session / workshop'},
+    {v:'pr_faq',l:'PR/FAQ document'},
+    {v:'adr',l:'Architecture Decision Record (ADR)'},
+    {v:'wiki',l:'Internal wiki / Confluence page'},
+    {v:'demo',l:'Live demo / prototype'},
+    {v:'email',l:'Email summary'},
+    {v:'slack',l:'Async Slack thread'},
+   ],ex:'comm_format'},
+  {id:'7_3',type:'textarea',
+   q:'What are the top 3 objections you expect, and how will you address them?',
+   hint:'Anticipating pushback strengthens your recommendation and builds credibility.',
+   ph:'"We don\'t have capacity" → Show fixing tests prevents 6hrs/sprint of firefighting — ROI positive by sprint 2.\n"Tests were always flaky" → Data: failure rate is 3× above 6-month baseline.\n"This is a symptom, not root cause" → Acknowledge; position as Phase 1 while deeper architectural work is planned for Q3…',
+   ex:'objections'},
+  {id:'7_4',type:'textarea',
+   q:'What are the specific next steps with owners and deadlines?',
+   hint:'A recommendation without next steps is not actionable. 3–5 concrete actions.',
+   ph:'1. [DevOps Lead] Quarantine 4 flaky tests — this Friday\n2. [Eng Manager] Allocate 2 engineers for test fix sprint — by Monday\n3. [Platform] Add deployment health dashboard — 2 weeks\n4. [All] Weekly deployment retro — starting next Thursday\n5. [PM] Prioritize as Q3 engineering excellence initiative — 1 week…',
+   ex:'next_steps'},
+  {id:'7_5',type:'chips',
+   q:'How will you measure success over time?',
+   hint:'Close the loop — connect back to success criteria from Step 1.',
+   opts:['Weekly metrics review','Deployment failure rate dashboard','Sprint retrospective tracking','OKR / KPI alignment','Automated regression alerts','Monthly executive readout','Team satisfaction survey'],
+   ex:'measurement'},
+ ]},
+];
+
+// ═══════════════════════════════════════════════════════════
+//  EXAMPLES
+// ═══════════════════════════════════════════════════════════
+const EX={
+define_prob:[
+ {t:'DevOps / CI/CD',b:'Deployment failure rate in our Kubernetes-based CD pipeline increased from 3% to 18% over 90 days, causing a 4× increase in rollback frequency and adding an average of 5 hours delay per release cycle.'},
+ {t:'Software Development',b:'The legacy monolith checkout service has 8-second average response time under 500 concurrent users, failing our SLA of <2 seconds and blocking onboarding of 3 new enterprise clients.'},
+ {t:'Solutions Architecture',b:'Our multi-tenant SaaS platform lacks data isolation between tenant namespaces, creating a SOC 2 Type II compliance risk and preventing sales to regulated-industry customers representing $4M ARR.'},
+],
+stakeholders:[
+ {t:'Think in Rings',b:'Inner: people who directly do the work.\nMiddle: people who depend on the outputs.\nOuter: people affected by outcomes.\n\nThis prevents missing less-obvious stakeholders like security or compliance teams.'},
+],
+urgency:[
+ {t:'Urgency vs Importance',b:'Critical = urgent AND important (production down, SLA breach).\nHigh = important but not yet critical (trending wrong).\nMedium = strategic, can be planned.\n\nDon\'t let urgent-but-unimportant noise displace strategic work.'},
+],
+success:[
+ {t:'SMART Metrics',b:'Specific: "deployment failure rate", not "stability".\nMeasurable: "<5%".\nAchievable: 18%→5% is aggressive but possible.\nRelevant: tied to release velocity OKR.\nTime-bound: "within 60 days".'},
+],
+prob_type:[
+ {t:'Type Shapes Approach',b:'Technical Debt → architecture review + refactoring plan.\nProcess → workflow mapping + stakeholder alignment.\nPeople → skills assessment + training plan.\nTooling → build-vs-buy analysis.'},
+],
+disaggregate:[
+ {t:'MECE Logic Tree — DevOps',b:'Pipeline Failures\n├── People: skill gaps in test writing, no test ownership\n├── Process: no quarantine policy, manual rollback approval\n├── Technology: race conditions in test suite, env config drift\n└── Data: no test reliability metrics, no deployment analytics'},
+ {t:'MECE Check',b:'(1) Can one root cause live in two dimensions? If yes — redefine.\n(2) Are there causes that don\'t fit any dimension? If yes — add a dimension.'},
+],
+hypotheses:[
+ {t:'Hypothesis Format',b:'"We believe [specific cause] is responsible for [specific effect] because [existing evidence]. We will test this by [specific action]."'},
+ {t:'DevOps Example',b:'H1: Flaky tests cause 55%+ of failures — evidence: 3 post-mortems. Test: analyze 60 days CI logs.\nH2: Staging CPU limits (4× lower than prod) cause OOM — evidence: anecdotal. Test: compare resource configs.'},
+],
+structures:[
+ {t:'Choosing a Structure',b:'Driver tree: best when you have a clear metric to explain.\nIssue tree: best for open-ended strategy questions.\nProcess map: best when the problem is in a sequence of steps.\nRisk matrix: best for severity × likelihood prioritization.'},
+],
+evidence:[
+ {t:'Evidence Hierarchy',b:'Strongest: quantitative production data (logs, metrics).\nStrong: reproducible experiments (A/B tests).\nModerate: expert interviews (3+ corroborate).\nWeakest: single anecdotes or intuition.'},
+],
+pri_items:[
+ {t:'Specificity Matters',b:'Not "fix tests" but "fix race condition in UserAuthService integration test".\n\nSpecificity enables accurate impact and effort scoring. Vague items always look equal in priority.'},
+],
+pri_criteria:[
+ {t:'ICE Scoring',b:'Fix flaky tests:\nImpact=9, Confidence=8, Ease=7 → ICE=504\n\nRebuild staging env:\nImpact=6, Confidence=4, Ease=2 → ICE=48\n\nClear winner every time.'},
+],
+pri_method:[
+ {t:'2×2 Matrix',b:'Upper-left (Low effort, High impact) = Quick Wins — DO FIRST.\nUpper-right (High effort, High impact) = Major Projects — plan carefully.\nLower-left = Fill-ins.\nLower-right = Avoid.'},
+ {t:'Pareto 80/20',b:'20% of root causes drive 80% of the problem.\n\nIf 4 tests cause 58% of failures, fix those 4 before optimizing anything else. Focus is a strategy.'},
+],
+top_pri:[
+ {t:'Single Priority Discipline',b:'Forcing ONE top priority prevents "everything is P1" syndrome. The discipline of choosing creates clarity for teams.'},
+],
+workstreams:[
+ {t:'DevOps Example',b:'Track A — Diagnose (Wk 1): DevOps lead analyzes 90 days CI logs.\nTrack B — Quick Fix (Wks 2–3): 2 engineers fix top 4 flaky tests.\nTrack C — Infrastructure (Wks 2–4): Platform adds deployment health dashboard.\nTrack D — Process (Wk 3): PM establishes test reliability standards.'},
+],
+timeline:[
+ {t:'Timeboxing',b:'Start with the desired outcome date and work backwards. Buffer 20% for unknowns.\n\nIf critical: "What can we do in 1 sprint to stop the bleeding?" — even if the full fix takes longer.'},
+],
+resources:[
+ {t:'Resource Planning',b:'Engineering capacity is almost always the binding constraint. Get explicit commitments (not "we\'ll try") from leads before locking the workplan.'},
+],
+risks:[
+ {t:'Risk + Pre-mortem',b:'Format: "Risk: [what]. Likelihood: H/M/L. Impact: H/M/L. Mitigation: [action]."\n\nPre-mortem: imagine the project failed — what caused it? Work backwards from that failure.'},
+],
+methods:[
+ {t:'Method Matching for DevOps',b:'Log analysis + observability dashboards: always start here — data without disruption.\nA/B testing: powerful for hypothesis validation.\nAvoid surveys as primary evidence for technical problems.'},
+ {t:'5 Whys Example',b:'Problem: Deployment failed.\nWhy? Test timed out.\nWhy? DB pool exhausted.\nWhy? Parallel threads all requesting connections.\nWhy? No pool limits in test suite.\nWhy? No test infrastructure standards.\nRoot cause → process + culture fix.'},
+],
+ana_qs:[
+ {t:'Good vs Bad Questions',b:'Bad: "Why is our CI broken?" (vague)\nGood: "What % of failures occur in test vs. build vs. deploy stage over 90 days?"\n\nBad: "Is staging bad?"\nGood: "Which config params differ between staging and the 12 failed prod deployments?"'},
+],
+findings:[
+ {t:'Findings Format',b:'"Finding: X is true [evidence]. This means: Y."\n\nExplicitly state which hypotheses were confirmed and which were refuted — this shows rigour.'},
+],
+confidence:[
+ {t:'Calibration',b:'"Very High" = ≥2 independent data sources.\n"High" = 1 solid dataset.\n"Medium" = directional signal only.\n\nOverconfident findings that turn out wrong destroy trust.'},
+],
+headline:[
+ {t:'Pyramid Principle',b:'Lead with the answer (recommendation), then key arguments (findings), then supporting data.\n\nBurying the answer at the end loses busy executives who stop reading early.'},
+],
+recommendations:[
+ {t:'Actionable = Specific + Owner + Timeframe',b:'"Improve the CI pipeline" is NOT actionable.\n"[DevOps Lead] Add deployment health dashboard in Datadog by Week 3" IS actionable.\n\nWHO does WHAT by WHEN with what RESULT?'},
+],
+tradeoffs:[
+ {t:'Why Acknowledge Trade-offs',b:'Presenting only upside looks naive. Naming trade-offs proactively builds credibility and shows deep thinking.'},
+],
+impact:[
+ {t:'Quantify Impact',b:'Work backwards from your Step 1 metrics. Translate to: engineering hours saved, incidents avoided, revenue protected, deployment frequency enabled.'},
+],
+audience:[
+ {t:'Tailoring the Message',b:'Technical: lead with data and mechanisms.\nProduct: lead with user and business impact.\nExecutives: lead with recommendation and outcome — put data in the appendix.'},
+],
+comm_format:[
+ {t:'Format Matching',b:'Slide deck: best for live presentations.\nWritten brief: best for async decision-making.\nADR: best for engineering decisions needing a permanent record.\nWorkshop: best when you need co-creation.'},
+],
+objections:[
+ {t:'Objection Handling',b:'For each objection:\n(1) Acknowledge as valid concern.\n(2) Reframe using data.\n(3) Show cost of inaction.\n\n"We don\'t have capacity" → "Not fixing this costs 6 hrs/sprint in firefighting."'},
+],
+next_steps:[
+ {t:'Next Steps Format',b:'[Role] [Verb] [Specific deliverable] by [Date]\n\n"[DevOps Lead] Quarantine 4 flaky tests in CI config — by this Friday 5pm"\n\nAvoid: "Team to look into testing" — no owner, no deliverable, no date.'},
+],
+measurement:[
+ {t:'Closing the Loop',b:'Your measurement plan should map directly back to the success criteria in Step 1.\n\nAutomate measurement where possible — manual tracking degrades over time.'},
+],
+};
+
+// ═══════════════════════════════════════════════════════════
+//  SVG DIAGRAMS
+// ═══════════════════════════════════════════════════════════
+const SVGS={
+mece_tree:`<div class="mt-4 bg-b10 border border-b20 p-3 overflow-x-auto rounded-sm">
+  <div class="text-xs font-bold text-b70 uppercase tracking-widest mb-2 font-mono">MECE Logic Tree — Example</div>
+  <svg width="500" height="170" viewBox="0 0 500 170" style="min-width:440px;display:block">
+    <rect x="175" y="6" width="150" height="30" rx="1" fill="#0043ce"/>
+    <text x="250" y="25" text-anchor="middle" font-size="11" font-weight="700" fill="white" font-family="IBM Plex Sans,sans-serif">Core Problem</text>
+    <line x1="250" y1="36" x2="250" y2="54" stroke="#0043ce" stroke-width="1.5"/>
+    <line x1="50" y1="54" x2="450" y2="54" stroke="#0043ce" stroke-width="1.5"/>
+    <line x1="50" y1="54" x2="50" y2="72" stroke="#0043ce" stroke-width="1.5"/>
+    <line x1="150" y1="54" x2="150" y2="72" stroke="#0043ce" stroke-width="1.5"/>
+    <line x1="250" y1="54" x2="250" y2="72" stroke="#0043ce" stroke-width="1.5"/>
+    <line x1="350" y1="54" x2="350" y2="72" stroke="#0043ce" stroke-width="1.5"/>
+    <line x1="450" y1="54" x2="450" y2="72" stroke="#0043ce" stroke-width="1.5"/>
+    <rect x="2" y="72" width="96" height="26" rx="1" fill="#002d9c"/><text x="50" y="88" text-anchor="middle" font-size="11" font-weight="600" fill="white" font-family="IBM Plex Sans,sans-serif">People</text>
+    <rect x="102" y="72" width="96" height="26" rx="1" fill="#002d9c"/><text x="150" y="88" text-anchor="middle" font-size="11" font-weight="600" fill="white" font-family="IBM Plex Sans,sans-serif">Process</text>
+    <rect x="202" y="72" width="96" height="26" rx="1" fill="#002d9c"/><text x="250" y="88" text-anchor="middle" font-size="11" font-weight="600" fill="white" font-family="IBM Plex Sans,sans-serif">Technology</text>
+    <rect x="302" y="72" width="96" height="26" rx="1" fill="#002d9c"/><text x="350" y="88" text-anchor="middle" font-size="11" font-weight="600" fill="white" font-family="IBM Plex Sans,sans-serif">Data</text>
+    <rect x="402" y="72" width="96" height="26" rx="1" fill="#002d9c"/><text x="450" y="88" text-anchor="middle" font-size="11" font-weight="600" fill="white" font-family="IBM Plex Sans,sans-serif">External</text>
+    <line x1="50" y1="98" x2="50" y2="116" stroke="#0043ce" stroke-width="1.5"/>
+    <rect x="2" y="116" width="96" height="22" rx="1" fill="#edf5ff"/><text x="50" y="131" text-anchor="middle" font-size="10" fill="#525252" font-family="IBM Plex Sans,sans-serif">Skills gap</text>
+    <line x1="150" y1="98" x2="150" y2="116" stroke="#0043ce" stroke-width="1.5"/>
+    <rect x="102" y="116" width="96" height="22" rx="1" fill="#edf5ff"/><text x="150" y="131" text-anchor="middle" font-size="10" fill="#525252" font-family="IBM Plex Sans,sans-serif">No policy</text>
+    <line x1="250" y1="98" x2="250" y2="116" stroke="#0043ce" stroke-width="1.5"/>
+    <rect x="202" y="116" width="96" height="22" rx="1" fill="#edf5ff"/><text x="250" y="131" text-anchor="middle" font-size="10" fill="#525252" font-family="IBM Plex Sans,sans-serif">Flaky tests</text>
+    <line x1="350" y1="98" x2="350" y2="116" stroke="#0043ce" stroke-width="1.5"/>
+    <rect x="302" y="116" width="96" height="22" rx="1" fill="#edf5ff"/><text x="350" y="131" text-anchor="middle" font-size="10" fill="#525252" font-family="IBM Plex Sans,sans-serif">No metrics</text>
+    <line x1="450" y1="98" x2="450" y2="116" stroke="#0043ce" stroke-width="1.5"/>
+    <rect x="402" y="116" width="96" height="22" rx="1" fill="#edf5ff"/><text x="450" y="131" text-anchor="middle" font-size="10" fill="#525252" font-family="IBM Plex Sans,sans-serif">Vendor issue</text>
+    <text x="250" y="160" text-anchor="middle" font-size="9.5" fill="#0043ce" font-weight="600" font-family="IBM Plex Sans,sans-serif">← Mutually Exclusive · Collectively Exhaustive →</text>
+  </svg>
+</div>`,
+matrix:`<div class="mt-4 bg-b10 border border-b20 p-3 rounded-sm">
+  <div class="text-xs font-bold text-b70 uppercase tracking-widest mb-2 font-mono">2×2 Prioritization Matrix</div>
+  <svg width="280" height="210" viewBox="0 0 280 210" style="display:block">
+    <rect x="30" y="10" width="110" height="90" fill="#defbe6" rx="1"/>
+    <rect x="140" y="10" width="110" height="90" fill="#d0e2ff" rx="1"/>
+    <rect x="30" y="100" width="110" height="90" fill="#fff1f1" rx="1"/>
+    <rect x="140" y="100" width="110" height="90" fill="#f4f4f4" rx="1"/>
+    <text x="85" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#044317" font-family="IBM Plex Sans,sans-serif">QUICK WINS</text>
+    <text x="85" y="48" text-anchor="middle" font-size="9" fill="#044317" font-family="IBM Plex Sans,sans-serif">Do First ✓</text>
+    <text x="195" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#002d9c" font-family="IBM Plex Sans,sans-serif">MAJOR PROJECTS</text>
+    <text x="195" y="48" text-anchor="middle" font-size="9" fill="#002d9c" font-family="IBM Plex Sans,sans-serif">Plan carefully</text>
+    <text x="85" y="120" text-anchor="middle" font-size="10" font-weight="700" fill="#750e13" font-family="IBM Plex Sans,sans-serif">LOW PRIORITY</text>
+    <text x="85" y="134" text-anchor="middle" font-size="9" fill="#750e13" font-family="IBM Plex Sans,sans-serif">Fill-ins only</text>
+    <text x="195" y="120" text-anchor="middle" font-size="10" font-weight="700" fill="#525252" font-family="IBM Plex Sans,sans-serif">THANKLESS</text>
+    <text x="195" y="134" text-anchor="middle" font-size="9" fill="#525252" font-family="IBM Plex Sans,sans-serif">Avoid / defer</text>
+    <line x1="135" y1="6" x2="135" y2="194" stroke="#8d8d8d" stroke-width="1"/>
+    <line x1="26" y1="97" x2="254" y2="97" stroke="#8d8d8d" stroke-width="1"/>
+    <text x="85" y="203" text-anchor="middle" font-size="9" fill="#525252" font-family="IBM Plex Sans,sans-serif">Low Effort</text>
+    <text x="195" y="203" text-anchor="middle" font-size="9" fill="#525252" font-family="IBM Plex Sans,sans-serif">High Effort</text>
+    <text x="10" y="97" text-anchor="middle" font-size="9" fill="#525252" font-family="IBM Plex Sans,sans-serif" transform="rotate(-90 10 97)">Impact →</text>
+  </svg>
+</div>`,
+};
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+const KEY='psp_v3';
+let ans={},stp=0,qst=0;
+
+function loadState(){
+  try{const d=JSON.parse(localStorage.getItem(KEY)||'{}');
+    ans=d.ans||{};stp=+(d.stp||0);qst=+(d.qst||0);}catch(e){}
+}
+function saveState(){
+  localStorage.setItem(KEY,JSON.stringify({ans,stp,qst,ts:Date.now()}));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RAIL (tablet+desktop)
+// ═══════════════════════════════════════════════════════════
+function renderRail(){
+  const rail=document.getElementById('rail');
+  rail.innerHTML=STEPS.map((S,i)=>{
+    const done=stepDone(i);
+    const active=i===stp;
+    const dc=done?'bg-green-400 text-gray-900 border-green-400':active?'bg-white text-b70 border-white':'bg-transparent text-white/40 border-white/25';
+    const conn=i<STEPS.length-1?`<div class="h-0.5 flex-1 min-w-2 ${i<stp?'bg-green-400':'bg-white/20'}"></div>`:'';
+    return `<div class="flex items-center shrink-0 cursor-pointer select-none" onclick="jumpStep(${i})">
+      <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold font-mono border-2 transition-all ${dc}">${done&&!active?'✓':S.id}</div>
+      <span class="ml-1.5 mr-2 text-xs font-medium text-white whitespace-nowrap ${active?'opacity-100 font-bold':'opacity-50'} hidden md:block" style="max-width:72px;overflow:hidden;text-overflow:ellipsis">${S.short}</span>
+    </div>${conn}`;
+  }).join('');
+
+  // progress %
+  const total=STEPS.reduce((a,S)=>a+S.qs.length,0);
+  let done=0;for(let i=0;i<stp;i++)done+=STEPS[i].qs.length;done+=qst;
+  const pct=Math.round(done/total*100);
+  document.getElementById('pfill').style.width=pct+'%';
+  const bn=document.getElementById('bnav-prog');
+  if(bn)bn.textContent=pct+'%';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DRAWER
+// ═══════════════════════════════════════════════════════════
+function openDrawer(){
+  renderDrawerSteps();
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+function renderDrawerSteps(){
+  const el=document.getElementById('drawer-steps');
+  el.innerHTML=STEPS.map((S,i)=>{
+    const done=stepDone(i);
+    const active=i===stp;
+    const bg=active?'bg-b60':done?'bg-b80 hover:bg-b70':'bg-b90 hover:bg-b80';
+    const icon=done&&!active?'✓':S.icon;
+    const answered=S.qs.filter(q=>hasAnswer(q.id)).length;
+    return `<button onclick="closeDrawer();jumpStep(${i})" class="flex items-center gap-3 px-3 py-3 w-full text-left transition rounded-none ${bg} ${active?'border-l-4 border-b40':''}">
+      <span class="text-lg w-7 text-center">${icon}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-white text-sm font-semibold truncate">${S.title}</div>
+        <div class="text-b30 text-xs">${answered}/${S.qs.length} answered</div>
+      </div>
+      ${active?'<span class="text-b30 text-xs font-mono">▶</span>':''}
+    </button>`;
+  }).join('');
+}
+
+function stepDone(i){
+  return STEPS[i].qs.every(q=>hasAnswer(q.id));
+}
+function hasAnswer(id){
+  const v=ans[id];if(!v)return false;
+  try{const p=JSON.parse(v);return Array.isArray(p)?p.length>0:!!v.trim();}catch{return !!v.trim();}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER CARD
+// ═══════════════════════════════════════════════════════════
+function render(){
+  document.getElementById('stage').style.display='flex';
+  document.getElementById('rpt').style.display='none';
+  if(stp>=STEPS.length){showReport();return;}
+  const S=STEPS[stp];
+  const QD=S.qs[qst];
+  if(!QD){stp++;qst=0;saveState();renderRail();render();return;}
+
+  const saved=ans[QD.id]||'';
+  const isFirst=qst===0;
+  const isLastQ=qst===S.qs.length-1;
+  const isLastAll=stp===STEPS.length-1&&isLastQ;
+  const pct=Math.round((totalDone()/totalQ())*100);
+
+  // Step intro (shown only on first question of each step)
+  const introHTML=isFirst?`
+    <div class="bg-b90 text-white px-5 sm:px-6 py-5 flex gap-4 items-start">
+      <div class="text-3xl shrink-0 select-none">${S.icon}</div>
+      <div class="min-w-0">
+        <div class="text-xs font-bold text-b30 uppercase tracking-widest mb-1 font-mono">Step ${S.id} of 7</div>
+        <div class="font-bold text-base mb-1">${S.title}</div>
+        <p class="text-xs text-white/70 leading-relaxed">${S.about}</p>
+        <div class="mt-3 bg-b80 px-3 py-2.5 border-l-2 border-b40">
+          <div class="text-xs font-bold text-b30 uppercase tracking-widest mb-0.5 font-mono">MECE Principle</div>
+          <p class="text-xs text-white/60 leading-relaxed">${S.mece}</p>
+        </div>
+      </div>
+    </div>`:'';
+
+  // Next button label & color
+  const nextTxt=isLastAll?'Finish &amp; Report →':isLastQ?'Next Step →':'Continue →';
+  const nextCls=isLastAll?'bg-green-600 active:bg-green-800':isLastQ?'bg-b80 active:bg-b90':'bg-b60 active:bg-b80';
+
+  const svgBlock=QD.svg&&SVGS[QD.svg]?SVGS[QD.svg]:'';
+
+  document.getElementById('mount').innerHTML=`
+  <div class="w-full card-enter" id="qcard">
+    <div class="bg-white border-t-4 border-b60 shadow-xl">
+      ${introHTML}
+
+      <!-- card header bar -->
+      <div class="bg-b60 px-4 sm:px-5 py-2.5 flex items-center justify-between">
+        <span class="font-mono text-xs font-bold text-white bg-black/20 px-2 py-0.5 hidden sm:inline">STEP ${S.id} — ${S.title.toUpperCase()}</span>
+        <span class="font-mono text-xs font-bold text-white sm:hidden">STEP ${S.id}: ${S.short.toUpperCase()}</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-white/70">Q ${qst+1}/${S.qs.length}</span>
+          <span class="hidden sm:inline text-xs text-white/50">·</span>
+          <span class="hidden sm:inline text-xs text-white/50">${pct}% complete</span>
+        </div>
+      </div>
+
+      <!-- question body -->
+      <div class="px-4 sm:px-6 pt-6 pb-4">
+        <div class="text-xs font-bold text-b60 uppercase tracking-widest mb-2 font-mono">${S.title}</div>
+        <h2 class="text-lg sm:text-xl font-bold text-g100 leading-snug mb-2">${QD.q}</h2>
+        <p class="text-sm text-g70 leading-relaxed mb-5">${QD.hint}</p>
+
+        <!-- input zone -->
+        <div id="inp">${buildInput(QD,saved)}</div>
+
+        ${svgBlock}
+
+        <button onclick="openEx('${QD.ex}')" class="mt-4 text-xs text-b60 hover:text-b80 underline underline-offset-2 flex items-center gap-1.5 active:opacity-70">
+          💡 See examples &amp; tips
+        </button>
+      </div>
+
+      <!-- footer (desktop) -->
+      <div class="hidden sm:flex px-6 pb-6 pt-3 border-t border-g20 items-center justify-between gap-3">
+        <button onclick="goBack()" class="text-sm border border-g30 text-g70 px-4 py-2.5 hover:border-g50 hover:text-g100 transition flex items-center gap-1.5">← Back</button>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-g50">${countAnswered()}/${totalQ()} answered</span>
+          <button onclick="goNext()" class="text-sm font-bold text-white px-6 py-2.5 transition ${nextCls}">${nextTxt}</button>
+        </div>
+      </div>
+
+      <!-- footer (mobile) — Continue button above bottom nav -->
+      <div class="sm:hidden px-4 pb-4 pt-3 border-t border-g20">
+        <button onclick="goNext()" class="w-full text-sm font-bold text-white py-3.5 transition ${nextCls} flex items-center justify-center gap-2">${nextTxt}</button>
+      </div>
+    </div>
+  </div>`;
+
+  renderRail();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INPUT BUILDERS
+// ═══════════════════════════════════════════════════════════
+function buildInput(QD,saved){
+  if(QD.type==='textarea'){
+    return `<textarea class="cds-input" id="ans" oninput="save1('${QD.id}',this.value)" placeholder="${QD.ph||''}">${esc(saved)}</textarea>`;
+  }
+  if(QD.type==='select'){
+    const opts=QD.opts.map(o=>`<option value="${o.v}"${saved===o.v?' selected':''}>${o.l}</option>`).join('');
+    return `<select class="cds-input" id="ans" onchange="save1('${QD.id}',this.value)">${opts}</select>`;
+  }
+  if(QD.type==='checkbox'){
+    const sel=saved?tryParse(saved,[]):[];
+    return `<div class="flex flex-col gap-1.5" id="ans">
+      ${QD.opts.map(o=>{
+        const ck=sel.includes(o.v);
+        return `<label class="ck-row${ck?' on':''}" data-v="${o.v}">
+          <input type="checkbox" value="${o.v}"${ck?' checked':''} onchange="syncCk('${QD.id}')"/>
+          <div class="min-w-0">
+            <div class="text-sm font-semibold text-g90 leading-snug">${o.l}</div>
+            ${o.s?`<div class="text-xs text-g50 mt-0.5">${o.s}</div>`:''}
+          </div>
+        </label>`;
+      }).join('')}
+    </div>`;
+  }
+  if(QD.type==='chips'){
+    const sel=saved?tryParse(saved,[]):[];
+    return `<div class="flex flex-wrap gap-2" id="ans">
+      ${QD.opts.map(o=>{
+        const enc=btoa(unescape(encodeURIComponent(o)));
+        const ck=sel.includes(o);
+        return `<button type="button" class="chip${ck?' on':''}" onclick="toggleChip(this,'${QD.id}')" data-v="${enc}">${o}</button>`;
+      }).join('')}
+    </div>`;
+  }
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SAVE HELPERS
+// ═══════════════════════════════════════════════════════════
+function save1(id,val){ans[id]=val;saveState();}
+
+function syncCk(id){
+  const vals=[...document.querySelectorAll('#ans input[type=checkbox]:checked')].map(b=>b.value);
+  ans[id]=JSON.stringify(vals);saveState();
+  document.querySelectorAll('#ans .ck-row').forEach(row=>{
+    const on=vals.includes(row.dataset.v);
+    row.classList.toggle('on',on);
+  });
+}
+
+function toggleChip(btn,id){
+  btn.classList.toggle('on');
+  const vals=[...document.querySelectorAll('#ans .chip.on')].map(b=>decodeURIComponent(escape(atob(b.dataset.v))));
+  ans[id]=JSON.stringify(vals);saveState();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function goNext(){
+  // persist textarea/select on tap
+  const QD=STEPS[stp]?.qs[qst];
+  if(QD&&(QD.type==='textarea'||QD.type==='select')){
+    const el=document.getElementById('ans');
+    if(el){ans[QD.id]=el.value;saveState();}
+  }
+  const S=STEPS[stp];
+  if(qst<S.qs.length-1)qst++;
+  else{stp++;qst=0;}
+  saveState();renderRail();render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function goBack(){
+  if(document.getElementById('rpt').style.display!=='none'){backToForm();return;}
+  if(qst>0)qst--;
+  else if(stp>0){stp--;qst=STEPS[stp].qs.length-1;}
+  saveState();renderRail();render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function jumpStep(i){
+  stp=i;qst=0;saveState();
+  document.getElementById('stage').style.display='flex';
+  document.getElementById('rpt').style.display='none';
+  renderRail();render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function totalDone(){
+  let d=0;for(let i=0;i<stp;i++)d+=STEPS[i].qs.length;return d+qst;
+}
+function totalQ(){return STEPS.reduce((a,S)=>a+S.qs.length,0);}
+function countAnswered(){return STEPS.reduce((a,S)=>a+S.qs.filter(q=>hasAnswer(q.id)).length,0);}
+
+// ═══════════════════════════════════════════════════════════
+//  REPORT
+// ═══════════════════════════════════════════════════════════
+function showReport(){
+  document.getElementById('stage').style.display='none';
+  document.getElementById('rpt').style.display='block';
+  document.getElementById('rpt').innerHTML=buildReportHTML();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function backToForm(){
+  document.getElementById('stage').style.display='flex';
+  document.getElementById('rpt').style.display='none';
+}
+
+function buildReportHTML(){
+  const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  let h=`
+  <div class="mb-5 flex flex-wrap gap-2 noprint">
+    <button onclick="backToForm()" class="flex-1 sm:flex-none bg-b60 hover:bg-b70 active:bg-b80 text-white text-sm font-bold px-4 py-3 transition flex items-center justify-center gap-2">← Back</button>
+    <button onclick="doExport()" class="flex-1 sm:flex-none bg-g80 hover:bg-g90 active:bg-g100 text-white text-sm font-bold px-4 py-3 transition flex items-center justify-center gap-2">⬇ Export JSON</button>
+    <button onclick="viewMD()" class="flex-1 sm:flex-none border border-b60 text-b60 hover:bg-b10 text-sm font-bold px-4 py-3 transition flex items-center justify-center gap-2">📄 Markdown</button>
+    <button onclick="window.print()" class="flex-1 sm:flex-none border border-g50 text-g70 hover:bg-g20 text-sm font-bold px-4 py-3 transition flex items-center justify-center gap-2">🖨 Print</button>
+  </div>
+  <div class="bg-b70 text-white px-5 sm:px-6 py-5 mb-4">
+    <div class="font-mono text-xs text-b30 mb-1 uppercase tracking-widest">Problem Solving Report</div>
+    <h1 class="text-xl sm:text-2xl font-bold mb-1">McKinsey 7-Step Framework</h1>
+    <div class="text-sm text-white/50">${date}</div>
+  </div>`;
+
+  STEPS.forEach(S=>{
+    const hasAns=S.qs.some(q=>hasAnswer(q.id));
+    if(!hasAns)return;
+    h+=`<div class="bg-white border-t-4 border-b60 shadow mb-4">
+      <div class="bg-b80 text-white px-4 sm:px-5 py-3 flex items-center gap-3">
+        <span class="text-lg">${S.icon}</span>
+        <span class="font-bold text-sm uppercase tracking-wide">Step ${S.id}: ${S.title}</span>
+      </div>
+      <div class="px-4 sm:px-5 py-4 divide-y divide-g20">
+        ${S.qs.map(QD=>{
+          const v=ans[QD.id];
+          if(!v||v==='[]'||!v.trim())return '';
+          let display='';
+          if(QD.type==='checkbox'||QD.type==='chips'){
+            try{const arr=JSON.parse(v);display=arr.map(x=>`<span class="inline-block bg-b20 text-b80 text-xs font-medium px-2.5 py-1 mr-1 mb-1">${x}</span>`).join('');}
+            catch{display=`<span class="text-sm">${v}</span>`;}
+          }else if(QD.type==='select'){
+            const opt=QD.opts?.find(o=>o.v===v);
+            display=`<span class="text-sm font-semibold text-g90">${opt?opt.l:v}</span>`;
+          }else{
+            display=`<p class="text-sm text-g90 whitespace-pre-line leading-relaxed">${esc(v)}</p>`;
+          }
+          return `<div class="py-3">
+            <div class="text-xs font-bold text-g50 uppercase tracking-wider mb-1.5">${QD.q}</div>
+            <div>${display}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  return h;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MARKDOWN
+// ═══════════════════════════════════════════════════════════
+function buildMD(){
+  let md=`# Problem Solving Report\n_McKinsey 7-Step Framework — ${new Date().toLocaleDateString()}_\n\n---\n\n`;
+  STEPS.forEach(S=>{
+    if(!S.qs.some(q=>hasAnswer(q.id)))return;
+    md+=`## ${S.icon} Step ${S.id}: ${S.title}\n\n`;
+    S.qs.forEach(QD=>{
+      const v=ans[QD.id];
+      if(!v||v==='[]'||!v.trim())return;
+      md+=`### ${QD.q}\n\n`;
+      if(QD.type==='checkbox'||QD.type==='chips'){
+        try{JSON.parse(v).forEach(x=>{md+=`- ${x}\n`;});}catch{md+=v+'\n';}
+      }else if(QD.type==='select'){
+        const opt=QD.opts?.find(o=>o.v===v);md+=`**${opt?opt.l:v}**\n`;
+      }else{md+=v+'\n';}
+      md+='\n';
+    });
+    md+='---\n\n';
+  });
+  return md;
+}
+
+function viewMD(){
+  const md=buildMD();
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;inset:0;background:rgba(22,22,22,.85);z-index:800;display:flex;align-items:flex-start;justify-content:center;padding:max(48px,4vw) 16px 24px;overflow-y:auto;';
+  wrap.innerHTML=`<div style="background:#161616;border-top:4px solid #f1c21b;width:100%;max-width:720px;box-shadow:0 8px 32px rgba(0,0,0,.4);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#262626;color:white;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;">📄 Markdown Export</span>
+      <div style="display:flex;gap:8px;">
+        <button id="copybtn" style="font-size:12px;background:#0f62fe;color:white;border:none;padding:6px 14px;cursor:pointer;font-family:inherit;">📋 Copy</button>
+        <button onclick="this.closest('div[style]').remove()" style="color:rgba(255,255,255,.6);background:none;border:none;font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">✕</button>
+      </div>
+    </div>
+    <pre style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#98c379;padding:20px;white-space:pre-wrap;word-break:break-word;max-height:65vh;overflow-y:auto;line-height:1.7;margin:0;">${esc(md)}</pre>
+  </div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector('#copybtn').onclick=()=>navigator.clipboard.writeText(md).then(()=>showToast('Copied!'));
+  wrap.addEventListener('click',e=>{if(e.target===wrap)wrap.remove();});
+}
+
+// ═══════════════════════════════════════════════════════════
+//  IMPORT / EXPORT / RESET
+// ═══════════════════════════════════════════════════════════
+function doExport(){
+  const blob=new Blob([JSON.stringify({ans,stp,qst,ts:new Date().toISOString(),v:'psp_v3'},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`problem-solver-${Date.now()}.json`;a.click();
+  showToast('JSON exported');
+}
+function triggerImport(){document.getElementById('fin').click();}
+function doImport(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(d.ans)ans=d.ans;
+      if(d.stp!=null)stp=+d.stp;
+      if(d.qst!=null)qst=+d.qst;
+      saveState();renderRail();render();showToast('Imported successfully');
+    }catch{showToast('Invalid JSON file');}
+  };
+  r.readAsText(file);e.target.value='';
+}
+function resetAll(){
+  if(!confirm('Reset all answers and start over?'))return;
+  ans={};stp=0;qst=0;localStorage.removeItem(KEY);
+  document.getElementById('stage').style.display='flex';
+  document.getElementById('rpt').style.display='none';
+  renderRail();render();showToast('Reset complete');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAL (examples)
+// ═══════════════════════════════════════════════════════════
+function openEx(key){
+  const items=EX[key]||[];
+  document.getElementById('mtitle').textContent='💡 Examples & Tips';
+  document.getElementById('mbody').innerHTML=items.length
+    ?items.map(e=>`<div style="background:#edf5ff;border-left:4px solid #0f62fe;padding:12px 14px;">
+        <div style="font-size:11px;font-weight:700;color:#0043ce;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;">${e.t}</div>
+        <p style="font-size:13px;color:#393939;line-height:1.6;white-space:pre-line;margin:0;">${e.b}</p>
+      </div>`).join('')
+    :'<p style="font-size:13px;color:#525252;">No examples for this question.</p>';
+  document.getElementById('modal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeModal(){
+  document.getElementById('modal').classList.add('hidden');
+  document.body.style.overflow='';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.remove('opacity-0','translate-y-4');
+  t.classList.add('opacity-100','translate-y-0');
+  clearTimeout(t._to);
+  t._to=setTimeout(()=>{
+    t.classList.add('opacity-0','translate-y-4');
+    t.classList.remove('opacity-100','translate-y-0');
+  },2600);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════════
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function tryParse(s,fb){try{return JSON.parse(s);}catch{return fb;}}
+
+// keyboard nav (desktop)
+document.addEventListener('keydown',e=>{
+  if(['TEXTAREA','INPUT','SELECT'].includes(e.target.tagName))return;
+  if(e.key==='ArrowRight')goNext();
+  if(e.key==='ArrowLeft')goBack();
+  if(e.key==='Escape')closeModal();
+});
+
+// swipe nav (mobile)
+let tx=0;
+document.addEventListener('touchstart',e=>{tx=e.changedTouches[0].clientX;},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(document.getElementById('drawer').classList.contains('open'))return;
+  const dx=e.changedTouches[0].clientX-tx;
+  if(Math.abs(dx)>60){
+    if(dx<0)goNext();
+    else goBack();
+  }
+},{passive:true});
+
+// ═══════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════
+loadState();
+renderRail();
+render();
+</script>
+</body>
+</html>
