@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ansible File Operations Reference</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['IBM Plex Sans', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'monospace'],
+          },
+          colors: {
+            ibm: {
+              blue:    '#0f62fe',
+              'blue-hover': '#0353e9',
+              'blue-light': '#edf5ff',
+              'blue-mid':   '#d0e2ff',
+              'blue-dark':  '#002d9c',
+              gray10: '#f4f4f4',
+              gray20: '#e0e0e0',
+              gray30: '#c6c6c6',
+              gray50: '#8d8d8d',
+              gray70: '#525252',
+              gray90: '#262626',
+              black:  '#161616',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'IBM Plex Sans', sans-serif; }
+    code, pre, .mono { font-family: 'IBM Plex Mono', monospace; }
+
+    .entry { display: none; }
+    .entry.open { display: block; }
+
+    .chevron { transition: transform 0.2s ease; }
+    .chevron.rotated { transform: rotate(90deg); }
+
+    /* Tab active underline */
+    .tab-btn { border-bottom: 3px solid transparent; }
+    .tab-btn.active { border-bottom: 3px solid #0f62fe; color: #0f62fe; font-weight: 600; }
+
+    /* Section panels */
+    .section-panel { display: none; }
+    .section-panel.active { display: block; }
+
+    pre { white-space: pre; overflow-x: auto; }
+
+    /* Fade-in stagger */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card { animation: fadeUp 0.25s ease both; }
+    .card:nth-child(1)  { animation-delay: 0.03s; }
+    .card:nth-child(2)  { animation-delay: 0.06s; }
+    .card:nth-child(3)  { animation-delay: 0.09s; }
+    .card:nth-child(4)  { animation-delay: 0.12s; }
+    .card:nth-child(5)  { animation-delay: 0.15s; }
+    .card:nth-child(6)  { animation-delay: 0.18s; }
+    .card:nth-child(7)  { animation-delay: 0.21s; }
+    .card:nth-child(8)  { animation-delay: 0.24s; }
+    .card:nth-child(9)  { animation-delay: 0.27s; }
+    .card:nth-child(10) { animation-delay: 0.30s; }
+  </style>
+</head>
+<body class="bg-white text-ibm-black min-h-screen">
+
+  <!-- ── TOP BAR ── -->
+  <div class="bg-ibm-black text-white text-xs font-mono px-8 py-2 flex items-center gap-3">
+    <span class="text-ibm-blue font-semibold tracking-widest uppercase">IBM</span>
+    <span class="text-ibm-gray30">|</span>
+    <span class="text-ibm-gray30">Ansible Reference Documentation</span>
+  </div>
+
+  <!-- ── HERO HEADER ── -->
+  <header class="border-b-2 border-ibm-blue bg-white px-8 pt-10 pb-8">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-xs font-mono tracking-widest text-ibm-blue uppercase mb-3">Reference · v1.0</p>
+      <h1 class="text-4xl font-bold text-ibm-black tracking-tight leading-none mb-3">
+        Ansible File Operations
+      </h1>
+      <p class="text-ibm-gray70 text-base font-light max-w-2xl">
+        Comprehensive reference for file copy, existence checks, backup strategies, and common shell actions.
+        All modules are <code class="text-ibm-blue text-sm">ansible.builtin</code> unless noted.
+      </p>
+      <!-- stat pills -->
+      <div class="flex flex-wrap gap-3 mt-6">
+        <span class="bg-ibm-blue-light border border-ibm-blue-mid text-ibm-blue-dark text-xs font-mono px-3 py-1 rounded-sm">6 Copy entries</span>
+        <span class="bg-ibm-blue-light border border-ibm-blue-mid text-ibm-blue-dark text-xs font-mono px-3 py-1 rounded-sm">8 Existence entries</span>
+        <span class="bg-ibm-blue-light border border-ibm-blue-mid text-ibm-blue-dark text-xs font-mono px-3 py-1 rounded-sm">8 Backup entries</span>
+        <span class="bg-ibm-blue-light border border-ibm-blue-mid text-ibm-blue-dark text-xs font-mono px-3 py-1 rounded-sm">12 Shell entries</span>
+        <span class="bg-ibm-blue text-white text-xs font-mono px-3 py-1 rounded-sm">24 Quick-ref tasks</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── TAB NAV ── -->
+  <nav class="bg-ibm-gray10 border-b border-ibm-gray20 px-8 sticky top-0 z-20">
+    <div class="max-w-5xl mx-auto flex overflow-x-auto">
+      <button onclick="showTab('copy')"      id="tab-copy"      class="tab-btn active  px-5 py-4 text-sm font-sans whitespace-nowrap text-ibm-gray70 hover:text-ibm-blue transition-colors">⇄ File Copy</button>
+      <button onclick="showTab('existence')" id="tab-existence" class="tab-btn         px-5 py-4 text-sm font-sans whitespace-nowrap text-ibm-gray70 hover:text-ibm-blue transition-colors">? File Existence</button>
+      <button onclick="showTab('backup')"    id="tab-backup"    class="tab-btn         px-5 py-4 text-sm font-sans whitespace-nowrap text-ibm-gray70 hover:text-ibm-blue transition-colors">⟳ Backup</button>
+      <button onclick="showTab('shell')"     id="tab-shell"     class="tab-btn         px-5 py-4 text-sm font-sans whitespace-nowrap text-ibm-gray70 hover:text-ibm-blue transition-colors">&gt;_ Shell Actions</button>
+      <button onclick="showTab('cheat')"     id="tab-cheat"     class="tab-btn         px-5 py-4 text-sm font-sans whitespace-nowrap text-ibm-gray70 hover:text-ibm-blue transition-colors">⊞ Cheat Sheet</button>
+    </div>
+  </nav>
+
+  <!-- ── MAIN ── -->
+  <main class="max-w-5xl mx-auto px-8 py-8">
+
+    <!-- Badge helper colours -->
+    <!-- module=blue  parameter=teal  fact=green  keyword=orange  pattern=purple -->
+
+    <!-- ════════════════════════════════ FILE COPY ════════════════════════════════ -->
+    <div id="panel-copy" class="section-panel active space-y-3">
+
+      <!-- copy -->
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">copy</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Copy a file from the control node (or remote) to a remote host.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Copy a file from the control node (or remote) to a remote host.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- name: Copy config file
+  ansible.builtin.copy:
+    src: /local/path/app.conf
+    dest: /etc/app/app.conf
+    owner: root
+    group: root
+    mode: '0644'</pre>
+        </div>
+      </div>
+
+      <!-- remote_src -->
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-teal-50 text-teal-700 border border-teal-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">parameter</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">remote_src</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Set to true to copy a file already on the remote host (not the controller).</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Set to <code class="text-ibm-blue">true</code> to copy a file already on the remote host (not the controller).</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.copy:
+    src: /tmp/source.txt
+    dest: /etc/dest.txt
+    remote_src: true</pre>
+        </div>
+      </div>
+
+      <!-- synchronize -->
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">synchronize</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Use rsync to sync files/directories efficiently between hosts.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Use rsync to sync files/directories efficiently between hosts. Requires <code class="text-ibm-blue">ansible.posix</code> collection.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- name: Sync app directory
+  ansible.posix.synchronize:
+    src: /src/app/
+    dest: /opt/app/
+    delete: true
+    recursive: true</pre>
+        </div>
+      </div>
+
+      <!-- fetch -->
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">fetch</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Fetch a file FROM a remote host back to the control node.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Fetch a file FROM a remote host back to the control node. Opposite direction of <code class="text-ibm-blue">copy</code>.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- name: Fetch log from remote
+  ansible.builtin.fetch:
+    src: /var/log/app.log
+    dest: /tmp/fetched/
+    flat: true</pre>
+        </div>
+      </div>
+
+      <!-- template -->
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">template</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Copy a Jinja2 template, rendering variables before writing to remote.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Copy a Jinja2 template, rendering variables before writing to the remote host.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- name: Deploy rendered config
+  ansible.builtin.template:
+    src: templates/nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    mode: '0644'</pre>
+        </div>
+      </div>
+
+      <!-- assemble -->
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">assemble</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Assemble a file on the remote from fragments in a directory.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Assemble a file on the remote from multiple fragment files in a source directory.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.assemble:
+    src: /etc/motd.d/
+    dest: /etc/motd</pre>
+        </div>
+      </div>
+
+    </div><!-- /panel-copy -->
+
+
+    <!-- ════════════════════════════════ FILE EXISTENCE ════════════════════════════════ -->
+    <div id="panel-existence" class="section-panel space-y-3">
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">stat</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Gather facts about a file — existence, type, size, checksum, etc.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Gather facts about a file or path — existence, type, size, checksum, permissions, and more.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- name: Check if file exists
+  ansible.builtin.stat:
+    path: /etc/app/config.yml
+  register: config_stat
+
+- name: Act only if file exists
+  debug:
+    msg: "File found"
+  when: config_stat.stat.exists</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">fact</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">stat.stat.exists</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Boolean — true if the path exists.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Boolean returned by the <code class="text-ibm-blue">stat</code> module — <code class="text-ibm-blue">true</code> if the path exists on the remote host.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">when: config_stat.stat.exists</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">fact</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">stat.stat.isreg</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">True if the path is a regular file (not a directory or symlink).</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">True if the path is a regular file — not a directory, symlink, or special file.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">when: config_stat.stat.isreg</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">fact</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">stat.stat.isdir</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">True if the path is a directory.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">True if the path is a directory.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">when: config_stat.stat.isdir</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">fact</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">stat.stat.size / stat.stat.checksum</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">File size in bytes and SHA1 checksum.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">File size in bytes (valid only when <code class="text-ibm-blue">stat.stat.exists</code> is true). SHA1 checksum useful for detecting changes.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">when: config_stat.stat.size > 0
+
+- debug:
+    var: config_stat.stat.checksum</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">find</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Search for files matching patterns, age, size, or type within a path.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Search for files matching patterns, age, size, or type within a path. Returns a list of matched paths.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.find:
+    paths: /var/log/app/
+    patterns: "*.log"
+    age: "7d"
+    recurse: true
+  register: old_logs</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-orange-50 text-orange-700 border border-orange-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">keyword</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">failed_when / changed_when</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Control when a task is marked failed or changed.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Control when a task is marked failed or changed — useful after shell existence checks where non-zero rc is acceptable.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- shell: test -f /etc/myapp.conf
+  register: result
+  failed_when: result.rc not in [0, 1]
+  changed_when: false</pre>
+        </div>
+      </div>
+
+    </div><!-- /panel-existence -->
+
+
+    <!-- ════════════════════════════════ BACKUP ════════════════════════════════ -->
+    <div id="panel-backup" class="section-panel space-y-3">
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-teal-50 text-teal-700 border border-teal-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">parameter</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">backup: true &nbsp;(copy)</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Auto-create a timestamped backup before overwrite.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Auto-create a timestamped backup when <code class="text-ibm-blue">copy</code> would overwrite a file. Backup format: <code class="text-ibm-blue">/path/file.YYYY-MM-DD@HH:MM:SS~</code></p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.copy:
+    src: /tmp/new_app.log
+    dest: /var/log/app.log
+    backup: true</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-teal-50 text-teal-700 border border-teal-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">parameter</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">backup: true &nbsp;(template)</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Same backup option works in the template module.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Same <code class="text-ibm-blue">backup: true</code> option works identically in the <code class="text-ibm-blue">template</code> module.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.template:
+    src: app.conf.j2
+    dest: /etc/app/app.conf
+    backup: true</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-teal-50 text-teal-700 border border-teal-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">parameter</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">backup: true &nbsp;(lineinfile / blockinfile)</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Also available in lineinfile and blockinfile.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3"><code class="text-ibm-blue">backup: true</code> also available in <code class="text-ibm-blue">lineinfile</code> and <code class="text-ibm-blue">blockinfile</code>.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.lineinfile:
+    path: /etc/app/app.conf
+    regexp: '^log_level'
+    line: 'log_level = INFO'
+    backup: true</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">pattern</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">Manual backup with timestamp suffix</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Copy to a backup path using ansible_date_time.epoch before overwriting.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Manually copy a file to a backup path before overwriting, using a Unix timestamp suffix for uniqueness.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- name: Backup log before rotation
+  ansible.builtin.copy:
+    src: /var/log/app.log
+    dest: "/var/log/app.log.{{ ansible_date_time.epoch }}.bak"
+    remote_src: true
+
+- name: Overwrite the original
+  ansible.builtin.copy:
+    src: /tmp/new_app.log
+    dest: /var/log/app.log</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-green-50 text-green-700 border border-green-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">fact</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">ansible_date_time.epoch / .date</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Built-in facts for Unix timestamp and YYYY-MM-DD date.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Built-in facts — <code class="text-ibm-blue">epoch</code> gives Unix timestamp, <code class="text-ibm-blue">date</code> gives YYYY-MM-DD. Both ideal for unique backup suffixes.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">dest: "/var/log/app.log.{{ ansible_date_time.epoch }}.bak"
+dest: "/backup/app.log.{{ ansible_date_time.date }}.bak"</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">archive / unarchive</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Compress files into .tar.gz / .zip archives for structured backups.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Compress files into <code class="text-ibm-blue">.tar.gz</code> / <code class="text-ibm-blue">.zip</code> archives for structured backups. Requires <code class="text-ibm-blue">community.general</code> collection.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- community.general.archive:
+    path: /var/log/app/
+    dest: /backup/app_logs_{{ ansible_date_time.date }}.tar.gz
+    format: gz</pre>
+        </div>
+      </div>
+
+    </div><!-- /panel-backup -->
+
+
+    <!-- ════════════════════════════════ SHELL ACTIONS ════════════════════════════════ -->
+    <div id="panel-shell" class="section-panel space-y-3">
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">shell</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Run a shell command with full shell features (pipes, redirects, globs).</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Run a shell command with full shell features — pipes <code class="text-ibm-blue">|</code>, redirects <code class="text-ibm-blue">&gt;</code>, globs <code class="text-ibm-blue">*</code>. Use when <code class="text-ibm-blue">command</code> is not sufficient.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.shell: |
+    cat /var/log/app.log | grep ERROR > /tmp/errors.txt</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">command</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Run a command without invoking a shell — safer, more idempotent.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Run a command without invoking a shell — safer and more idempotent. No pipes, redirects, or globs. Prefer over <code class="text-ibm-blue">shell</code> when possible.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.command:
+    cmd: /usr/bin/myapp --check
+    chdir: /opt/myapp</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">raw</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Send a raw SSH command — bypasses Python entirely.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Send a raw SSH command — bypasses Python entirely. Used for bootstrapping when Python is not yet installed on the target.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.raw: apt-get install -y python3</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-orange-50 text-orange-700 border border-orange-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">keyword</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">register</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Save a task's output (stdout, stderr, rc) into a variable.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Save a task's output — <code class="text-ibm-blue">stdout</code>, <code class="text-ibm-blue">stderr</code>, <code class="text-ibm-blue">rc</code> — into a variable for later use in the playbook.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- shell: cat /etc/os-release
+  register: os_info
+
+- debug:
+    var: os_info.stdout_lines</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-teal-50 text-teal-700 border border-teal-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">parameter</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">creates / removes</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Skip task if a file already exists (creates) or does not exist (removes).</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3"><code class="text-ibm-blue">creates</code>: skip if the file exists. <code class="text-ibm-blue">removes</code>: skip if the file does not exist. Provides idempotency for command/shell tasks.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.command:
+    cmd: /opt/setup.sh
+    creates: /opt/.setup_done
+
+- ansible.builtin.command:
+    cmd: /opt/cleanup.sh
+    removes: /opt/.setup_done</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">lineinfile</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Ensure a specific line exists (or does not) in a file.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Ensure a specific line exists (or does not) in a file. Idempotent sed-like editing — will not duplicate lines.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: '10.0.0.5 myserver'
+    state: present</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">blockinfile</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Insert or update a block of lines wrapped by marker comments.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Insert or update a block of multiple lines wrapped by named marker comments to prevent duplication.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    block: |
+      AllowUsers deploy
+      PermitRootLogin no
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">replace</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Regex-based find-and-replace within a file.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Regex-based find-and-replace within a file. More powerful than <code class="text-ibm-blue">lineinfile</code> for pattern-based substitutions.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.replace:
+    path: /etc/app/config.ini
+    regexp: 'debug=true'
+    replace: 'debug=false'</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">file</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Create, delete, or set permissions on files, dirs, or symlinks.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Create, delete, or set permissions/ownership on files, directories, or symlinks.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.file:
+    path: /var/log/app
+    state: directory
+    owner: appuser
+    mode: '0755'
+
+- ansible.builtin.file:
+    path: /tmp/stale.lock
+    state: absent</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">cron</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Manage cron jobs — schedule shell actions to run periodically.</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Manage cron jobs — schedule shell actions to run periodically on remote hosts.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.cron:
+    name: "Rotate app log"
+    minute: "0"
+    hour: "3"
+    job: "/usr/sbin/logrotate /etc/logrotate.d/app"</pre>
+        </div>
+      </div>
+
+      <div class="card border border-ibm-gray20 hover:border-ibm-blue transition-colors rounded-sm bg-white">
+        <button onclick="toggle(this)" class="w-full flex items-center gap-3 px-5 py-4 text-left">
+          <span class="bg-blue-100 text-ibm-blue border border-blue-200 text-xs font-mono px-2 py-0.5 rounded-sm uppercase tracking-wide shrink-0">module</span>
+          <code class="text-ibm-blue font-semibold text-sm flex-1">script</code>
+          <span class="text-ibm-gray50 text-xs hidden sm:block flex-1 truncate">Run a local script on the remote host (copies it first, then executes).</span>
+          <svg class="chevron w-4 h-4 text-ibm-gray50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="entry px-5 pb-5">
+          <p class="text-sm text-ibm-gray70 mb-3">Run a local script on the remote host — copies it first, then executes it. Supports <code class="text-ibm-blue">creates</code> for idempotency.</p>
+          <pre class="bg-ibm-gray10 border border-ibm-gray20 text-xs text-ibm-black p-4 rounded-sm leading-relaxed">- ansible.builtin.script:
+    cmd: scripts/init.sh
+    creates: /opt/.initialized</pre>
+        </div>
+      </div>
+
+    </div><!-- /panel-shell -->
+
+
+    <!-- ════════════════════════════════ CHEAT SHEET ════════════════════════════════ -->
+    <div id="panel-cheat" class="section-panel">
+      <div class="mb-4">
+        <h2 class="text-lg font-bold text-ibm-black mb-1">Quick Reference Cheat Sheet</h2>
+        <p class="text-sm text-ibm-gray70">All common tasks mapped to their module or keyword at a glance.</p>
+      </div>
+      <div class="border border-ibm-gray20 rounded-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-ibm-blue text-white">
+              <th class="text-left px-5 py-3 font-semibold font-sans">Task</th>
+              <th class="text-left px-5 py-3 font-semibold font-sans">Module / Keyword</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- copy group -->
+            <tr class="bg-ibm-blue-light"><td colspan="2" class="px-5 py-1.5 text-xs font-semibold text-ibm-blue uppercase tracking-widest">File Copy</td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Copy file to remote</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">copy</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Copy between remote paths</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">copy (remote_src: true)</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Sync directory via rsync</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">synchronize</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Pull file from remote</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">fetch</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Render template to remote</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">template</code></td></tr>
+            <!-- existence group -->
+            <tr class="bg-ibm-blue-light border-t border-ibm-blue-mid"><td colspan="2" class="px-5 py-1.5 text-xs font-semibold text-ibm-blue uppercase tracking-widest">File Existence</td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Check file exists</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">stat + stat.stat.exists</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Check it's a regular file</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">stat + stat.stat.isreg</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Check it's a directory</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">stat + stat.stat.isdir</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Find files by pattern / age</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">find</code></td></tr>
+            <!-- backup group -->
+            <tr class="bg-ibm-blue-light border-t border-ibm-blue-mid"><td colspan="2" class="px-5 py-1.5 text-xs font-semibold text-ibm-blue uppercase tracking-widest">Backup</td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Auto-backup before overwrite</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">backup: true (copy / template / lineinfile)</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Backup with timestamp suffix</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">copy + ansible_date_time.epoch</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Archive directory to .tar.gz</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">archive</code></td></tr>
+            <!-- shell group -->
+            <tr class="bg-ibm-blue-light border-t border-ibm-blue-mid"><td colspan="2" class="px-5 py-1.5 text-xs font-semibold text-ibm-blue uppercase tracking-widest">Shell Actions</td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Run shell with pipes / redirects</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">shell</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Run simple command (no shell)</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">command</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Bootstrap without Python</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">raw</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Capture command output</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">register</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Skip task if file exists</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">creates</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Skip task if file missing</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">removes</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Edit single line in file</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">lineinfile</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Edit block of lines in file</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">blockinfile</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Find-and-replace in file</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">replace</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Create / delete file or directory</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">file (state: present / absent / directory)</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Schedule recurring shell job</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">cron</code></td></tr>
+            <tr class="border-t border-ibm-gray20 hover:bg-ibm-gray10"><td class="px-5 py-3 text-ibm-gray90">Run local script on remote</td><td class="px-5 py-3"><code class="text-ibm-blue text-xs">script</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /panel-cheat -->
+
+  </main>
+
+  <!-- ── FOOTER ── -->
+  <footer class="border-t-2 border-ibm-gray20 bg-ibm-gray10 px-8 py-6 mt-8">
+    <div class="max-w-5xl mx-auto flex flex-wrap gap-4 text-xs text-ibm-gray50 font-mono">
+      <span>All modules are <span class="text-ibm-blue">ansible.builtin</span> unless noted.</span>
+      <span>·</span>
+      <span><span class="text-ibm-blue">community.general.archive</span> requires the community.general collection.</span>
+      <span>·</span>
+      <span><span class="text-ibm-blue">ansible.posix.synchronize</span> requires the ansible.posix collection.</span>
+    </div>
+  </footer>
+
+  <script>
+    function showTab(id) {
+      document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('panel-' + id).classList.add('active');
+      document.getElementById('tab-' + id).classList.add('active');
+    }
+
+    function toggle(btn) {
+      const card = btn.closest('.card') || btn.parentElement;
+      const entry = card.querySelector('.entry');
+      const chevron = btn.querySelector('.chevron');
+      const isOpen = entry.classList.contains('open');
+      entry.classList.toggle('open', !isOpen);
+      chevron.classList.toggle('rotated', !isOpen);
+    }
+  </script>
+</body>
+</html>
