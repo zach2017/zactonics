@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kafka & ZooKeeper: The Grocery Store Data Adventure</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ibm-blue-10: #edf5ff;
+    --ibm-blue-20: #d0e2ff;
+    --ibm-blue-40: #78a9ff;
+    --ibm-blue-60: #0f62fe;
+    --ibm-blue-70: #0043ce;
+    --ibm-blue-80: #002d9c;
+    --ibm-blue-90: #001d6c;
+    --ibm-blue-100: #001141;
+    --ibm-cyan-40: #33b1ff;
+    --ibm-cyan-60: #0072c3;
+    --ibm-teal-40: #08bdba;
+    --ibm-purple-40: #be95ff;
+    --ibm-red-60: #da1e28;
+    --ibm-green-40: #42be65;
+    --ibm-yellow-30: #f1c21b;
+    --ibm-gray-10: #f4f4f4;
+    --ibm-gray-20: #e0e0e0;
+    --ibm-gray-50: #8d8d8d;
+    --ibm-gray-90: #262626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: #ffffff;
+    color: var(--ibm-gray-90);
+  }
+  h1, h2, h3 { font-family: 'IBM Plex Serif', serif; }
+  code, .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* Hero */
+  .hero-bg {
+    background: linear-gradient(135deg, var(--ibm-blue-90) 0%, var(--ibm-blue-70) 50%, var(--ibm-cyan-60) 100%);
+  }
+
+  /* Cards */
+  .card {
+    background: #fff;
+    border: 2px solid var(--ibm-blue-20);
+    border-radius: 8px;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .card:hover {
+    box-shadow: 0 8px 32px rgba(15,98,254,0.12);
+    transform: translateY(-2px);
+  }
+
+  /* Steps */
+  .step-num {
+    background: var(--ibm-blue-60);
+    color: white;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    border-radius: 50%;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Badges */
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-blue { background: var(--ibm-blue-10); color: var(--ibm-blue-70); border: 1px solid var(--ibm-blue-20); }
+  .badge-teal { background: #d9fbfb; color: #004144; border: 1px solid var(--ibm-teal-40); }
+  .badge-purple { background: #f6f2ff; color: #6929c4; border: 1px solid var(--ibm-purple-40); }
+  .badge-green { background: #defbe6; color: #044317; border: 1px solid var(--ibm-green-40); }
+  .badge-yellow { background: #fcf4d6; color: #4d3600; border: 1px solid var(--ibm-yellow-30); }
+  .badge-red { background: #fff1f1; color: #750e13; border: 1px solid #ffa4a9; }
+
+  /* Pipeline flow */
+  .pipe-arrow {
+    color: var(--ibm-blue-40);
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+
+  /* Topic pill */
+  .topic-pill {
+    background: var(--ibm-blue-10);
+    border: 1.5px solid var(--ibm-blue-40);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--ibm-blue-70);
+    font-weight: 600;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(3px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: white;
+    border-radius: 8px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-top: 4px solid var(--ibm-blue-60);
+    box-shadow: 0 24px 80px rgba(0,0,29,0.35);
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  .modal-close {
+    cursor: pointer;
+    background: var(--ibm-blue-60);
+    color: white;
+    border: none;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .modal-close:hover { background: var(--ibm-blue-80); }
+
+  /* Info button */
+  .info-btn {
+    background: var(--ibm-blue-60);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .info-btn:hover { background: var(--ibm-blue-70); transform: scale(1.03); }
+  .info-btn.cyan { background: var(--ibm-cyan-60); }
+  .info-btn.cyan:hover { background: #005a9e; }
+  .info-btn.teal { background: #007d79; }
+  .info-btn.teal:hover { background: #004144; }
+  .info-btn.green { background: #198038; }
+  .info-btn.green:hover { background: #044317; }
+  .info-btn.purple { background: #6929c4; }
+  .info-btn.purple:hover { background: #491d8b; }
+
+  /* Code block */
+  .code-block {
+    background: var(--ibm-blue-100);
+    color: var(--ibm-blue-20);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+  .code-block .kw { color: var(--ibm-cyan-40); }
+  .code-block .str { color: var(--ibm-green-40); }
+  .code-block .num { color: var(--ibm-yellow-30); }
+  .code-block .cmt { color: var(--ibm-gray-50); }
+
+  /* Message bubble */
+  .msg-bubble {
+    background: var(--ibm-blue-10);
+    border-left: 3px solid var(--ibm-blue-60);
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--ibm-blue-90);
+  }
+
+  /* Section divider */
+  .section-divider {
+    height: 4px;
+    background: linear-gradient(90deg, var(--ibm-blue-60), var(--ibm-cyan-40), var(--ibm-teal-40));
+    border-radius: 2px;
+    margin: 0 auto;
+    width: 80px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--ibm-blue-40); border-radius: 3px; }
+
+  /* Animated data flow */
+  @keyframes flowRight {
+    0% { transform: translateX(-100%); opacity:0; }
+    50% { opacity:1; }
+    100% { transform: translateX(100%); opacity:0; }
+  }
+  .flow-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--ibm-blue-40);
+    animation: flowRight 2s ease-in-out infinite;
+  }
+
+  /* Grocery item cards */
+  .grocery-card {
+    border: 2px solid;
+    border-radius: 8px;
+    padding: 14px;
+    transition: transform 0.2s;
+  }
+  .grocery-card:hover { transform: scale(1.02); }
+
+  /* Table */
+  table { border-collapse: collapse; width: 100%; }
+  th { background: var(--ibm-blue-60); color: white; font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; padding: 8px 12px; text-align: left; }
+  td { padding: 8px 12px; font-size: 0.85rem; border-bottom: 1px solid var(--ibm-blue-20); }
+  tr:hover td { background: var(--ibm-blue-10); }
+
+  /* Sticky nav */
+  nav { position: sticky; top: 0; z-index: 100; }
+
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ibm-blue-60);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== MODAL SYSTEM ===================== -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal-box" id="modal-box">
+    <div style="padding:1.25rem 1.5rem; border-bottom:1px solid #e0e0e0;" class="flex justify-between items-center">
+      <h3 style="font-size:1.15rem; color:var(--ibm-blue-80); margin:0;" id="modal-title">Title</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="padding:1.5rem;" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ===================== NAV ===================== -->
+<nav style="background:var(--ibm-blue-90); border-bottom:1px solid var(--ibm-blue-80);">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem; display:flex; align-items:center; gap:2rem; height:52px; overflow-x:auto;">
+    <span style="font-family:'IBM Plex Mono',monospace; color:var(--ibm-blue-40); font-size:0.85rem; font-weight:600; white-space:nowrap;">🛒 GroceryStream</span>
+    <a href="#overview" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">Overview</a>
+    <a href="#zookeeper" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">ZooKeeper</a>
+    <a href="#kafka" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">Kafka</a>
+    <a href="#topics" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">Topics</a>
+    <a href="#etl" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">ETL Pipeline</a>
+    <a href="#sources" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">Data Sources</a>
+    <a href="#flow" style="color:var(--ibm-blue-20); font-size:0.8rem; text-decoration:none; white-space:nowrap;">Full Flow</a>
+  </div>
+</nav>
+
+<!-- ===================== HERO ===================== -->
+<div class="hero-bg" style="padding: 4rem 1.5rem 3rem;">
+  <div style="max-width:900px; margin:0 auto; text-align:center;">
+    <div style="margin-bottom:1rem;">
+      <span class="badge badge-blue" style="background:rgba(255,255,255,0.15); color:var(--ibm-blue-20); border-color:var(--ibm-blue-40); font-size:0.75rem;">Middle School Edition · IBM Technology</span>
+    </div>
+    <h1 style="font-size:clamp(2rem,5vw,3.2rem); color:white; margin:0 0 1rem; line-height:1.15;">
+      Kafka, ZooKeeper &<br/>the Grocery Store Data Adventure
+    </h1>
+    <p style="color:var(--ibm-blue-20); font-size:1.1rem; max-width:620px; margin:0 auto 2rem; line-height:1.7;">
+      Imagine your favorite grocery store has <strong style="color:white;">thousands of messages</strong> flying around every second —
+      price changes, new orders, customer complaints, scanner beeps.
+      How does it all get organized? Meet <strong style="color:var(--ibm-cyan-40);">Apache Kafka</strong> and <strong style="color:var(--ibm-yellow-30);">ZooKeeper</strong>!
+    </p>
+    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+      <button class="info-btn" style="font-size:0.85rem; padding:10px 22px;" onclick="openModal('kafka-hero')">📦 What is Kafka?</button>
+      <button class="info-btn cyan" style="font-size:0.85rem; padding:10px 22px;" onclick="openModal('zoo-hero')">🦁 What is ZooKeeper?</button>
+      <button class="info-btn teal" style="font-size:0.85rem; padding:10px 22px;" onclick="openModal('etl-hero')">🔄 What is ETL?</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== BIG PICTURE ===================== -->
+<section id="overview" style="max-width:1100px; margin:0 auto; padding:4rem 1.5rem 2rem;">
+  <div style="text-align:center; margin-bottom:2.5rem;">
+    <div class="section-label" style="margin-bottom:0.5rem;">Section 1</div>
+    <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0 0 0.75rem;">🏪 The Big Picture</h2>
+    <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+    <p style="color:#555; max-width:620px; margin:0 auto;">FreshMart is a big grocery chain. Every second, hundreds of events happen. Let's see them all:</p>
+  </div>
+
+  <!-- Data sources grid -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1rem; margin-bottom:2rem;">
+    <div class="grocery-card" style="border-color:var(--ibm-blue-40); background:var(--ibm-blue-10);">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">🏷️</div>
+      <div style="font-weight:700; color:var(--ibm-blue-80); font-size:0.95rem;">Inventory System</div>
+      <div style="font-size:0.8rem; color:#555; margin-top:4px;">Stock levels, restocking alerts, expiry dates</div>
+      <button class="info-btn" style="margin-top:10px; font-size:0.7rem; padding:4px 10px;" onclick="openModal('src-inventory')">Learn more →</button>
+    </div>
+    <div class="grocery-card" style="border-color:#42be65; background:#defbe6;">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">🧾</div>
+      <div style="font-weight:700; color:#044317; font-size:0.95rem;">Point of Sale (POS)</div>
+      <div style="font-size:0.8rem; color:#555; margin-top:4px;">Every scan at checkout, payment type, total</div>
+      <button class="info-btn green" style="margin-top:10px; font-size:0.7rem; padding:4px 10px;" onclick="openModal('src-pos')">Learn more →</button>
+    </div>
+    <div class="grocery-card" style="border-color:#da1e28; background:#fff1f1;">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">😤</div>
+      <div style="font-weight:700; color:#750e13; font-size:0.95rem;">Customer Complaints</div>
+      <div style="font-size:0.8rem; color:#555; margin-top:4px;">App reviews, in-store feedback, returns</div>
+      <button class="info-btn" style="margin-top:10px; font-size:0.7rem; padding:4px 10px; background:var(--ibm-red-60);" onclick="openModal('src-complaints')">Learn more →</button>
+    </div>
+    <div class="grocery-card" style="border-color:#be95ff; background:#f6f2ff;">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">🚚</div>
+      <div style="font-weight:700; color:#6929c4; font-size:0.95rem;">Vendor Orders</div>
+      <div style="font-size:0.8rem; color:#555; margin-top:4px;">Deliveries, invoices, supplier updates</div>
+      <button class="info-btn purple" style="margin-top:10px; font-size:0.7rem; padding:4px 10px;" onclick="openModal('src-vendors')">Learn more →</button>
+    </div>
+    <div class="grocery-card" style="border-color:#f1c21b; background:#fcf4d6;">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">🖥️</div>
+      <div style="font-weight:700; color:#4d3600; font-size:0.95rem;">Digital Displays</div>
+      <div style="font-size:0.8rem; color:#555; margin-top:4px;">Price boards, promotion screens, aisle signs</div>
+      <button class="info-btn" style="margin-top:10px; font-size:0.7rem; padding:4px 10px; background:#e9930a;" onclick="openModal('src-displays')">Learn more →</button>
+    </div>
+    <div class="grocery-card" style="border-color:var(--ibm-cyan-40); background:#e5f6ff;">
+      <div style="font-size:2rem; margin-bottom:0.5rem;">📊</div>
+      <div style="font-weight:700; color:#003a6d; font-size:0.95rem;">Sales Analytics</div>
+      <div style="font-size:0.8rem; color:#555; margin-top:4px;">Daily totals, best sellers, trends</div>
+      <button class="info-btn cyan" style="margin-top:10px; font-size:0.7rem; padding:4px 10px;" onclick="openModal('src-sales')">Learn more →</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.5rem; background:var(--ibm-blue-10);">
+    <div style="display:flex; align-items:flex-start; gap:1rem;">
+      <div style="font-size:2.5rem;">🤔</div>
+      <div>
+        <div style="font-weight:700; color:var(--ibm-blue-80); margin-bottom:0.4rem;">The Problem Without Kafka</div>
+        <p style="margin:0; color:#444; font-size:0.9rem; line-height:1.6;">
+          Without a system like Kafka, every department would have to <strong>directly talk to every other department</strong> — 
+          the inventory system would need a direct wire to the sales system, the complaint system, the displays... 
+          It's like every person in school having their own personal intercom to every other person. <strong>Total chaos!</strong>
+          Kafka acts like the school's PA system — one broadcast, everyone who needs it hears it.
+        </p>
+        <button class="info-btn" style="margin-top:12px; font-size:0.75rem;" onclick="openModal('problem-detail')">📖 See the full problem explained</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ZOOKEEPER ===================== -->
+<section id="zookeeper" style="background:linear-gradient(180deg,#fff 0%, var(--ibm-blue-10) 100%); padding:4rem 0 3rem;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem;">
+    <div style="text-align:center; margin-bottom:2.5rem;">
+      <div class="section-label">Section 2</div>
+      <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0.5rem 0 0.75rem;">🦁 ZooKeeper: The Store Manager</h2>
+      <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+      <p style="color:#555; max-width:600px; margin:0 auto;">Think of ZooKeeper as the <strong>store manager</strong> at FreshMart. They don't do the actual work — they coordinate who does what.</p>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+      <!-- Analogy -->
+      <div class="card" style="padding:1.5rem;">
+        <div class="badge badge-yellow" style="margin-bottom:1rem;">Real Life Analogy</div>
+        <h3 style="font-size:1rem; color:var(--ibm-blue-80); margin:0 0 1rem;">🏪 The Store Manager Analogy</h3>
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <span style="font-size:1.2rem;">📋</span>
+            <div><strong>Keeps the org chart:</strong> <span style="color:#555; font-size:0.85rem;">Knows every register, scanner, and computer in the store</span></div>
+          </div>
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <span style="font-size:1.2rem;">🏆</span>
+            <div><strong>Picks a leader:</strong> <span style="color:#555; font-size:0.85rem;">If the head cashier is sick, ZooKeeper picks the next one</span></div>
+          </div>
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <span style="font-size:1.2rem;">📡</span>
+            <div><strong>Tracks who's alive:</strong> <span style="color:#555; font-size:0.85rem;">Checks if each computer is still running every few seconds</span></div>
+          </div>
+          <div style="display:flex; gap:0.75rem; align-items:start;">
+            <span style="font-size:1.2rem;">🔑</span>
+            <div><strong>Shares config:</strong> <span style="color:#555; font-size:0.85rem;">Tells everyone the store's settings (holiday hours, sale prices)</span></div>
+          </div>
+        </div>
+        <button class="info-btn" style="margin-top:1.25rem; font-size:0.75rem;" onclick="openModal('zoo-deep')">🔍 Deep dive: How ZooKeeper works</button>
+      </div>
+
+      <!-- ZNode tree -->
+      <div class="card" style="padding:1.5rem;">
+        <div class="badge badge-blue" style="margin-bottom:1rem;">ZooKeeper ZNodes (the info it stores)</div>
+        <div class="code-block" style="font-size:0.75rem; line-height:1.9;">
+<span class="cmt"># ZooKeeper stores info as a tree of "znodes"</span>
+<span class="str">/freshmart</span>
+├── <span class="str">/kafka</span>
+│   ├── <span class="str">/brokers</span>
+│   │   ├── <span class="str">/0</span>  <span class="cmt">← Register #1 computer</span>
+│   │   ├── <span class="str">/1</span>  <span class="cmt">← Register #2 computer</span>
+│   │   └── <span class="str">/2</span>  <span class="cmt">← Warehouse computer</span>
+│   ├── <span class="str">/controller</span>  <span class="cmt">← Who is the LEADER?</span>
+│   └── <span class="str">/topics</span>
+│       ├── <span class="str">/sales</span>
+│       ├── <span class="str">/inventory</span>
+│       └── <span class="str">/complaints</span>
+        </div>
+        <button class="info-btn cyan" style="margin-top:1rem; font-size:0.75rem;" onclick="openModal('znodes')">📂 What are ZNodes?</button>
+      </div>
+    </div>
+
+    <!-- ZooKeeper Steps -->
+    <div class="card" style="padding:1.75rem;">
+      <div class="badge badge-blue" style="margin-bottom:1.25rem;">Step-by-Step: ZooKeeper Starting Up at FreshMart</div>
+      <div style="display:flex; flex-direction:column; gap:1rem;">
+        <div style="display:flex; gap:1rem; align-items:start;">
+          <div class="step-num">1</div>
+          <div>
+            <div style="font-weight:700; font-size:0.95rem;">🌅 Store Opens at 7am</div>
+            <div style="color:#555; font-size:0.85rem; margin-top:3px;">ZooKeeper starts up and all Kafka "brokers" (computers) register themselves — like employees swiping their badge at the door</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:1rem; align-items:start;">
+          <div class="step-num">2</div>
+          <div>
+            <div style="font-weight:700; font-size:0.95rem;">👑 Leader Election</div>
+            <div style="color:#555; font-size:0.85rem; margin-top:3px;">ZooKeeper picks one broker as the "controller" — the main boss. If it crashes, ZooKeeper instantly picks a new one (no downtime!)</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:1rem; align-items:start;">
+          <div class="step-num">3</div>
+          <div>
+            <div style="font-weight:700; font-size:0.95rem;">💓 Heartbeat Checks</div>
+            <div style="color:#555; font-size:0.85rem; margin-top:3px;">Every few seconds, ZooKeeper pings each broker: "Are you alive?" If no answer in time, it marks that broker as down and reassigns its work</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:1rem; align-items:start;">
+          <div class="step-num">4</div>
+          <div>
+            <div style="font-weight:700; font-size:0.95rem;">📢 Broadcasting Changes</div>
+            <div style="color:#555; font-size:0.85rem; margin-top:3px;">When a new product topic is created (like "holiday-candy"), ZooKeeper tells ALL brokers immediately — everyone stays in sync</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:1.25rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <button class="info-btn" style="font-size:0.75rem;" onclick="openModal('zoo-election')">👑 How Leader Election Works</button>
+        <button class="info-btn cyan" style="font-size:0.75rem;" onclick="openModal('zoo-docs')">📚 Official ZooKeeper Docs</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== KAFKA ===================== -->
+<section id="kafka" style="padding:4rem 0 3rem; background:white;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem;">
+    <div style="text-align:center; margin-bottom:2.5rem;">
+      <div class="section-label">Section 3</div>
+      <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0.5rem 0 0.75rem;">📦 Apache Kafka: The Giant Message Board</h2>
+      <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+      <p style="color:#555; max-width:640px; margin:0 auto;">Kafka is like a <strong>massive bulletin board</strong> at FreshMart's back office. Anyone can post a message, and any department can read it — at any time, without removing it.</p>
+    </div>
+
+    <!-- Key concepts -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem; margin-bottom:2rem;">
+      <div class="card" style="padding:1.25rem; border-color:var(--ibm-blue-40);">
+        <div style="font-size:1.8rem; margin-bottom:0.5rem;">📢</div>
+        <div class="badge badge-blue" style="margin-bottom:0.75rem;">Producer</div>
+        <p style="font-size:0.85rem; color:#444; margin:0 0 0.75rem; line-height:1.5;">A system that <strong>sends messages</strong> to Kafka. In our store: the POS scanner produces a "sale happened" message every time someone checks out.</p>
+        <button class="info-btn" style="font-size:0.7rem; padding:4px 10px;" onclick="openModal('producer')">More info</button>
+      </div>
+      <div class="card" style="padding:1.25rem; border-color:#42be65;">
+        <div style="font-size:1.8rem; margin-bottom:0.5rem;">👂</div>
+        <div class="badge badge-green" style="margin-bottom:0.75rem;">Consumer</div>
+        <p style="font-size:0.85rem; color:#444; margin:0 0 0.75rem; line-height:1.5;">A system that <strong>reads messages</strong> from Kafka. The inventory system reads sale messages to know when to reorder stock.</p>
+        <button class="info-btn green" style="font-size:0.7rem; padding:4px 10px;" onclick="openModal('consumer')">More info</button>
+      </div>
+      <div class="card" style="padding:1.25rem; border-color:var(--ibm-cyan-40);">
+        <div style="font-size:1.8rem; margin-bottom:0.5rem;">🗂️</div>
+        <div class="badge badge-teal" style="margin-bottom:0.75rem;">Topic</div>
+        <p style="font-size:0.85rem; color:#444; margin:0 0 0.75rem; line-height:1.5;">A <strong>named channel</strong> for messages. Like folders in a filing cabinet: <code style="font-size:0.75rem; background:var(--ibm-blue-10); padding:1px 4px; border-radius:2px;">sales</code>, <code style="font-size:0.75rem; background:var(--ibm-blue-10); padding:1px 4px; border-radius:2px;">inventory</code>, <code style="font-size:0.75rem; background:var(--ibm-blue-10); padding:1px 4px; border-radius:2px;">complaints</code>.</p>
+        <button class="info-btn teal" style="font-size:0.7rem; padding:4px 10px;" onclick="openModal('topic-detail')">More info</button>
+      </div>
+      <div class="card" style="padding:1.25rem; border-color:var(--ibm-purple-40);">
+        <div style="font-size:1.8rem; margin-bottom:0.5rem;">🖥️</div>
+        <div class="badge badge-purple" style="margin-bottom:0.75rem;">Broker</div>
+        <p style="font-size:0.85rem; color:#444; margin:0 0 0.75rem; line-height:1.5;">A <strong>server computer</strong> that stores messages. FreshMart uses 3 brokers so if one breaks, the others keep running.</p>
+        <button class="info-btn purple" style="font-size:0.7rem; padding:4px 10px;" onclick="openModal('broker')">More info</button>
+      </div>
+      <div class="card" style="padding:1.25rem; border-color:var(--ibm-yellow-30);">
+        <div style="font-size:1.8rem; margin-bottom:0.5rem;">🍕</div>
+        <div class="badge badge-yellow" style="margin-bottom:0.75rem;">Partition</div>
+        <p style="font-size:0.85rem; color:#444; margin:0 0 0.75rem; line-height:1.5;">Each topic is split into <strong>partitions</strong> (slices). Like splitting a pizza — multiple people can eat at once, making it faster!</p>
+        <button class="info-btn" style="font-size:0.7rem; padding:4px 10px; background:#e9930a;" onclick="openModal('partition')">More info</button>
+      </div>
+      <div class="card" style="padding:1.25rem; border-color:var(--ibm-teal-40);">
+        <div style="font-size:1.8rem; margin-bottom:0.5rem;">📖</div>
+        <div class="badge badge-teal" style="margin-bottom:0.75rem;">Offset</div>
+        <p style="font-size:0.85rem; color:#444; margin:0 0 0.75rem; line-height:1.5;">Each message gets a <strong>position number</strong> (offset). Consumers remember their offset so they know where they left off reading.</p>
+        <button class="info-btn teal" style="font-size:0.7rem; padding:4px 10px;" onclick="openModal('offset')">More info</button>
+      </div>
+    </div>
+
+    <!-- Sample Kafka message -->
+    <div class="card" style="padding:1.75rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.25rem;">
+        <div>
+          <div class="badge badge-green" style="margin-bottom:0.5rem;">Live Example</div>
+          <h3 style="font-size:1rem; color:var(--ibm-blue-80); margin:0;">A Real Kafka Message from FreshMart's POS System</h3>
+        </div>
+        <button class="info-btn" style="font-size:0.75rem;" onclick="openModal('message-anatomy')">🔬 Anatomy of a message</button>
+      </div>
+      <div class="code-block">
+<span class="cmt">// Topic: "pos-sales"  |  Partition: 2  |  Offset: 10847</span>
+{
+  <span class="kw">"event_type"</span>: <span class="str">"SALE_COMPLETED"</span>,
+  <span class="kw">"timestamp"</span>: <span class="str">"2024-03-15T14:32:01.523Z"</span>,
+  <span class="kw">"store_id"</span>: <span class="str">"FRESHMART-042"</span>,
+  <span class="kw">"register_id"</span>: <span class="str">"REG-07"</span>,
+  <span class="kw">"cashier_id"</span>: <span class="str">"EMP-1192"</span>,
+  <span class="kw">"items"</span>: [
+    { <span class="kw">"sku"</span>: <span class="str">"APPL-GALA-1LB"</span>, <span class="kw">"qty"</span>: <span class="num">2</span>, <span class="kw">"price"</span>: <span class="num">1.99</span> },
+    { <span class="kw">"sku"</span>: <span class="str">"MILK-WHL-GAL"</span>, <span class="kw">"qty"</span>: <span class="num">1</span>, <span class="kw">"price"</span>: <span class="num">4.29</span> },
+    { <span class="kw">"sku"</span>: <span class="str">"BREAD-WHT-LF"</span>, <span class="kw">"qty"</span>: <span class="num">1</span>, <span class="kw">"price"</span>: <span class="num">2.49</span> }
+  ],
+  <span class="kw">"total"</span>: <span class="num">10.76</span>,
+  <span class="kw">"payment_method"</span>: <span class="str">"CREDIT_CARD"</span>
+}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TOPICS ===================== -->
+<section id="topics" style="background:var(--ibm-blue-10); padding:4rem 0 3rem;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem;">
+    <div style="text-align:center; margin-bottom:2.5rem;">
+      <div class="section-label">Section 4</div>
+      <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0.5rem 0 0.75rem;">🗂️ FreshMart's Kafka Topics</h2>
+      <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+      <p style="color:#555; max-width:620px; margin:0 auto;">Each department's messages live in their own topic. Here are all of FreshMart's Kafka topics:</p>
+    </div>
+
+    <div style="overflow-x:auto; margin-bottom:1.5rem;">
+      <table>
+        <thead>
+          <tr>
+            <th>Topic Name</th>
+            <th>Data Source</th>
+            <th>Message Rate</th>
+            <th>Who Reads It</th>
+            <th>Example Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="topic-pill">pos-sales</span></td>
+            <td>🧾 Checkout Scanners</td>
+            <td><span class="badge badge-red">~50/min</span></td>
+            <td>Inventory, Analytics, Loyalty</td>
+            <td><button class="info-btn" style="font-size:0.7rem; padding:3px 8px;" onclick="openModal('msg-pos')">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="topic-pill">inventory-updates</span></td>
+            <td>🏷️ Warehouse Scanners</td>
+            <td><span class="badge badge-yellow">~20/min</span></td>
+            <td>Displays, Vendors, Ordering System</td>
+            <td><button class="info-btn" style="font-size:0.7rem; padding:3px 8px;" onclick="openModal('msg-inv')">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="topic-pill">customer-complaints</span></td>
+            <td>😤 App + Help Desk</td>
+            <td><span class="badge badge-green">~3/min</span></td>
+            <td>Manager Alerts, CRM, Analytics</td>
+            <td><button class="info-btn" style="font-size:0.7rem; padding:3px 8px;" onclick="openModal('msg-complaint')">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="topic-pill">vendor-deliveries</span></td>
+            <td>🚚 Dock Scanners</td>
+            <td><span class="badge badge-blue">~5/hour</span></td>
+            <td>Inventory, Accounting, Ordering</td>
+            <td><button class="info-btn" style="font-size:0.7rem; padding:3px 8px;" onclick="openModal('msg-vendor')">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="topic-pill">display-updates</span></td>
+            <td>🖥️ Price Management</td>
+            <td><span class="badge badge-yellow">~10/min</span></td>
+            <td>All Digital Signs</td>
+            <td><button class="info-btn" style="font-size:0.7rem; padding:3px 8px;" onclick="openModal('msg-display')">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="topic-pill">daily-sales-report</span></td>
+            <td>📊 Analytics Engine</td>
+            <td><span class="badge badge-teal">1/day</span></td>
+            <td>Management, HQ, Finance</td>
+            <td><button class="info-btn" style="font-size:0.7rem; padding:3px 8px;" onclick="openModal('msg-sales')">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+      <button class="info-btn" onclick="openModal('topics-partitions')">🍕 How Partitions Speed Things Up</button>
+      <button class="info-btn cyan" onclick="openModal('consumer-groups')">👥 Consumer Groups</button>
+      <button class="info-btn teal" onclick="openModal('retention')">⏳ How Long Are Messages Kept?</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ETL ===================== -->
+<section id="etl" style="padding:4rem 0 3rem; background:white;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem;">
+    <div style="text-align:center; margin-bottom:2.5rem;">
+      <div class="section-label">Section 5</div>
+      <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0.5rem 0 0.75rem;">🔄 ETL: Extract, Transform, Load</h2>
+      <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+      <p style="color:#555; max-width:640px; margin:0 auto;">ETL is like <strong>cooking a meal from raw ingredients</strong>. You collect ingredients (Extract), prepare them (Transform), then serve them (Load).</p>
+    </div>
+
+    <!-- ETL Big Steps -->
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.5rem; margin-bottom:2rem;">
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-blue-40); text-align:center;">
+        <div style="font-size:3rem; margin-bottom:0.75rem;">🥕</div>
+        <div style="font-weight:700; color:var(--ibm-blue-80); font-size:1.1rem; margin-bottom:0.5rem;">E — Extract</div>
+        <p style="font-size:0.85rem; color:#555; margin:0 0 1rem; line-height:1.5;">Pull raw data from all sources: POS scanners, inventory sensors, complaint forms, vendor APIs. Kafka delivers these messages in real time.</p>
+        <button class="info-btn" style="font-size:0.75rem;" onclick="openModal('extract')">How extraction works →</button>
+      </div>
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-cyan-40); text-align:center;">
+        <div style="font-size:3rem; margin-bottom:0.75rem;">🍳</div>
+        <div style="font-weight:700; color:var(--ibm-cyan-60); font-size:1.1rem; margin-bottom:0.5rem;">T — Transform</div>
+        <p style="font-size:0.85rem; color:#555; margin:0 0 1rem; line-height:1.5;">Clean, combine, and reshape data. Convert timestamps, merge sale + product tables, flag low-stock alerts, calculate daily totals.</p>
+        <button class="info-btn cyan" style="font-size:0.75rem;" onclick="openModal('transform')">How transformation works →</button>
+      </div>
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-teal-40); text-align:center;">
+        <div style="font-size:3rem; margin-bottom:0.75rem;">🍽️</div>
+        <div style="font-weight:700; color:#007d79; font-size:1.1rem; margin-bottom:0.5rem;">L — Load</div>
+        <p style="font-size:0.85rem; color:#555; margin:0 0 1rem; line-height:1.5;">Put the clean, ready data into databases, dashboards, or reporting systems — where humans can use it to make decisions.</p>
+        <button class="info-btn teal" style="font-size:0.75rem;" onclick="openModal('load')">How loading works →</button>
+      </div>
+    </div>
+
+    <!-- ETL Pipeline Steps -->
+    <div class="card" style="padding:1.75rem; margin-bottom:1.5rem;">
+      <div class="badge badge-blue" style="margin-bottom:1.25rem;">ETL Step-by-Step: Tracking a Banana Sale</div>
+      <div style="display:flex; flex-direction:column; gap:0; position:relative;">
+        <div style="display:flex; gap:1rem; align-items:start; padding:0 0 1.25rem 0; border-left:2px dashed var(--ibm-blue-40); margin-left:19px; padding-left:1.75rem; margin-left:0; padding-left:0;">
+        </div>
+
+        <!-- Steps with connecting line -->
+        <div style="position:relative;">
+          <div style="position:absolute; left:19px; top:40px; bottom:0; width:2px; background:linear-gradient(180deg,var(--ibm-blue-40),var(--ibm-teal-40)); z-index:0;"></div>
+
+          <div style="display:flex; flex-direction:column; gap:0;">
+            <div style="display:flex; gap:1rem; align-items:start; padding-bottom:1.25rem; position:relative; z-index:1;">
+              <div class="step-num" style="background:var(--ibm-blue-60);">1</div>
+              <div>
+                <div style="font-weight:700; font-size:0.95rem;">🍌 Customer buys 3 lbs of bananas at Register 4</div>
+                <div class="msg-bubble" style="margin-top:0.5rem;">EXTRACT: POS scanner fires <span class="mono" style="color:var(--ibm-blue-60);">SALE_COMPLETED</span> event → sent to Kafka topic <span class="mono" style="color:var(--ibm-blue-60);">pos-sales</span></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; align-items:start; padding-bottom:1.25rem; position:relative; z-index:1;">
+              <div class="step-num" style="background:var(--ibm-cyan-60);">2</div>
+              <div>
+                <div style="font-weight:700; font-size:0.95rem;">📥 Inventory Consumer reads the sale message</div>
+                <div class="msg-bubble" style="margin-top:0.5rem; border-color:var(--ibm-cyan-40);">EXTRACT: Consumer at offset 10,848 reads the banana sale. Banana stock: 120 lbs → 117 lbs. Threshold check: below 100 lbs? <strong>No.</strong></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; align-items:start; padding-bottom:1.25rem; position:relative; z-index:1;">
+              <div class="step-num" style="background:#198038;">3</div>
+              <div>
+                <div style="font-weight:700; font-size:0.95rem;">🔧 Transform: Enrich with product data</div>
+                <div class="msg-bubble" style="margin-top:0.5rem; border-color:var(--ibm-green-40);">TRANSFORM: Join sale record with product database → add category "produce", supplier "DelMonte", calculate margin: $0.42/lb profit. Standardize timestamp to UTC.</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; align-items:start; padding-bottom:1.25rem; position:relative; z-index:1;">
+              <div class="step-num" style="background:#6929c4;">4</div>
+              <div>
+                <div style="font-weight:700; font-size:0.95rem;">📊 Analytics Consumer aggregates hourly</div>
+                <div class="msg-bubble" style="margin-top:0.5rem; border-color:var(--ibm-purple-40);">TRANSFORM: Running total for produce this hour: $847.22. Bananas = best seller this morning. Alert: Apples running low!</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; align-items:start; position:relative; z-index:1;">
+              <div class="step-num" style="background:#007d79;">5</div>
+              <div>
+                <div style="font-weight:700; font-size:0.95rem;">💾 Load into Data Warehouse + Dashboard</div>
+                <div class="msg-bubble" style="margin-top:0.5rem; border-color:var(--ibm-teal-40);">LOAD: Enriched row written to <code style="font-size:0.75rem;">DW_SALES_FACT</code> table. Dashboard refreshes. Manager sees "Produce: +12% vs yesterday." Vendor email queued for apple reorder.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:1.25rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <button class="info-btn" onclick="openModal('etl-tools')">🛠️ ETL Tools Used with Kafka</button>
+        <button class="info-btn cyan" onclick="openModal('streaming-etl')">⚡ Streaming ETL vs Batch ETL</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DATA SOURCES DEEP DIVE ===================== -->
+<section id="sources" style="background:var(--ibm-blue-10); padding:4rem 0 3rem;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem;">
+    <div style="text-align:center; margin-bottom:2.5rem;">
+      <div class="section-label">Section 6</div>
+      <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0.5rem 0 0.75rem;">📡 All Data Sources at FreshMart</h2>
+      <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+
+      <!-- Inventory -->
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-blue-40);">
+        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:1rem;">
+          <div>
+            <div style="font-size:1.8rem;">🏷️</div>
+            <h3 style="font-size:1rem; color:var(--ibm-blue-80); margin:0.25rem 0 0;">Inventory Management System</h3>
+          </div>
+          <span class="badge badge-blue">Kafka Producer</span>
+        </div>
+        <div class="code-block" style="font-size:0.72rem; margin-bottom:1rem;">
+{
+  <span class="kw">"event"</span>: <span class="str">"STOCK_LOW_ALERT"</span>,
+  <span class="kw">"sku"</span>: <span class="str">"MILK-WHL-GAL"</span>,
+  <span class="kw">"current_qty"</span>: <span class="num">12</span>,
+  <span class="kw">"reorder_threshold"</span>: <span class="num">20</span>,
+  <span class="kw">"aisle"</span>: <span class="str">"DAIRY-3"</span>
+}
+        </div>
+        <p style="font-size:0.82rem; color:#555; margin:0 0 0.75rem; line-height:1.5;">Tracks every product's quantity. When milk drops below 20 gallons, it fires an alert. This feeds the reorder system AND the digital dairy-aisle display automatically.</p>
+        <button class="info-btn" style="font-size:0.72rem;" onclick="openModal('inv-detail')">📦 Full Inventory Flow</button>
+      </div>
+
+      <!-- Sales / POS -->
+      <div class="card" style="padding:1.5rem; border-color:#42be65;">
+        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:1rem;">
+          <div>
+            <div style="font-size:1.8rem;">🧾</div>
+            <h3 style="font-size:1rem; color:#044317; margin:0.25rem 0 0;">Point of Sale System</h3>
+          </div>
+          <span class="badge badge-green">Kafka Producer</span>
+        </div>
+        <div class="code-block" style="font-size:0.72rem; margin-bottom:1rem;">
+{
+  <span class="kw">"event"</span>: <span class="str">"TRANSACTION"</span>,
+  <span class="kw">"transaction_id"</span>: <span class="str">"TXN-99821"</span>,
+  <span class="kw">"loyalty_card"</span>: <span class="str">"CARD-44821"</span>,
+  <span class="kw">"items_count"</span>: <span class="num">7</span>,
+  <span class="kw">"total_usd"</span>: <span class="num">34.87</span>,
+  <span class="kw">"payment"</span>: <span class="str">"APPLE_PAY"</span>
+}
+        </div>
+        <p style="font-size:0.82rem; color:#555; margin:0 0 0.75rem; line-height:1.5;">Every checkout beep sends a message. Multiple consumers read this same message: inventory decrements stock, analytics counts revenue, loyalty system adds points.</p>
+        <button class="info-btn green" style="font-size:0.72rem;" onclick="openModal('pos-detail')">🧾 Full POS Flow</button>
+      </div>
+
+      <!-- Complaints -->
+      <div class="card" style="padding:1.5rem; border-color:#da1e28;">
+        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:1rem;">
+          <div>
+            <div style="font-size:1.8rem;">😤</div>
+            <h3 style="font-size:1rem; color:#750e13; margin:0.25rem 0 0;">Customer Complaint System</h3>
+          </div>
+          <span class="badge badge-red">Kafka Producer</span>
+        </div>
+        <div class="code-block" style="font-size:0.72rem; margin-bottom:1rem;">
+{
+  <span class="kw">"event"</span>: <span class="str">"COMPLAINT_FILED"</span>,
+  <span class="kw">"type"</span>: <span class="str">"SPOILED_PRODUCT"</span>,
+  <span class="kw">"product_sku"</span>: <span class="str">"STRAW-PINT"</span>,
+  <span class="kw">"severity"</span>: <span class="str">"HIGH"</span>,
+  <span class="kw">"customer_id"</span>: <span class="str">"CUST-29910"</span>,
+  <span class="kw">"channel"</span>: <span class="str">"MOBILE_APP"</span>
+}
+        </div>
+        <p style="font-size:0.82rem; color:#555; margin:0 0 0.75rem; line-height:1.5;">When a customer reports rotten strawberries in the app, a message fires. If 3+ complaints about the same SKU hit in 30 min, it auto-alerts the store manager.</p>
+        <button class="info-btn" style="font-size:0.72rem; background:var(--ibm-red-60);" onclick="openModal('complaint-detail')">😤 Full Complaints Flow</button>
+      </div>
+
+      <!-- Vendors -->
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-purple-40);">
+        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:1rem;">
+          <div>
+            <div style="font-size:1.8rem;">🚚</div>
+            <h3 style="font-size:1rem; color:#6929c4; margin:0.25rem 0 0;">Vendor / Supplier System</h3>
+          </div>
+          <span class="badge badge-purple">Producer + Consumer</span>
+        </div>
+        <div class="code-block" style="font-size:0.72rem; margin-bottom:1rem;">
+{
+  <span class="kw">"event"</span>: <span class="str">"DELIVERY_RECEIVED"</span>,
+  <span class="kw">"vendor"</span>: <span class="str">"DOLE_FOODS"</span>,
+  <span class="kw">"po_number"</span>: <span class="str">"PO-2024-8821"</span>,
+  <span class="kw">"items"</span>: [
+    { <span class="kw">"sku"</span>: <span class="str">"BAN-CAVENDISH-1LB"</span>, <span class="kw">"qty"</span>: <span class="num">500</span> }
+  ],
+  <span class="kw">"temp_check"</span>: <span class="str">"PASSED"</span>
+}
+        </div>
+        <p style="font-size:0.82rem; color:#555; margin:0 0 0.75rem; line-height:1.5;">When the delivery truck's barcode is scanned at the dock, Kafka records it. Inventory auto-updates. The accounting system also reads this to match invoices.</p>
+        <button class="info-btn purple" style="font-size:0.72rem;" onclick="openModal('vendor-detail')">🚚 Full Vendor Flow</button>
+      </div>
+
+      <!-- Displays -->
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-yellow-30);">
+        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:1rem;">
+          <div>
+            <div style="font-size:1.8rem;">🖥️</div>
+            <h3 style="font-size:1rem; color:#4d3600; margin:0.25rem 0 0;">Digital Display System</h3>
+          </div>
+          <span class="badge badge-yellow">Kafka Consumer</span>
+        </div>
+        <div class="code-block" style="font-size:0.72rem; margin-bottom:1rem;">
+<span class="cmt">// Display READS from inventory + price topics</span>
+{
+  <span class="kw">"display_id"</span>: <span class="str">"SIGN-PRODUCE-04"</span>,
+  <span class="kw">"action"</span>: <span class="str">"UPDATE_PRICE"</span>,
+  <span class="kw">"sku"</span>: <span class="str">"APPL-GALA-1LB"</span>,
+  <span class="kw">"new_price"</span>: <span class="num">1.79</span>,
+  <span class="kw">"promo_text"</span>: <span class="str">"FLASH SALE - 2 hrs only!"</span>
+}
+        </div>
+        <p style="font-size:0.82rem; color:#555; margin:0 0 0.75rem; line-height:1.5;">The electronic price signs CONSUME messages from Kafka. When a sale is triggered in the pricing system, every sign in the produce aisle updates within seconds — no human needed!</p>
+        <button class="info-btn" style="font-size:0.72rem; background:#e9930a;" onclick="openModal('display-detail')">🖥️ Display System Flow</button>
+      </div>
+
+      <!-- Sales Analytics -->
+      <div class="card" style="padding:1.5rem; border-color:var(--ibm-cyan-40);">
+        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:1rem;">
+          <div>
+            <div style="font-size:1.8rem;">📊</div>
+            <h3 style="font-size:1rem; color:#003a6d; margin:0.25rem 0 0;">Sales Analytics Engine</h3>
+          </div>
+          <span class="badge badge-teal">Kafka Consumer + Producer</span>
+        </div>
+        <div class="code-block" style="font-size:0.72rem; margin-bottom:1rem;">
+<span class="cmt">// Reads pos-sales, PRODUCES daily-sales-report</span>
+{
+  <span class="kw">"report_date"</span>: <span class="str">"2024-03-15"</span>,
+  <span class="kw">"total_revenue"</span>: <span class="num">48291.44</span>,
+  <span class="kw">"top_category"</span>: <span class="str">"produce"</span>,
+  <span class="kw">"transactions"</span>: <span class="num">1847</span>,
+  <span class="kw">"avg_basket"</span>: <span class="num">26.15</span>
+}
+        </div>
+        <p style="font-size:0.82rem; color:#555; margin:0 0 0.75rem; line-height:1.5;">The analytics engine is both a consumer AND a producer! It reads from sales, transforms the data, then produces a summary to the <code style="font-size:0.72rem;">daily-sales-report</code> topic for management.</p>
+        <button class="info-btn cyan" style="font-size:0.72rem;" onclick="openModal('analytics-detail')">📊 Analytics Flow</button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FULL FLOW DIAGRAM ===================== -->
+<section id="flow" style="padding:4rem 0 3rem; background:white;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 1.5rem;">
+    <div style="text-align:center; margin-bottom:2.5rem;">
+      <div class="section-label">Section 7</div>
+      <h2 style="font-size:1.9rem; color:var(--ibm-blue-90); margin:0.5rem 0 0.75rem;">🗺️ The Full FreshMart Data Flow</h2>
+      <div class="section-divider" style="margin-bottom:1.25rem;"></div>
+      <p style="color:#555; max-width:640px; margin:0 auto;">Here's how everything connects. ZooKeeper coordinates Kafka, which manages all the messages flowing between every system.</p>
+    </div>
+
+    <!-- Architecture diagram (visual) -->
+    <div class="card" style="padding:2rem; margin-bottom:1.5rem; overflow-x:auto;">
+      <div style="min-width:700px;">
+        <!-- Row 1: Producers -->
+        <div style="text-align:center; margin-bottom:0.5rem;"><span class="badge badge-blue">DATA PRODUCERS (Sources)</span></div>
+        <div style="display:flex; justify-content:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+          <div style="background:var(--ibm-blue-10); border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">🧾 POS Scanner</div>
+          <div style="background:var(--ibm-blue-10); border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">🏷️ Inventory Sensor</div>
+          <div style="background:var(--ibm-blue-10); border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">😤 Complaint App</div>
+          <div style="background:var(--ibm-blue-10); border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">🚚 Dock Scanner</div>
+          <div style="background:var(--ibm-blue-10); border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">💰 Price System</div>
+        </div>
+
+        <!-- Down arrows -->
+        <div style="text-align:center; font-size:1.3rem; color:var(--ibm-blue-40); margin-bottom:0.25rem;">↓ ↓ ↓ ↓ ↓</div>
+        <div style="text-align:center; font-size:0.72rem; color:var(--ibm-blue-60); font-family:'IBM Plex Mono',monospace; margin-bottom:0.5rem;">Messages sent to Kafka</div>
+
+        <!-- Kafka cluster -->
+        <div style="border:2.5px solid var(--ibm-blue-60); border-radius:10px; padding:1.25rem; background:linear-gradient(135deg,var(--ibm-blue-10),#e8f4fd); margin-bottom:0.75rem; position:relative;">
+          <div style="position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--ibm-blue-60); color:white; font-family:'IBM Plex Mono',monospace; font-size:0.75rem; padding:2px 14px; border-radius:10px; white-space:nowrap;">📦 APACHE KAFKA CLUSTER (coordinated by 🦁 ZooKeeper)</div>
+          <div style="display:flex; gap:0.75rem; justify-content:center; flex-wrap:wrap; margin-top:0.75rem;">
+            <div style="background:white; border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:10px 16px; text-align:center;">
+              <div style="font-size:0.7rem; font-family:'IBM Plex Mono',monospace; color:var(--ibm-blue-70); font-weight:600;">Broker 0 👑</div>
+              <div style="font-size:0.65rem; color:#888; margin-top:2px;">Controller</div>
+            </div>
+            <div style="background:white; border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:10px 16px; text-align:center;">
+              <div style="font-size:0.7rem; font-family:'IBM Plex Mono',monospace; color:var(--ibm-blue-70); font-weight:600;">Broker 1</div>
+              <div style="font-size:0.65rem; color:#888; margin-top:2px;">Follower</div>
+            </div>
+            <div style="background:white; border:1.5px solid var(--ibm-blue-40); border-radius:6px; padding:10px 16px; text-align:center;">
+              <div style="font-size:0.7rem; font-family:'IBM Plex Mono',monospace; color:var(--ibm-blue-70); font-weight:600;">Broker 2</div>
+              <div style="font-size:0.65rem; color:#888; margin-top:2px;">Follower</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap; margin-top:0.75rem;">
+            <span class="topic-pill" style="font-size:0.68rem;">pos-sales</span>
+            <span class="topic-pill" style="font-size:0.68rem;">inventory-updates</span>
+            <span class="topic-pill" style="font-size:0.68rem;">customer-complaints</span>
+            <span class="topic-pill" style="font-size:0.68rem;">vendor-deliveries</span>
+            <span class="topic-pill" style="font-size:0.68rem;">display-updates</span>
+            <span class="topic-pill" style="font-size:0.68rem;">daily-sales-report</span>
+          </div>
+        </div>
+
+        <!-- Down arrows -->
+        <div style="text-align:center; font-size:1.3rem; color:var(--ibm-blue-40); margin-bottom:0.25rem;">↓ ↓ ↓ ↓ ↓</div>
+        <div style="text-align:center; font-size:0.72rem; color:var(--ibm-blue-60); font-family:'IBM Plex Mono',monospace; margin-bottom:0.5rem;">ETL Pipeline: Extract → Transform → Load</div>
+
+        <!-- Consumers -->
+        <div style="text-align:center; margin-bottom:0.5rem;"><span class="badge badge-teal">DATA CONSUMERS + ETL PROCESSORS</span></div>
+        <div style="display:flex; justify-content:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+          <div style="background:#defbe6; border:1.5px solid #42be65; border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">📊 Analytics Engine</div>
+          <div style="background:#defbe6; border:1.5px solid #42be65; border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">🖥️ Display Signs</div>
+          <div style="background:#defbe6; border:1.5px solid #42be65; border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">📦 Order System</div>
+          <div style="background:#defbe6; border:1.5px solid #42be65; border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">👔 Manager Alerts</div>
+          <div style="background:#defbe6; border:1.5px solid #42be65; border-radius:6px; padding:8px 14px; text-align:center; font-size:0.78rem; font-family:'IBM Plex Mono',monospace;">💰 Accounting</div>
+        </div>
+        <div style="text-align:center; font-size:1.3rem; color:var(--ibm-teal-40); margin-bottom:0.25rem;">↓</div>
+        <!-- Data warehouse -->
+        <div style="background:linear-gradient(135deg,var(--ibm-blue-90),var(--ibm-blue-80)); border-radius:8px; padding:1rem; text-align:center; color:white;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:0.85rem; font-weight:600; margin-bottom:0.5rem;">🗄️ Data Warehouse + Management Dashboard</div>
+          <div style="font-size:0.78rem; color:var(--ibm-blue-20);">IBM Db2 · Apache Spark · Tableau · Reports</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; justify-content:center;">
+      <button class="info-btn" onclick="openModal('why-kafka')">💡 Why not just use a database?</button>
+      <button class="info-btn cyan" onclick="openModal('kafka-speed')">⚡ How fast is Kafka?</button>
+      <button class="info-btn teal" onclick="openModal('real-world')">🌍 Who else uses Kafka?</button>
+      <button class="info-btn green" onclick="openModal('kafka-docs')">📚 Official Kafka Docs</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer style="background:var(--ibm-blue-100); padding:2.5rem 1.5rem; color:var(--ibm-blue-20);">
+  <div style="max-width:1100px; margin:0 auto; display:flex; flex-wrap:wrap; gap:2rem; justify-content:space-between;">
+    <div>
+      <div style="font-family:'IBM Plex Mono',monospace; color:var(--ibm-blue-40); font-weight:600; margin-bottom:0.75rem;">🛒 GroceryStream</div>
+      <p style="font-size:0.8rem; max-width:280px; color:var(--ibm-blue-30); line-height:1.6; margin:0;">A middle-school-friendly guide to Apache Kafka, ZooKeeper, and ETL pipelines using a grocery store scenario.</p>
+    </div>
+    <div>
+      <div style="font-size:0.8rem; font-weight:600; margin-bottom:0.75rem; color:white;">📚 Official Documentation</div>
+      <div style="display:flex; flex-direction:column; gap:0.4rem;">
+        <a href="https://kafka.apache.org/documentation/" target="_blank" style="color:var(--ibm-blue-40); font-size:0.8rem; text-decoration:none; font-family:'IBM Plex Mono',monospace;">→ Apache Kafka Docs</a>
+        <a href="https://zookeeper.apache.org/doc/current/zookeeperOver.html" target="_blank" style="color:var(--ibm-blue-40); font-size:0.8rem; text-decoration:none; font-family:'IBM Plex Mono',monospace;">→ Apache ZooKeeper Docs</a>
+        <a href="https://www.ibm.com/topics/kafka" target="_blank" style="color:var(--ibm-blue-40); font-size:0.8rem; text-decoration:none; font-family:'IBM Plex Mono',monospace;">→ IBM: What is Kafka?</a>
+        <a href="https://www.ibm.com/topics/etl" target="_blank" style="color:var(--ibm-blue-40); font-size:0.8rem; text-decoration:none; font-family:'IBM Plex Mono',monospace;">→ IBM: What is ETL?</a>
+        <a href="https://kafka.apache.org/quickstart" target="_blank" style="color:var(--ibm-blue-40); font-size:0.8rem; text-decoration:none; font-family:'IBM Plex Mono',monospace;">→ Kafka Quickstart Guide</a>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.8rem; font-weight:600; margin-bottom:0.75rem; color:white;">🔑 Key Terms</div>
+      <div style="display:flex; flex-wrap:wrap; gap:0.4rem; max-width:220px;">
+        <span class="badge badge-blue">Broker</span>
+        <span class="badge badge-teal">Topic</span>
+        <span class="badge badge-green">Producer</span>
+        <span class="badge badge-purple">Consumer</span>
+        <span class="badge badge-yellow">ZNode</span>
+        <span class="badge badge-red">Partition</span>
+        <span class="badge badge-blue">Offset</span>
+        <span class="badge badge-teal">ETL</span>
+        <span class="badge badge-green">Extract</span>
+        <span class="badge badge-yellow">Transform</span>
+        <span class="badge badge-teal">Load</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ===================== MODAL CONTENT DATA ===================== -->
+<script>
+const modals = {
+  'kafka-hero': {
+    title: '📦 What is Apache Kafka?',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">
+        <strong>Apache Kafka</strong> is an open-source platform for <strong>streaming data</strong> — imagine it as a super-fast, never-full bulletin board where computers can post and read messages in real time.
+      </p>
+      <p style="font-size:0.9rem; line-height:1.7; color:#444; margin-bottom:1rem;">
+        It was created by LinkedIn engineers in 2010 and donated to the Apache Software Foundation in 2011. Today, <strong>80% of Fortune 100 companies</strong> use Kafka.
+      </p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🎓 Analogy for middle schoolers:</strong>
+        <p style="font-size:0.85rem; margin:0.5rem 0 0; color:#444;">Kafka is like the school's PA system. Teachers (producers) announce things. Every classroom (consumer) hears it at the same time. The PA system (Kafka) keeps a recording so absent students can hear it later too!</p>
+      </div>
+      <p style="font-size:0.85rem; color:#555; margin-bottom:0.5rem;"><strong>Key things Kafka can do:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li>Handle <strong>millions of messages per second</strong></li>
+        <li>Keep messages for hours, days, or even years</li>
+        <li>Let many different systems read the same message</li>
+        <li>Never lose a message (replication)</li>
+        <li>Scale to hundreds of computers</li>
+      </ul>
+      <a href="https://kafka.apache.org/intro" target="_blank" style="color:var(--ibm-blue-60); font-size:0.85rem; font-family:'IBM Plex Mono',monospace;">→ Official Kafka Introduction</a>
+    `
+  },
+  'zoo-hero': {
+    title: '🦁 What is Apache ZooKeeper?',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">
+        <strong>Apache ZooKeeper</strong> is a coordination service for distributed systems. When you have many computers working together, someone needs to keep them organized — that's ZooKeeper's job.
+      </p>
+      <div style="background:#fcf4d6; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🎓 The Zoo Analogy:</strong>
+        <p style="font-size:0.85rem; margin:0.5rem 0 0; color:#444;">Just like a real zookeeper manages animals (making sure they're fed, healthy, and in the right enclosure), Apache ZooKeeper manages computers in a cluster — making sure they're running, know who's in charge, and have the right information.</p>
+      </div>
+      <p style="font-size:0.85rem; color:#555; margin-bottom:0.5rem;"><strong>ZooKeeper's main jobs:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li><strong>Leader election:</strong> Picks who's in charge if the boss goes down</li>
+        <li><strong>Configuration storage:</strong> Stores shared settings all computers need</li>
+        <li><strong>Health monitoring:</strong> Detects crashed computers instantly</li>
+        <li><strong>Naming service:</strong> Keeps a directory of all computers and topics</li>
+        <li><strong>Synchronization:</strong> Makes sure all computers see the same data</li>
+      </ul>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:0.75rem; font-size:0.8rem; color:var(--ibm-blue-80); margin-bottom:1rem;">
+        <strong>Note:</strong> Newer versions of Kafka (2.8+) include KRaft mode which can run WITHOUT ZooKeeper. But ZooKeeper is still widely used and important to understand!
+      </div>
+      <a href="https://zookeeper.apache.org/doc/current/zookeeperOver.html" target="_blank" style="color:var(--ibm-blue-60); font-size:0.85rem; font-family:'IBM Plex Mono',monospace;">→ Official ZooKeeper Overview</a>
+    `
+  },
+  'etl-hero': {
+    title: '🔄 What is ETL?',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">
+        <strong>ETL</strong> stands for <strong>Extract, Transform, Load</strong> — the three steps to move data from where it's created to where it's useful.
+      </p>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+        <div style="background:var(--ibm-blue-10); border-radius:6px; padding:0.75rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:0.25rem;">🥕</div>
+          <strong style="font-size:0.85rem; color:var(--ibm-blue-80);">Extract</strong>
+          <p style="font-size:0.78rem; color:#555; margin:0.25rem 0 0;">Collect raw data from sources (Kafka, databases, files)</p>
+        </div>
+        <div style="background:#e5f6ff; border-radius:6px; padding:0.75rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:0.25rem;">🍳</div>
+          <strong style="font-size:0.85rem; color:var(--ibm-cyan-60);">Transform</strong>
+          <p style="font-size:0.78rem; color:#555; margin:0.25rem 0 0;">Clean, combine, reshape data into useful format</p>
+        </div>
+        <div style="background:#d9fbfb; border-radius:6px; padding:0.75rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:0.25rem;">🍽️</div>
+          <strong style="font-size:0.85rem; color:#007d79;">Load</strong>
+          <p style="font-size:0.78rem; color:#555; margin:0.25rem 0 0;">Store ready data in warehouses and dashboards</p>
+        </div>
+      </div>
+      <p style="font-size:0.85rem; line-height:1.7; color:#444; margin-bottom:1rem;">
+        <strong>Why is ETL important?</strong> Raw data is messy! Dates in different formats, missing values, duplicate records — ETL fixes all that before the data reaches analysts and managers who need accurate information.
+      </p>
+      <p style="font-size:0.85rem; line-height:1.7; color:#444; margin-bottom:1rem;">
+        <strong>With Kafka:</strong> Traditionally ETL happened in big batches overnight (batch ETL). Kafka enables <strong>streaming ETL</strong> — processing data instantly as it arrives, like a factory assembly line instead of a weekly delivery truck.
+      </p>
+      <a href="https://www.ibm.com/topics/etl" target="_blank" style="color:var(--ibm-blue-60); font-size:0.85rem; font-family:'IBM Plex Mono',monospace;">→ IBM: What is ETL?</a>
+    `
+  },
+  'problem-detail': {
+    title: '🤔 The Problem Without Kafka',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Imagine FreshMart tries to connect systems <strong>directly</strong> to each other (called "point-to-point" integration):</p>
+      <div style="background:#fff1f1; border:1px solid #ffa4a9; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <p style="font-size:0.85rem; margin:0; line-height:1.7; color:#444;">
+          POS → Inventory<br/>
+          POS → Analytics<br/>
+          POS → Loyalty Program<br/>
+          POS → Display Signs<br/>
+          POS → Vendor System<br/>
+          Inventory → Display Signs<br/>
+          Inventory → Vendor System<br/>
+          ...and so on
+        </p>
+      </div>
+      <p style="font-size:0.9rem; line-height:1.7; color:#444; margin-bottom:1rem;">
+        With <strong>6 systems</strong>, you'd need up to <strong>30 direct connections</strong>! If you add a 7th system, you need 6 more connections. This grows exponentially and becomes a maintenance nightmare.
+      </p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">✅ With Kafka:</strong>
+        <p style="font-size:0.85rem; margin:0.5rem 0 0; color:#444;">Every system connects to Kafka only. Add a new system? Just one new connection. Kafka is the "hub" and systems are the "spokes." This is called the <strong>Hub-and-Spoke pattern</strong>.</p>
+      </div>
+      <p style="font-size:0.85rem; color:#555;">This concept is sometimes called <strong>"decoupling"</strong> — the POS system doesn't need to know that the analytics system exists. They're completely independent, connected only through Kafka.</p>
+    `
+  },
+  'zoo-deep': {
+    title: '🔍 Deep Dive: How ZooKeeper Works',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">ZooKeeper runs as a cluster of servers (usually 3 or 5 — always odd numbers, for voting purposes). Here's how it works:</p>
+
+      <div style="margin-bottom:1rem;">
+        <strong style="font-size:0.9rem; color:var(--ibm-blue-80);">🗳️ Quorum Voting</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">ZooKeeper uses majority voting. With 3 servers, 2 must agree. This means even if 1 server crashes, ZooKeeper keeps running. With 5 servers, 2 can crash and it still works.</p>
+      </div>
+
+      <div style="margin-bottom:1rem;">
+        <strong style="font-size:0.9rem; color:var(--ibm-blue-80);">📝 ZAB Protocol</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">ZooKeeper uses the "ZooKeeper Atomic Broadcast" protocol to ensure all servers see the same data in the same order — like a perfectly synchronized class clap.</p>
+      </div>
+
+      <div style="margin-bottom:1rem;">
+        <strong style="font-size:0.9rem; color:var(--ibm-blue-80);">⚡ Ephemeral Nodes</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">When a Kafka broker connects, it creates an "ephemeral" ZNode. When that broker crashes or disconnects, the ZNode <strong>automatically disappears</strong> — like a name tag that vanishes when someone leaves.</p>
+      </div>
+
+      <div style="margin-bottom:1rem;">
+        <strong style="font-size:0.9rem; color:var(--ibm-blue-80);">👀 Watchers</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Systems can "watch" a ZNode for changes. If the leader broker's ZNode disappears, all followers are instantly notified and an election begins — usually within milliseconds!</p>
+      </div>
+      <a href="https://zookeeper.apache.org/doc/current/zookeeperInternals.html" target="_blank" style="color:var(--ibm-blue-60); font-size:0.85rem; font-family:'IBM Plex Mono',monospace;">→ ZooKeeper Internals Documentation</a>
+    `
+  },
+  'znodes': {
+    title: '📂 What are ZNodes?',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">ZNodes are the data units ZooKeeper stores. Think of them as files in a folder tree — just like your computer's file system.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        <div style="background:var(--ibm-blue-10); border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:var(--ibm-blue-80);">📁 Persistent ZNodes</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Stay forever until manually deleted. Used for topic configurations and permanent settings.</p>
+        </div>
+        <div style="background:#defbe6; border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:#044317;">💨 Ephemeral ZNodes</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Disappear when the client disconnects. Used to track which brokers are currently alive.</p>
+        </div>
+        <div style="background:#fcf4d6; border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:#4d3600;">🔢 Sequential ZNodes</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Get an auto-incremented number. Used in leader election (lowest number wins!).</p>
+        </div>
+        <div style="background:#f6f2ff; border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:#6929c4;">👀 Container ZNodes</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Auto-delete when all children are gone. Great for managing groups of resources.</p>
+        </div>
+      </div>
+      <p style="font-size:0.85rem; color:#555; line-height:1.5;">Each ZNode can hold up to <strong>1 MB of data</strong> and has metadata like: creation time, last modified time, version number, and who created it.</p>
+    `
+  },
+  'zoo-election': {
+    title: '👑 How Leader Election Works in ZooKeeper',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">This is one of ZooKeeper's most magical features. Here's the step-by-step:</p>
+      <div style="display:flex; flex-direction:column; gap:0.875rem;">
+        <div style="display:flex; gap:0.75rem; align-items:start;">
+          <div style="background:var(--ibm-blue-60); color:white; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; flex-shrink:0;">1</div>
+          <div><strong style="font-size:0.88rem;">All Kafka brokers</strong> create a sequential ephemeral ZNode at <code style="font-size:0.78rem; background:var(--ibm-blue-10); padding:1px 4px;">/controller_epoch</code> — like taking a numbered ticket</div>
+        </div>
+        <div style="display:flex; gap:0.75rem; align-items:start;">
+          <div style="background:var(--ibm-blue-60); color:white; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; flex-shrink:0;">2</div>
+          <div>The broker with the <strong style="font-size:0.88rem;">lowest sequence number</strong> becomes the leader (controller). Simple!  If tickets are 001, 002, 003 → 001 wins.</div>
+        </div>
+        <div style="display:flex; gap:0.75rem; align-items:start;">
+          <div style="background:var(--ibm-blue-60); color:white; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; flex-shrink:0;">3</div>
+          <div>Each other broker <strong style="font-size:0.88rem;">watches the ZNode just above it</strong> in sequence. Broker 002 watches 001. Broker 003 watches 002. (This avoids a "thundering herd" problem)</div>
+        </div>
+        <div style="display:flex; gap:0.75rem; align-items:start;">
+          <div style="background:var(--ibm-blue-60); color:white; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; flex-shrink:0;">4</div>
+          <div>If the leader (001) crashes, its <strong style="font-size:0.88rem;">ephemeral ZNode disappears</strong> automatically. ZooKeeper notifies broker 002, which checks if anything lower exists — none does, so it becomes leader!</div>
+        </div>
+        <div style="display:flex; gap:0.75rem; align-items:start;">
+          <div style="background:#198038; color:white; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; flex-shrink:0;">✓</div>
+          <div>The whole election takes <strong style="font-size:0.88rem;">milliseconds</strong>. FreshMart's shoppers never notice anything happened!</div>
+        </div>
+      </div>
+    `
+  },
+  'zoo-docs': {
+    title: '📚 ZooKeeper Official Documentation',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Here are the official resources for learning more about ZooKeeper:</p>
+      <div style="display:flex; flex-direction:column; gap:0.75rem;">
+        <a href="https://zookeeper.apache.org/doc/current/zookeeperOver.html" target="_blank" style="display:block; background:var(--ibm-blue-10); border:1px solid var(--ibm-blue-20); border-radius:6px; padding:0.875rem; text-decoration:none;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:var(--ibm-blue-60); font-weight:600;">ZooKeeper Overview →</div>
+          <div style="font-size:0.8rem; color:#555; margin-top:3px;">Official introduction and high-level concepts</div>
+        </a>
+        <a href="https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html" target="_blank" style="display:block; background:var(--ibm-blue-10); border:1px solid var(--ibm-blue-20); border-radius:6px; padding:0.875rem; text-decoration:none;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:var(--ibm-blue-60); font-weight:600;">Programmer's Guide →</div>
+          <div style="font-size:0.8rem; color:#555; margin-top:3px;">How to build applications using ZooKeeper</div>
+        </a>
+        <a href="https://www.ibm.com/cloud/learn/zookeeper" target="_blank" style="display:block; background:var(--ibm-blue-10); border:1px solid var(--ibm-blue-20); border-radius:6px; padding:0.875rem; text-decoration:none;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:var(--ibm-blue-60); font-weight:600;">IBM: What is ZooKeeper? →</div>
+          <div style="font-size:0.8rem; color:#555; margin-top:3px;">Beginner-friendly IBM explainer</div>
+        </a>
+      </div>
+    `
+  },
+  'producer': {
+    title: '📢 Kafka Producers',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">A <strong>Kafka Producer</strong> is any application that <strong>writes (publishes) messages</strong> to a Kafka topic. It's the "sender" in our messaging system.</p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🛒 FreshMart Examples:</strong>
+        <ul style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; padding-left:1.25rem; line-height:1.8;">
+          <li>POS checkout system → produces to <code style="font-size:0.78rem;">pos-sales</code></li>
+          <li>Inventory scanner → produces to <code style="font-size:0.78rem;">inventory-updates</code></li>
+          <li>Customer app → produces to <code style="font-size:0.78rem;">customer-complaints</code></li>
+          <li>Dock barcode reader → produces to <code style="font-size:0.78rem;">vendor-deliveries</code></li>
+        </ul>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:1rem;">Producers can choose which <strong>partition</strong> to send to (using a key), and Kafka guarantees message order within a partition.</p>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5;">Producers also have <strong>acknowledgment settings</strong> (acks): do you need just the leader to confirm receipt, or all replicas? More acks = safer but slower.</p>
+      <a href="https://kafka.apache.org/documentation/#producerapi" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Producer API Docs</a>
+    `
+  },
+  'consumer': {
+    title: '👂 Kafka Consumers',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">A <strong>Kafka Consumer</strong> is any application that <strong>reads messages</strong> from a Kafka topic. Multiple consumers can read the same topic independently — Kafka never "removes" a message just because one consumer read it.</p>
+      <div style="background:#defbe6; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🛒 FreshMart's consumers of <code>pos-sales</code>:</strong>
+        <ul style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; padding-left:1.25rem; line-height:1.8;">
+          <li>📦 Inventory system (decrements stock)</li>
+          <li>📊 Analytics engine (calculates revenue)</li>
+          <li>⭐ Loyalty program (adds points to customer)</li>
+          <li>🖥️ Dashboard (updates real-time charts)</li>
+          <li>💰 Accounting system (records the transaction)</li>
+        </ul>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:1rem;">Each consumer <strong>tracks its own offset</strong> — where it's up to in reading the topic. If the analytics engine crashes and restarts, it picks up exactly where it left off!</p>
+      <a href="https://kafka.apache.org/documentation/#consumerapi" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Consumer API Docs</a>
+    `
+  },
+  'topic-detail': {
+    title: '🗂️ Kafka Topics in Detail',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">A <strong>topic</strong> is a named stream of messages — like a TV channel. Producers broadcast to it, consumers tune in.</p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">📺 TV Channel Analogy:</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Channel 5 (pos-sales) broadcasts sale events. Channel 8 (inventory-updates) broadcasts stock changes. You can watch multiple channels at once. The channel keeps airing even if you walk away — you can watch the recording later (that's the offset system).</p>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Topic configuration options:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li><strong>retention.ms:</strong> How long to keep messages (e.g., 7 days)</li>
+        <li><strong>partitions:</strong> How many parallel streams (more = faster)</li>
+        <li><strong>replication.factor:</strong> How many copies (more = safer)</li>
+        <li><strong>cleanup.policy:</strong> Delete old messages or compact (keep latest per key)</li>
+      </ul>
+      <a href="https://kafka.apache.org/documentation/#topicconfigs" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Topic Configuration Reference</a>
+    `
+  },
+  'broker': {
+    title: '🖥️ Kafka Brokers',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">A <strong>broker</strong> is a single Kafka server — a computer that stores messages and serves producers and consumers. A group of brokers is a <strong>Kafka cluster</strong>.</p>
+      <div style="background:#f6f2ff; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🏢 Building Analogy:</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">If Kafka is a mail sorting facility, each broker is one sorting room. FreshMart's 3-broker cluster means even if one room catches fire, the other two keep sorting mail!</p>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>What a broker does:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li>Receives messages from producers</li>
+        <li>Stores messages on disk (in partition log files)</li>
+        <li>Serves messages to consumers</li>
+        <li>Replicates partitions to other brokers</li>
+        <li>One broker is the "controller" (managed by ZooKeeper)</li>
+      </ul>
+      <p style="font-size:0.85rem; color:#555;">A Kafka cluster at a large retailer like FreshMart might have <strong>50–200 brokers</strong> handling millions of messages per second!</p>
+    `
+  },
+  'partition': {
+    title: '🍕 Kafka Partitions',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">A <strong>partition</strong> is a section of a topic — like slices of a pizza. Splitting a topic into partitions allows Kafka to process messages in parallel, massively increasing speed.</p>
+      <div style="background:#fcf4d6; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🍕 The Pizza Analogy:</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">If you have 1 whole pizza, only 1 person can slice it at a time. If you cut it into 8 slices first, 8 people can grab a slice simultaneously! More partitions = more parallel consumers = faster processing.</p>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>How FreshMart uses partitions:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li><code style="font-size:0.78rem;">pos-sales</code> has <strong>12 partitions</strong> — one per checkout register!</li>
+        <li>Messages for Register 7 always go to Partition 7 (using register_id as the key)</li>
+        <li>Order of sales at each register is guaranteed</li>
+        <li>12 analytics workers can process 12 registers simultaneously</li>
+      </ul>
+      <p style="font-size:0.85rem; color:#555;">Each partition is stored on one broker but <strong>replicated</strong> to 2 others for safety.</p>
+      <a href="https://kafka.apache.org/documentation/#intro_concepts_and_terminology" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Concepts: Partitions</a>
+    `
+  },
+  'offset': {
+    title: '📖 Kafka Offsets',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">An <strong>offset</strong> is the position number of a message within a partition. Think of it like page numbers in a book — you can always say "I've read up to page 847."</p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">📚 Bookmark Analogy:</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">Each consumer group has its own bookmark in each partition. The Inventory System might be at offset 10,848 while the Analytics Engine is at 10,720 (slightly behind). They're completely independent!</p>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Why offsets are powerful:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li>If the analytics system crashes overnight, it resumes from where it left off next morning</li>
+        <li>You can "replay" history by resetting the offset back to 0</li>
+        <li>Multiple consumer groups each maintain their own offsets independently</li>
+        <li>Offsets are stored in a special Kafka topic: <code style="font-size:0.78rem;">__consumer_offsets</code></li>
+      </ul>
+    `
+  },
+  'message-anatomy': {
+    title: '🔬 Anatomy of a Kafka Message',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Every Kafka message has these parts:</p>
+      <div style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1rem;">
+        <div style="background:var(--ibm-blue-10); border-radius:6px; padding:0.875rem; display:flex; gap:0.75rem;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:var(--ibm-blue-60); font-weight:600; min-width:80px;">🔑 Key</span>
+          <span style="font-size:0.82rem; color:#444;">Optional identifier used for partitioning. FreshMart uses <code style="font-size:0.78rem;">register_id</code> as key so all transactions from one register go to the same partition.</span>
+        </div>
+        <div style="background:#defbe6; border-radius:6px; padding:0.875rem; display:flex; gap:0.75rem;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:#044317; font-weight:600; min-width:80px;">📦 Value</span>
+          <span style="font-size:0.82rem; color:#444;">The actual message content — usually JSON or Avro format. This is the sale data, inventory event, or complaint details.</span>
+        </div>
+        <div style="background:#fcf4d6; border-radius:6px; padding:0.875rem; display:flex; gap:0.75rem;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:#4d3600; font-weight:600; min-width:80px;">⏰ Timestamp</span>
+          <span style="font-size:0.82rem; color:#444;">When the message was created (or when Kafka received it). Critical for time-based analysis and replaying events.</span>
+        </div>
+        <div style="background:#f6f2ff; border-radius:6px; padding:0.875rem; display:flex; gap:0.75rem;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:#6929c4; font-weight:600; min-width:80px;">🏷️ Headers</span>
+          <span style="font-size:0.82rem; color:#444;">Optional metadata — like source system name, schema version, correlation ID for tracing the message's journey.</span>
+        </div>
+        <div style="background:#e5f6ff; border-radius:6px; padding:0.875rem; display:flex; gap:0.75rem;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:var(--ibm-cyan-60); font-weight:600; min-width:80px;">🔢 Offset</span>
+          <span style="font-size:0.82rem; color:#444;">Position number assigned by Kafka when stored. Consumers use this to track their progress.</span>
+        </div>
+      </div>
+    `
+  },
+  'topics-partitions': {
+    title: '🍕 How Partitions Speed Up Kafka',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Partitions are Kafka's main mechanism for <strong>parallelism and scale</strong>. Here's why they matter:</p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">Without partitions (1 partition):</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0; line-height:1.5;">Messages queue up one-by-one. Only 1 consumer can read at a time. Maximum speed: limited to 1 processor's speed.</p>
+        <strong style="font-size:0.85rem;">With 12 partitions:</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">12 consumers process simultaneously! Speed is multiplied by 12. FreshMart handles all 12 registers at exactly the same time.</p>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Important rule:</strong> You can have MORE partitions than consumers, but you can't have more consumers than partitions in one consumer group — extra consumers sit idle.</p>
+      <p style="font-size:0.85rem; color:#555;">A single Kafka partition can handle roughly <strong>10 MB/second</strong>. With 100 partitions that's 1 GB/second throughput!</p>
+    `
+  },
+  'consumer-groups': {
+    title: '👥 Kafka Consumer Groups',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">A <strong>consumer group</strong> is a team of consumers that work together to read a topic. Each message is delivered to only ONE consumer in the group — but multiple groups can read the same topic independently.</p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🏬 FreshMart Example:</strong>
+        <p style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; line-height:1.5;">The <code style="font-size:0.78rem;">pos-sales</code> topic has 3 consumer groups:
+          <br/>• Group "inventory-team": 3 workers share the 12 partitions (4 each)
+          <br/>• Group "analytics-team": 6 workers share the 12 partitions (2 each)
+          <br/>• Group "loyalty-team": 1 worker reads all 12 partitions
+          <br/><br/>All three groups get ALL the same messages — independently!</p>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5;">If a worker in the inventory-team crashes, Kafka automatically <strong>reassigns</strong> its partitions to the remaining workers. This is called <strong>rebalancing</strong>.</p>
+      <a href="https://kafka.apache.org/documentation/#intro_consumers" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Consumer Groups Documentation</a>
+    `
+  },
+  'retention': {
+    title: '⏳ How Long Are Kafka Messages Kept?',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Unlike a regular message queue that deletes messages after they're read, Kafka <strong>keeps messages for a configurable time period</strong>. This is called the <strong>retention policy</strong>.</p>
+      <div style="overflow-x:auto; margin-bottom:1rem;">
+        <table>
+          <thead><tr><th>FreshMart Topic</th><th>Retention</th><th>Why?</th></tr></thead>
+          <tbody>
+            <tr><td><code style="font-size:0.75rem;">pos-sales</code></td><td>7 days</td><td>Enough for weekly audits</td></tr>
+            <tr><td><code style="font-size:0.75rem;">inventory-updates</code></td><td>3 days</td><td>Fast-moving data, low storage</td></tr>
+            <tr><td><code style="font-size:0.75rem;">customer-complaints</code></td><td>90 days</td><td>Legal requirements</td></tr>
+            <tr><td><code style="font-size:0.75rem;">vendor-deliveries</code></td><td>1 year</td><td>Accounting and audits</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Log Compaction:</strong> An alternative to time-based retention. Instead of keeping all messages, keep only the <em>latest</em> message for each key. Good for "current state" topics like current inventory levels.</p>
+      <a href="https://kafka.apache.org/documentation/#log_compaction" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Log Compaction Docs</a>
+    `
+  },
+  'extract': {
+    title: '🥕 ETL: The Extract Step',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;"><strong>Extraction</strong> means pulling raw data from its source. With Kafka, this usually means a Kafka Consumer reading messages from a topic.</p>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🛒 At FreshMart, extraction happens in three ways:</strong>
+        <ul style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; padding-left:1.25rem; line-height:1.8;">
+          <li><strong>Real-time:</strong> Kafka Consumer reads <code style="font-size:0.78rem;">pos-sales</code> messages as they arrive</li>
+          <li><strong>Pull from databases:</strong> Connect to the inventory DB and read changed rows (CDC)</li>
+          <li><strong>File intake:</strong> Vendor sends a CSV file; extract reads and parses it</li>
+        </ul>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Tools for extraction with Kafka:</strong></p>
+      <ul style="font-size:0.85rem; color:#444; line-height:1.8; margin:0 0 1rem; padding-left:1.25rem;">
+        <li><strong>Kafka Connect:</strong> Pre-built connectors for 200+ data sources</li>
+        <li><strong>Debezium:</strong> Captures database changes and streams them to Kafka</li>
+        <li><strong>Apache NiFi:</strong> Visual tool for routing and extracting data</li>
+      </ul>
+      <a href="https://kafka.apache.org/documentation/#connect" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Connect Documentation</a>
+    `
+  },
+  'transform': {
+    title: '🍳 ETL: The Transform Step',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;"><strong>Transformation</strong> is the most complex step — it's where raw data gets cleaned, enriched, and shaped into something useful.</p>
+      <div style="background:#e5f6ff; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">🔧 Transformations FreshMart does:</strong>
+        <ul style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; padding-left:1.25rem; line-height:1.9;">
+          <li>📅 <strong>Convert timestamps</strong> to store's local time zone</li>
+          <li>🔗 <strong>Join data:</strong> Link SKU codes to product names from the product database</li>
+          <li>🧹 <strong>Clean data:</strong> Remove test transactions, fix $0.00 prices</li>
+          <li>📊 <strong>Aggregate:</strong> Sum up hourly revenue per department</li>
+          <li>🚨 <strong>Enrich:</strong> Flag items running low on stock</li>
+          <li>💰 <strong>Calculate:</strong> Add profit margin based on cost data</li>
+        </ul>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Kafka Streams / KSQL:</strong> Kafka has built-in transformation tools! You can write SQL-like queries directly on Kafka streams, doing real-time joins and aggregations.</p>
+      <a href="https://kafka.apache.org/documentation/streams/" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Streams Documentation</a>
+    `
+  },
+  'load': {
+    title: '🍽️ ETL: The Load Step',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;"><strong>Loading</strong> means writing the cleaned, transformed data to its final destination where humans or other systems can use it.</p>
+      <div style="background:#d9fbfb; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+        <strong style="font-size:0.85rem;">📦 FreshMart loads data to:</strong>
+        <ul style="font-size:0.85rem; color:#444; margin:0.5rem 0 0; padding-left:1.25rem; line-height:1.8;">
+          <li>🗄️ <strong>IBM Db2 Data Warehouse</strong> — for long-term storage and reporting</li>
+          <li>📊 <strong>Tableau Dashboard</strong> — for manager's real-time view</li>
+          <li>📧 <strong>Email alerts</strong> — "Low stock: Milk (12 gallons remaining)"</li>
+          <li>🖥️ <strong>Electronic shelf signs</strong> — price and promotion updates</li>
+          <li>📱 <strong>Manager app notifications</strong> — urgent complaint alerts</li>
+        </ul>
+      </div>
+      <p style="font-size:0.85rem; color:#444; line-height:1.5; margin-bottom:0.75rem;"><strong>Kafka Connect Sink Connectors</strong> make loading easy — pre-built connectors push data from Kafka directly into Elasticsearch, databases, S3, Salesforce, and hundreds more destinations.</p>
+      <a href="https://docs.confluent.io/platform/current/connect/kafka_connectors.html" target="_blank" style="color:var(--ibm-blue-60); font-size:0.82rem; font-family:'IBM Plex Mono',monospace;">→ Kafka Connect Sink Connectors</a>
+    `
+  },
+  'etl-tools': {
+    title: '🛠️ ETL Tools Used with Kafka',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Many tools work alongside Kafka for ETL processing:</p>
+      <div style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1rem;">
+        <div style="background:var(--ibm-blue-10); border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:var(--ibm-blue-80);">Apache Spark Streaming</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.35rem 0 0; line-height:1.5;">Reads from Kafka, does complex transformations, writes to data warehouses. FreshMart uses this for hourly sales summaries.</p>
+        </div>
+        <div style="background:#defbe6; border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:#044317;">Kafka Streams</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.35rem 0 0; line-height:1.5;">Built into Kafka! Write Java/Scala code to process streams with joins, aggregations, and windowing — all inside Kafka itself.</p>
+        </div>
+        <div style="background:#e5f6ff; border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:var(--ibm-cyan-60);">ksqlDB</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.35rem 0 0; line-height:1.5;">Run SQL queries ON Kafka streams! <code style="font-size:0.78rem;">SELECT * FROM pos-sales WHERE total > 100</code> — real-time SQL for Kafka.</p>
+        </div>
+        <div style="background:#f6f2ff; border-radius:6px; padding:0.875rem;">
+          <strong style="font-size:0.85rem; color:#6929c4;">Apache Flink</strong>
+          <p style="font-size:0.82rem; color:#444; margin:0.35rem 0 0; line-height:1.5;">Ultra-low latency stream processing. FreshMart uses Flink for real-time fraud detection on payment transactions.</p>
+        </div>
+      </div>
+    `
+  },
+  'streaming-etl': {
+    title: '⚡ Streaming ETL vs. Batch ETL',
+    body: `
+      <p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">There are two approaches to ETL — and Kafka makes the streaming approach possible.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        <div style="background:#fcf4d6; border-radius:6px; padding:1rem;">
+          <div style="font-size:1.3rem; margin-bottom:0.25rem;">🐢</div>
+          <strong style="font-size:0.85rem; color:#4d3600;">Batch ETL (Old Way)</strong>
+          <ul style="font-size:0.82rem; color:#444; margin:0.5rem 0 0; padding-left:1.15rem; line-height:1.8;">
+            <li>Runs on a schedule (nightly at 2am)</li>
+            <li>Collects all data, processes as a chunk</li>
+            <li>Report is ready at 7am next morning</li>
+            <li>Simple but SLOW for decision making</li>
+          </ul>
+        </div>
+        <div style="background:#defbe6; border-radius:6px; padding:1rem;">
+          <div style="font-size:1.3rem; margin-bottom:0.25rem;">⚡</div>
+          <strong style="font-size:0.85rem; color:#044317;">Streaming ETL (Kafka Way)</strong>
+          <ul style="font-size:0.82rem; color:#444; margin:0.5rem 0 0; padding-left:1.15rem; line-height:1.8;">
+            <li>Continuous — always running</li>
+            <li>Each message processed as it arrives</li>
+            <li>Dashboard updates in milliseconds</li>
+            <li>Complex but enables REAL-TIME action</li>
+          </ul>
+        </div>
+      </div>
+      <div style="background:var(--ibm-blue-10); border-radius:6px; padding:0.875rem; font-size:0.85rem; color:#444; line-height:1.5;">
+        <strong>Real example:</strong> With batch ETL, FreshMart would discover the strawberries were spoiled at 7am the NEXT day. With streaming ETL + Kafka, the manager gets an alert within 60 seconds of the first complaint! 🍓
+      </div>
+    `
+  },
+  'msg-pos': { title: '🧾 POS Sale Message Example', body: `<div class="code-block" style="font-size:0.78rem;">{<br>  <span class="kw">"event_type"</span>: <span class="str">"SALE_COMPLETED"</span>,<br>  <span class="kw">"timestamp"</span>: <span class="str">"2024-03-15T14:32:01.523Z"</span>,<br>  <span class="kw">"store_id"</span>: <span class="str">"FRESHMART-042"</span>,<br>  <span class="kw">"register_id"</span>: <span class="str">"REG-07"</span>,<br>  <span class="kw">"cashier_id"</span>: <span class="str">"EMP-1192"</span>,<br>  <span class="kw">"loyalty_card"</span>: <span class="str">"CARD-44821"</span>,<br>  <span class="kw">"items"</span>: [<br>    { <span class="kw">"sku"</span>: <span class="str">"APPL-GALA-1LB"</span>, <span class="kw">"qty"</span>: <span class="num">2</span>, <span class="kw">"price"</span>: <span class="num">1.99</span>, <span class="kw">"dept"</span>: <span class="str">"produce"</span> },<br>    { <span class="kw">"sku"</span>: <span class="str">"MILK-WHL-GAL"</span>, <span class="kw">"qty"</span>: <span class="num">1</span>, <span class="kw">"price"</span>: <span class="num">4.29</span>, <span class="kw">"dept"</span>: <span class="str">"dairy"</span> },<br>    { <span class="kw">"sku"</span>: <span class="str">"BREAD-WHT-LF"</span>, <span class="kw">"qty"</span>: <span class="num">1</span>, <span class="kw">"price"</span>: <span class="num">2.49</span>, <span class="kw">"dept"</span>: <span class="str">"bakery"</span> }<br>  ],<br>  <span class="kw">"subtotal"</span>: <span class="num">10.76</span>,<br>  <span class="kw">"tax"</span>: <span class="num">0.54</span>,<br>  <span class="kw">"total"</span>: <span class="num">11.30</span>,<br>  <span class="kw">"payment_method"</span>: <span class="str">"CREDIT_CARD"</span>,<br>  <span class="kw">"card_last4"</span>: <span class="str">"4821"</span><br>}</div><p style="font-size:0.85rem; color:#555; margin-top:1rem; line-height:1.5;">This message goes to topic <strong>pos-sales</strong>. The register_id (REG-07) is used as the partition key, ensuring all Register 7 transactions stay in order on Partition 7.</p>` },
+  'msg-inv': { title: '🏷️ Inventory Update Message', body: `<div class="code-block" style="font-size:0.78rem;">{<br>  <span class="kw">"event_type"</span>: <span class="str">"STOCK_UPDATED"</span>,<br>  <span class="kw">"timestamp"</span>: <span class="str">"2024-03-15T14:32:05.100Z"</span>,<br>  <span class="kw">"sku"</span>: <span class="str">"APPL-GALA-1LB"</span>,<br>  <span class="kw">"aisle"</span>: <span class="str">"PRODUCE-02"</span>,<br>  <span class="kw">"previous_qty"</span>: <span class="num">87</span>,<br>  <span class="kw">"new_qty"</span>: <span class="num">85</span>,<br>  <span class="kw">"reason"</span>: <span class="str">"SALE"</span>,<br>  <span class="kw">"reorder_threshold"</span>: <span class="num">20</span>,<br>  <span class="kw">"is_low_stock"</span>: <span class="kw">false</span>,<br>  <span class="kw">"last_restock_date"</span>: <span class="str">"2024-03-15T06:30:00Z"</span><br>}</div><p style="font-size:0.85rem; color:#555; margin-top:1rem; line-height:1.5;">Fired automatically when a sale reduces stock. Goes to <strong>inventory-updates</strong> topic. The displays system reads this to update the "X left!" indicator on shelf signs.</p>` },
+  'msg-complaint': { title: '😤 Customer Complaint Message', body: `<div class="code-block" style="font-size:0.78rem;">{<br>  <span class="kw">"event_type"</span>: <span class="str">"COMPLAINT_FILED"</span>,<br>  <span class="kw">"timestamp"</span>: <span class="str">"2024-03-15T14:15:22.400Z"</span>,<br>  <span class="kw">"complaint_id"</span>: <span class="str">"CMP-20240315-0044"</span>,<br>  <span class="kw">"customer_id"</span>: <span class="str">"CUST-29910"</span>,<br>  <span class="kw">"channel"</span>: <span class="str">"MOBILE_APP"</span>,<br>  <span class="kw">"type"</span>: <span class="str">"SPOILED_PRODUCT"</span>,<br>  <span class="kw">"product_sku"</span>: <span class="str">"STRAW-PINT"</span>,<br>  <span class="kw">"severity"</span>: <span class="str">"HIGH"</span>,<br>  <span class="kw">"description"</span>: <span class="str">"Strawberries were moldy 2 days before expiry"</span>,<br>  <span class="kw">"purchase_date"</span>: <span class="str">"2024-03-14"</span>,<br>  <span class="kw">"resolution_requested"</span>: <span class="str">"REFUND"</span><br>}</div><p style="font-size:0.85rem; color:#555; margin-top:1rem; line-height:1.5;">The analytics stream counts complaints per SKU. If STRAW-PINT gets 3+ HIGH complaints in 30 minutes, it automatically fires a <strong>MANAGER_ALERT</strong> event and triggers a product pull from shelves.</p>` },
+  'msg-vendor': { title: '🚚 Vendor Delivery Message', body: `<div class="code-block" style="font-size:0.78rem;">{<br>  <span class="kw">"event_type"</span>: <span class="str">"DELIVERY_RECEIVED"</span>,<br>  <span class="kw">"timestamp"</span>: <span class="str">"2024-03-15T07:45:00.000Z"</span>,<br>  <span class="kw">"delivery_id"</span>: <span class="str">"DEL-2024-0315-001"</span>,<br>  <span class="kw">"vendor_id"</span>: <span class="str">"DOLE_FOODS"</span>,<br>  <span class="kw">"po_number"</span>: <span class="str">"PO-2024-8821"</span>,<br>  <span class="kw">"dock_door"</span>: <span class="num">3</span>,<br>  <span class="kw">"temp_check"</span>: <span class="str">"PASSED"</span>,<br>  <span class="kw">"items"</span>: [<br>    { <span class="kw">"sku"</span>: <span class="str">"BAN-CAVENDISH-1LB"</span>, <span class="kw">"ordered_qty"</span>: <span class="num">500</span>, <span class="kw">"received_qty"</span>: <span class="num">498</span> },<br>    { <span class="kw">"sku"</span>: <span class="str">"PINEAPPLE-EA"</span>, <span class="kw">"ordered_qty"</span>: <span class="num">100</span>, <span class="kw">"received_qty"</span>: <span class="num">100</span> }<br>  ],<br>  <span class="kw">"invoice_total"</span>: <span class="num">847.50</span><br>}</div><p style="font-size:0.85rem; color:#555; margin-top:1rem; line-height:1.5;">Note: bananas received = 498 vs ordered 500. The accounting system reads this discrepancy and flags it for a credit memo with Dole Foods automatically.</p>` },
+  'msg-display': { title: '🖥️ Display Update Message', body: `<div class="code-block" style="font-size:0.78rem;">{<br>  <span class="kw">"event_type"</span>: <span class="str">"PRICE_CHANGE"</span>,<br>  <span class="kw">"timestamp"</span>: <span class="str">"2024-03-15T12:00:00.000Z"</span>,<br>  <span class="kw">"sku"</span>: <span class="str">"APPL-GALA-1LB"</span>,<br>  <span class="kw">"old_price"</span>: <span class="num">1.99</span>,<br>  <span class="kw">"new_price"</span>: <span class="num">1.49</span>,<br>  <span class="kw">"promo_type"</span>: <span class="str">"FLASH_SALE"</span>,<br>  <span class="kw">"start_time"</span>: <span class="str">"2024-03-15T12:00:00Z"</span>,<br>  <span class="kw">"end_time"</span>: <span class="str">"2024-03-15T14:00:00Z"</span>,<br>  <span class="kw">"affected_displays"</span>: [<span class="str">"SIGN-PRODUCE-01"</span>, <span class="str">"SIGN-PRODUCE-02"</span>, <span class="str">"SIGN-ENTRANCE-BOARD"</span>],<br>  <span class="kw">"banner_text"</span>: <span class="str">"2-HR FLASH SALE! Gala Apples $1.49/lb"</span><br>}</div><p style="font-size:0.85rem; color:#555; margin-top:1rem; line-height:1.5;">All 3 digital signs are updated simultaneously within 500ms. The POS system also reads this event to apply the discounted price at checkout automatically.</p>` },
+  'msg-sales': { title: '📊 Daily Sales Report Message', body: `<div class="code-block" style="font-size:0.78rem;">{<br>  <span class="kw">"event_type"</span>: <span class="str">"DAILY_REPORT"</span>,<br>  <span class="kw">"report_date"</span>: <span class="str">"2024-03-15"</span>,<br>  <span class="kw">"store_id"</span>: <span class="str">"FRESHMART-042"</span>,<br>  <span class="kw">"total_revenue"</span>: <span class="num">48291.44</span>,<br>  <span class="kw">"total_transactions"</span>: <span class="num">1847</span>,<br>  <span class="kw">"avg_basket_size"</span>: <span class="num">26.15</span>,<br>  <span class="kw">"by_department"</span>: {<br>    <span class="kw">"produce"</span>: <span class="num">12420.50</span>,<br>    <span class="kw">"dairy"</span>: <span class="num">8930.20</span>,<br>    <span class="kw">"bakery"</span>: <span class="num">5210.80</span>,<br>    <span class="kw">"meat"</span>: <span class="num">11440.90</span>,<br>    <span class="kw">"frozen"</span>: <span class="num">6890.30</span>,<br>    <span class="kw">"beverages"</span>: <span class="num">3398.74</span><br>  },<br>  <span class="kw">"top_sellers"</span>: [<span class="str">"BAN-CAVENDISH-1LB"</span>, <span class="str">"MILK-WHL-GAL"</span>, <span class="str">"BREAD-WHT-LF"</span>],<br>  <span class="kw">"vs_yesterday_pct"</span>: <span class="num">3.2</span><br>}</div>` },
+  'src-inventory': { title: '🏷️ Inventory System Deep Dive', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">FreshMart's inventory system tracks <strong>every single item</strong> in the store in real time.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>How it works:</strong> Every shelf has weight sensors. When a banana is removed, the weight changes. That triggers an inventory update event to Kafka. Warehouse handheld scanners also send events when stock is moved.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Kafka integration:</strong> The inventory system is a <em>producer</em> that writes to <code style="font-size:0.78rem;">inventory-updates</code>, but it's also a <em>consumer</em> of <code style="font-size:0.78rem;">pos-sales</code> — it listens for sales events to decrement counts without waiting for the shelf sensor.</p><p style="font-size:0.85rem; color:#444; line-height:1.7;"><strong>ETL role:</strong> The inventory topic feeds the ETL pipeline that generates daily shrinkage reports (items that went missing or expired), automated vendor reorder emails, and shelf-stocking task assignments for employees.</p>` },
+  'src-pos': { title: '🧾 Point of Sale Deep Dive', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">The POS system is FreshMart's highest-volume Kafka producer — <strong>~50 messages per minute</strong> across all registers.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Data it produces:</strong> Every item scan, every void, every price override, every payment, every loyalty card scan — all become Kafka messages in milliseconds.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Multiple consumers:</strong> The same transaction event is consumed by 5+ different systems simultaneously. Kafka's fan-out capability makes this possible without the POS needing to know any of them exist.</p><p style="font-size:0.85rem; color:#444; line-height:1.7;"><strong>ETL transformation:</strong> Raw POS data is enriched with product category data, margin calculations, and customer demographics (from the loyalty card), then loaded into a star schema data warehouse for business intelligence reporting.</p>` },
+  'src-complaints': { title: '😤 Complaints System Deep Dive', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">FreshMart receives complaints from 4 channels, all unified through Kafka.</p><ul style="font-size:0.85rem; color:#444; line-height:1.8; padding-left:1.25rem; margin-bottom:1rem;"><li><strong>Mobile App:</strong> Customer fills out a form → event fired instantly</li><li><strong>Website:</strong> Online feedback form → Kafka Connect reads the database</li><li><strong>In-Store Kiosk:</strong> Touch screen at exit → direct Kafka producer</li><li><strong>Call Center:</strong> Agent logs complaint → CRM pushes to Kafka</li></ul><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Real-time analytics:</strong> A Kafka Streams application does a <em>windowed count</em> — if the same SKU appears in 3+ HIGH severity complaints within a 30-minute window, it fires a <code style="font-size:0.78rem;">PRODUCT_RECALL_ALERT</code> event automatically.</p><p style="font-size:0.85rem; color:#444; line-height:1.7;"><strong>ETL load:</strong> Complaint data is loaded into a CRM database for follow-up and into the business intelligence system to correlate complaints with vendor deliveries (was the bad product from a specific delivery?).</p>` },
+  'src-vendors': { title: '🚚 Vendor System Deep Dive', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">FreshMart works with 200+ vendors. The vendor system manages the entire supply chain through Kafka.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Inbound (Producer):</strong> When the inventory system detects a SKU is below its reorder threshold, it fires a <code style="font-size:0.78rem;">REORDER_NEEDED</code> event. The vendor management system consumes this and creates a purchase order automatically.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Delivery receiving (Producer):</strong> When a truck arrives at the dock, the receiving clerk scans the delivery barcode. This fires a <code style="font-size:0.78rem;">DELIVERY_RECEIVED</code> event that simultaneously updates inventory AND notifies accounting to match the invoice.</p><p style="font-size:0.85rem; color:#444; line-height:1.7;"><strong>ETL pipeline:</strong> Vendor delivery data is transformed to calculate fill rates (did they deliver what was ordered?), on-time delivery %, and cost variance — all fed into the vendor scorecard dashboard.</p>` },
+  'src-displays': { title: '🖥️ Digital Display System Deep Dive', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">FreshMart has 847 digital displays throughout the store — price tags, aisle boards, promotional screens, and entrance displays.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Pure consumer:</strong> The display system only READS from Kafka. It subscribes to three topics: <code style="font-size:0.78rem;">display-updates</code>, <code style="font-size:0.78rem;">inventory-updates</code>, and <code style="font-size:0.78rem;">pos-sales</code>.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Smart behavior:</strong> Shelf signs show real-time stock counts ("Only 8 left!"). Produce displays show the freshness rating. Promotional screens automatically activate flash sales and deactivate when they end — based entirely on Kafka events.</p><p style="font-size:0.85rem; color:#444; line-height:1.7;"><strong>ETL benefit:</strong> Because the display system reads from the same ETL-processed Kafka topics as the inventory system, prices shown on displays are always in sync with what the POS charges — eliminating pricing disputes at checkout!</p>` },
+  'src-sales': { title: '📊 Sales Analytics Deep Dive', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">The analytics engine is FreshMart's most sophisticated Kafka component — it's both a consumer AND a producer.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>What it reads:</strong> <code style="font-size:0.78rem;">pos-sales</code>, <code style="font-size:0.78rem;">inventory-updates</code>, <code style="font-size:0.78rem;">customer-complaints</code>, and <code style="font-size:0.78rem;">vendor-deliveries</code>.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>What it produces:</strong> Aggregated summaries every 15 minutes to <code style="font-size:0.78rem;">rolling-sales-summary</code>, and a final <code style="font-size:0.78rem;">daily-sales-report</code> at store close.</p><p style="font-size:0.85rem; color:#444; line-height:1.7; margin-bottom:1rem;"><strong>Kafka Streams windowing:</strong> Uses tumbling time windows (15 min, 1 hour, 1 day) to aggregate revenue, transaction counts, and department performance — all in real time as sales happen.</p><p style="font-size:0.85rem; color:#444; line-height:1.7;"><strong>ETL end result:</strong> The daily report is loaded into the HQ data warehouse where all 200 FreshMart locations' data is compared, enabling executives to see which stores are outperforming and why.</p>` },
+  'inv-detail': { title: '📦 Full Inventory ETL Flow', body: `<div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-blue-80);">1. EXTRACT</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">Shelf weight sensors → warehouse scanners → POS decrements. All produce events to Kafka topic <code style="font-size:0.78rem;">inventory-updates</code>.</p></div><div style="background:#e5f6ff;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-cyan-60);">2. TRANSFORM</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Join SKU to product master (get supplier, category, cost)<br/>• Calculate days until expiry<br/>• Flag if below reorder threshold<br/>• Compute current stock value (qty × cost)</p></div><div style="background:#d9fbfb;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#007d79;">3. LOAD</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• DB: Update <code style="font-size:0.78rem;">INVENTORY_CURRENT</code> table<br/>• Display signs: Update shelf quantity displays<br/>• Alert: Email vendor if below threshold<br/>• Report: Daily stock valuation spreadsheet</p></div></div>` },
+  'pos-detail': { title: '🧾 Full POS ETL Flow', body: `<div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-blue-80);">1. EXTRACT</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">Checkout scanner fires event for every completed transaction. Kafka Producer publishes JSON to <code style="font-size:0.78rem;">pos-sales</code> topic with register_id as partition key.</p></div><div style="background:#e5f6ff;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-cyan-60);">2. TRANSFORM</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Join SKU codes with product database (add names, categories)<br/>• Lookup loyalty card → attach customer demographics<br/>• Calculate profit margin per item<br/>• Apply promo discounts validation<br/>• Standardize timestamp to store timezone</p></div><div style="background:#d9fbfb;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#007d79;">3. LOAD (5 destinations simultaneously!)</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Inventory DB: Decrement stock counts<br/>• Data Warehouse: Append to SALES_FACT table<br/>• Loyalty DB: Credit points to customer<br/>• Analytics: Update real-time dashboard<br/>• Accounting: Post to ledger</p></div></div>` },
+  'complaint-detail': { title: '😤 Full Complaints ETL Flow', body: `<div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-blue-80);">1. EXTRACT</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">App/web/kiosk/call-center all produce events to <code style="font-size:0.78rem;">customer-complaints</code> Kafka topic. Kafka Connect pulls any complaints logged in legacy CRM systems.</p></div><div style="background:#e5f6ff;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-cyan-60);">2. TRANSFORM (Stream Processing)</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Kafka Streams: 30-minute tumbling window count per SKU<br/>• NLP sentiment analysis score on description text<br/>• Join with purchase history (was it really sold at our store?)<br/>• Join with vendor delivery (which delivery batch was this from?)<br/>• Auto-classify: spoiled / wrong item / rude staff / pricing</p></div><div style="background:#d9fbfb;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#007d79;">3. LOAD</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• CRM: Create customer service ticket for follow-up<br/>• Manager alert (SMS/app push) if severity HIGH<br/>• Auto-recall trigger if 3+ same SKU in 30 min<br/>• Vendor scorecard: deduct quality points<br/>• BI Dashboard: Complaint trends by category</p></div></div>` },
+  'vendor-detail': { title: '🚚 Full Vendor ETL Flow', body: `<div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-blue-80);">1. EXTRACT</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">Dock barcode scanner → <code style="font-size:0.78rem;">vendor-deliveries</code>. Inventory reorder threshold triggers → <code style="font-size:0.78rem;">reorder-needed</code>. Vendor EDI (Electronic Data Interchange) files → Kafka Connect ingests XML/CSV invoices.</p></div><div style="background:#e5f6ff;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-cyan-60);">2. TRANSFORM</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Match received qty vs ordered qty (discrepancy flagging)<br/>• Calculate fill rate % per vendor<br/>• Convert invoice currency (some vendors bill in CAD/EUR)<br/>• Join with complaint data (quality correlation)<br/>• Apply vendor contract terms (volume discounts)</p></div><div style="background:#d9fbfb;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#007d79;">3. LOAD</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Inventory DB: Increment stock counts<br/>• Accounting: Post invoice to AP (Accounts Payable)<br/>• Vendor Scorecard DB: Update delivery performance metrics<br/>• Purchasing: Auto-generate credit memo if short-shipped<br/>• Management: Monthly vendor performance report</p></div></div>` },
+  'display-detail': { title: '🖥️ Display System ETL Flow', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">The display system is a <strong>pure Kafka consumer</strong> — it only reads, never writes. It subscribes to 3 topics and reacts instantly.</p><div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-blue-80);">Consumer 1: inventory-updates</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">Reads stock counts → updates "X remaining" on shelf signs. When stock hits 0 → displays "Out of Stock" and changes sign color to red.</p></div><div style="background:#e5f6ff;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-cyan-60);">Consumer 2: display-updates</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">Reads price changes and promotions → updates price display on all affected signs within 500ms. Entrance display board shows current active promotions.</p></div><div style="background:#d9fbfb;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#007d79;">Consumer 3: pos-sales</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">Reads completed sales → "X customers served today" counter on entrance sign. "Today's Best Value" display updates when a high-selling item is detected.</p></div></div>` },
+  'analytics-detail': { title: '📊 Analytics ETL Flow', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">The analytics engine is the most complex component — it reads 4 topics, does real-time aggregation, and writes to 2 output topics.</p><div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-blue-80);">1. EXTRACT (reads from 4 topics)</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">pos-sales + inventory-updates + customer-complaints + vendor-deliveries → all feed into the analytics Kafka Streams application.</p></div><div style="background:#e5f6ff;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:var(--ibm-cyan-60);">2. TRANSFORM (Kafka Streams windowing)</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Tumbling 15-min windows: revenue per department<br/>• Session windows: customer shopping sessions (loyalty card)<br/>• Join: complaints vs. deliveries (find bad batches)<br/>• Rolling average: hourly transaction rate<br/>• Anomaly detection: unusual drop in sales (register down?)</p></div><div style="background:#d9fbfb;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#007d79;">3. LOAD (produces to 2 topics + loads to DB)</strong><p style="font-size:0.82rem;color:#444;margin:0.35rem 0 0;line-height:1.5;">• Produces → <code style="font-size:0.78rem;">rolling-sales-summary</code> (every 15 min)<br/>• Produces → <code style="font-size:0.78rem;">daily-sales-report</code> (store close)<br/>• Loads → Tableau dashboard (real-time via Kafka Connect)<br/>• Loads → IBM Db2 DW SALES_FACT table (for history)</p></div></div>` },
+  'why-kafka': { title: '💡 Why Not Just Use a Database?', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Great question! Databases are amazing for storing and querying data — but they weren't designed for the high-speed, always-flowing data streams that FreshMart needs.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;"><div style="background:#fff1f1;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#750e13;">❌ Database Problems</strong><ul style="font-size:0.82rem;color:#444;margin:0.5rem 0 0;padding-left:1.15rem;line-height:1.8;"><li>Bottleneck: all writes hit one server</li><li>Multiple readers slow each other down</li><li>Data gone after reading (queues)</li><li>Can't replay old events</li><li>Hard to have 50 apps reading simultaneously</li></ul></div><div style="background:#defbe6;border-radius:6px;padding:0.875rem;"><strong style="font-size:0.85rem;color:#044317;">✅ Kafka Advantages</strong><ul style="font-size:0.82rem;color:#444;margin:0.5rem 0 0;padding-left:1.15rem;line-height:1.8;"><li>Distributed across many servers</li><li>Readers don't slow each other down</li><li>Messages persist for days/years</li><li>Replay any event at any time</li><li>Millions of messages per second</li></ul></div></div><p style="font-size:0.85rem;color:#555;line-height:1.5;">The best systems use BOTH: Kafka for real-time streaming and event delivery, databases for querying and storing the final results.</p>` },
+  'kafka-speed': { title: '⚡ How Fast is Kafka?', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Kafka is extraordinarily fast. Here are some real numbers:</p><ul style="font-size:0.88rem;color:#444;line-height:2;padding-left:1.25rem;margin-bottom:1rem;"><li>A single Kafka broker can handle <strong>1 million+ messages per second</strong></li><li>End-to-end latency (producer → consumer) can be as low as <strong>2 milliseconds</strong></li><li>LinkedIn uses Kafka to process <strong>7 trillion messages PER DAY</strong></li><li>Netflix uses Kafka for <strong>700 billion events per day</strong></li><li>Cloudflare uses Kafka to process <strong>1 million events per second</strong></li></ul><div style="background:var(--ibm-blue-10);border-radius:6px;padding:1rem;margin-bottom:1rem;"><strong style="font-size:0.85rem;">🛒 FreshMart in perspective:</strong><p style="font-size:0.85rem;color:#444;margin:0.5rem 0 0;line-height:1.5;">FreshMart's busiest day (Thanksgiving) might hit 500 messages/second. Kafka is <em>thousands</em> of times more powerful than needed — giving plenty of room to grow!</p></div><a href="https://kafka.apache.org/documentation/#design" target="_blank" style="color:var(--ibm-blue-60);font-size:0.82rem;font-family:'IBM Plex Mono',monospace;">→ Kafka Design and Performance</a>` },
+  'real-world': { title: '🌍 Who Else Uses Kafka?', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Kafka powers some of the world's biggest companies — you've probably used it today without knowing!</p><div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1rem;"><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.75rem;display:flex;gap:0.75rem;align-items:center;"><span style="font-size:1.3rem;">🎬</span><div><strong style="font-size:0.85rem;">Netflix</strong> <span style="font-size:0.82rem;color:#555;">— streams viewing events, recommendation engine input, monitoring</span></div></div><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.75rem;display:flex;gap:0.75rem;align-items:center;"><span style="font-size:1.3rem;">🚗</span><div><strong style="font-size:0.85rem;">Uber</strong> <span style="font-size:0.82rem;color:#555;">— driver location updates, surge pricing calculation, trip events</span></div></div><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.75rem;display:flex;gap:0.75rem;align-items:center;"><span style="font-size:1.3rem;">💼</span><div><strong style="font-size:0.85rem;">LinkedIn</strong> <span style="font-size:0.82rem;color:#555;">— invented Kafka! Used for connection recommendations, messaging</span></div></div><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.75rem;display:flex;gap:0.75rem;align-items:center;"><span style="font-size:1.3rem;">🏦</span><div><strong style="font-size:0.85rem;">PayPal</strong> <span style="font-size:0.82rem;color:#555;">— real-time fraud detection, transaction processing</span></div></div><div style="background:var(--ibm-blue-10);border-radius:6px;padding:0.75rem;display:flex;gap:0.75rem;align-items:center;"><span style="font-size:1.3rem;">🛒</span><div><strong style="font-size:0.85rem;">Walmart</strong> <span style="font-size:0.82rem;color:#555;">— inventory management across 10,000+ stores (just like FreshMart!)</span></div></div></div><p style="font-size:0.82rem;color:#555;">80% of Fortune 100 companies use Apache Kafka. It's become as fundamental as databases!</p>` },
+  'kafka-docs': { title: '📚 Official Kafka Documentation', body: `<p style="font-size:0.95rem; line-height:1.7; margin-bottom:1rem;">Ready to explore Kafka more? Here are the best official resources:</p><div style="display:flex;flex-direction:column;gap:0.75rem;"><a href="https://kafka.apache.org/intro" target="_blank" style="display:block;background:var(--ibm-blue-10);border:1px solid var(--ibm-blue-20);border-radius:6px;padding:0.875rem;text-decoration:none;"><div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--ibm-blue-60);font-weight:600;">Apache Kafka Introduction →</div><div style="font-size:0.8rem;color:#555;margin-top:3px;">Official intro — perfect starting point</div></a><a href="https://kafka.apache.org/quickstart" target="_blank" style="display:block;background:var(--ibm-blue-10);border:1px solid var(--ibm-blue-20);border-radius:6px;padding:0.875rem;text-decoration:none;"><div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--ibm-blue-60);font-weight:600;">Kafka Quickstart Guide →</div><div style="font-size:0.8rem;color:#555;margin-top:3px;">Run Kafka on your own computer in 10 minutes</div></a><a href="https://www.ibm.com/topics/kafka" target="_blank" style="display:block;background:var(--ibm-blue-10);border:1px solid var(--ibm-blue-20);border-radius:6px;padding:0.875rem;text-decoration:none;"><div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--ibm-blue-60);font-weight:600;">IBM: What is Apache Kafka? →</div><div style="font-size:0.8rem;color:#555;margin-top:3px;">Clear, beginner-friendly explanation from IBM</div></a><a href="https://developer.confluent.io/learn-kafka/" target="_blank" style="display:block;background:var(--ibm-blue-10);border:1px solid var(--ibm-blue-20);border-radius:6px;padding:0.875rem;text-decoration:none;"><div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--ibm-blue-60);font-weight:600;">Confluent: Learn Apache Kafka →</div><div style="font-size:0.8rem;color:#555;margin-top:3px;">Free courses, videos, and hands-on exercises</div></a><a href="https://kafka.apache.org/documentation/streams/" target="_blank" style="display:block;background:var(--ibm-blue-10);border:1px solid var(--ibm-blue-20);border-radius:6px;padding:0.875rem;text-decoration:none;"><div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--ibm-blue-60);font-weight:600;">Kafka Streams Documentation →</div><div style="font-size:0.8rem;color:#555;margin-top:3px;">The built-in stream processing library</div></a></div>` }
+};
+
+function openModal(key) {
+  const data = modals[key];
+  if (!data) return;
+  document.getElementById('modal-title').textContent = data.title;
+  document.getElementById('modal-body').innerHTML = data.body;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closeModalOnOverlay(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>
