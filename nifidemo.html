@@ -2,1081 +2,1293 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>NiFi Admin — Grocery Store Pipeline</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+:root {
+  --b70:#0043ce; --b60:#0f62fe; --b50:#4589ff; --b20:#d0e2ff; --b10:#edf5ff;
+  --cy:#1192e8; --tl:#009d9a; --g50:#198038; --g20:#a7f0ba; --g10:#defbe6;
+  --r60:#da1e28; --r10:#fff1f1; --o40:#ff832b; --o10:#fff2e8;
+  --p50:#8a3ffc; --p10:#f6f2ff; --y30:#f1c21b; --y10:#fcf4d6;
+  --gr100:#161616; --gr90:#262626; --gr80:#393939; --gr70:#525252;
+  --gr50:#8d8d8d; --gr30:#c6c6c6; --gr20:#e0e0e0; --gr10:#f4f4f4;
+  --bg:#ffffff; --card:#ffffff; --border:#e0e0e0; --text:#161616;
+  --dim:#525252; --muted:#8d8d8d;
+  --prod:#009d9a; --prod-lt:#e3f6f6; --cons:#ff832b; --cons-lt:#fff2e8;
+  --proc:#8a3ffc; --proc-lt:#f6f2ff; --sec:#1192e8; --sec-lt:#e5f6ff;
+}
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; }
+code { font-family:'IBM Plex Mono','Courier New',monospace; font-size:.85em;
+       background:var(--gr10); padding:1px 5px; border-radius:3px; color:var(--b70); }
 
-  :root {
-    --bg: #0d0f0b;
-    --surface: #141710;
-    --card: #1a1e15;
-    --border: #2a2f22;
-    --accent: #a3e635;
-    --accent2: #f97316;
-    --accent3: #38bdf8;
-    --producer: #a3e635;
-    --consumer: #f97316;
-    --muted: #4a5240;
-    --text: #e8edd8;
-    --text-dim: #8a9275;
-  }
+/* HEADER */
+header { background:var(--b70); position:sticky; top:0; z-index:200; border-bottom:3px solid var(--b60); }
+.hdr { max-width:1400px; margin:0 auto; padding:0 16px; display:flex; align-items:center;
+       justify-content:space-between; min-height:48px; gap:12px; }
+.logo { font-size:1rem; font-weight:600; color:#fff; white-space:nowrap; }
+.logo span { opacity:.7; font-weight:400; }
+.pills { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.pill { font-size:.7rem; font-family:'IBM Plex Mono',monospace; padding:3px 10px; border-radius:12px;
+        font-weight:500; border:1px solid rgba(255,255,255,.3); color:#fff; white-space:nowrap; }
+.p-run { background:rgba(161,223,171,.2); }
+.p-warn { background:rgba(255,131,43,.3); }
+.p-sec { background:rgba(17,146,232,.35); }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+/* HERO */
+.hero { background:var(--b10); border-bottom:1px solid var(--b20); padding:22px 16px 18px; }
+.hero-in { max-width:1400px; margin:0 auto; }
+.hero h1 { font-size:clamp(1.4rem,4vw,1.9rem); font-weight:300; color:var(--b70); margin-bottom:5px; line-height:1.2; }
+.hero h1 strong { font-weight:600; }
+.hero p { font-size:.82rem; color:var(--gr70); }
 
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+/* CONTAINER */
+.c { max-width:1400px; margin:0 auto; padding:18px 16px 48px; }
 
-  /* HEADER */
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 40px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .logo {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1.3rem;
-    color: var(--accent);
-    letter-spacing: -0.02em;
-  }
-  .logo span { color: var(--text-dim); font-weight: 400; }
-  .status-bar { display: flex; gap: 20px; align-items: center; }
-  .pill {
-    font-size: 0.72rem;
-    font-family: 'DM Mono', monospace;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-weight: 500;
-  }
-  .pill-running { background: rgba(163,230,53,0.12); color: var(--accent); border: 1px solid rgba(163,230,53,0.3); }
-  .pill-warn { background: rgba(249,115,22,0.12); color: var(--accent2); border: 1px solid rgba(249,115,22,0.3); }
+/* SECTION LABEL */
+.slbl { font-size:.7rem; font-family:'IBM Plex Mono',monospace; color:var(--b60);
+        text-transform:uppercase; letter-spacing:.12em; margin:24px 0 10px;
+        display:flex; align-items:center; gap:8px; }
+.slbl::after { content:''; flex:1; height:1px; background:var(--b20); }
+.slbl:first-child { margin-top:0; }
 
-  /* LAYOUT */
-  .container { max-width: 1400px; margin: 0 auto; padding: 32px 40px; }
+/* METRICS GRID */
+.mgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+         gap:1px; background:var(--border); border:1px solid var(--border);
+         border-radius:4px; overflow:hidden; margin-bottom:20px; }
+.mc { background:var(--card); padding:14px 12px; }
+.mlbl { font-size:.67rem; font-family:'IBM Plex Mono',monospace; color:var(--muted);
+        text-transform:uppercase; letter-spacing:.08em; margin-bottom:5px; }
+.mv { font-size:1.6rem; font-weight:300; line-height:1; color:var(--b70); }
+.msub { font-size:.68rem; color:var(--dim); margin-top:3px; }
+.mvg{color:var(--g50);} .mvo{color:var(--o40);} .mvb{color:var(--b60);} .mvp{color:var(--p50);}
 
-  h1 {
-    font-family: 'Syne', sans-serif;
-    font-size: 2.2rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    margin-bottom: 4px;
-  }
-  h1 em { color: var(--accent); font-style: normal; }
-  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 36px; }
+/* PIPELINE */
+.pipe-wrap { background:var(--gr10); border:1px solid var(--border); border-radius:4px;
+             padding:18px; overflow-x:auto; margin-bottom:20px; -webkit-overflow-scrolling:touch; }
+.pipe-hint { font-size:.72rem; color:var(--muted); margin-bottom:12px; }
+.pipe-flow { display:flex; align-items:center; min-width:840px; }
+.ngrp { display:flex; flex-direction:column; gap:10px; }
+.node { display:flex; flex-direction:column; align-items:center; gap:4px;
+        cursor:pointer; outline:none; text-decoration:none; }
+.nbox { width:118px; padding:10px 8px 8px; border-radius:4px; text-align:center;
+        border:2px solid transparent; transition:box-shadow .15s,transform .15s; background:#fff; }
+.node:hover .nbox, .node:focus .nbox { transform:translateY(-2px); box-shadow:0 4px 12px rgba(15,98,254,.18); }
+.nic { font-size:1.25rem; margin-bottom:2px; }
+.nnm { font-family:'IBM Plex Mono',monospace; font-size:.67rem; font-weight:500; line-height:1.2; }
+.ntp { font-size:.59rem; color:var(--muted); margin-top:2px; }
+.nlbl { font-size:.61rem; font-family:'IBM Plex Mono',monospace; color:var(--muted); }
+.prod .nbox { border-color:var(--prod); color:var(--prod); background:var(--prod-lt); }
+.cons .nbox { border-color:var(--cons); color:var(--gr90); background:var(--cons-lt); }
+.proc .nbox { border-color:var(--proc); color:var(--proc); background:var(--proc-lt); width:128px; }
+.acol { display:flex; flex-direction:column; justify-content:center; gap:10px; padding:0 5px; }
+.aln { width:34px; height:2px; background:var(--gr30); position:relative; }
+.aln::after { content:'\25BA'; position:absolute; right:-9px; top:-7px; font-size:.58rem; color:var(--gr50); }
+.fleg { display:flex; gap:14px; margin-top:14px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap; }
+.fli { display:flex; align-items:center; gap:5px; font-size:.73rem; color:var(--dim); }
+.fld { width:10px; height:10px; border-radius:2px; }
 
-  /* PIPELINE DIAGRAM */
-  .pipeline-section { margin-bottom: 48px; }
-  .section-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    margin-bottom: 16px;
-  }
+/* TABS */
+.tbar { display:flex; overflow-x:auto; -webkit-overflow-scrolling:touch;
+        border-bottom:2px solid var(--b20); margin-bottom:18px; scrollbar-width:none; }
+.tbar::-webkit-scrollbar { display:none; }
+.tbtn { flex-shrink:0; padding:9px 13px; font-size:.76rem; font-family:'IBM Plex Mono',monospace;
+        color:var(--dim); background:none; border:none; border-bottom:3px solid transparent;
+        margin-bottom:-2px; cursor:pointer; white-space:nowrap; transition:color .15s,border-color .15s; }
+.tbtn:hover { color:var(--b60); background:var(--b10); }
+.tbtn.active { color:var(--b70); border-bottom-color:var(--b60); font-weight:600; }
+.tpane { display:none; }
+.tpane.active { display:block; animation:fi .18s ease; }
+@keyframes fi { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:none} }
 
-  .pipeline-visual {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 36px;
-    overflow-x: auto;
-  }
+/* TWO COL */
+.two { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+@media(max-width:700px) { .two { grid-template-columns:1fr; } }
+.icard { background:var(--card); border:1px solid var(--border); border-radius:4px; padding:14px; }
+.icard h3 { font-size:.86rem; font-weight:600; color:var(--b70); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.icard p { font-size:.78rem; color:var(--dim); line-height:1.65; margin-bottom:7px; }
+.icard p:last-child { margin-bottom:0; }
 
-  .pipeline-flow {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    min-width: 900px;
-  }
+/* CALLOUTS */
+.cal { border-left:3px solid var(--b60); background:var(--b10); padding:9px 13px;
+       font-size:.76rem; color:var(--gr90); border-radius:0 4px 4px 0; margin:9px 0; line-height:1.6; }
+.cal.warn { border-left-color:var(--o40); background:var(--o10); }
+.cal.sec  { border-left-color:var(--cy); background:var(--sec-lt); }
+.cal.ok   { border-left-color:var(--g50); background:var(--g10); }
 
-  .node-group { display: flex; flex-direction: column; gap: 16px; }
+/* CODE CARD */
+.ccard { background:var(--card); border:1px solid var(--border); border-radius:4px; overflow:hidden; margin-bottom:14px; }
+.cchdr { display:flex; align-items:center; padding:9px 13px; background:var(--gr10);
+         border-bottom:1px solid var(--border); flex-wrap:wrap; gap:5px; }
+.cctit { font-size:.81rem; font-weight:600; color:var(--gr100); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.badge { font-size:.63rem; font-family:'IBM Plex Mono',monospace; padding:2px 8px; border-radius:20px; font-weight:500; }
+.bp { background:var(--prod-lt); color:var(--prod); border:1px solid var(--prod); }
+.bc { background:var(--cons-lt); color:var(--gr90); border:1px solid var(--cons); }
+.bx { background:var(--proc-lt); color:var(--proc); border:1px solid var(--proc); }
+.bs { background:var(--sec-lt); color:var(--sec); border:1px solid var(--sec); }
+.bg { background:var(--gr10); color:var(--dim); border:1px solid var(--border); }
+.bl { background:var(--y10); color:#7a5200; border:1px solid var(--y30); }
+.cdesc { padding:9px 13px; font-size:.76rem; color:var(--dim); border-bottom:1px solid var(--border); line-height:1.65; }
+pre { margin:0; padding:14px; overflow-x:auto; font-family:'IBM Plex Mono','Courier New',monospace;
+      font-size:.73rem; line-height:1.72; background:#f8f9fb; color:var(--gr100); -webkit-overflow-scrolling:touch; }
+.kw{color:var(--b70);font-weight:600;} .ty{color:var(--tl);} .st{color:var(--o40);}
+.cm{color:var(--muted);font-style:italic;} .an{color:var(--p50);} .fn{color:var(--cy);} .nu{color:var(--r60);}
+.lts{color:var(--gr50);} .linf{color:var(--b60);font-weight:600;} .lwrn{color:var(--o40);font-weight:600;}
+.lerr{color:var(--r60);font-weight:600;} .lok{color:var(--g50);font-weight:600;} .lsec{color:var(--p50);font-weight:600;}
 
-  .node {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-  }
-  .node-box {
-    width: 130px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    font-size: 0.8rem;
-    font-weight: 500;
-    text-align: center;
-    border: 2px solid transparent;
-    transition: all 0.2s;
-    position: relative;
-  }
-  .node-box:hover { transform: translateY(-2px); }
-  .node-box .icon { font-size: 1.4rem; margin-bottom: 4px; }
-  .node-box .name { font-family: 'DM Mono', monospace; font-size: 0.72rem; }
-  .node-box .type { font-size: 0.65rem; color: var(--text-dim); margin-top: 2px; }
+/* TABLES */
+.tw { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.dtbl { width:100%; border-collapse:collapse; font-size:.76rem; }
+.dtbl th { font-family:'IBM Plex Mono',monospace; font-size:.63rem; color:var(--muted);
+           text-transform:uppercase; letter-spacing:.08em; padding:8px 11px; text-align:left;
+           background:var(--gr10); border-bottom:2px solid var(--b20); white-space:nowrap; }
+.dtbl td { padding:8px 11px; border-bottom:1px solid var(--border); vertical-align:top; }
+.dtbl tr:last-child td { border-bottom:none; }
+.dtbl tr:hover td { background:var(--b10); }
+.tt { font-family:'IBM Plex Mono',monospace; font-size:.65rem; padding:1px 6px; border-radius:20px;
+      background:var(--b10); color:var(--b70); border:1px solid var(--b20); }
+.ry { font-family:'IBM Plex Mono',monospace; font-size:.61rem; padding:1px 6px; border-radius:20px;
+      background:var(--g10); color:var(--g50); border:1px solid var(--g20); }
+.rn { font-family:'IBM Plex Mono',monospace; font-size:.61rem; padding:1px 6px; border-radius:20px;
+      background:var(--gr10); color:var(--muted); border:1px solid var(--border); }
+.sdot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+.drun { background:var(--g50); animation:pulse 2s infinite; }
+.dwrn { background:var(--o40); animation:pulse 2s infinite; }
+.dstop { background:var(--gr30); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+.cwrap { background:var(--card); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
 
-  .producer-node .node-box {
-    background: rgba(163,230,53,0.08);
-    border-color: rgba(163,230,53,0.3);
-    color: var(--accent);
-  }
-  .producer-node .node-box:hover { border-color: var(--accent); background: rgba(163,230,53,0.15); }
+/* ROLE CARDS */
+.rgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; margin-bottom:14px; }
+.rcard { background:var(--card); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+.rhdr { padding:11px 13px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:9px; }
+.ric { font-size:1.15rem; }
+.rnm { font-weight:600; font-size:.81rem; color:var(--b70); }
+.rsub { font-size:.68rem; color:var(--muted); }
+.rbdy { padding:9px 13px; }
+.prow { display:flex; align-items:flex-start; justify-content:space-between; padding:4px 0;
+        border-bottom:1px solid var(--gr10); gap:7px; }
+.prow:last-child { border-bottom:none; }
+.pres { font-family:'IBM Plex Mono',monospace; font-size:.65rem; color:var(--dim); }
+.pa { font-size:.63rem; font-family:'IBM Plex Mono',monospace; color:var(--g50); white-space:nowrap; }
+.pd { font-size:.63rem; font-family:'IBM Plex Mono',monospace; color:var(--r60); white-space:nowrap; }
+.pr { font-size:.63rem; font-family:'IBM Plex Mono',monospace; color:var(--b60); white-space:nowrap; }
 
-  .consumer-node .node-box {
-    background: rgba(249,115,22,0.08);
-    border-color: rgba(249,115,22,0.3);
-    color: var(--accent2);
-  }
-  .consumer-node .node-box:hover { border-color: var(--accent2); background: rgba(249,115,22,0.15); }
+/* POPUP OVERLAY */
+.pov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:300;
+       align-items:flex-end; justify-content:center; }
+.pov.open { display:flex; animation:ovin .2s ease; }
+@keyframes ovin { from{opacity:0} to{opacity:1} }
+.psh { background:#fff; border-radius:12px 12px 0 0; width:100%; max-width:680px;
+       max-height:86vh; overflow-y:auto; -webkit-overflow-scrolling:touch; animation:shin .22s ease; }
+@keyframes shin { from{transform:translateY(60px);opacity:0} to{transform:none;opacity:1} }
+.phdr { position:sticky; top:0; background:var(--b70); color:#fff; padding:13px 16px;
+        display:flex; align-items:center; justify-content:space-between; z-index:1; }
+.phdr h2 { font-size:.92rem; font-weight:600; }
+.pcls { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; line-height:1; padding:0 4px; }
+.pbdy { padding:15px; }
+.psec { margin-bottom:14px; }
+.psec h4 { font-size:.81rem; font-weight:600; color:var(--b70); margin-bottom:5px; }
+.psec p { font-size:.76rem; color:var(--dim); line-height:1.6; margin-bottom:5px; }
+.arow { display:flex; gap:7px; padding:4px 0; border-bottom:1px solid var(--gr10); font-size:.73rem; }
+.arow:last-child { border-bottom:none; }
+.akey { font-family:'IBM Plex Mono',monospace; color:var(--b70); min-width:120px; flex-shrink:0; }
+.aval { color:var(--dim); word-break:break-all; }
+.pbtn { background:var(--b60); color:#fff; border:none; padding:8px 16px; border-radius:4px;
+        font-size:.78rem; cursor:pointer; margin-top:4px; }
+.pbtn:hover { background:var(--b70); }
 
-  .processor-node .node-box {
-    background: rgba(56,189,248,0.08);
-    border-color: rgba(56,189,248,0.3);
-    color: var(--accent3);
-    width: 150px;
-  }
-  .processor-node .node-box:hover { border-color: var(--accent3); background: rgba(56,189,248,0.15); }
-
-  .node-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--text-dim);
-    text-align: center;
-  }
-
-  /* ARROWS */
-  .arrow-zone {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 16px;
-    padding: 0 8px;
-  }
-  .arrow {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--muted);
-  }
-  .arrow-line {
-    height: 2px;
-    width: 48px;
-    background: linear-gradient(90deg, var(--muted), transparent);
-    position: relative;
-  }
-  .arrow-line::after {
-    content: '▶';
-    position: absolute;
-    right: -8px;
-    top: -7px;
-    font-size: 0.65rem;
-    color: var(--muted);
-  }
-  .arrow-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  /* QUEUE bubble */
-  .queue-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 0 12px;
-  }
-  .queue-visual {
-    background: rgba(255,255,255,0.04);
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--text-dim);
-    text-align: center;
-  }
-  .queue-count {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-  }
-
-  /* TABS */
-  .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
-  .tab {
-    padding: 10px 20px;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s;
-    margin-bottom: -1px;
-  }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
-
-  /* CODE BLOCKS */
-  .code-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 24px;
-  }
-  .code-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 20px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-  }
-  .code-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 0.9rem;
-  }
-  .code-title .badge {
-    display: inline-block;
-    margin-left: 10px;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-    vertical-align: middle;
-  }
-  .badge-producer { background: rgba(163,230,53,0.15); color: var(--accent); }
-  .badge-consumer { background: rgba(249,115,22,0.15); color: var(--accent2); }
-  .badge-processor { background: rgba(56,189,248,0.15); color: var(--accent3); }
-  .badge-config { background: rgba(255,255,255,0.07); color: var(--text-dim); }
-
-  .code-desc {
-    padding: 12px 20px;
-    font-size: 0.82rem;
-    color: var(--text-dim);
-    border-bottom: 1px solid var(--border);
-    line-height: 1.6;
-  }
-
-  pre {
-    margin: 0;
-    padding: 20px;
-    overflow-x: auto;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    line-height: 1.7;
-    background: #0a0c09;
-  }
-
-  /* Syntax highlighting */
-  .kw { color: #a3e635; }       /* keyword */
-  .ty { color: #38bdf8; }       /* type */
-  .st { color: #fbbf24; }       /* string */
-  .cm { color: #4a5240; font-style: italic; } /* comment */
-  .an { color: #f97316; }       /* annotation */
-  .fn { color: #c084fc; }       /* function */
-  .nu { color: #fb7185; }       /* number */
-
-  /* METRICS */
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
-    margin-bottom: 36px;
-  }
-  .metric-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-  }
-  .metric-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 8px;
-  }
-  .metric-value {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.8rem;
-    font-weight: 800;
-    line-height: 1;
-  }
-  .metric-sub { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; }
-  .metric-green { color: var(--accent); }
-  .metric-orange { color: var(--accent2); }
-  .metric-blue { color: var(--accent3); }
-
-  /* PROCESSOR TABLE */
-  .proc-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-  .proc-table th {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 10px 16px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-  }
-  .proc-table td { padding: 12px 16px; border-bottom: 1px solid rgba(42,47,34,0.5); }
-  .proc-table tr:last-child td { border-bottom: none; }
-  .proc-table tr:hover td { background: rgba(255,255,255,0.02); }
-  .status-dot {
-    display: inline-block;
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    margin-right: 8px;
-    animation: pulse 2s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-  .dot-running { background: var(--accent); }
-  .dot-stopped { background: var(--muted); animation: none; }
-  .dot-warn { background: var(--accent2); }
-
-  /* FLOW diagram annotation */
-  .flow-legend {
-    display: flex;
-    gap: 24px;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border);
-  }
-  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-dim); }
-  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+@media(max-width:480px) {
+  .mgrid { grid-template-columns:repeat(2,1fr); }
+  .mv { font-size:1.4rem; }
+  .hdr { padding:0 10px; }
+  .pill { font-size:.62rem; padding:2px 7px; }
+}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">NiFi<span>Admin</span> — Grocery Store Pipeline</div>
-  <div class="status-bar">
-    <span class="pill pill-running">● RUNNING</span>
-    <span class="pill pill-warn">⚠ 3 QUEUED</span>
-    <span style="font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--text-dim)">NiFi 2.0 · localhost:8443</span>
+  <div class="hdr">
+    <div class="logo">NiFi<span>Admin</span> &mdash; Grocery Pipeline</div>
+    <div class="pills">
+      <span class="pill p-run">&#9679; RUNNING</span>
+      <span class="pill p-warn">&#9888; 3 QUEUED</span>
+      <span class="pill p-sec">&#128274; TLS+RBAC</span>
+    </div>
   </div>
 </header>
 
-<div class="container">
+<div class="hero">
+  <div class="hero-in">
+    <h1>Grocery Store <strong>Data Flow</strong></h1>
+    <p>2 Producers &#8594; Transform / Route &#8594; 3 Consumers &nbsp;&#183;&nbsp; FlowFile orchestration &nbsp;&#183;&nbsp; RBAC Security &nbsp;&#183;&nbsp; Full data definitions</p>
+  </div>
+</div>
 
-  <h1>Grocery Store <em>Data Flow</em></h1>
-  <p class="subtitle">2 Producers → Routing Processors → 3 Consumers · FlowFile orchestration pipeline</p>
+<div class="c">
 
-  <!-- METRICS -->
-  <div class="metrics-grid">
-    <div class="metric-card">
-      <div class="metric-label">FlowFiles / min</div>
-      <div class="metric-value metric-green">1,842</div>
-      <div class="metric-sub">↑ 12% from last hour</div>
+  <div class="slbl">System Metrics</div>
+  <div class="mgrid">
+    <div class="mc"><div class="mlbl">FlowFiles/min</div><div class="mv mvb">1,842</div><div class="msub">&#8593; 12% last hr</div></div>
+    <div class="mc"><div class="mlbl">Producers</div><div class="mv mvg">2/2</div><div class="msub">Running</div></div>
+    <div class="mc"><div class="mlbl">Consumers</div><div class="mv mvo">3/3</div><div class="msub">Running</div></div>
+    <div class="mc"><div class="mlbl">Queue Depth</div><div class="mv mvb">247</div><div class="msub">Pending</div></div>
+    <div class="mc"><div class="mlbl">RBAC Roles</div><div class="mv mvp">5</div><div class="msub">Enforced</div></div>
+    <div class="mc"><div class="mlbl">TLS</div><div class="mv mvp">&#10003;</div><div class="msub">mTLS active</div></div>
+    <div class="mc"><div class="mlbl">Data Today</div><div class="mv">84 GB</div><div class="msub">Processed</div></div>
+  </div>
+
+  <div class="slbl">Pipeline Topology</div>
+  <div class="pipe-wrap">
+    <div class="pipe-hint">&#128161; Tap any node for a details popup &nbsp;|&nbsp; scroll right on small screens</div>
+    <div class="pipe-flow">
+      <div class="ngrp">
+        <div class="node prod" tabindex="0" role="button" aria-label="POS Scanner details" onclick="op('pos')" onkeydown="nkey(event,'pos')">
+          <div class="nbox"><div class="nic">&#127978;</div><div class="nnm">POS Scanner</div><div class="ntp">GenerateFlowFile</div></div>
+          <div class="nlbl">PRODUCER 1</div>
+        </div>
+        <div class="node prod" tabindex="0" role="button" aria-label="Supplier Feed details" onclick="op('supplier')" onkeydown="nkey(event,'supplier')">
+          <div class="nbox"><div class="nic">&#128666;</div><div class="nnm">Supplier Feed</div><div class="ntp">ListenHTTP</div></div>
+          <div class="nlbl">PRODUCER 2</div>
+        </div>
+      </div>
+      <div class="acol"><div class="aln"></div><div class="aln"></div></div>
+      <div class="ngrp">
+        <div class="node proc" tabindex="0" role="button" aria-label="MergeContent details" onclick="op('merge')" onkeydown="nkey(event,'merge')">
+          <div class="nbox"><div class="nic">&#128256;</div><div class="nnm">MergeContent</div><div class="ntp">MergeContent</div></div>
+          <div class="nlbl">MERGE</div>
+        </div>
+        <div class="node proc" tabindex="0" role="button" aria-label="JoltTransform details" onclick="op('jolt')" onkeydown="nkey(event,'jolt')">
+          <div class="nbox"><div class="nic">&#128295;</div><div class="nnm">JoltTransform</div><div class="ntp">JoltTransformJSON</div></div>
+          <div class="nlbl">TRANSFORM</div>
+        </div>
+      </div>
+      <div class="acol"><div class="aln"></div><div class="aln"></div></div>
+      <div class="node proc" style="align-self:center" tabindex="0" role="button" aria-label="RouteOnAttribute details" onclick="op('route')" onkeydown="nkey(event,'route')">
+        <div class="nbox" style="width:130px"><div class="nic">&#128259;</div><div class="nnm">RouteOnAttribute</div><div class="ntp">RouteOnAttribute</div></div>
+        <div class="nlbl">ROUTER</div>
+      </div>
+      <div class="acol"><div class="aln"></div><div class="aln"></div><div class="aln"></div></div>
+      <div class="ngrp">
+        <div class="node cons" tabindex="0" role="button" aria-label="InventoryDB details" onclick="op('inventory')" onkeydown="nkey(event,'inventory')">
+          <div class="nbox"><div class="nic">&#128230;</div><div class="nnm">InventoryDB</div><div class="ntp">PutDatabaseRecord</div></div>
+          <div class="nlbl">CONSUMER 1</div>
+        </div>
+        <div class="node cons" tabindex="0" role="button" aria-label="BillingSystem details" onclick="op('billing')" onkeydown="nkey(event,'billing')">
+          <div class="nbox"><div class="nic">&#128179;</div><div class="nnm">BillingSystem</div><div class="ntp">PutHTTP</div></div>
+          <div class="nlbl">CONSUMER 2</div>
+        </div>
+        <div class="node cons" tabindex="0" role="button" aria-label="Analytics Sink details" onclick="op('analytics')" onkeydown="nkey(event,'analytics')">
+          <div class="nbox"><div class="nic">&#128202;</div><div class="nnm">Analytics Sink</div><div class="ntp">PublishKafka</div></div>
+          <div class="nlbl">CONSUMER 3</div>
+        </div>
+      </div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Producers Active</div>
-      <div class="metric-value metric-green">2 / 2</div>
-      <div class="metric-sub">Scanner · Supplier Feed</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Consumers Active</div>
-      <div class="metric-value metric-orange">3 / 3</div>
-      <div class="metric-sub">Inventory · Billing · Analytics</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Queue Depth</div>
-      <div class="metric-value metric-blue">247</div>
-      <div class="metric-sub">FlowFiles pending</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Data Processed</div>
-      <div class="metric-value" style="color:var(--text)">84 GB</div>
-      <div class="metric-sub">Today</div>
+    <div class="fleg">
+      <div class="fli"><div class="fld" style="background:var(--prod)"></div>Producer</div>
+      <div class="fli"><div class="fld" style="background:var(--proc)"></div>Processor</div>
+      <div class="fli"><div class="fld" style="background:var(--cons)"></div>Consumer</div>
+      <div class="fli"><div class="fld" style="background:var(--b20);border:1px solid var(--b50)"></div>Tap node &#8594; popup</div>
     </div>
   </div>
 
-  <!-- PIPELINE DIAGRAM -->
-  <div class="pipeline-section">
-    <div class="section-label">// Pipeline Topology</div>
-    <div class="pipeline-visual">
-      <div class="pipeline-flow">
+  <!-- TAB BAR -->
+  <div class="tbar" role="tablist" aria-label="Pipeline sections">
+    <button class="tbtn active" role="tab" aria-selected="true"  onclick="st('ov')">Overview</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('p1')">&#127978; POS Scanner</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('p2')">&#128666; Supplier Feed</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('px')">&#9881; Processors</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('c1')">&#128230; InventoryDB</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('c2')">&#128179; Billing</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('c3')">&#128202; Analytics</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('sec')">&#128274; Security</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('cfg')">&#128196; Configs</button>
+    <button class="tbtn"        role="tab" aria-selected="false" onclick="st('lg')">&#128203; Logs</button>
+  </div>
 
-        <!-- PRODUCERS -->
-        <div class="node-group">
-          <div class="node producer-node" onclick="showTab('producers')">
-            <div class="node-box">
-              <div class="icon">🏪</div>
-              <div class="name">POS Scanner</div>
-              <div class="type">GenerateFlowFile</div>
-            </div>
-            <div class="node-label">PRODUCER 1</div>
-          </div>
-          <div class="node producer-node" onclick="showTab('producers')">
-            <div class="node-box">
-              <div class="icon">🚛</div>
-              <div class="name">Supplier Feed</div>
-              <div class="type">GetHTTP / ListenHTTP</div>
-            </div>
-            <div class="node-label">PRODUCER 2</div>
-          </div>
-        </div>
+  <!-- ===== OVERVIEW ===== -->
+  <div class="tpane active" id="tp-ov">
+    <div class="cwrap"><div class="tw">
+      <table class="dtbl">
+        <thead><tr><th>Processor</th><th>NiFi Type</th><th>Role</th><th>Status</th><th>In/Out 5m</th><th>RBAC Role</th></tr></thead>
+        <tbody>
+          <tr><td>&#127978; POS Scanner</td><td><code>GenerateFlowFile</code></td><td><span class="badge bp">PRODUCER</span></td><td><span class="sdot drun"></span>Running</td><td><code>842 / &mdash;</code></td><td><span class="badge bs">pos-producer</span></td></tr>
+          <tr><td>&#128666; Supplier Feed</td><td><code>ListenHTTP</code></td><td><span class="badge bp">PRODUCER</span></td><td><span class="sdot drun"></span>Running</td><td><code>1000 / &mdash;</code></td><td><span class="badge bs">supplier-producer</span></td></tr>
+          <tr><td>&#128256; MergeContent</td><td><code>MergeContent</code></td><td><span class="badge bx">PROCESSOR</span></td><td><span class="sdot drun"></span>Running</td><td><code>1842 / 921</code></td><td><span class="badge bg">pipeline-operator</span></td></tr>
+          <tr><td>&#128295; JoltTransform</td><td><code>JoltTransformJSON</code></td><td><span class="badge bx">PROCESSOR</span></td><td><span class="sdot drun"></span>Running</td><td><code>921 / 921</code></td><td><span class="badge bg">pipeline-operator</span></td></tr>
+          <tr><td>&#128259; RouteOnAttribute</td><td><code>RouteOnAttribute</code></td><td><span class="badge bx">PROCESSOR</span></td><td><span class="sdot drun"></span>Running</td><td><code>921 / 921</code></td><td><span class="badge bg">pipeline-operator</span></td></tr>
+          <tr><td>&#128230; InventoryDB</td><td><code>PutDatabaseRecord</code></td><td><span class="badge bc">CONSUMER</span></td><td><span class="sdot drun"></span>Running</td><td><code>&mdash; / 921</code></td><td><span class="badge bs">inventory-consumer</span></td></tr>
+          <tr><td>&#128179; BillingSystem</td><td><code>PutHTTP</code></td><td><span class="badge bc">CONSUMER</span></td><td><span class="sdot dwrn"></span>Warn</td><td><code>&mdash; / 418</code></td><td><span class="badge bs">billing-consumer</span></td></tr>
+          <tr><td>&#128202; Analytics Sink</td><td><code>PublishKafka_2_6</code></td><td><span class="badge bc">CONSUMER</span></td><td><span class="sdot drun"></span>Running</td><td><code>&mdash; / 921</code></td><td><span class="badge bs">analytics-consumer</span></td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
 
-        <!-- ARROW 1 -->
-        <div class="arrow-zone">
-          <div class="arrow">
-            <div class="arrow-line"></div>
-          </div>
-          <div class="arrow">
-            <div class="arrow-line"></div>
-          </div>
-        </div>
-
-        <!-- MERGE + ROUTE -->
-        <div class="node-group">
-          <div class="node processor-node" onclick="showTab('processors')">
-            <div class="node-box">
-              <div class="icon">🔀</div>
-              <div class="name">MergeContent</div>
-              <div class="type">MergeContent</div>
-            </div>
-            <div class="node-label">MERGE</div>
-          </div>
-          <div class="node processor-node" onclick="showTab('processors')">
-            <div class="node-box">
-              <div class="icon">🔧</div>
-              <div class="name">TransformJSON</div>
-              <div class="type">JoltTransform</div>
-            </div>
-            <div class="node-label">TRANSFORM</div>
-          </div>
-        </div>
-
-        <!-- ARROW 2 -->
-        <div class="arrow-zone">
-          <div class="arrow">
-            <div class="arrow-line"></div>
-          </div>
-          <div class="arrow">
-            <div class="arrow-line"></div>
-          </div>
-        </div>
-
-        <!-- ROUTER -->
-        <div class="node processor-node" style="align-self:center" onclick="showTab('processors')">
-          <div class="node-box" style="width:150px">
-            <div class="icon">🔃</div>
-            <div class="name">RouteOnAttribute</div>
-            <div class="type">RouteOnAttribute</div>
-          </div>
-          <div class="node-label">ROUTER</div>
-        </div>
-
-        <!-- ARROW 3 (fan out) -->
-        <div class="arrow-zone">
-          <div class="arrow"><div class="arrow-line"></div></div>
-          <div class="arrow"><div class="arrow-line"></div></div>
-          <div class="arrow"><div class="arrow-line"></div></div>
-        </div>
-
-        <!-- CONSUMERS -->
-        <div class="node-group">
-          <div class="node consumer-node" onclick="showTab('consumers')">
-            <div class="node-box">
-              <div class="icon">📦</div>
-              <div class="name">InventoryDB</div>
-              <div class="type">PutDatabaseRecord</div>
-            </div>
-            <div class="node-label">CONSUMER 1</div>
-          </div>
-          <div class="node consumer-node" onclick="showTab('consumers')">
-            <div class="node-box">
-              <div class="icon">💳</div>
-              <div class="name">BillingSystem</div>
-              <div class="type">PutHTTP</div>
-            </div>
-            <div class="node-label">CONSUMER 2</div>
-          </div>
-          <div class="node consumer-node" onclick="showTab('consumers')">
-            <div class="node-box">
-              <div class="icon">📊</div>
-              <div class="name">Analytics Sink</div>
-              <div class="type">PublishKafka</div>
-            </div>
-            <div class="node-label">CONSUMER 3</div>
-          </div>
-        </div>
-
+  <!-- ===== PRODUCER 1 ===== -->
+  <div class="tpane" id="tp-p1">
+    <div class="two">
+      <div class="icard">
+        <h3>&#127978; POS Scanner Producer</h3>
+        <p>Emits one FlowFile per checkout transaction. Connects to the register TCP socket or Redis stream from the POS middleware. Uses <code>GenerateFlowFile</code> in dev, <code>ListenTCP</code> in production.</p>
+        <div class="cal ok">Volume: ~14 txns/min per register &times; 4 registers = ~56 FlowFiles/min at STORE-042.</div>
+        <p>Each FlowFile wraps a JSON array containing all line items from one transaction. A custom Java processor (<code>POSScannerProcessor</code>) stamps all required FlowFile attributes, then hands off to <code>ValidateRecord</code> which enforces the Avro schema before the FlowFile enters the main pipeline.</p>
       </div>
-
-      <div class="flow-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--producer)"></div> Producer Processor</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--accent3)"></div> Transform / Route Processor</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--consumer)"></div> Consumer Processor</div>
+      <div class="icard">
+        <h3>&#128274; PII &amp; Data Rules</h3>
+        <p><strong>cashier_id</strong> is an employee ID (PII). It is preserved in full for Inventory and Billing, but masked to <code>***</code> on the analytics routing path by a <code>ReplaceText</code> processor placed before Kafka publish.</p>
+        <p><strong>loyalty_card</strong> numbers are SHA-256 hashed at the producer before entering the pipeline. The raw card number never appears in any FlowFile attribute or content body.</p>
+        <div class="cal warn"><code>ValidateRecord</code> is placed immediately downstream. Malformed scans (wrong types, missing required fields, enum violations) are routed to a dead-letter queue and trigger an ops alert via PagerDuty.</div>
       </div>
     </div>
-  </div>
 
-  <!-- TABS -->
-  <div class="tabs">
-    <div class="tab active" onclick="showTab('overview')" id="tab-overview">Overview</div>
-    <div class="tab" onclick="showTab('producers')" id="tab-producers">Producers (2)</div>
-    <div class="tab" onclick="showTab('processors')" id="tab-processors">Processors</div>
-    <div class="tab" onclick="showTab('consumers')" id="tab-consumers">Consumers (3)</div>
-    <div class="tab" onclick="showTab('config')" id="tab-config">Flow XML Config</div>
-  </div>
-
-  <!-- TAB: OVERVIEW -->
-  <div class="tab-content active" id="tab-overview">
-    <table class="proc-table" style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-      <thead><tr>
-        <th>Processor</th><th>Type</th><th>Role</th><th>Status</th><th>In/Out (5m)</th>
-      </tr></thead>
-      <tbody>
-        <tr>
-          <td>🏪 POS Scanner</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">GenerateFlowFile</span></td>
-          <td><span class="badge badge-producer">PRODUCER</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">842 / —</td>
-        </tr>
-        <tr>
-          <td>🚛 Supplier Feed</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">ListenHTTP</span></td>
-          <td><span class="badge badge-producer">PRODUCER</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">1000 / —</td>
-        </tr>
-        <tr>
-          <td>🔀 MergeContent</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">MergeContent</span></td>
-          <td><span class="badge badge-processor">PROCESSOR</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">1842 / 921</td>
-        </tr>
-        <tr>
-          <td>🔧 JoltTransform</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">JoltTransformJSON</span></td>
-          <td><span class="badge badge-processor">PROCESSOR</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">921 / 921</td>
-        </tr>
-        <tr>
-          <td>🔃 RouteOnAttribute</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">RouteOnAttribute</span></td>
-          <td><span class="badge badge-processor">PROCESSOR</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">921 / 921</td>
-        </tr>
-        <tr>
-          <td>📦 InventoryDB</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">PutDatabaseRecord</span></td>
-          <td><span class="badge badge-consumer">CONSUMER</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">— / 921</td>
-        </tr>
-        <tr>
-          <td>💳 BillingSystem</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">PutHTTP</span></td>
-          <td><span class="badge badge-consumer">CONSUMER</span></td>
-          <td><span class="status-dot dot-warn"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">— / 418</td>
-        </tr>
-        <tr>
-          <td>📊 Analytics Sink</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent3)">PublishKafka</span></td>
-          <td><span class="badge badge-consumer">CONSUMER</span></td>
-          <td><span class="status-dot dot-running"></span>Running</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.75rem">— / 921</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- TAB: PRODUCERS -->
-  <div class="tab-content" id="tab-producers">
-
-    <!-- PRODUCER 1 -->
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">🏪 POS Scanner — GenerateFlowFile / UpdateAttribute <span class="badge badge-producer">PRODUCER 1</span></div>
-      </div>
-      <div class="code-desc">
-        Simulates a Point-of-Sale barcode scanner. Each FlowFile represents a scanned item at checkout. In production, replace with <code>GetFile</code> or <code>ConsumeKafka</code> reading from the register terminal. Attributes tag the item category for downstream routing.
-      </div>
-      <pre><span class="cm">// ─── PRODUCER 1: POS Scanner ──────────────────────────────────────────
-// Processor: GenerateFlowFile  (simulates checkout scan events)
-// In production: swap with GetFile, ConsumeKafka, or ListenTCP</span>
-
-<span class="cm">// UpdateAttribute processor sets FlowFile attributes:</span>
-<span class="st">item.category</span>  = <span class="st">"produce"</span>    <span class="cm">// produce | dairy | frozen | deli</span>
-<span class="st">item.sku</span>       = <span class="st">"${UUID()}"</span>
-<span class="st">item.store_id</span>  = <span class="st">"STORE-042"</span>
-<span class="st">source.type</span>    = <span class="st">"pos_scanner"</span>
-<span class="st">event.time</span>     = <span class="st">"${now():format('yyyy-MM-dd HH:mm:ss')}"</span>
-
-<span class="cm">// FlowFile content (JSON body emitted):</span>
-{
-  <span class="st">"transaction_id"</span>: <span class="st">"${UUID()}"</span>,
-  <span class="st">"store_id"</span>:       <span class="st">"STORE-042"</span>,
-  <span class="st">"register"</span>:       <span class="nu">3</span>,
-  <span class="st">"cashier_id"</span>:     <span class="st">"EMP-0189"</span>,
-  <span class="st">"items"</span>: [
-    {
-      <span class="st">"sku"</span>:       <span class="st">"${item.sku}"</span>,
-      <span class="st">"name"</span>:      <span class="st">"Organic Bananas"</span>,
-      <span class="st">"category"</span>:  <span class="st">"${item.category}"</span>,
-      <span class="st">"qty"</span>:       <span class="nu">2</span>,
-      <span class="st">"price"</span>:     <span class="nu">1.49</span>,
-      <span class="st">"unit"</span>:      <span class="st">"lb"</span>
-    }
-  ],
-  <span class="st">"timestamp"</span>: <span class="st">"${event.time}"</span>
-}</pre>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">POS Scan Event &mdash; Full Field Definitions <span class="badge bp">PRODUCER 1 SCHEMA</span></div></div>
+      <div class="tw"><table class="dtbl">
+        <thead><tr><th>Field Path</th><th>Type</th><th>Req</th><th>Example</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>transaction_id</code></td><td><span class="tt">UUID</span></td><td><span class="ry">YES</span></td><td><code>f4a9c2e1-3b22</code></td><td>Globally unique transaction ID. Used as idempotency key in Billing consumer.</td></tr>
+          <tr><td><code>store_id</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>STORE-042</code></td><td>Store location code. Format: STORE-{3-digit}. Set via processor property.</td></tr>
+          <tr><td><code>register</code></td><td><span class="tt">INT</span></td><td><span class="ry">YES</span></td><td><code>3</code></td><td>Register number 1&ndash;12. Used for audit trail and shrinkage detection.</td></tr>
+          <tr><td><code>cashier_id</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>EMP-0189</code></td><td>Employee ID. PII &mdash; masked to *** on analytics routing path only.</td></tr>
+          <tr><td><code>loyalty_card</code></td><td><span class="tt">STRING|NULL</span></td><td><span class="rn">OPT</span></td><td><code>SHA256:3f8a&hellip;</code></td><td>SHA-256 hashed loyalty card number. Null if no card was scanned.</td></tr>
+          <tr><td><code>items[].sku</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>PRD-00441</code></td><td>Stock-keeping unit. Format: {CAT}-{5-digit}. Links to inventory master table.</td></tr>
+          <tr><td><code>items[].name</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>Organic Bananas</code></td><td>Human-readable product name from PLU database.</td></tr>
+          <tr><td><code>items[].category</code></td><td><span class="tt">ENUM</span></td><td><span class="ry">YES</span></td><td><code>produce</code></td><td>Drives RouteOnAttribute fan-out. Values: produce | dairy | frozen | deli | bakery | beverage | general</td></tr>
+          <tr><td><code>items[].qty</code></td><td><span class="tt">DECIMAL</span></td><td><span class="ry">YES</span></td><td><code>2.0</code></td><td>Decimal to support weighted items (e.g. 1.34 lb of deli meat).</td></tr>
+          <tr><td><code>items[].unit</code></td><td><span class="tt">ENUM</span></td><td><span class="ry">YES</span></td><td><code>lb</code></td><td>Values: each | lb | kg | oz | pack</td></tr>
+          <tr><td><code>items[].price</code></td><td><span class="tt">DECIMAL(10,2)</span></td><td><span class="ry">YES</span></td><td><code>1.49</code></td><td>Unit sale price in USD. Tax calculated downstream.</td></tr>
+          <tr><td><code>items[].discount</code></td><td><span class="tt">DECIMAL|NULL</span></td><td><span class="rn">OPT</span></td><td><code>0.30</code></td><td>Coupon or loyalty discount applied. Null if no discount.</td></tr>
+          <tr><td><code>payment_method</code></td><td><span class="tt">ENUM</span></td><td><span class="ry">YES</span></td><td><code>credit</code></td><td>Values: cash | credit | debit | ebt | gift_card. Routed to Billing only.</td></tr>
+          <tr><td><code>total_amount</code></td><td><span class="tt">DECIMAL(10,2)</span></td><td><span class="ry">YES</span></td><td><code>2.98</code></td><td>Pre-tax transaction total in USD.</td></tr>
+          <tr><td><code>timestamp</code></td><td><span class="tt">ISO8601</span></td><td><span class="ry">YES</span></td><td><code>2026-05-20T14:32:11Z</code></td><td>UTC time of scan. Validated within &plusmn;5 min of NiFi node time.</td></tr>
+        </tbody>
+      </table></div>
     </div>
 
-    <!-- PRODUCER 1 JAVA -->
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">Java — Custom POS Producer Processor <span class="badge badge-producer">PRODUCER 1</span></div>
-      </div>
-      <pre><span class="an">@Tags</span>({<span class="st">"grocery"</span>, <span class="st">"pos"</span>, <span class="st">"producer"</span>})
-<span class="an">@CapabilityDescription</span>(<span class="st">"Reads POS scan events and emits FlowFiles"</span>)
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">FlowFile Attributes &mdash; POS Scanner <span class="badge bp">METADATA</span></div></div>
+      <div class="cdesc">Key-value metadata stamped by <code>UpdateAttribute</code> and <code>EvaluateJsonPath</code>. These travel with the FlowFile through the entire pipeline and drive routing decisions without modifying the JSON content body.</div>
+      <div class="tw"><table class="dtbl">
+        <thead><tr><th>Attribute Key</th><th>Value / Expression</th><th>Set By</th><th>Consumed By</th></tr></thead>
+        <tbody>
+          <tr><td><code>source.type</code></td><td><code>pos_scanner</code></td><td>UpdateAttribute</td><td>RouteOnAttribute, BillingConsumer</td></tr>
+          <tr><td><code>store.id</code></td><td><code>${store-id}</code> (processor property)</td><td>UpdateAttribute</td><td>BillingConsumer HTTP header, audit log</td></tr>
+          <tr><td><code>item.category</code></td><td><code>${field:category}</code> extracted from JSON</td><td>EvaluateJsonPath</td><td>RouteOnAttribute, Kafka partition key</td></tr>
+          <tr><td><code>event.id</code></td><td><code>${transaction_id}</code> extracted from JSON</td><td>EvaluateJsonPath</td><td>BillingConsumer idempotency key</td></tr>
+          <tr><td><code>event.time</code></td><td><code>${now():format('yyyy-MM-dd HH:mm:ss')}</code></td><td>UpdateAttribute</td><td>Audit log, dead-letter tagging</td></tr>
+          <tr><td><code>mime.type</code></td><td><code>application/json</code></td><td>UpdateAttribute</td><td>All downstream processors</td></tr>
+          <tr><td><code>schema.name</code></td><td><code>pos-scan-event-v2</code></td><td>UpdateAttribute</td><td>ValidateRecord, Schema Registry lookup</td></tr>
+          <tr><td><code>pipeline.version</code></td><td><code>2.4.1</code></td><td>UpdateAttribute</td><td>Ops monitoring, alerting dashboards</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">POSScannerProcessor.java &mdash; Full Implementation <span class="badge bp">PRODUCER 1 JAVA</span></div></div>
+<pre><span class="an">@Tags</span>({<span class="st">"grocery"</span>, <span class="st">"pos"</span>, <span class="st">"producer"</span>, <span class="st">"scanner"</span>})
+<span class="an">@CapabilityDescription</span>(<span class="st">"Reads POS scan events and emits FlowFiles with full attribute metadata"</span>)
 <span class="an">@SupportsBatching</span>
 <span class="kw">public class</span> <span class="ty">POSScannerProcessor</span> <span class="kw">extends</span> <span class="ty">AbstractProcessor</span> {
 
     <span class="kw">static final</span> <span class="ty">PropertyDescriptor</span> STORE_ID = <span class="kw">new</span> <span class="ty">PropertyDescriptor</span>.Builder()
-        .<span class="fn">name</span>(<span class="st">"store-id"</span>)
-        .<span class="fn">displayName</span>(<span class="st">"Store ID"</span>)
-        .<span class="fn">description</span>(<span class="st">"Unique identifier for the grocery store location"</span>)
-        .<span class="fn">required</span>(<span class="kw">true</span>)
-        .<span class="fn">defaultValue</span>(<span class="st">"STORE-042"</span>)
-        .<span class="fn">addValidator</span>(<span class="ty">StandardValidators</span>.NON_EMPTY_VALIDATOR)
-        .<span class="fn">build</span>();
+        .<span class="fn">name</span>(<span class="st">"store-id"</span>).<span class="fn">displayName</span>(<span class="st">"Store ID"</span>)
+        .<span class="fn">required</span>(<span class="kw">true</span>).<span class="fn">defaultValue</span>(<span class="st">"STORE-042"</span>)
+        .<span class="fn">addValidator</span>(<span class="ty">StandardValidators</span>.NON_EMPTY_VALIDATOR).<span class="fn">build</span>();
+
+    <span class="kw">static final</span> <span class="ty">PropertyDescriptor</span> SCHEMA_VER = <span class="kw">new</span> <span class="ty">PropertyDescriptor</span>.Builder()
+        .<span class="fn">name</span>(<span class="st">"schema-version"</span>).<span class="fn">required</span>(<span class="kw">true</span>)
+        .<span class="fn">defaultValue</span>(<span class="st">"pos-scan-event-v2"</span>)
+        .<span class="fn">addValidator</span>(<span class="ty">StandardValidators</span>.NON_EMPTY_VALIDATOR).<span class="fn">build</span>();
 
     <span class="kw">static final</span> <span class="ty">Relationship</span> SUCCESS = <span class="kw">new</span> <span class="ty">Relationship</span>.Builder()
-        .<span class="fn">name</span>(<span class="st">"success"</span>)
-        .<span class="fn">description</span>(<span class="st">"Scan event successfully parsed"</span>)
-        .<span class="fn">build</span>();
-
+        .<span class="fn">name</span>(<span class="st">"success"</span>).<span class="fn">description</span>(<span class="st">"Scan event emitted OK"</span>).<span class="fn">build</span>();
     <span class="kw">static final</span> <span class="ty">Relationship</span> FAILURE = <span class="kw">new</span> <span class="ty">Relationship</span>.Builder()
-        .<span class="fn">name</span>(<span class="st">"failure"</span>)
-        .<span class="fn">description</span>(<span class="st">"Malformed scan event"</span>)
-        .<span class="fn">build</span>();
+        .<span class="fn">name</span>(<span class="st">"failure"</span>).<span class="fn">description</span>(<span class="st">"Malformed or unreadable scan"</span>).<span class="fn">build</span>();
 
     <span class="an">@Override</span>
     <span class="kw">public void</span> <span class="fn">onTrigger</span>(<span class="ty">ProcessContext</span> ctx, <span class="ty">ProcessSession</span> session) {
-        <span class="ty">FlowFile</span> flowFile = session.<span class="fn">create</span>();
+        <span class="ty">FlowFile</span> ff = session.<span class="fn">create</span>();
+        <span class="kw">try</span> {
+            <span class="ty">String</span> storeId  = ctx.<span class="fn">getProperty</span>(STORE_ID).<span class="fn">getValue</span>();
+            <span class="ty">String</span> schema   = ctx.<span class="fn">getProperty</span>(SCHEMA_VER).<span class="fn">getValue</span>();
+            <span class="ty">POSScanEvent</span> evt = <span class="fn">readNextScanEvent</span>(); <span class="cm">// TCP socket / Redis stream</span>
 
-        <span class="ty">String</span> storeId  = ctx.<span class="fn">getProperty</span>(STORE_ID).<span class="fn">getValue</span>();
-        <span class="ty">String</span> category = <span class="fn">detectCategory</span>(flowFile); <span class="cm">// produce/dairy/frozen/deli</span>
+            <span class="cm">// Stamp all FlowFile attributes ───────────────────</span>
+            <span class="ty">Map</span>&lt;<span class="ty">String</span>,<span class="ty">String</span>&gt; attrs = <span class="kw">new</span> <span class="ty">HashMap</span>&lt;&gt;();
+            attrs.<span class="fn">put</span>(<span class="st">"source.type"</span>,     <span class="st">"pos_scanner"</span>);
+            attrs.<span class="fn">put</span>(<span class="st">"store.id"</span>,        storeId);
+            attrs.<span class="fn">put</span>(<span class="st">"item.category"</span>,   evt.<span class="fn">getPrimaryCategory</span>());
+            attrs.<span class="fn">put</span>(<span class="st">"event.id"</span>,        evt.<span class="fn">getTransactionId</span>().<span class="fn">toString</span>());
+            attrs.<span class="fn">put</span>(<span class="st">"event.time"</span>,      evt.<span class="fn">getTimestamp</span>().<span class="fn">toString</span>());
+            attrs.<span class="fn">put</span>(<span class="st">"mime.type"</span>,       <span class="st">"application/json"</span>);
+            attrs.<span class="fn">put</span>(<span class="st">"schema.name"</span>,     schema);
+            attrs.<span class="fn">put</span>(<span class="st">"pipeline.version"</span>,<span class="st">"2.4.1"</span>);
+            ff = session.<span class="fn">putAllAttributes</span>(ff, attrs);
 
-        <span class="cm">// Stamp attributes for downstream routing</span>
-        flowFile = session.<span class="fn">putAttribute</span>(flowFile, <span class="st">"store.id"</span>,      storeId);
-        flowFile = session.<span class="fn">putAttribute</span>(flowFile, <span class="st">"item.category"</span>, category);
-        flowFile = session.<span class="fn">putAttribute</span>(flowFile, <span class="st">"source.type"</span>,   <span class="st">"pos_scanner"</span>);
-        flowFile = session.<span class="fn">putAttribute</span>(flowFile, <span class="st">"event.time"</span>,
-            <span class="ty">Instant</span>.<span class="fn">now</span>().<span class="fn">toString</span>());
-
-        <span class="cm">// Write JSON payload</span>
-        flowFile = session.<span class="fn">write</span>(flowFile, out -> {
-            <span class="ty">String</span> json = <span class="fn">buildScanJson</span>(storeId, category);
-            out.<span class="fn">write</span>(json.<span class="fn">getBytes</span>(<span class="ty">StandardCharsets</span>.UTF_8));
-        });
-
-        session.<span class="fn">transfer</span>(flowFile, SUCCESS);
-        session.<span class="fn">commitAsync</span>();
-    }
-
-    <span class="kw">private</span> <span class="ty">String</span> <span class="fn">buildScanJson</span>(<span class="ty">String</span> storeId, <span class="ty">String</span> category) {
-        <span class="kw">return</span> <span class="ty">String</span>.<span class="fn">format</span>(<span class="st">"""
-            {"transaction_id":"%s","store_id":"%s",
-             "category":"%s","timestamp":"%s"}
-            """</span>,
-            <span class="ty">UUID</span>.<span class="fn">randomUUID</span>(), storeId, category, <span class="ty">Instant</span>.<span class="fn">now</span>());
+            <span class="cm">// Write JSON body ──────────────────────────────────</span>
+            <span class="ty">String</span> json = <span class="ty">ObjectMapper</span>.<span class="fn">writeValueAsString</span>(evt);
+            ff = session.<span class="fn">write</span>(ff, out -&gt; out.<span class="fn">write</span>(json.<span class="fn">getBytes</span>(<span class="ty">StandardCharsets</span>.UTF_8)));
+            session.<span class="fn">transfer</span>(ff, SUCCESS);
+            session.<span class="fn">commitAsync</span>();
+            <span class="fn">getLogger</span>().<span class="fn">info</span>(<span class="st">"POS event emitted txn={} store={} cat={}"</span>,
+                evt.<span class="fn">getTransactionId</span>(), storeId, evt.<span class="fn">getPrimaryCategory</span>());
+        } <span class="kw">catch</span> (<span class="ty">Exception</span> e) {
+            <span class="fn">getLogger</span>().<span class="fn">error</span>(<span class="st">"POS scan failed: {}"</span>, e.<span class="fn">getMessage</span>(), e);
+            session.<span class="fn">transfer</span>(ff, FAILURE);
+        }
     }
 }</pre>
     </div>
-
-    <!-- PRODUCER 2 -->
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">🚛 Supplier Feed — ListenHTTP <span class="badge badge-producer">PRODUCER 2</span></div>
-      </div>
-      <div class="code-desc">
-        Receives inbound HTTP POST webhooks from supplier systems (e.g., restocking notifications, price updates, delivery manifests). NiFi's built-in <code>ListenHTTP</code> creates a FlowFile for every incoming POST body.
-      </div>
-      <pre><span class="cm">// ─── PRODUCER 2: Supplier Feed ────────────────────────────────────────
-// Processor: ListenHTTP (NiFi built-in)
-// Suppliers POST to: https://nifi-host:8443/supplier/ingest</span>
-
-<span class="cm">// Processor Properties:</span>
-<span class="st">Listening Port</span>:          <span class="nu">9999</span>
-<span class="st">Base Path</span>:               <span class="st">supplier</span>
-<span class="st">Max Data to Receive</span>:     <span class="st">10 MB</span>
-<span class="st">HTTP Headers to Receive</span>: <span class="st">X-Supplier-ID, X-Delivery-Type</span>
-
-<span class="cm">// Attributes auto-extracted from HTTP headers:</span>
-<span class="st">http.headers.X-Supplier-ID</span>   → <span class="st">"SUP-FRESHDIRECT-07"</span>
-<span class="st">http.headers.X-Delivery-Type</span> → <span class="st">"restock"</span>   <span class="cm">// restock|price_update|recall</span>
-<span class="st">source.type</span>                  → <span class="st">"supplier_feed"</span>
-
-<span class="cm">// Incoming POST body example (restock event):</span>
-{
-  <span class="st">"supplier_id"</span>:    <span class="st">"SUP-FRESHDIRECT-07"</span>,
-  <span class="st">"delivery_type"</span>:  <span class="st">"restock"</span>,
-  <span class="st">"items"</span>: [
-    {
-      <span class="st">"sku"</span>:       <span class="st">"PRD-00441"</span>,
-      <span class="st">"name"</span>:      <span class="st">"Whole Milk 1 Gal"</span>,
-      <span class="st">"category"</span>:  <span class="st">"dairy"</span>,
-      <span class="st">"qty"</span>:       <span class="nu">48</span>,
-      <span class="st">"cost_price"</span>: <span class="nu">2.10</span>,
-      <span class="st">"expiry"</span>:    <span class="st">"2026-06-01"</span>
-    }
-  ],
-  <span class="st">"po_number"</span>: <span class="st">"PO-20260520-881"</span>
-}</pre>
-    </div>
-
   </div>
 
-  <!-- TAB: PROCESSORS -->
-  <div class="tab-content" id="tab-processors">
-
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">🔀 MergeContent — Batching POS + Supplier Events <span class="badge badge-processor">PROCESSOR</span></div>
+  <!-- ===== PRODUCER 2 ===== -->
+  <div class="tpane" id="tp-p2">
+    <div class="two">
+      <div class="icard">
+        <h3>&#128666; Supplier Feed Producer</h3>
+        <p>Inbound HTTP listener using NiFi's built-in <code>ListenHTTP</code> on port 9999. External supplier systems (distributors, farms, wholesalers) POST JSON webhook payloads whenever stock events occur.</p>
+        <p>Three event types are supported: <strong>restock</strong> (new delivery), <strong>price_update</strong> (new cost/retail price), and <strong>recall</strong> (product safety recall &mdash; highest priority, bypasses batching).</p>
+        <div class="cal ok">Endpoint: <code>https://nifi.internal:9999/supplier/ingest</code> &nbsp;|&nbsp; Each supplier has a unique mTLS cert from the Grocery CA. Cert CN is validated against the X-Supplier-ID header to prevent spoofing.</div>
       </div>
-      <div class="code-desc">
-        Merges FlowFiles from both producers into batches for efficient downstream processing. Groups by <code>source.type</code> attribute. Emits a merged FlowFile when either 100 files accumulate or 5 seconds elapse.
+      <div class="icard">
+        <h3>&#9888; Recall Fast-Path</h3>
+        <p>Events where <code>delivery_type=recall</code> receive a <code>priority=HIGH</code> attribute via UpdateAttribute. A separate connection from the listener bypasses MergeContent entirely and routes directly to RouteOnAttribute, then to InventoryDB and a PagerDuty alerting processor.</p>
+        <div class="cal warn">Recall events must reach InventoryDB within 3 seconds of receipt. Back-pressure on the <code>to_alert</code> relationship queue triggers a P1 incident alert. Monitor this queue in the NiFi UI.</div>
+        <p>Recall events also trigger a downstream <code>RecallAlertProcessor</code> that calls the store PA system API to broadcast an in-store announcement and locks the affected SKU from further POS transactions.</p>
       </div>
-      <pre><span class="cm">// Processor: MergeContent</span>
-<span class="st">Merge Strategy</span>:           Bin-Packing
-<span class="st">Merge Format</span>:             JSON Array (Concatenate with delimiter)
-<span class="st">Minimum Number of Entries</span>: <span class="nu">1</span>
-<span class="st">Maximum Number of Entries</span>: <span class="nu">100</span>
-<span class="st">Max Bin Age</span>:              <span class="st">5 sec</span>
-<span class="st">Correlation Attribute Name</span>: <span class="st">source.type</span>   <span class="cm">// batch same-source together</span>
-
-<span class="cm">// Output: wrapped JSON array batch</span>
-[
-  { <span class="st">"transaction_id"</span>: <span class="st">"..."</span>, <span class="st">"category"</span>: <span class="st">"produce"</span>, ... },
-  { <span class="st">"transaction_id"</span>: <span class="st">"..."</span>, <span class="st">"category"</span>: <span class="st">"dairy"</span>,   ... }
-]</pre>
     </div>
 
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">🔧 JoltTransformJSON — Normalise Schema <span class="badge badge-processor">PROCESSOR</span></div>
-      </div>
-      <div class="code-desc">
-        Transforms heterogeneous POS and supplier payloads into a unified canonical schema before routing. Uses a Jolt shift spec.
-      </div>
-      <pre><span class="cm">// Processor: JoltTransformJSON
-// Jolt Spec (shift transform — canonical grocery event schema):</span>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">Supplier Webhook Event &mdash; Full Field Definitions <span class="badge bp">PRODUCER 2 SCHEMA</span></div></div>
+      <div class="tw"><table class="dtbl">
+        <thead><tr><th>Field Path</th><th>Type</th><th>Req</th><th>Example</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>supplier_id</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>SUP-FRESHDIRECT-07</code></td><td>Unique supplier identifier. Must exactly match the CN of the client TLS certificate used to connect.</td></tr>
+          <tr><td><code>delivery_type</code></td><td><span class="tt">ENUM</span></td><td><span class="ry">YES</span></td><td><code>restock</code></td><td>Drives routing priority. Values: restock | price_update | recall | delivery_eta</td></tr>
+          <tr><td><code>po_number</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>PO-20260520-881</code></td><td>Purchase order number. Format: PO-{YYYYMMDD}-{seq}. Idempotency key for InventoryDB upsert.</td></tr>
+          <tr><td><code>items[].sku</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>PRD-00441</code></td><td>Must match an existing SKU in the inventory master table. Validation failure routes to dead-letter queue.</td></tr>
+          <tr><td><code>items[].name</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>Whole Milk 1 Gal</code></td><td>Supplier&apos;s product name. May differ from PLU name &mdash; reconciled in InventoryDB upsert.</td></tr>
+          <tr><td><code>items[].category</code></td><td><span class="tt">ENUM</span></td><td><span class="ry">YES</span></td><td><code>dairy</code></td><td>Same enum as POS events. ValidateRecord rejects non-lowercase values (common supplier error).</td></tr>
+          <tr><td><code>items[].qty</code></td><td><span class="tt">INT</span></td><td><span class="ry">YES</span></td><td><code>48</code></td><td>Whole-case quantity. Always integer for supplier events (no fractional cases).</td></tr>
+          <tr><td><code>items[].cost_price</code></td><td><span class="tt">DECIMAL(10,4)</span></td><td><span class="ry">YES</span></td><td><code>2.1000</code></td><td>Wholesale cost per unit in USD. 4 decimal places for precision. Present on billing path only &mdash; stripped for analytics.</td></tr>
+          <tr><td><code>items[].retail_price</code></td><td><span class="tt">DECIMAL|NULL</span></td><td><span class="rn">OPT</span></td><td><code>3.49</code></td><td>Suggested retail price. Null for restock events; required for price_update events.</td></tr>
+          <tr><td><code>items[].expiry</code></td><td><span class="tt">DATE|NULL</span></td><td><span class="rn">OPT</span></td><td><code>2026-06-01</code></td><td>Best-before / expiry date (ISO 8601). Required for produce, dairy, and frozen categories.</td></tr>
+          <tr><td><code>items[].recall_reason</code></td><td><span class="tt">STRING|NULL</span></td><td><span class="rn">COND</span></td><td><code>Listeria contamination</code></td><td>Required when delivery_type=recall. Free-text reason. Stored in InventoryDB and sent to PagerDuty.</td></tr>
+          <tr><td><code>delivery_eta</code></td><td><span class="tt">ISO8601|NULL</span></td><td><span class="rn">OPT</span></td><td><code>2026-05-21T08:00:00Z</code></td><td>Expected delivery window start. Used by inventory planning module for staff scheduling.</td></tr>
+          <tr><td><code>warehouse_id</code></td><td><span class="tt">STRING</span></td><td><span class="ry">YES</span></td><td><code>WH-NORTHEAST-3</code></td><td>Originating warehouse code. Used for regional demand analytics and delivery routing.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">FlowFile Attributes &mdash; Supplier Feed <span class="badge bp">METADATA</span></div></div>
+      <div class="cdesc">Attributes auto-extracted from HTTP headers by <code>ListenHTTP</code>, plus additional attributes stamped by <code>UpdateAttribute</code> and <code>EvaluateJsonPath</code>.</div>
+      <div class="tw"><table class="dtbl">
+        <thead><tr><th>Attribute Key</th><th>Value / Expression</th><th>Set By</th><th>Consumed By</th></tr></thead>
+        <tbody>
+          <tr><td><code>source.type</code></td><td><code>supplier_feed</code></td><td>UpdateAttribute</td><td>RouteOnAttribute</td></tr>
+          <tr><td><code>supplier.id</code></td><td><code>${http.headers.X-Supplier-ID}</code></td><td>ListenHTTP (auto from header)</td><td>InventoryDB, audit log, cert validation processor</td></tr>
+          <tr><td><code>delivery.type</code></td><td><code>${field:delivery_type}</code> from JSON body</td><td>EvaluateJsonPath</td><td>RouteOnAttribute (recall fast-path)</td></tr>
+          <tr><td><code>po.number</code></td><td><code>${field:po_number}</code> from JSON body</td><td>EvaluateJsonPath</td><td>InventoryDB UPSERT idempotency key</td></tr>
+          <tr><td><code>priority</code></td><td><code>${delivery.type:equals('recall'):ifElse('HIGH','NORMAL')}</code></td><td>UpdateAttribute</td><td>MergeContent bypass logic, alerting processor</td></tr>
+          <tr><td><code>http.client.dn</code></td><td>TLS client certificate DN (auto)</td><td>ListenHTTP (auto from mTLS handshake)</td><td>Security audit, cert-to-supplier CN validation</td></tr>
+          <tr><td><code>mime.type</code></td><td><code>application/json</code></td><td>UpdateAttribute</td><td>All downstream processors</td></tr>
+          <tr><td><code>schema.name</code></td><td><code>supplier-event-v1</code></td><td>UpdateAttribute</td><td>ValidateRecord, Confluent Schema Registry</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- ===== PROCESSORS ===== -->
+  <div class="tpane" id="tp-px">
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">&#128256; MergeContent &mdash; Batch Configuration <span class="badge bx">PROCESSOR</span></div></div>
+      <div class="cdesc">Batches FlowFiles from both producers into groups by <code>source.type</code>. Emits a JSON array when 100 items accumulate or after 5 seconds. <strong>Recall events bypass this processor entirely</strong> via a separate high-priority connection from ListenHTTP directly to RouteOnAttribute.</div>
+<pre><span class="st">Merge Strategy</span>:              Bin-Packing
+<span class="st">Merge Format</span>:                JSON Array (newline delimiter)
+<span class="st">Min Number of Entries</span>:       <span class="nu">1</span>
+<span class="st">Max Number of Entries</span>:       <span class="nu">100</span>
+<span class="st">Max Bin Age</span>:                 <span class="st">5 sec</span>
+<span class="st">Correlation Attribute Name</span>:  <span class="st">source.type</span>   <span class="cm">// batch same-source together</span></pre>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">&#128295; JoltTransformJSON &mdash; Canonical Schema Normalisation <span class="badge bx">PROCESSOR</span></div></div>
+      <div class="cdesc">Normalises both POS and supplier payloads to a unified <code>grocery-event</code> canonical schema using a Jolt shift spec. Both payload shapes map to the same output structure before routing, so downstream consumers deal with one consistent schema.</div>
+<pre><span class="cm">// Jolt shift spec &mdash; maps both payload shapes to canonical grocery-event schema:</span>
 [{
   <span class="st">"operation"</span>: <span class="st">"shift"</span>,
   <span class="st">"spec"</span>: {
-    <span class="st">"transaction_id"</span>: <span class="st">"event.id"</span>,
+    <span class="st">"transaction_id"</span>: <span class="st">"event.id"</span>,      <span class="cm">// POS path</span>
+    <span class="st">"po_number"</span>:      <span class="st">"event.id"</span>,      <span class="cm">// supplier path</span>
     <span class="st">"store_id"</span>:       <span class="st">"event.store"</span>,
     <span class="st">"supplier_id"</span>:    <span class="st">"event.supplier"</span>,
-    <span class="st">"category"</span>:       <span class="st">"event.category"</span>,
+    <span class="st">"delivery_type"</span>:  <span class="st">"event.type"</span>,
     <span class="st">"items"</span>: {
       <span class="st">"*"</span>: {
-        <span class="st">"sku"</span>:   <span class="st">"event.items[&1].sku"</span>,
-        <span class="st">"name"</span>:  <span class="st">"event.items[&1].name"</span>,
-        <span class="st">"qty"</span>:   <span class="st">"event.items[&1].quantity"</span>,
-        <span class="st">"price"</span>: <span class="st">"event.items[&1].unit_price"</span>
+        <span class="st">"sku"</span>:        <span class="st">"event.items[&amp;1].sku"</span>,
+        <span class="st">"name"</span>:       <span class="st">"event.items[&amp;1].name"</span>,
+        <span class="st">"category"</span>:   <span class="st">"event.items[&amp;1].category"</span>,
+        <span class="st">"qty"</span>:        <span class="st">"event.items[&amp;1].quantity"</span>,
+        <span class="st">"price"</span>:      <span class="st">"event.items[&amp;1].unit_price"</span>,
+        <span class="st">"cost_price"</span>: <span class="st">"event.items[&amp;1].cost_price"</span>,
+        <span class="st">"expiry"</span>:     <span class="st">"event.items[&amp;1].expiry_date"</span>
       }
     },
     <span class="st">"timestamp"</span>: <span class="st">"event.occurred_at"</span>
   }
 }]</pre>
     </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">&#128259; RouteOnAttribute &mdash; Fan-out Routing Rules <span class="badge bx">PROCESSOR</span></div></div>
+      <div class="cdesc">Routes each FlowFile to one or more consumer queues. A single FlowFile can match multiple routes simultaneously &mdash; analytics receives everything; billing receives POS sales only; recalls also trigger the alert path.</div>
+<pre><span class="cm">// NiFi Expression Language routing predicates:</span>
 
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">🔃 RouteOnAttribute — Fan-out to 3 Consumers <span class="badge badge-processor">PROCESSOR</span></div>
-      </div>
-      <div class="code-desc">
-        Routes each FlowFile to one or more consumers based on <code>item.category</code> and <code>source.type</code>. All events go to Analytics; only POS sales go to Billing; all stock events go to Inventory.
-      </div>
-      <pre><span class="cm">// Processor: RouteOnAttribute
-// NiFi Expression Language routing rules:</span>
+<span class="st">"to_inventory"</span>  : <span class="st">"${literal(true)}"</span>
+<span class="cm">// ALL events update stock &mdash; sales decrement, restocks increment</span>
 
-<span class="st">"to_inventory"</span>  : <span class="st">"${source.type:equals('pos_scanner'):or(${source.type:equals('supplier_feed')})}"</span>
 <span class="st">"to_billing"</span>    : <span class="st">"${source.type:equals('pos_scanner')}"</span>
-<span class="st">"to_analytics"</span>  : <span class="st">"${literal(true)}"</span>   <span class="cm">// ALL events → analytics</span>
+<span class="cm">// Only POS sales &mdash; supplier cost data never enters billing path</span>
 
-<span class="cm">// Routing Strategy: Route to Property Name
-// Unmatched → "unmatched" relationship (send to dead-letter queue)</span></pre>
+<span class="st">"to_analytics"</span>  : <span class="st">"${literal(true)}"</span>
+<span class="cm">// ALL events, PII scrubbed before Kafka publish</span>
+
+<span class="st">"to_alert"</span>      : <span class="st">"${delivery.type:equals('recall')}"</span>
+<span class="cm">// Recall events &rarr; PagerDuty alert processor (zero batching delay)</span>
+
+<span class="st">Routing Strategy</span>: Route to Property Name
+<span class="st">Unmatched</span>:        dead-letter-queue connection &rarr; ops alert</pre>
     </div>
-
   </div>
 
-  <!-- TAB: CONSUMERS -->
-  <div class="tab-content" id="tab-consumers">
-
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">📦 InventoryDB — PutDatabaseRecord <span class="badge badge-consumer">CONSUMER 1</span></div>
+  <!-- ===== CONSUMER 1 ===== -->
+  <div class="tpane" id="tp-c1">
+    <div class="two">
+      <div class="icard">
+        <h3>&#128230; InventoryDB Consumer</h3>
+        <p>Receives <strong>ALL</strong> FlowFiles from both producers via the <code>to_inventory</code> route. Upserts rows into <code>inventory.stock_ledger</code> in PostgreSQL. Sale events decrement stock quantities; restock events increment them; recall events set a <code>recalled=true</code> flag.</p>
+        <div class="cal ok">Idempotent &mdash; uses <code>po.number</code> / <code>event.id</code> as the primary key. Duplicate deliveries are silently skipped, logged, and transferred to the success relationship.</div>
+        <p>The processor uses a <code>JsonTreeReader</code> record reader with field translation (<code>camelCase</code> &rarr; <code>snake_case</code>) so JSON field names map directly to column names without explicit field mapping.</p>
       </div>
-      <div class="code-desc">
-        Writes all stock-change events (POS sales and supplier restocks) to the Inventory PostgreSQL database. Uses a JSON record reader to parse the FlowFile, then upserts rows into <code>inventory.stock_ledger</code>.
+      <div class="icard">
+        <h3>&#128274; RBAC: inventory-consumer</h3>
+        <p>This role has write access to the INVENTORY-DB-001 processor and its input connection only. It cannot read billing processor configs, analytics configs, or any other consumer group resources.</p>
+        <div class="cal sec">DB password stored as encrypted Parameter Context variable <code>#{db.inventory.password}</code> using AES-256-GCM. The value never appears in <code>flow.xml</code> in plain text. The JDBC driver credentials are injected only at runtime.</div>
+        <p>The <code>nifi_writer</code> PostgreSQL role used by this processor has INSERT and UPDATE privileges on <code>inventory.stock_ledger</code> only &mdash; no DELETE, no DDL, no access to other schemas.</p>
       </div>
-      <pre><span class="cm">// Processor: PutDatabaseRecord
-// Writes to: PostgreSQL — inventory.stock_ledger</span>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">PutDatabaseRecord &mdash; Full Config &amp; Target Schema <span class="badge bc">CONSUMER 1</span></div></div>
+<pre><span class="cm">// Processor: PutDatabaseRecord</span>
+<span class="st">Record Reader</span>:              JsonTreeReader
+<span class="st">Statement Type</span>:             UPSERT
+<span class="st">Table Name</span>:                 <span class="st">"inventory.stock_ledger"</span>
+<span class="st">Catalog Name</span>:               <span class="st">"grocery_db"</span>
+<span class="st">Translate Field Names</span>:      <span class="kw">true</span>    <span class="cm">// camelCase &rarr; snake_case</span>
+<span class="st">Unmatched Field Behavior</span>:   Ignore
+<span class="st">DB Connection Pool Service</span>: PostgreSQL-DBCP-inventory
 
-<span class="st">Record Reader</span>:     JsonTreeReader
-<span class="st">Database Type</span>:     PostgreSQL
-<span class="st">Statement Type</span>:    UPSERT
-<span class="st">Table Name</span>:        <span class="st">"inventory.stock_ledger"</span>
-<span class="st">Catalog Name</span>:      <span class="st">"grocery_db"</span>
-
-<span class="cm">// DBCPConnectionPool Controller Service:</span>
+<span class="cm">// DBCPConnectionPool controller service:</span>
 <span class="st">Database URL</span>:      <span class="st">"jdbc:postgresql://db-host:5432/grocery_db"</span>
 <span class="st">Driver Class</span>:      <span class="st">"org.postgresql.Driver"</span>
 <span class="st">Username</span>:          <span class="st">"nifi_writer"</span>
+<span class="st">Password</span>:          <span class="st">"#{db.inventory.password}"</span>  <span class="cm">// encrypted param ref</span>
 
 <span class="cm">// Target table DDL:</span>
 <span class="kw">CREATE TABLE</span> inventory.stock_ledger (
-    event_id      <span class="ty">UUID</span>         <span class="kw">PRIMARY KEY</span>,
-    store_id      <span class="ty">VARCHAR</span>(<span class="nu">20</span>),
-    sku           <span class="ty">VARCHAR</span>(<span class="nu">50</span>),
-    item_name     <span class="ty">TEXT</span>,
-    category      <span class="ty">VARCHAR</span>(<span class="nu">30</span>),
-    quantity      <span class="ty">NUMERIC</span>,
-    event_type    <span class="ty">VARCHAR</span>(<span class="nu">20</span>),  <span class="cm">-- 'sale' | 'restock'</span>
-    occurred_at   <span class="ty">TIMESTAMPTZ</span>
+    event_id     <span class="ty">UUID</span>           <span class="kw">PRIMARY KEY</span>,   <span class="cm">-- from event.id attribute</span>
+    store_id     <span class="ty">VARCHAR</span>(<span class="nu">20</span>),
+    supplier_id  <span class="ty">VARCHAR</span>(<span class="nu">40</span>),
+    sku          <span class="ty">VARCHAR</span>(<span class="nu">50</span>),
+    item_name    <span class="ty">TEXT</span>,
+    category     <span class="ty">VARCHAR</span>(<span class="nu">30</span>),
+    quantity     <span class="ty">NUMERIC</span>(<span class="nu">12</span>,<span class="nu">3</span>),
+    event_type   <span class="ty">VARCHAR</span>(<span class="nu">20</span>),               <span class="cm">-- 'sale' | 'restock' | 'recall'</span>
+    unit_price   <span class="ty">NUMERIC</span>(<span class="nu">10</span>,<span class="nu">2</span>),
+    cost_price   <span class="ty">NUMERIC</span>(<span class="nu">10</span>,<span class="nu">4</span>),
+    expiry_date  <span class="ty">DATE</span>,
+    recalled     <span class="ty">BOOLEAN</span> <span class="kw">DEFAULT FALSE</span>,
+    occurred_at  <span class="ty">TIMESTAMPTZ</span>,
+    ingested_at  <span class="ty">TIMESTAMPTZ</span> <span class="kw">DEFAULT NOW</span>()
 );</pre>
     </div>
+  </div>
 
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">💳 BillingSystem — PutHTTP (Java Custom) <span class="badge badge-consumer">CONSUMER 2</span></div>
+  <!-- ===== CONSUMER 2 ===== -->
+  <div class="tpane" id="tp-c2">
+    <div class="two">
+      <div class="icard">
+        <h3>&#128179; BillingSystem Consumer</h3>
+        <p>Receives only POS sale FlowFiles (filtered by the <code>to_billing</code> route). POSTs the canonical event JSON to the billing settlement REST API over HTTPS with mutual TLS. Implements retry with exponential back-off (1s &rarr; 2s &rarr; 4s, max 3 attempts). Uses the <code>event.id</code> FlowFile attribute as the HTTP <code>Idempotency-Key</code> header to prevent double-billing on retry.</p>
+        <div class="cal warn">Supplier cost_price data is <strong>never</strong> routed to this consumer. The Jolt transform strips <code>cost_price</code> for the billing path. This is enforced architecturally, not just by configuration.</div>
       </div>
-      <div class="code-desc">
-        POSTs completed sale transactions to the external billing/POS settlement API over HTTPS. Only receives FlowFiles where <code>source.type = pos_scanner</code>.
+      <div class="icard">
+        <h3>&#128274; RBAC: billing-consumer (most restricted)</h3>
+        <p>The most restricted role in the pipeline. Can only read from the billing input queue and write to BILLING-001. Has no access to other consumer configs, data provenance views, cost price fields, or policy management.</p>
+        <div class="cal sec">API bearer token stored as sensitive Parameter Context variable <code>#{billing.api.token}</code>, encrypted AES-256-GCM. Explicitly marked <code>sensitive=true</code> in processor config so it is redacted from NiFi UI and audit logs.</div>
       </div>
-      <pre><span class="cm">// Processor: PutHTTP (or custom InvokeHTTP)</span>
-<span class="st">HTTP Method</span>:        POST
-<span class="st">Remote URL</span>:         <span class="st">"https://billing.internal/api/v2/transactions"</span>
-<span class="st">Content-Type</span>:       <span class="st">"application/json"</span>
-<span class="st">Request Header</span>:     <span class="st">"X-Store-ID: ${store.id}"</span>
-<span class="st">SSL Context Service</span>: StandardSSLContextService
-<span class="st">Connection Timeout</span>: <span class="st">5 sec</span>
-<span class="st">Read Timeout</span>:       <span class="st">10 sec</span>
-
-<span class="cm">// Custom Java processor for retry + idempotency key:</span>
-<span class="an">@Tags</span>({<span class="st">"billing"</span>, <span class="st">"http"</span>, <span class="st">"grocery"</span>})
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">BillingHttpConsumer.java &mdash; Full Implementation <span class="badge bc">CONSUMER 2 JAVA</span></div></div>
+<pre><span class="an">@Tags</span>({<span class="st">"billing"</span>, <span class="st">"http"</span>, <span class="st">"pos"</span>, <span class="st">"grocery"</span>})
+<span class="an">@CapabilityDescription</span>(<span class="st">"POSTs POS sale events to billing API with idempotency and retry"</span>)
 <span class="kw">public class</span> <span class="ty">BillingHttpConsumer</span> <span class="kw">extends</span> <span class="ty">AbstractProcessor</span> {
+
+    <span class="kw">static final</span> <span class="ty">PropertyDescriptor</span> BILLING_URL = <span class="kw">new</span> <span class="ty">PropertyDescriptor</span>.Builder()
+        .<span class="fn">name</span>(<span class="st">"billing-url"</span>).<span class="fn">required</span>(<span class="kw">true</span>).<span class="fn">sensitive</span>(<span class="kw">false</span>)
+        .<span class="fn">defaultValue</span>(<span class="st">"https://billing.internal/api/v2/transactions"</span>)
+        .<span class="fn">addValidator</span>(<span class="ty">StandardValidators</span>.URL_VALIDATOR).<span class="fn">build</span>();
+
+    <span class="kw">static final</span> <span class="ty">PropertyDescriptor</span> API_TOKEN = <span class="kw">new</span> <span class="ty">PropertyDescriptor</span>.Builder()
+        .<span class="fn">name</span>(<span class="st">"api-token"</span>).<span class="fn">required</span>(<span class="kw">true</span>).<span class="fn">sensitive</span>(<span class="kw">true</span>)  <span class="cm">// encrypted in nifi.properties</span>
+        .<span class="fn">addValidator</span>(<span class="ty">StandardValidators</span>.NON_EMPTY_VALIDATOR).<span class="fn">build</span>();
+
+    <span class="kw">static final</span> <span class="ty">PropertyDescriptor</span> MAX_RETRIES = <span class="kw">new</span> <span class="ty">PropertyDescriptor</span>.Builder()
+        .<span class="fn">name</span>(<span class="st">"max-retries"</span>).<span class="fn">required</span>(<span class="kw">true</span>).<span class="fn">defaultValue</span>(<span class="st">"3"</span>)
+        .<span class="fn">addValidator</span>(<span class="ty">StandardValidators</span>.POSITIVE_INTEGER_VALIDATOR).<span class="fn">build</span>();
+
+    <span class="kw">static final</span> <span class="ty">Relationship</span> SUCCESS = <span class="kw">new</span> <span class="ty">Relationship</span>.Builder().<span class="fn">name</span>(<span class="st">"success"</span>).<span class="fn">build</span>();
+    <span class="kw">static final</span> <span class="ty">Relationship</span> RETRY   = <span class="kw">new</span> <span class="ty">Relationship</span>.Builder().<span class="fn">name</span>(<span class="st">"retry"</span>).<span class="fn">build</span>();
 
     <span class="an">@Override</span>
     <span class="kw">public void</span> <span class="fn">onTrigger</span>(<span class="ty">ProcessContext</span> ctx, <span class="ty">ProcessSession</span> session) {
-        <span class="ty">FlowFile</span> ff = session.<span class="fn">get</span>();
-        <span class="kw">if</span> (ff == <span class="kw">null</span>) <span class="kw">return</span>;
+        <span class="ty">FlowFile</span> ff = session.<span class="fn">get</span>(); <span class="kw">if</span> (ff == <span class="kw">null</span>) <span class="kw">return</span>;
 
-        <span class="ty">String</span> txnId   = ff.<span class="fn">getAttribute</span>(<span class="st">"event.id"</span>);
-        <span class="ty">String</span> storeId = ff.<span class="fn">getAttribute</span>(<span class="st">"store.id"</span>);
+        <span class="ty">String</span> txnId    = ff.<span class="fn">getAttribute</span>(<span class="st">"event.id"</span>);
+        <span class="ty">String</span> storeId  = ff.<span class="fn">getAttribute</span>(<span class="st">"store.id"</span>);
+        <span class="ty">String</span> token    = ctx.<span class="fn">getProperty</span>(API_TOKEN).<span class="fn">getValue</span>();
+        <span class="ty">String</span> url      = ctx.<span class="fn">getProperty</span>(BILLING_URL).<span class="fn">getValue</span>();
+        <span class="kw">int</span>    maxRetry = ctx.<span class="fn">getProperty</span>(MAX_RETRIES).<span class="fn">asInteger</span>();
 
-        <span class="kw">try</span> {
-            <span class="ty">HttpResponse</span> resp = <span class="fn">postToBilling</span>(ff, txnId, storeId, session);
+        <span class="kw">for</span> (<span class="kw">int</span> attempt = <span class="nu">0</span>; attempt &lt; maxRetry; attempt++) {
+            <span class="kw">try</span> {
+                <span class="ty">HttpRequest</span> req = <span class="ty">HttpRequest</span>.<span class="fn">newBuilder</span>()
+                    .<span class="fn">uri</span>(<span class="ty">URI</span>.<span class="fn">create</span>(url))
+                    .<span class="fn">header</span>(<span class="st">"Content-Type"</span>,   <span class="st">"application/json"</span>)
+                    .<span class="fn">header</span>(<span class="st">"Authorization"</span>,  <span class="st">"Bearer "</span> + token)
+                    .<span class="fn">header</span>(<span class="st">"X-Store-ID"</span>,     storeId)
+                    .<span class="fn">header</span>(<span class="st">"Idempotency-Key"</span>, txnId)  <span class="cm">// prevents double-billing</span>
+                    .<span class="fn">POST</span>(<span class="ty">HttpRequest</span>.BodyPublishers.<span class="fn">ofInputStream</span>(
+                        () -&gt; session.<span class="fn">read</span>(ff)))
+                    .<span class="fn">timeout</span>(<span class="ty">Duration</span>.<span class="fn">ofSeconds</span>(<span class="nu">10</span>)).<span class="fn">build</span>();
 
-            <span class="kw">if</span> (resp.<span class="fn">statusCode</span>() == <span class="nu">200</span> || resp.<span class="fn">statusCode</span>() == <span class="nu">201</span>) {
-                ff = session.<span class="fn">putAttribute</span>(ff, <span class="st">"billing.status"</span>, <span class="st">"settled"</span>);
-                session.<span class="fn">transfer</span>(ff, SUCCESS);
-            } <span class="kw">else if</span> (resp.<span class="fn">statusCode</span>() == <span class="nu">409</span>) {
-                <span class="cm">// Idempotency: already processed</span>
-                session.<span class="fn">transfer</span>(ff, SUCCESS);
-            } <span class="kw">else</span> {
-                session.<span class="fn">penalize</span>(ff);
-                session.<span class="fn">transfer</span>(ff, RETRY);
+                <span class="kw">int</span> status = httpClient.<span class="fn">send</span>(req,
+                    <span class="ty">HttpResponse</span>.BodyHandlers.<span class="fn">ofString</span>()).<span class="fn">statusCode</span>();
+
+                <span class="kw">if</span> (status == <span class="nu">200</span> || status == <span class="nu">201</span> || status == <span class="nu">409</span>) {
+                    <span class="cm">// 409 = Conflict: already processed (idempotent OK)</span>
+                    ff = session.<span class="fn">putAttribute</span>(ff, <span class="st">"billing.status"</span>, <span class="st">"settled"</span>);
+                    ff = session.<span class="fn">putAttribute</span>(ff, <span class="st">"billing.http.code"</span>, <span class="ty">String</span>.<span class="fn">valueOf</span>(status));
+                    session.<span class="fn">transfer</span>(ff, SUCCESS); <span class="kw">return</span>;
+                }
+                <span class="cm">// Exponential back-off: 1s, 2s, 4s</span>
+                <span class="ty">Thread</span>.<span class="fn">sleep</span>((<span class="kw">long</span>) <span class="ty">Math</span>.<span class="fn">pow</span>(<span class="nu">2</span>, attempt) * <span class="nu">1000L</span>);
+            } <span class="kw">catch</span> (<span class="ty">Exception</span> e) {
+                <span class="fn">getLogger</span>().<span class="fn">warn</span>(<span class="st">"Billing attempt {} failed txn={}: {}"</span>,
+                    attempt + <span class="nu">1</span>, txnId, e.<span class="fn">getMessage</span>());
             }
-        } <span class="kw">catch</span> (<span class="ty">IOException</span> e) {
-            session.<span class="fn">penalize</span>(ff);
-            session.<span class="fn">transfer</span>(ff, RETRY);
         }
+        session.<span class="fn">penalize</span>(ff);
+        session.<span class="fn">transfer</span>(ff, RETRY);
     }
 }</pre>
     </div>
-
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">📊 Analytics Sink — PublishKafka <span class="badge badge-consumer">CONSUMER 3</span></div>
-      </div>
-      <div class="code-desc">
-        Publishes ALL events (sales + restocks) to a Kafka topic for real-time analytics dashboards, demand forecasting ML models, and shrinkage detection. Routes to topic partitions by <code>item.category</code>.
-      </div>
-      <pre><span class="cm">// Processor: PublishKafka_2_6
-// All grocery events → Kafka analytics cluster</span>
-
-<span class="st">Kafka Brokers</span>:          <span class="st">"kafka-1:9092,kafka-2:9092,kafka-3:9092"</span>
-<span class="st">Topic Name</span>:             <span class="st">"grocery.events.all"</span>
-<span class="st">Message Key Field</span>:      <span class="st">"${item.category}"</span>      <span class="cm">// partition by category</span>
-<span class="st">Delivery Guarantee</span>:     <span class="st">"Guarantee Replicated Delivery"</span>
-<span class="st">Compression Type</span>:       <span class="st">"snappy"</span>
-<span class="st">Batch Size</span>:             <span class="nu">16384</span>
-<span class="st">Linger ms</span>:              <span class="nu">5</span>
-
-<span class="cm">// Kafka topic config:</span>
-<span class="st">Partitions</span>:  <span class="nu">4</span>         <span class="cm">// produce | dairy | frozen | deli</span>
-<span class="st">Replication</span>: <span class="nu">3</span>
-<span class="st">Retention</span>:   <span class="st">"7 days"</span>
-
-<span class="cm">// Downstream consumers of this Kafka topic:</span>
-<span class="cm">//  → Flink job: real-time inventory dashboard</span>
-<span class="cm">//  → Spark Streaming: demand forecasting model</span>
-<span class="cm">//  → Python consumer: shrinkage / loss detection</span></pre>
-    </div>
-
   </div>
 
-  <!-- TAB: CONFIG -->
-  <div class="tab-content" id="tab-config">
-    <div class="code-card">
-      <div class="code-header">
-        <div class="code-title">flow.xml.gz — Simplified NiFi Flow Config <span class="badge badge-config">XML CONFIG</span></div>
+  <!-- ===== CONSUMER 3 ===== -->
+  <div class="tpane" id="tp-c3">
+    <div class="two">
+      <div class="icard">
+        <h3>&#128202; Analytics Sink Consumer</h3>
+        <p>Receives <strong>all events</strong> from both producers after PII scrubbing (<code>cashier_id</code> replaced with <code>***</code> by a <code>ReplaceText</code> processor). Publishes to Kafka topic <code>grocery.events.all</code>, partitioned by <code>item.category</code>.</p>
+        <p>Downstream consumers of this Kafka topic include: a Flink streaming job for real-time inventory dashboards, a Spark Streaming ML pipeline for demand forecasting, and a Python consumer for shrinkage / loss detection.</p>
+        <div class="cal ok">Partitioning by category means department-specific consumers (e.g. the dairy forecasting model) never have to filter through unrelated events &mdash; they just consume their partition.</div>
       </div>
-      <div class="code-desc">
-        Abridged <code>flow.xml</code> snippet showing processor definitions, connections, and relationships for the full grocery pipeline. In NiFi 2.x this is stored as <code>flow.json.gz</code> but XML format is shown for readability.
+      <div class="icard">
+        <h3>&#128274; RBAC: analytics-consumer</h3>
+        <p>Can read all event types but only receives the PII-scrubbed version. Kafka client authenticates using SASL/SCRAM-SHA-512 with a dedicated <code>nifi-analytics-producer</code> service account.</p>
+        <p>This role cannot access the billing processor config, billing connection, or supplier <code>cost_price</code> fields &mdash; those are removed in the Jolt transform before the analytics routing path receives the FlowFile.</p>
+        <div class="cal sec">Kafka SASL password stored as encrypted Parameter Context var <code>#{kafka.sasl.password}</code>. The Kafka truststore at <code>/opt/nifi/certs/kafka-truststore.jks</code> contains only the Kafka cluster CA cert.</div>
       </div>
-      <pre><span class="cm">&lt;!-- NiFi Grocery Store Flow — flow.xml (abridged) --&gt;</span>
-<span class="kw">&lt;flowController&gt;</span>
-  <span class="kw">&lt;rootGroup&gt;</span>
-    <span class="kw">&lt;id&gt;</span>ROOT-GROCERY-PIPELINE<span class="kw">&lt;/id&gt;</span>
-    <span class="kw">&lt;name&gt;</span>Grocery Store Data Pipeline<span class="kw">&lt;/name&gt;</span>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">PublishKafka_2_6 &mdash; Full Configuration <span class="badge bc">CONSUMER 3</span></div></div>
+<pre><span class="st">Kafka Brokers</span>:           <span class="st">"kafka-1:9092,kafka-2:9092,kafka-3:9092"</span>
+<span class="st">Topic Name</span>:              <span class="st">"grocery.events.all"</span>
+<span class="st">Message Key Field</span>:       <span class="st">"${item.category}"</span>      <span class="cm">// partition by department</span>
+<span class="st">Delivery Guarantee</span>:      Guarantee Replicated Delivery
+<span class="st">Compression Type</span>:        snappy
+<span class="st">Batch Size</span>:              <span class="nu">16384</span>
+<span class="st">Linger ms</span>:               <span class="nu">5</span>
+<span class="st">Security Protocol</span>:       SASL_SSL
+<span class="st">SASL Mechanism</span>:          SCRAM-SHA-512
+<span class="st">SSL Truststore</span>:          /opt/nifi/certs/kafka-truststore.jks
+<span class="st">SASL Username</span>:           nifi-analytics-producer
+<span class="st">SASL Password</span>:           #{kafka.sasl.password}   <span class="cm">// encrypted parameter ref</span>
 
-    <span class="cm">&lt;!-- ═══ PRODUCER 1: POS Scanner ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>POS-SCANNER-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>POS Scanner<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>com.grocery.nifi.POSScannerProcessor<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;schedulingPeriod&gt;</span>0 sec<span class="kw">&lt;/schedulingPeriod&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>store-id<span class="kw">&lt;/name&gt;&lt;value&gt;</span>STORE-042<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
+<span class="cm">// Kafka topic config (kafka-topics.sh / Confluent Control Center):</span>
+<span class="cm">// Partitions:         7  (one per category enum value)</span>
+<span class="cm">// Replication Factor: 3  |  min.insync.replicas: 2</span>
+<span class="cm">// retention.ms:       604800000 (7 days)</span>
 
-    <span class="cm">&lt;!-- ═══ PRODUCER 2: Supplier Feed ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>SUPPLIER-FEED-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>Supplier Feed<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>org.apache.nifi.processors.standard.ListenHTTP<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Listening Port<span class="kw">&lt;/name&gt;&lt;value&gt;</span>9999<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Base Path<span class="kw">&lt;/name&gt;&lt;value&gt;</span>supplier<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ PROCESSOR: MergeContent ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>MERGE-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>MergeContent<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>org.apache.nifi.processors.standard.MergeContent<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Maximum Number of Entries<span class="kw">&lt;/name&gt;&lt;value&gt;</span>100<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Max Bin Age<span class="kw">&lt;/name&gt;&lt;value&gt;</span>5 sec<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ PROCESSOR: JoltTransform ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>JOLT-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>TransformJSON<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>org.apache.nifi.processors.standard.JoltTransformJSON<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Jolt Specification<span class="kw">&lt;/name&gt;&lt;value&gt;</span>[{"operation":"shift",...}]<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ PROCESSOR: RouteOnAttribute ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>ROUTE-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>RouteOnAttribute<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>org.apache.nifi.processors.standard.RouteOnAttribute<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>to_inventory<span class="kw">&lt;/name&gt;</span>
-        <span class="kw">&lt;value&gt;</span>${source.type:equals('pos_scanner'):or(...)}<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>to_billing<span class="kw">&lt;/name&gt;</span>
-        <span class="kw">&lt;value&gt;</span>${source.type:equals('pos_scanner')}<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>to_analytics<span class="kw">&lt;/name&gt;&lt;value&gt;</span>${literal(true)}<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ CONSUMER 1: InventoryDB ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>INVENTORY-DB-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>InventoryDB<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>org.apache.nifi.processors.standard.PutDatabaseRecord<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Table Name<span class="kw">&lt;/name&gt;&lt;value&gt;</span>inventory.stock_ledger<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Statement Type<span class="kw">&lt;/name&gt;&lt;value&gt;</span>UPSERT<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ CONSUMER 2: BillingSystem ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>BILLING-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>BillingSystem<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>com.grocery.nifi.BillingHttpConsumer<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Remote URL<span class="kw">&lt;/name&gt;&lt;value&gt;</span>https://billing.internal/api/v2/transactions<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ CONSUMER 3: Analytics Sink ═══ --&gt;</span>
-    <span class="kw">&lt;processor&gt;</span>
-      <span class="kw">&lt;id&gt;</span>KAFKA-ANALYTICS-001<span class="kw">&lt;/id&gt;</span>
-      <span class="kw">&lt;name&gt;</span>Analytics Sink<span class="kw">&lt;/name&gt;</span>
-      <span class="kw">&lt;class&gt;</span>org.apache.nifi.processors.kafka.pubsub.PublishKafka_2_6<span class="kw">&lt;/class&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Topic Name<span class="kw">&lt;/name&gt;&lt;value&gt;</span>grocery.events.all<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-      <span class="kw">&lt;property&gt;&lt;name&gt;</span>Message Key Field<span class="kw">&lt;/name&gt;&lt;value&gt;</span>${item.category}<span class="kw">&lt;/value&gt;&lt;/property&gt;</span>
-    <span class="kw">&lt;/processor&gt;</span>
-
-    <span class="cm">&lt;!-- ═══ CONNECTIONS ═══ --&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>POS-SCANNER-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>MERGE-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>success<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>SUPPLIER-FEED-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>MERGE-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>success<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>MERGE-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>JOLT-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>merged<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>JOLT-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>ROUTE-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>success<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>ROUTE-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>INVENTORY-DB-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>to_inventory<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>ROUTE-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>BILLING-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>to_billing<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-    <span class="kw">&lt;connection&gt;&lt;sourceId&gt;</span>ROUTE-001<span class="kw">&lt;/sourceId&gt;&lt;destinationId&gt;</span>KAFKA-ANALYTICS-001<span class="kw">&lt;/destinationId&gt;
-      &lt;relationship&gt;</span>to_analytics<span class="kw">&lt;/relationship&gt;&lt;/connection&gt;</span>
-
-  <span class="kw">&lt;/rootGroup&gt;</span>
-<span class="kw">&lt;/flowController&gt;</span></pre>
+<span class="cm">// Downstream consumers of grocery.events.all:</span>
+<span class="cm">//   Flink job        &rarr; real-time inventory dashboard</span>
+<span class="cm">//   Spark Streaming  &rarr; demand forecasting ML model</span>
+<span class="cm">//   Python consumer  &rarr; shrinkage / loss detection</span></pre>
     </div>
   </div>
 
+  <!-- ===== SECURITY ===== -->
+  <div class="tpane" id="tp-sec">
+    <div class="icard" style="margin-bottom:14px">
+      <h3>&#128274; Security Architecture Overview</h3>
+      <p>NiFi uses a <strong>file-based authorizer</strong> (upgradeable to LDAP/OIDC in production) defined in <code>/conf/authorizations.xml</code> and <code>/conf/users.xml</code>. Every processor, process group, connection, and controller service is an <em>authorizable resource</em> with discrete read, write, and delete policies.</p>
+      <p>The grocery pipeline enforces <strong>least-privilege</strong>: each consumer role can access only the connections and processors it needs. Producers cannot see consumer configs. The NiFi Admin role is restricted to break-glass scenarios with full audit logging.</p>
+      <div class="cal sec">All inter-node, client, and cluster communication is secured with mutual TLS (mTLS). The NiFi keystore and truststore are provisioned by the internal Grocery CA. Sensitive properties in <code>flow.xml.gz</code> are AES-256-GCM encrypted using <code>nifi.sensitive.props.key</code> &mdash; the key itself is injected from HashiCorp Vault at startup via <code>bootstrap.conf</code>.</div>
+    </div>
+    <div class="slbl">RBAC Role Definitions</div>
+    <div class="rgrid">
+      <div class="rcard">
+        <div class="rhdr" style="background:var(--prod-lt)">
+          <div class="ric">&#127978;</div><div><div class="rnm">pos-producer</div><div class="rsub">POS terminal service account</div></div>
+        </div>
+        <div class="rbdy">
+          <div class="prow"><span class="pres">/processors/POS-SCANNER-001</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/connections/pos&rarr;merge</span><span class="pa">WRITE</span></div>
+          <div class="prow"><span class="pres">/process-groups/root</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/controller-services/*</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/policies/*</span><span class="pd">DENY</span></div>
+        </div>
+      </div>
+      <div class="rcard">
+        <div class="rhdr" style="background:var(--prod-lt)">
+          <div class="ric">&#128666;</div><div><div class="rnm">supplier-producer</div><div class="rsub">Supplier webhook service account</div></div>
+        </div>
+        <div class="rbdy">
+          <div class="prow"><span class="pres">/processors/SUPPLIER-FEED-001</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/connections/supplier&rarr;merge</span><span class="pa">WRITE</span></div>
+          <div class="prow"><span class="pres">/processors/POS-SCANNER-001</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/tenants/*</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/policies/*</span><span class="pd">DENY</span></div>
+        </div>
+      </div>
+      <div class="rcard">
+        <div class="rhdr" style="background:var(--cons-lt)">
+          <div class="ric">&#128230;</div><div><div class="rnm">inventory-consumer</div><div class="rsub">InventoryDB write access</div></div>
+        </div>
+        <div class="rbdy">
+          <div class="prow"><span class="pres">/processors/INVENTORY-DB-001</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/connections/route&rarr;inventory</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/controller-services/PostgreSQL-DBCP</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/processors/BILLING-001</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/policies/*</span><span class="pd">DENY</span></div>
+        </div>
+      </div>
+      <div class="rcard">
+        <div class="rhdr" style="background:var(--cons-lt)">
+          <div class="ric">&#128179;</div><div><div class="rnm">billing-consumer</div><div class="rsub">Most restricted role</div></div>
+        </div>
+        <div class="rbdy">
+          <div class="prow"><span class="pres">/processors/BILLING-001</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/connections/route&rarr;billing</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/provenance-data/BILLING-001</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/processors/KAFKA-ANALYTICS-001</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/policies/*</span><span class="pd">DENY</span></div>
+        </div>
+      </div>
+      <div class="rcard">
+        <div class="rhdr" style="background:var(--cons-lt)">
+          <div class="ric">&#128202;</div><div><div class="rnm">analytics-consumer</div><div class="rsub">Kafka publish &mdash; PII-scrubbed</div></div>
+        </div>
+        <div class="rbdy">
+          <div class="prow"><span class="pres">/processors/KAFKA-ANALYTICS-001</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/data (PII-scrubbed only)</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/connections/route&rarr;analytics</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/processors/BILLING-001</span><span class="pd">DENY</span></div>
+          <div class="prow"><span class="pres">/policies/*</span><span class="pd">DENY</span></div>
+        </div>
+      </div>
+      <div class="rcard">
+        <div class="rhdr" style="background:var(--b10)">
+          <div class="ric">&#9881;&#65039;</div><div><div class="rnm">pipeline-operator</div><div class="rsub">Ops &mdash; no credential access</div></div>
+        </div>
+        <div class="rbdy">
+          <div class="prow"><span class="pres">/process-groups/root</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/processors/*</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/connections/*</span><span class="pa">READ+WRITE</span></div>
+          <div class="prow"><span class="pres">/controller-services/*</span><span class="pr">READ</span></div>
+          <div class="prow"><span class="pres">/policies/*</span><span class="pd">DENY</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">authorizations.xml &mdash; Policy Definitions <span class="badge bs">RBAC CONFIG</span></div></div>
+      <div class="cdesc">Abridged NiFi authorization policies. In production these are managed via LDAP group sync or OIDC claims mapped to NiFi groups rather than manual XML editing.</div>
+<pre><span class="cm">&lt;!-- /conf/authorizations.xml (NiFi file-based authorizer) --&gt;</span>
+<span class="kw">&lt;authorizations&gt;</span>
+
+  <span class="cm">&lt;!-- POS Producer: write to scanner processor only --&gt;</span>
+  <span class="kw">&lt;policy</span> identifier=<span class="st">"pol-pos-write"</span>
+          resource=<span class="st">"/processors/POS-SCANNER-001"</span> action=<span class="st">"W"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;group</span> identifier=<span class="st">"grp-pos-producer"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/policy&gt;</span>
+
+  <span class="cm">&lt;!-- Supplier Producer: write to HTTP listener only --&gt;</span>
+  <span class="kw">&lt;policy</span> identifier=<span class="st">"pol-supplier-write"</span>
+          resource=<span class="st">"/processors/SUPPLIER-FEED-001"</span> action=<span class="st">"W"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;group</span> identifier=<span class="st">"grp-supplier-producer"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/policy&gt;</span>
+
+  <span class="cm">&lt;!-- Inventory Consumer: read connection + write DB processor --&gt;</span>
+  <span class="kw">&lt;policy</span> identifier=<span class="st">"pol-inventory-proc"</span>
+          resource=<span class="st">"/processors/INVENTORY-DB-001"</span> action=<span class="st">"RW"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;group</span> identifier=<span class="st">"grp-inventory-consumer"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/policy&gt;</span>
+
+  <span class="cm">&lt;!-- Billing Consumer: most restricted --&gt;</span>
+  <span class="kw">&lt;policy</span> identifier=<span class="st">"pol-billing-proc"</span>
+          resource=<span class="st">"/processors/BILLING-001"</span> action=<span class="st">"RW"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;group</span> identifier=<span class="st">"grp-billing-consumer"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/policy&gt;</span>
+  <span class="cm">&lt;!-- Explicitly deny provenance data viewing for billing group --&gt;</span>
+  <span class="kw">&lt;policy</span> identifier=<span class="st">"pol-billing-no-prov"</span>
+          resource=<span class="st">"/provenance-data/processors/BILLING-001"</span> action=<span class="st">"R"</span><span class="kw">&gt;</span>
+    <span class="cm">&lt;!-- intentionally empty: no group granted --&gt;</span>
+  <span class="kw">&lt;/policy&gt;</span>
+
+  <span class="cm">&lt;!-- Analytics Consumer: publish to Kafka --&gt;</span>
+  <span class="kw">&lt;policy</span> identifier=<span class="st">"pol-analytics-kafka"</span>
+          resource=<span class="st">"/processors/KAFKA-ANALYTICS-001"</span> action=<span class="st">"RW"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;group</span> identifier=<span class="st">"grp-analytics-consumer"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/policy&gt;</span>
+
+<span class="kw">&lt;/authorizations&gt;</span></pre>
+    </div>
+  </div>
+
+  <!-- ===== CONFIGS ===== -->
+  <div class="tpane" id="tp-cfg">
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">nifi.properties &mdash; Core Node Configuration <span class="badge bg">CONFIG FILE</span></div></div>
+<pre><span class="cm"># /opt/nifi/conf/nifi.properties</span>
+
+<span class="cm"># ── Web / TLS ──────────────────────────────────────────</span>
+nifi.web.https.host=<span class="st">nifi.grocery.internal</span>
+nifi.web.https.port=<span class="nu">8443</span>
+nifi.web.http.port=               <span class="cm"># intentionally blank &mdash; HTTP disabled</span>
+nifi.security.keystore=<span class="st">/opt/nifi/certs/keystore.jks</span>
+nifi.security.keystoreType=<span class="st">JKS</span>
+nifi.security.keystorePasswd=<span class="st">${NIFI_KEYSTORE_PASSWD}</span>   <span class="cm"># env var from Vault</span>
+nifi.security.keyPasswd=<span class="st">${NIFI_KEY_PASSWD}</span>
+nifi.security.truststore=<span class="st">/opt/nifi/certs/truststore.jks</span>
+nifi.security.truststoreType=<span class="st">JKS</span>
+nifi.security.truststorePasswd=<span class="st">${NIFI_TRUSTSTORE_PASSWD}</span>
+nifi.security.needClientAuth=<span class="kw">true</span>                        <span class="cm"># mTLS required</span>
+
+<span class="cm"># ── Sensitive property encryption ──────────────────────</span>
+nifi.sensitive.props.key=<span class="st">${NIFI_SENSITIVE_KEY}</span>
+nifi.sensitive.props.algorithm=<span class="st">NIFI_PBKDF2_AES_GCM_256</span>
+nifi.sensitive.props.provider=<span class="st">BC</span>
+
+<span class="cm"># ── Authorization ────────────────────────────────────────</span>
+nifi.security.user.authorizer=<span class="st">file-provider</span>
+nifi.security.user.login.identity.provider=<span class="st">ldap-provider</span>
+
+<span class="cm"># ── Cluster ──────────────────────────────────────────────</span>
+nifi.cluster.is.node=<span class="kw">true</span>
+nifi.cluster.node.address=<span class="st">nifi-1.grocery.internal</span>
+nifi.cluster.node.protocol.port=<span class="nu">11443</span>
+nifi.zookeeper.connect.string=<span class="st">zk-1:2181,zk-2:2181,zk-3:2181</span>
+
+<span class="cm"># ── Repository paths ──────────────────────────────────────</span>
+nifi.flowfile.repository.directory=<span class="st">/data/nifi/flowfile-repo</span>
+nifi.content.repository.directory.default=<span class="st">/data/nifi/content-repo</span>
+nifi.provenance.repository.directory.default=<span class="st">/data/nifi/provenance-repo</span>
+nifi.provenance.repository.max.storage.size=<span class="st">10 GB</span>
+nifi.provenance.repository.max.storage.time=<span class="st">30 days</span>
+
+<span class="cm"># ── Performance ───────────────────────────────────────────</span>
+nifi.queue.swap.threshold=<span class="nu">20000</span>
+nifi.bored.yield.duration=<span class="st">10 millis</span>
+nifi.processor.scheduling.timeout=<span class="st">1 min</span></pre>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">bootstrap.conf &mdash; JVM &amp; Startup Config <span class="badge bg">CONFIG FILE</span></div></div>
+<pre><span class="cm"># /opt/nifi/conf/bootstrap.conf</span>
+java.arg.1=-server
+java.arg.2=-Xms4g
+java.arg.3=-Xmx8g
+java.arg.4=-XX:+UseG1GC
+java.arg.5=-XX:MaxGCPauseMillis=200
+java.arg.6=-XX:+HeapDumpOnOutOfMemoryError
+java.arg.7=-XX:HeapDumpPath=/var/log/nifi/heap-dump.hprof
+java.arg.8=-Djava.security.egd=file:/dev/./urandom
+java.arg.9=-Dfile.encoding=UTF-8
+
+<span class="cm"># Secret injection from HashiCorp Vault:</span>
+java.arg.10=-DNIFI_KEYSTORE_PASSWD=<span class="st">${vault:secret/nifi/keystore-pass}</span>
+java.arg.11=-DNIFI_SENSITIVE_KEY=<span class="st">${vault:secret/nifi/sensitive-key}</span>
+
+run.as=nifi
+lib.dir=./lib
+conf.dir=./conf
+graceful.shutdown.seconds=<span class="nu">20</span></pre>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">grocery-pipeline-params.json &mdash; Parameter Context <span class="badge bg">CONFIG FILE</span></div></div>
+      <div class="cdesc">Import via NiFi REST API or UI &mdash; <code>POST /nifi-api/parameter-contexts</code>. Sensitive values are AES-256-GCM encrypted at rest and never appear in <code>flow.xml.gz</code> in plain text.</div>
+<pre>{
+  <span class="st">"name"</span>: <span class="st">"grocery-pipeline-params"</span>,
+  <span class="st">"description"</span>: <span class="st">"All environment-specific configs for grocery pipeline"</span>,
+  <span class="st">"parameters"</span>: [
+    { <span class="st">"name"</span>:<span class="st">"store.id"</span>,              <span class="st">"value"</span>:<span class="st">"STORE-042"</span>,                      <span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"db.inventory.url"</span>,       <span class="st">"value"</span>:<span class="st">"jdbc:postgresql://db:5432/grocery"</span>,<span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"db.inventory.user"</span>,      <span class="st">"value"</span>:<span class="st">"nifi_writer"</span>,                    <span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"db.inventory.password"</span>,  <span class="st">"value"</span>:<span class="st">"**encrypted**"</span>,                  <span class="st">"sensitive"</span>:<span class="kw">true</span>  },
+    { <span class="st">"name"</span>:<span class="st">"billing.api.url"</span>,        <span class="st">"value"</span>:<span class="st">"https://billing.internal/api/v2"</span>, <span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"billing.api.token"</span>,      <span class="st">"value"</span>:<span class="st">"**encrypted**"</span>,                  <span class="st">"sensitive"</span>:<span class="kw">true</span>  },
+    { <span class="st">"name"</span>:<span class="st">"kafka.brokers"</span>,          <span class="st">"value"</span>:<span class="st">"kafka-1:9092,kafka-2:9092"</span>,      <span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"kafka.sasl.password"</span>,    <span class="st">"value"</span>:<span class="st">"**encrypted**"</span>,                  <span class="st">"sensitive"</span>:<span class="kw">true</span>  },
+    { <span class="st">"name"</span>:<span class="st">"kafka.topic.events"</span>,     <span class="st">"value"</span>:<span class="st">"grocery.events.all"</span>,             <span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"supplier.listen.port"</span>,   <span class="st">"value"</span>:<span class="st">"9999"</span>,                           <span class="st">"sensitive"</span>:<span class="kw">false</span> },
+    { <span class="st">"name"</span>:<span class="st">"pipeline.schema.version"</span>,<span class="st">"value"</span>:<span class="st">"pos-scan-event-v2"</span>,              <span class="st">"sensitive"</span>:<span class="kw">false</span> }
+  ]
+}</pre>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">logback.xml &mdash; Logging Configuration <span class="badge bg">CONFIG FILE</span></div></div>
+<pre><span class="cm">&lt;!-- /opt/nifi/conf/logback.xml --&gt;</span>
+<span class="kw">&lt;configuration&gt;</span>
+  <span class="kw">&lt;appender</span> name=<span class="st">"APP_FILE"</span>
+            class=<span class="st">"ch.qos.logback.core.rolling.RollingFileAppender"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;file&gt;</span>/var/log/nifi/nifi-app.log<span class="kw">&lt;/file&gt;</span>
+    <span class="kw">&lt;rollingPolicy</span>
+      class=<span class="st">"ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy"</span><span class="kw">&gt;</span>
+      <span class="kw">&lt;fileNamePattern&gt;</span>/var/log/nifi/nifi-app.%d{yyyy-MM-dd}.%i.log<span class="kw">&lt;/fileNamePattern&gt;</span>
+      <span class="kw">&lt;maxFileSize&gt;</span>100MB<span class="kw">&lt;/maxFileSize&gt;</span>
+      <span class="kw">&lt;maxHistory&gt;</span>30<span class="kw">&lt;/maxHistory&gt;</span>
+    <span class="kw">&lt;/rollingPolicy&gt;</span>
+    <span class="kw">&lt;encoder&gt;</span>
+      <span class="kw">&lt;pattern&gt;</span>%d{ISO8601} %-5level %logger{36} - %msg%n<span class="kw">&lt;/pattern&gt;</span>
+    <span class="kw">&lt;/encoder&gt;</span>
+  <span class="kw">&lt;/appender&gt;</span>
+  <span class="kw">&lt;logger</span> name=<span class="st">"com.grocery.nifi"</span> level=<span class="st">"INFO"</span> additivity=<span class="st">"false"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;appender-ref</span> ref=<span class="st">"APP_FILE"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/logger&gt;</span>
+  <span class="kw">&lt;logger</span> name=<span class="st">"org.apache.nifi.authorization"</span> level=<span class="st">"WARN"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;logger</span> name=<span class="st">"org.apache.nifi.web.security"</span>    level=<span class="st">"WARN"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;root</span> level=<span class="st">"INFO"</span><span class="kw">&gt;&lt;appender-ref</span> ref=<span class="st">"APP_FILE"</span><span class="kw">/&gt;&lt;/root&gt;</span>
+<span class="kw">&lt;/configuration&gt;</span></pre>
+    </div>
+  </div>
+
+  <!-- ===== LOGS ===== -->
+  <div class="tpane" id="tp-lg">
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">nifi-app.log &mdash; Normal Operations <span class="badge bl">LIVE LOG</span></div></div>
+      <div class="cdesc">Representative log output from a healthy run of the grocery pipeline. All timestamps UTC. Logger names truncated to 36 chars.</div>
+<pre><span class="lts">2026-05-20 14:30:00.012 </span><span class="linf">INFO  </span> StandardProcessorNode   - Starting processor POS Scanner (POS-SCANNER-001)
+<span class="lts">2026-05-20 14:30:00.081 </span><span class="linf">INFO  </span> StandardProcessorNode   - Starting processor Supplier Feed (SUPPLIER-FEED-001)
+<span class="lts">2026-05-20 14:30:00.144 </span><span class="lok">INFO  </span> POSScannerProcessor      - POS event emitted txn=f4a9c2e1-3b22 store=STORE-042 category=produce
+<span class="lts">2026-05-20 14:30:00.211 </span><span class="lok">INFO  </span> POSScannerProcessor      - POS event emitted txn=a81f3d90-cc14 store=STORE-042 category=dairy
+<span class="lts">2026-05-20 14:30:01.003 </span><span class="linf">INFO  </span> ListenHTTP               - POST /supplier/ingest from SUP-FRESHDIRECT-07 (192.168.10.44) 2847 bytes
+<span class="lts">2026-05-20 14:30:01.091 </span><span class="lok">INFO  </span> ListenHTTP               - FlowFile created: source.type=supplier_feed delivery.type=restock
+<span class="lts">2026-05-20 14:30:05.503 </span><span class="linf">INFO  </span> MergeContent             - Merged 47 FlowFiles into batch (max-age=5s reached) &rarr; JoltTransform
+<span class="lts">2026-05-20 14:30:05.621 </span><span class="lok">INFO  </span> JoltTransformJSON        - Transformed 47 records to canonical schema pos-scan-event-v2
+<span class="lts">2026-05-20 14:30:05.702 </span><span class="linf">INFO  </span> RouteOnAttribute         - Routing: to_inventory=47 to_billing=38 to_analytics=47
+<span class="lts">2026-05-20 14:30:05.890 </span><span class="lok">INFO  </span> PutDatabaseRecord        - Successfully inserted 47 rows into inventory.stock_ledger
+<span class="lts">2026-05-20 14:30:06.104 </span><span class="lok">INFO  </span> BillingHttpConsumer      - POST txn=f4a9c2e1-3b22 &rarr; HTTP 201 CREATED (attempt 1)
+<span class="lts">2026-05-20 14:30:06.199 </span><span class="lok">INFO  </span> BillingHttpConsumer      - POST txn=a81f3d90-cc14 &rarr; HTTP 201 CREATED (attempt 1)
+<span class="lts">2026-05-20 14:30:06.440 </span><span class="lok">INFO  </span> PublishKafka_2_6         - Published 47 records to grocery.events.all (produce=14 dairy=11 frozen=8 deli=7 other=7)</pre>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">nifi-app.log &mdash; Warnings &amp; Errors <span class="badge bl">ERROR LOG</span></div></div>
+<pre><span class="lts">2026-05-20 15:12:33.041 </span><span class="lwrn">WARN  </span> BillingHttpConsumer      - Billing attempt 1 failed txn=9c3e7a12-f081: Connection timeout after 10s
+<span class="lts">2026-05-20 15:12:35.044 </span><span class="lwrn">WARN  </span> BillingHttpConsumer      - Billing attempt 2 failed txn=9c3e7a12-f081: HTTP 503 Service Unavailable
+<span class="lts">2026-05-20 15:12:39.054 </span><span class="lok">INFO  </span> BillingHttpConsumer      - POST txn=9c3e7a12-f081 &rarr; HTTP 201 CREATED (attempt 3) &#10003;
+
+<span class="lts">2026-05-20 15:44:02.891 </span><span class="lwrn">WARN  </span> ValidateRecord           - Schema validation failure: items[0].category value 'PRODUCE' not in enum
+                                                          [produce|dairy|frozen|deli|bakery|beverage|general] &mdash; routing to failure
+<span class="lts">2026-05-20 15:44:02.912 </span><span class="lerr">ERROR </span> ValidateRecord           - FlowFile &rarr; 'invalid' relationship: source=supplier_feed id=SUP-REGIONAL-12
+
+<span class="lts">2026-05-20 16:01:17.003 </span><span class="lerr">ERROR </span> PutDatabaseRecord        - Duplicate key violates unique constraint "stock_ledger_pkey"
+                                                          &mdash; idempotency key already present, routing to success
+<span class="lts">2026-05-20 16:01:17.041 </span><span class="lok">INFO  </span> PutDatabaseRecord        - Duplicate event_id detected (idempotent). FlowFile &rarr; success.
+
+<span class="lts">2026-05-20 16:18:55.771 </span><span class="lwrn">WARN  </span> ListenHTTP               - TLS handshake failure from 10.0.44.199: certificate not trusted &mdash; connection rejected
+<span class="lts">2026-05-20 16:18:55.790 </span><span class="lwrn">WARN  </span> NiFiAuthFilter           - Unauthorized: CN=grp-analytics-consumer /processors/BILLING-001 &mdash; DENIED (pol-billing-no-data)
+
+<span class="lts">2026-05-20 17:03:44.120 </span><span class="lerr">ERROR </span> PublishKafka_2_6         - LEADER_NOT_AVAILABLE for partition 3 (kafka-2 rebalancing) &mdash; retrying in 5s
+<span class="lts">2026-05-20 17:03:49.201 </span><span class="lok">INFO  </span> PublishKafka_2_6         - Kafka reconnected &mdash; published 12 buffered FlowFiles to grocery.events.all &#10003;
+
+<span class="lts">2026-05-20 17:55:00.001 </span><span class="lwrn">WARN  </span> ListenHTTP               - RECALL event received: SUP-NATIONAL-MEATS sku=PRD-00899 reason="Listeria contamination"
+<span class="lts">2026-05-20 17:55:00.022 </span><span class="lerr">ERROR </span> RecallAlertProcessor     - PRIORITY RECALL DETECTED &mdash; sku=PRD-00899 Listeria contamination
+                                                          &mdash; InventoryDB updated, PagerDuty P1 fired, PA system notified</pre>
+    </div>
+    <div class="ccard">
+      <div class="cchdr"><div class="cctit">nifi-user.log &mdash; Security &amp; Access Audit <span class="badge bs">AUDIT LOG</span></div></div>
+      <div class="cdesc">The <code>nifi-user.log</code> records every authentication, authorisation decision, resource modification, and data transfer event. This is the primary compliance log. All times UTC.</div>
+<pre><span class="lts">2026-05-20 08:00:01.003 </span><span class="lok">INFO  </span> AccessResource       - <span class="lsec">AUTHENTICATED</span>  identity=CN=nifi-admin,OU=ops,O=Grocery via CERTIFICATE
+<span class="lts">2026-05-20 08:01:14.441 </span><span class="linf">INFO  </span> ProcessorResource    - <span class="lsec">MODIFIED</span>       identity=CN=nifi-admin &mdash; processor BILLING-001 property billing-url UPDATED
+<span class="lts">2026-05-20 08:02:00.102 </span><span class="linf">INFO  </span> ProcessorResource    - <span class="lsec">STARTED</span>        identity=CN=nifi-admin &mdash; processor POS-SCANNER-001
+<span class="lts">2026-05-20 08:02:00.188 </span><span class="linf">INFO  </span> ProcessorResource    - <span class="lsec">STARTED</span>        identity=CN=nifi-admin &mdash; processor SUPPLIER-FEED-001
+<span class="lts">2026-05-20 14:30:01.001 </span><span class="linf">INFO  </span> DataTransferResource - <span class="lsec">DATA RECEIVED</span>  identity=CN=SUP-FRESHDIRECT-07 port=supplier bytes=2847
+<span class="lts">2026-05-20 16:18:55.780 </span><span class="lwrn">WARN  </span> NiFiAuthFilter       - <span class="lsec">ACCESS DENIED</span>  identity=CN=grp-analytics-consumer resource=/processors/BILLING-001 action=READ
+<span class="lts">2026-05-20 16:18:55.782 </span><span class="lwrn">WARN  </span> NiFiAuthFilter       - <span class="lsec">ACCESS DENIED</span>  identity=CN=grp-analytics-consumer resource=/provenance-data/BILLING-001 action=READ
+<span class="lts">2026-05-20 16:18:56.001 </span><span class="lerr">ERROR </span> NiFiAuthFilter       - <span class="lsec">BLOCKED</span>        identity=CN=UNKNOWN (10.0.44.199) TLS cert not in truststore &mdash; connection dropped
+<span class="lts">2026-05-20 17:00:00.000 </span><span class="linf">INFO  </span> FlowResource         - <span class="lsec">DOWNLOADED</span>     identity=CN=pipeline-operator /process-groups/root/flow (read-only export)
+<span class="lts">2026-05-20 23:59:59.999 </span><span class="linf">INFO  </span> ProvenanceRepository - <span class="lsec">DAILY ROLLUP</span>   1,842,177 events processed, store=STORE-042, ingested=101.4 GB</pre>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- POPUPS (mobile bottom sheet detail panels) -->
+
+<!-- POS SCANNER POPUP -->
+<div class="pov" id="pop-pos" role="dialog" aria-modal="true" aria-label="POS Scanner details" onclick="cbg(event,'pop-pos')">
+  <div class="psh">
+    <div class="phdr"><h2>&#127978; POS Scanner &mdash; Producer 1</h2><button class="pcls" onclick="cp('pop-pos')" aria-label="Close">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>Emits one FlowFile per checkout transaction. Connects to register TCP socket or Redis stream from POS middleware. <code>GenerateFlowFile</code> in dev, <code>ListenTCP</code> in production.</p>
+        <div class="cal ok">Volume: ~56 FlowFiles/min across 4 registers at STORE-042.</div>
+      </div>
+      <div class="psec"><h4>Key FlowFile Attributes</h4>
+        <div class="arow"><span class="akey">source.type</span><span class="aval">pos_scanner</span></div>
+        <div class="arow"><span class="akey">store.id</span><span class="aval">STORE-042</span></div>
+        <div class="arow"><span class="akey">item.category</span><span class="aval">produce | dairy | frozen | deli &hellip;</span></div>
+        <div class="arow"><span class="akey">event.id</span><span class="aval">transaction_id &mdash; Billing idempotency key</span></div>
+        <div class="arow"><span class="akey">schema.name</span><span class="aval">pos-scan-event-v2</span></div>
+        <div class="arow"><span class="akey">mime.type</span><span class="aval">application/json</span></div>
+      </div>
+      <div class="psec"><h4>Security</h4>
+        <p>RBAC role <strong>pos-producer</strong> &mdash; write to POS-SCANNER-001 only. <code>loyalty_card</code> SHA-256 hashed at source before pipeline entry.</p>
+      </div>
+      <button class="pbtn" onclick="cp('pop-pos');st('p1')">View full tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER FEED POPUP -->
+<div class="pov" id="pop-supplier" role="dialog" aria-modal="true" aria-label="Supplier Feed details" onclick="cbg(event,'pop-supplier')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128666; Supplier Feed &mdash; Producer 2</h2><button class="pcls" onclick="cp('pop-supplier')" aria-label="Close">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>Inbound HTTP listener on port 9999. Suppliers POST JSON webhooks for restock, price_update, or recall events. Authenticated via mutual TLS client certificates &mdash; each supplier has a unique cert from the Grocery CA.</p>
+        <div class="cal warn">Recall events bypass MergeContent &mdash; zero-delay routing to InventoryDB + PagerDuty alert.</div>
+      </div>
+      <div class="psec"><h4>Key FlowFile Attributes</h4>
+        <div class="arow"><span class="akey">source.type</span><span class="aval">supplier_feed</span></div>
+        <div class="arow"><span class="akey">supplier.id</span><span class="aval">${http.headers.X-Supplier-ID}</span></div>
+        <div class="arow"><span class="akey">delivery.type</span><span class="aval">restock | price_update | recall</span></div>
+        <div class="arow"><span class="akey">priority</span><span class="aval">HIGH (recall) | NORMAL</span></div>
+        <div class="arow"><span class="akey">http.client.dn</span><span class="aval">TLS cert DN &mdash; anti-spoofing</span></div>
+      </div>
+      <div class="psec"><h4>Security</h4>
+        <p>RBAC role <strong>supplier-producer</strong> &mdash; cannot see POS processor or any other group. Cert CN validated against X-Supplier-ID header.</p>
+      </div>
+      <button class="pbtn" onclick="cp('pop-supplier');st('p2')">View full tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- MERGE POPUP -->
+<div class="pov" id="pop-merge" role="dialog" aria-modal="true" onclick="cbg(event,'pop-merge')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128256; MergeContent Processor</h2><button class="pcls" onclick="cp('pop-merge')">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>Batches FlowFiles from both producers grouped by <code>source.type</code>. Emits a JSON array when 100 items accumulate or 5 seconds elapse. Recall events (priority=HIGH) bypass this processor via a separate direct connection.</p>
+      </div>
+      <div class="psec"><h4>Key Settings</h4>
+        <div class="arow"><span class="akey">Max Entries</span><span class="aval">100</span></div>
+        <div class="arow"><span class="akey">Max Bin Age</span><span class="aval">5 sec</span></div>
+        <div class="arow"><span class="akey">Correlation Key</span><span class="aval">source.type</span></div>
+        <div class="arow"><span class="akey">Format</span><span class="aval">JSON Array (newline delimiter)</span></div>
+      </div>
+      <button class="pbtn" onclick="cp('pop-merge');st('px')">View Processors tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- JOLT POPUP -->
+<div class="pov" id="pop-jolt" role="dialog" aria-modal="true" onclick="cbg(event,'pop-jolt')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128295; JoltTransformJSON</h2><button class="pcls" onclick="cp('pop-jolt')">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>Normalises both POS and supplier payloads to a unified canonical <code>grocery-event</code> schema using a Jolt shift spec. Both shapes map to the same output before routing so all downstream consumers deal with one schema.</p>
+      </div>
+      <div class="psec"><h4>Key Field Mappings</h4>
+        <div class="arow"><span class="akey">transaction_id</span><span class="aval">&rarr; event.id</span></div>
+        <div class="arow"><span class="akey">po_number</span><span class="aval">&rarr; event.id (supplier path)</span></div>
+        <div class="arow"><span class="akey">items[].qty</span><span class="aval">&rarr; event.items[].quantity</span></div>
+        <div class="arow"><span class="akey">timestamp</span><span class="aval">&rarr; event.occurred_at</span></div>
+      </div>
+      <button class="pbtn" onclick="cp('pop-jolt');st('px')">View Processors tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- ROUTE POPUP -->
+<div class="pov" id="pop-route" role="dialog" aria-modal="true" onclick="cbg(event,'pop-route')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128259; RouteOnAttribute</h2><button class="pcls" onclick="cp('pop-route')">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>Fan-out routing rules</h4>
+        <p>Each FlowFile can match multiple routes simultaneously. Analytics receives everything; Billing receives POS sales only; Recalls also trigger the alert path.</p>
+      </div>
+      <div class="psec"><h4>Routes</h4>
+        <div class="arow"><span class="akey">to_inventory</span><span class="aval">ALL events (true)</span></div>
+        <div class="arow"><span class="akey">to_billing</span><span class="aval">source.type = pos_scanner only</span></div>
+        <div class="arow"><span class="akey">to_analytics</span><span class="aval">ALL events (PII scrubbed)</span></div>
+        <div class="arow"><span class="akey">to_alert</span><span class="aval">delivery.type = recall only</span></div>
+      </div>
+      <button class="pbtn" onclick="cp('pop-route');st('px')">View Processors tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVENTORY POPUP -->
+<div class="pov" id="pop-inventory" role="dialog" aria-modal="true" onclick="cbg(event,'pop-inventory')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128230; InventoryDB &mdash; Consumer 1</h2><button class="pcls" onclick="cp('pop-inventory')">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>Receives ALL events. Upserts into <code>inventory.stock_ledger</code> (PostgreSQL). Sales decrement stock; restocks increment; recalls set the recalled flag. Idempotent on <code>event.id</code> primary key.</p>
+        <div class="cal ok">Duplicate event_id keys are silently skipped and logged &mdash; no double-counting.</div>
+      </div>
+      <div class="psec"><h4>RBAC: inventory-consumer</h4>
+        <div class="arow"><span class="akey">/processors/INVENTORY-DB-001</span><span class="aval" style="color:var(--g50)">READ+WRITE</span></div>
+        <div class="arow"><span class="akey">/processors/BILLING-001</span><span class="aval" style="color:var(--r60)">DENY</span></div>
+        <div class="arow"><span class="akey">/policies/*</span><span class="aval" style="color:var(--r60)">DENY</span></div>
+      </div>
+      <button class="pbtn" onclick="cp('pop-inventory');st('c1')">View full tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- BILLING POPUP -->
+<div class="pov" id="pop-billing" role="dialog" aria-modal="true" onclick="cbg(event,'pop-billing')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128179; BillingSystem &mdash; Consumer 2</h2><button class="pcls" onclick="cp('pop-billing')">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>POS sales only. POSTs JSON to billing settlement API (HTTPS + mTLS). Exponential retry (1s, 2s, 4s). <code>Idempotency-Key</code> header prevents double-billing on retry.</p>
+        <div class="cal warn">cost_price from supplier events is <strong>never</strong> routed here &mdash; stripped by JoltTransform.</div>
+      </div>
+      <div class="psec"><h4>RBAC: billing-consumer (most restricted)</h4>
+        <div class="arow"><span class="akey">/processors/BILLING-001</span><span class="aval" style="color:var(--g50)">READ+WRITE</span></div>
+        <div class="arow"><span class="akey">/provenance-data/BILLING-001</span><span class="aval" style="color:var(--r60)">DENY</span></div>
+        <div class="arow"><span class="akey">/processors/KAFKA-ANALYTICS-001</span><span class="aval" style="color:var(--r60)">DENY</span></div>
+      </div>
+      <button class="pbtn" onclick="cp('pop-billing');st('c2')">View full tab &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS POPUP -->
+<div class="pov" id="pop-analytics" role="dialog" aria-modal="true" onclick="cbg(event,'pop-analytics')">
+  <div class="psh">
+    <div class="phdr"><h2>&#128202; Analytics Sink &mdash; Consumer 3</h2><button class="pcls" onclick="cp('pop-analytics')">&#215;</button></div>
+    <div class="pbdy">
+      <div class="psec"><h4>What it does</h4>
+        <p>ALL events after PII scrubbing. Publishes to Kafka <code>grocery.events.all</code>, partitioned by <code>item.category</code> (7 partitions). SASL/SCRAM-SHA-512 auth. Feeds Flink dashboards, Spark demand forecasting, and shrinkage detection.</p>
+      </div>
+      <div class="psec"><h4>RBAC: analytics-consumer</h4>
+        <div class="arow"><span class="akey">/processors/KAFKA-ANALYTICS-001</span><span class="aval" style="color:var(--g50)">READ+WRITE</span></div>
+        <div class="arow"><span class="akey">/data (PII-scrubbed only)</span><span class="aval" style="color:var(--b60)">READ</span></div>
+        <div class="arow"><span class="akey">/processors/BILLING-001</span><span class="aval" style="color:var(--r60)">DENY</span></div>
+      </div>
+      <button class="pbtn" onclick="cp('pop-analytics');st('c3')">View full tab &rarr;</button>
+    </div>
+  </div>
 </div>
 
 <script>
-function showTab(name) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  // activate tab button
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(t => {
-    if (t.getAttribute('onclick').includes("'" + name + "'")) {
-      t.classList.add('active');
+// ── PANE MAP ─────────────────────────────────────────────
+var PANES = {
+  ov:'tp-ov', p1:'tp-p1', p2:'tp-p2', px:'tp-px',
+  c1:'tp-c1', c2:'tp-c2', c3:'tp-c3',
+  sec:'tp-sec', cfg:'tp-cfg', lg:'tp-lg'
+};
+
+function st(name) {
+  // hide all panes
+  Object.values(PANES).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  // deactivate all tab buttons
+  document.querySelectorAll('.tbtn').forEach(function(b) {
+    b.classList.remove('active');
+    b.setAttribute('aria-selected', 'false');
+  });
+  // activate target pane
+  var pane = document.getElementById(PANES[name]);
+  if (pane) pane.classList.add('active');
+  // activate matching button
+  document.querySelectorAll('.tbtn').forEach(function(b) {
+    var oc = b.getAttribute('onclick') || '';
+    if (oc.indexOf("'" + name + "'") !== -1) {
+      b.classList.add('active');
+      b.setAttribute('aria-selected', 'true');
+      b.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
     }
   });
 }
-</script>
 
+// ── POPUP MAP ────────────────────────────────────────────
+var POPS = {
+  pos:'pop-pos', supplier:'pop-supplier', merge:'pop-merge',
+  jolt:'pop-jolt', route:'pop-route', inventory:'pop-inventory',
+  billing:'pop-billing', analytics:'pop-analytics'
+};
+
+function op(key) {
+  var id = POPS[key];
+  if (!id) return;
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  var cls = el.querySelector('.pcls');
+  if (cls) setTimeout(function(){ cls.focus(); }, 60);
+}
+
+function cp(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function cbg(event, id) {
+  if (event.target === document.getElementById(id)) cp(id);
+}
+
+// Keyboard: Escape closes any open popup
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.pov.open').forEach(function(el) {
+      el.classList.remove('open');
+    });
+    document.body.style.overflow = '';
+  }
+});
+
+// Keyboard: Enter/Space triggers node click
+function nkey(e, key) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    op(key);
+  }
+}
+</script>
 </body>
 </html>
