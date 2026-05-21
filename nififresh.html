@@ -313,7 +313,8 @@
         <a href="#workflows"     class="block hover:accent">5 · The 6 workflows</a>
         <a href="#code"          class="block hover:accent">6 · Code line-by-line</a>
         <a href="#run"           class="block hover:accent">7 · How to run it</a>
-        <a href="#glossary"      class="block hover:accent">8 · Glossary</a>
+        <a href="#security"      class="block hover:accent">8 · Security</a>
+      <a href="#glossary"      class="block hover:accent">9 · Glossary</a>
       </nav>
     </details>
 
@@ -381,7 +382,8 @@
       <a href="#workflows"     class="block hover:accent">5 · The 6 workflows</a>
       <a href="#code"          class="block hover:accent">6 · Code line-by-line</a>
       <a href="#run"           class="block hover:accent">7 · How to run it</a>
-      <a href="#glossary"      class="block hover:accent">8 · Glossary</a>
+      <a href="#security"      class="block hover:accent">8 · Security</a>
+      <a href="#glossary"      class="block hover:accent">9 · Glossary</a>
     </nav>
   </aside>
 
@@ -1158,9 +1160,176 @@ docker compose down -v    # stop and wipe all data</pre>
     </section>
 
 
-    <!-- ─── SECTION 8 · GLOSSARY ───────────────────────────────────── -->
+    <!-- ─── SECTION 8 · SECURITY ──────────────────────────────────── -->
+    <section id="security">
+      <h2 class="section font-light text-3xl">8 · How security works</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        The dashboard isn't open to anyone. There's a login screen, every
+        action is tied to a username, and the server checks &mdash; on every
+        single request &mdash; whether your role is allowed to do that thing.
+      </p>
+
+      <h3 class="text-xl font-medium mt-6 mb-3">8.1 · The login screen</h3>
+      <p class="mb-4">
+        When you open the dashboard, the first thing you see is a login form
+        with seven demo accounts. Pick one (or type a username and password),
+        and the dashboard asks the server: "Is this person real?" The
+        server checks the password against a
+        <span class="chip" onclick="openModal('bcrypt', 'bcrypt password hashing', '<p>Passwords are never stored as-is &mdash; that would be a disaster if the database leaked. Instead we store a <strong>hash</strong>: a one-way scrambled version. To check a password, we hash what the user typed and compare hashes.</p><p><strong>bcrypt</strong> is a hashing algorithm designed to be <em>slow</em> on purpose (~250ms per check). That makes brute-force guessing impractical: even on a fast GPU, a hacker can only try maybe 1000 passwords per second instead of billions.</p><p>The &quot;cost factor&quot; (we use 12) controls how slow. Higher = safer but more CPU. Every few years you bump the number.</p>', [{label:'bcrypt explained', url:'https://en.wikipedia.org/wiki/Bcrypt'}, {label:'OWASP password hashing', url:'https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html'}])">bcrypt hash</span>
+        and, if it matches, hands back a
+        <span class="chip" onclick="openModal('jwt', 'JWT (JSON Web Token)', '<p>A <strong>JWT</strong> is a small text string that proves who you are. It looks like this:</p><pre class=\"mono text-[10px]\">eyJhbGciOiJIUzI1Ni...</pre><p>Inside (decoded) it&apos;s just JSON: <code>{\"sub\": \"alice\", \"role\": \"CASHIER\", \"exp\": 1700000000}</code>. The whole thing is <strong>signed</strong> with a secret key &mdash; if anyone changes the JSON, the signature breaks.</p><p>So the server doesn&apos;t need to remember who&apos;s logged in. It just checks the signature on every request. Stateless, fast, easy to scale.</p><p>FreshMart tokens last 8 hours by default. After that you log in again.</p>', [{label:'JWT.io introduction', url:'https://jwt.io/introduction'}, {label:'OWASP JWT cheat sheet', url:'https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html'}])">JWT token</span>.
+        The dashboard stores that token and sends it with every request from
+        then on.
+      </p>
+
+      <div class="rail p-5 mb-4">
+        <div class="mono text-xs uppercase tracking-widest mb-2 accent">Try it yourself</div>
+        <pre class="code mt-2">curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"cashier123"}'
+
+# → { "ok": true,
+#     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+#     "role": "CASHIER", ... }</pre>
+      </div>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">8.2 · The seven roles</h3>
+      <p class="mb-4">
+        Every user has exactly one <em>role</em>, and each role can do certain
+        things and not others. This is called
+        <span class="chip" onclick="openModal('rbac', 'RBAC: Role-Based Access Control', '<p><strong>RBAC</strong> means: instead of giving each individual user permissions one by one, you group permissions into <em>roles</em> and assign users to roles.</p><p>So instead of: &quot;Alice can do A, B, C&quot;, &quot;Bob can do A, B, D&quot;, &quot;Carol can do A, B, C&quot;...<br>You say: &quot;CASHIER can do A, B, C&quot;, &quot;MANAGER can do A, B, D&quot;, then assign Alice and Carol to CASHIER, Bob to MANAGER.</p><p>Easier to audit (one place to look), easier to onboard (one role to assign), easier to evolve (change the role and all members get updated).</p>', [{label:'NIST RBAC', url:'https://csrc.nist.gov/projects/role-based-access-control'}, {label:'Wikipedia: RBAC', url:'https://en.wikipedia.org/wiki/Role-based_access_control'}])">RBAC</span>.
+      </p>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="card p-4"><div class="mono text-xs accent mb-1">CASHIER · alice</div><p class="text-sm">Single POS sales. Read sales + inventory.</p></div>
+        <div class="card p-4"><div class="mono text-xs accent mb-1">MANAGER · bob</div><p class="text-sm">Bulk sales, inventory sweeps, planograms, all reads.</p></div>
+        <div class="card p-4"><div class="mono text-xs accent mb-1">VENDOR · dole</div><p class="text-sm">Submit deliveries. Read own deliveries.</p></div>
+        <div class="card p-4"><div class="mono text-xs accent mb-1">CUSTOMER · shopper</div><p class="text-sm">Submit feedback. Read feedback.</p></div>
+        <div class="card p-4"><div class="mono text-xs accent mb-1">HR · frank</div><p class="text-sm">HR notifications. Read employees.</p></div>
+        <div class="card p-4"><div class="mono text-xs accent mb-1">OPS · ops</div><p class="text-sm">Super-user. Can do everything.</p></div>
+        <div class="card p-4 md:col-span-2" style="border-left:3px solid var(--accent)"><div class="mono text-xs accent mb-1">AUDITOR · audit</div><p class="text-sm"><strong>Read-only</strong> across every table. Cannot change anything, but can investigate everything. Great for compliance officers and incident response.</p></div>
+      </div>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">8.3 · How permission checks actually happen</h3>
+      <p class="mb-4">
+        Every protected endpoint in the Python code has a one-line decorator:
+      </p>
+      <pre class="code"><span class="line-num">1</span><span class="annotate" onclick="openModal('decorator2', '@require_perm', '<p>This is a Python <strong>decorator</strong>. It wraps the function below so that before <code>pos_sale()</code> runs, our auth code first: (1) reads the Bearer token from the request, (2) verifies its signature, (3) checks the user&apos;s role has the <code>pos.sale</code> permission. If any step fails, the user gets a 401 or 403 and the real function never even runs.</p><p>Decorators let security live in one place &mdash; you don&apos;t have to remember to add checks to every endpoint. Just add the decorator and you&apos;re safe.</p>', [{label:'Python decorators', url:'https://docs.python.org/3/glossary.html#term-decorator'}])">@require_perm</span>("pos.sale")
+<span class="line-num">2</span>def pos_sale():
+<span class="line-num">3</span>    ...</pre>
+
+      <p class="mt-4 mb-4">
+        The decorator reads the
+        <span class="chip" onclick="openModal('bearer', 'Bearer tokens & the Authorization header', '<p>When you send a request, you put the token in an HTTP header:</p><pre class=\"mono text-xs\">Authorization: Bearer eyJhbGc...</pre><p>The word &quot;Bearer&quot; just means &quot;whoever has this token <em>is</em> the user&quot; &mdash; like a movie ticket. Don&apos;t let it leak!</p><p>The server reads the header, validates the JWT signature, extracts the role from the token, and decides whether to allow the request.</p>', [{label:'RFC 6750: Bearer tokens', url:'https://datatracker.ietf.org/doc/html/rfc6750'}, {label:'MDN Authorization header', url:'https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization'}])">Authorization header</span>,
+        validates the token, looks up the user's role, and checks a table of
+        which roles get which permissions. If the role doesn't have it, the
+        server returns
+        <span class="chip" onclick="openModal('http403', 'HTTP 401 vs 403', '<p>These are easy to mix up:</p><ul><li><strong>401 Unauthorized</strong>: we don&apos;t know who you are. Send a token (or a valid one). Means: &quot;log in&quot;.</li><li><strong>403 Forbidden</strong>: we know who you are, but you&apos;re not allowed to do this. Means: &quot;you don&apos;t have permission&quot;.</li></ul><p>The dashboard handles both: 401 → kick back to login; 403 → show a red toast saying &quot;Access denied&quot;.</p>', [{label:'MDN HTTP status codes', url:'https://developer.mozilla.org/en-US/docs/Web/HTTP/Status'}])">HTTP 403</span>
+        immediately and the actual endpoint code never runs.
+      </p>
+
+      <div class="card-soft p-5 my-6">
+        <div class="mono text-xs uppercase tracking-widest mb-2 accent">See for yourself</div>
+        <p class="mb-3 text-sm">Try logging in as <code class="inline">alice</code> (a cashier) and then call an endpoint she's not allowed to:</p>
+        <pre class="code">TOKEN=$(curl -sf -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"cashier123"}' | jq -r .token)
+
+curl -i -X POST http://localhost:8000/api/inventory/check \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{}'
+
+# HTTP/1.1 403 Forbidden
+# {"errors":["role CASHIER lacks permission inventory.check"],"ok":false}</pre>
+      </div>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">8.4 · The dashboard hides what you can't do</h3>
+      <p class="mb-4">
+        When you log in, the dashboard asks the server "what permissions do I
+        have?" and uses the answer to hide tabs you can't use. So Alice the
+        cashier never even sees the Operations tab.
+      </p>
+
+      <div class="rail p-5 mb-4">
+        <div class="mono text-xs uppercase tracking-widest mb-2 accent">UI hiding is not security!</div>
+        <p>
+          Hiding tabs is just for user experience. A determined attacker could
+          edit the JavaScript in the browser and show the hidden tabs anyway.
+          That's why the <strong>real</strong> permission check happens on the
+          server, on every request. The UI hiding is a nicety; the 403 is the
+          actual security.
+        </p>
+      </div>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">8.5 · Other protections layered in</h3>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Rate limiting</div>
+          <p class="text-sm">If anyone tries to brute-force the login or flood the API, Flask-Limiter blocks them after 10 attempts per minute (login) or 60 per minute (most endpoints).
+          <span class="chip" onclick="openModal('ratelimit', 'Rate limiting', '<p>A <strong>rate limit</strong> caps how often a single user (or IP) can hit an endpoint. Without limits, a single buggy script or malicious bot could:</p><ul><li>Brute-force passwords by trying millions of guesses</li><li>Crash the database by firing 10,000 inserts/sec</li><li>Run up your AWS bill by spamming SNS messages</li></ul><p>FreshMart uses Flask-Limiter with in-memory counters. In production you&apos;d use Redis so multiple app servers share the same counter.</p><p>When the limit is hit, the server returns <strong>HTTP 429 Too Many Requests</strong>.</p>', [{label:'Flask-Limiter docs', url:'https://flask-limiter.readthedocs.io/'}, {label:'HTTP 429', url:'https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429'}])">more info</span></p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">CORS lockdown</div>
+          <p class="text-sm">The API only accepts requests from <code class="inline">http://localhost:8000</code> &mdash; the dashboard origin. A malicious site can't trick your browser into firing requests on your behalf.
+          <span class="chip" onclick="openModal('cors', 'CORS: Cross-Origin Resource Sharing', '<p>By default, browsers <em>block</em> a website on <code>evil.com</code> from making requests to <code>your-bank.com</code>. That&apos;s good.</p><p>But sometimes you legitimately want cross-origin requests &mdash; your dashboard on <code>:8000</code> talking to your API on <code>:9090</code>, for example. The server has to explicitly allow it via the <code>Access-Control-Allow-Origin</code> header.</p><p>FreshMart only allows the dashboard origin. Even if someone&apos;s browser sends a malicious request to the API, the browser will refuse to give the response back to the calling script.</p>', [{label:'MDN: CORS', url:'https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS'}])">more info</span></p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Loopback-only ports</div>
+          <p class="text-sm">By default, Kafka, Postgres, and LocalStack bind to <code class="inline">127.0.0.1</code> &mdash; only your laptop can reach them. Nobody else on your Wi-Fi can poke at the database.
+          <span class="chip" onclick="openModal('loopback', 'Loopback binding (127.0.0.1)', '<p><code>127.0.0.1</code> (aka <code>localhost</code>) is your computer talking to itself. Services bound to that address aren&apos;t reachable from other devices.</p><p>Compare to <code>0.0.0.0</code>, which means &quot;listen on all network interfaces&quot;. If you bind Postgres to 0.0.0.0 with a weak password, anyone on your Wi-Fi (or worse, the internet if your firewall is misconfigured) could try to connect.</p><p>FreshMart uses the <code>HOST_BIND</code> env variable so you can switch when you need LAN access.</p>', [{label:'Loopback (Wikipedia)', url:'https://en.wikipedia.org/wiki/Localhost'}])">more info</span></p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Audit trail</div>
+          <p class="text-sm">Every action is logged to <code class="inline">EVENT_LOG</code> with the actor's username. Six months later you can answer "who triggered that recall on May 21st at 2:47 PM?" with a single SQL query.
+          <span class="chip" onclick="openModal('audit', 'Audit logging', '<p>An <strong>audit log</strong> is a tamper-resistant record of who did what, when. In FreshMart, every state-changing endpoint writes a row to <code>EVENT_LOG</code> with:</p><ul><li>event_type (e.g. POS_SALE)</li><li>source (e.g. dashboard:alice)</li><li>payload (full JSON of what was sent)</li><li>created_at timestamp</li></ul><p>This is critical for: compliance audits, incident response (&quot;who was logged in when this happened?&quot;), debugging customer issues, and detecting insider threats.</p>', [{label:'OWASP logging cheat sheet', url:'https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html'}])">more info</span></p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Secrets in .env</div>
+          <p class="text-sm">No passwords or signing keys are hardcoded. Everything lives in <code class="inline">.env</code>, which is gitignored. Docker Compose refuses to start the stack if any required secret is missing.
+          <span class="chip" onclick="openModal('secrets', 'Secrets management', '<p>Secrets are things like passwords, API keys, and signing keys. <strong>Never put them in source code</strong> &mdash; they end up in git history, Slack screenshots, and Stack Overflow questions.</p><p>For demos: a <code>.env</code> file that&apos;s gitignored. For real production: a secrets manager like HashiCorp Vault, AWS Secrets Manager, or Doppler, with rotation policies and access logs.</p><p>Generate strong ones: <code>openssl rand -base64 48</code></p>', [{label:'OWASP secrets management', url:'https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html'}, {label:'HashiCorp Vault', url:'https://developer.hashicorp.com/vault/docs'}])">more info</span></p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Input validation</div>
+          <p class="text-sm">Before any data reaches Kafka or the database, it's validated: required fields present, numbers positive, timestamps in ISO format. Bad input gets <code class="inline">HTTP 400</code> with a clear error message; no garbage ever lands in storage.</p>
+        </div>
+      </div>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">8.6 · What's not included (yet)</h3>
+      <p class="mb-4" style="color:var(--fg-soft)">
+        This is a demo. Real production would add:
+      </p>
+      <ul class="text-sm space-y-2 ml-5" style="color:var(--fg-soft)">
+        <li class="list-disc"><strong>TLS / HTTPS</strong> on the dashboard and API (we only have it on NiFi, with a self-signed cert).</li>
+        <li class="list-disc"><strong>Users in a real database</strong> with proper signup, password reset, account lockout after 5 bad attempts, and optional 2FA / MFA.</li>
+        <li class="list-disc"><strong>A secrets manager</strong> like Vault instead of <code class="inline">.env</code>.</li>
+        <li class="list-disc"><strong>NiFi multi-user mode</strong> with LDAP or OIDC login and per-process-group permissions.</li>
+        <li class="list-disc"><strong>Kafka SASL_SSL</strong> with per-client ACLs (right now Kafka has no auth on its broker port).</li>
+        <li class="list-disc"><strong>Refresh tokens</strong> so users aren't forced to re-login every 8 hours.</li>
+        <li class="list-disc"><strong>A WAF</strong> (Web Application Firewall) at the edge to block obvious attacks.</li>
+        <li class="list-disc"><strong>Audit log shipping</strong> to a SIEM like Splunk, Datadog, or OpenSearch for real-time alerting.</li>
+      </ul>
+
+      <div class="rail p-5 mt-6">
+        <div class="mono text-xs uppercase tracking-widest mb-2 accent">Verifying it works</div>
+        <p>The test suite has 39 dedicated security assertions: anonymous requests get 401, wrong-role requests get 403, audit logs include the actor, and each table check enforces its own permission. Run <code class="inline">python3 tests/test_pos_simulator.py</code> and you'll see them all pass.</p>
+      </div>
+    </section>
+
+
+    <!-- ─── SECTION 9 · GLOSSARY ───────────────────────────────────── -->
     <section id="glossary">
-      <h2 class="section font-light text-3xl">8 · Glossary</h2>
+      <h2 class="section font-light text-3xl">9 · Glossary</h2>
       <p class="mb-6 text-lg" style="color:var(--fg-soft)">
         Every technical word from this page, in alphabetical order, plain English.
       </p>
@@ -1172,6 +1341,15 @@ docker compose down -v    # stop and wipe all data</pre>
         <dt>Avro</dt>
         <dd>A way to write down what a piece of data looks like (its <em>schema</em>) so different programs can agree on the shape.</dd>
 
+        <dt>Audit log</dt>
+        <dd>A tamper-resistant record of who did what and when. FreshMart's <code class="inline">EVENT_LOG</code> table is the audit log.</dd>
+
+        <dt>bcrypt</dt>
+        <dd>A password hashing algorithm designed to be deliberately slow, making brute-force guessing impractical.</dd>
+
+        <dt>Bearer token</dt>
+        <dd>A token where "whoever has it is the user." Sent in the <code class="inline">Authorization: Bearer ...</code> HTTP header.</dd>
+
         <dt>Broker</dt>
         <dd>A Kafka server. It receives messages from producers and gives them to consumers. FreshMart has one broker.</dd>
 
@@ -1180,6 +1358,9 @@ docker compose down -v    # stop and wipe all data</pre>
 
         <dt>Container</dt>
         <dd>A bundled-up program that runs the same way on any computer. Like a sealed lunch box.</dd>
+
+        <dt>CORS (Cross-Origin Resource Sharing)</dt>
+        <dd>A browser rule that blocks websites on one domain from calling APIs on another, unless the API explicitly allows it.</dd>
 
         <dt>DLQ (Dead Letter Queue)</dt>
         <dd>A separate place where messages that failed processing go, so they can be investigated later without blocking the main pipeline.</dd>
@@ -1193,6 +1374,9 @@ docker compose down -v    # stop and wipe all data</pre>
         <dt>JSON (JavaScript Object Notation)</dt>
         <dd>A simple text format for data. Looks like <code class="inline">{"name": "Alice", "age": 12}</code>. Easy for both humans and computers to read.</dd>
 
+        <dt>JWT (JSON Web Token)</dt>
+        <dd>A small signed string that proves who you are. Lets the server check identity without storing sessions.</dd>
+
         <dt>Kafka topic</dt>
         <dd>A named mailbox in Kafka. Producers put messages in; consumers take them out (without removing them — they stay for replaying).</dd>
 
@@ -1201,6 +1385,9 @@ docker compose down -v    # stop and wipe all data</pre>
 
         <dt>KRaft</dt>
         <dd>The new way Kafka manages itself, without needing a separate ZooKeeper service.</dd>
+
+        <dt>Loopback (127.0.0.1)</dt>
+        <dd>The address a computer uses to talk to itself. Services bound here are not reachable from other machines.</dd>
 
         <dt>Partition</dt>
         <dd>A slice of a Kafka topic. A topic with 3 partitions can be read by 3 consumers at once, in parallel.</dd>
@@ -1219,6 +1406,12 @@ docker compose down -v    # stop and wipe all data</pre>
 
         <dt>Producer / Consumer</dt>
         <dd>A producer writes messages to Kafka. A consumer reads them.</dd>
+
+        <dt>Rate limit</dt>
+        <dd>A cap on how often one user or IP can hit an endpoint. Stops brute-force and runaway loops.</dd>
+
+        <dt>RBAC (Role-Based Access Control)</dt>
+        <dd>A system where users are grouped into roles (CASHIER, MANAGER, etc.) and permissions are attached to roles, not individuals.</dd>
 
         <dt>Recall</dt>
         <dd>An urgent notice that a product is unsafe and should be removed from shelves.</dd>
