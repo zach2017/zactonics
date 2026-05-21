@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ETL & NiFi Domain Model</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'monospace'],
+        },
+        colors: {
+          ibm: {
+            blue:      '#0f62fe',
+            blue10:    '#edf5ff',
+            blue20:    '#d0e2ff',
+            blue60:    '#0043ce',
+            blue70:    '#002d9c',
+            gray10:    '#f4f4f4',
+            gray20:    '#e0e0e0',
+            gray40:    '#a8a8a8',
+            gray60:    '#6f6f6f',
+            gray80:    '#393939',
+            gray90:    '#262626',
+            gray100:   '#161616',
+            cyan:      '#1192e8',
+            teal:      '#009d9a',
+            purple:    '#8a3ffc',
+            magenta:   '#ee5396',
+            orange:    '#ff832b',
+            green:     '#198038',
+          }
+        }
+      }
+    }
+  }
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'IBM Plex Sans', sans-serif; }
+
+  /* Smooth transitions for theme */
+  html { transition: background-color 0.2s, color 0.2s; }
+
+  /* Accordion animation */
+  .accordion-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1);
+  }
+  .accordion-body.open {
+    max-height: 2000px;
+  }
+
+  /* Tag pill hover */
+  .domain-tag:hover { filter: brightness(0.92); }
+
+  /* Term row hover */
+  .term-row:hover { background-color: rgba(15,98,254,0.05); }
+  .dark .term-row:hover { background-color: rgba(15,98,254,0.12); }
+
+  /* Sticky header shadow */
+  .sticky-header { box-shadow: 0 1px 0 0 #e0e0e0; }
+  .dark .sticky-header { box-shadow: 0 1px 0 0 #393939; }
+
+  /* Fade-in for sections */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-up { animation: fadeUp 0.4s ease both; }
+  .fade-up:nth-child(1) { animation-delay: 0.05s; }
+  .fade-up:nth-child(2) { animation-delay: 0.1s; }
+  .fade-up:nth-child(3) { animation-delay: 0.15s; }
+  .fade-up:nth-child(4) { animation-delay: 0.2s; }
+  .fade-up:nth-child(5) { animation-delay: 0.25s; }
+  .fade-up:nth-child(6) { animation-delay: 0.3s; }
+
+  /* Pipeline flow diagram arrows */
+  .flow-arrow::after {
+    content: '→';
+    font-size: 1.1rem;
+    color: #0f62fe;
+    opacity: 0.5;
+    margin: 0 2px;
+  }
+
+  /* Search highlight */
+  mark { background: #d0e2ff; color: #0043ce; border-radius: 2px; padding: 0 1px; }
+  .dark mark { background: #002d9c; color: #a6c8ff; }
+</style>
+</head>
+<body class="bg-white dark:bg-ibm-gray100 text-ibm-gray100 dark:text-white min-h-screen">
+
+<!-- ═══════════════════════ STICKY HEADER ═══════════════════════ -->
+<header class="sticky top-0 z-50 bg-white dark:bg-ibm-gray100 sticky-header">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-0">
+    <div class="flex items-center justify-between h-12">
+      <!-- IBM-style logo/product name -->
+      <div class="flex items-center gap-3">
+        <div class="w-6 h-6 bg-ibm-blue flex-shrink-0"></div>
+        <span class="font-mono text-xs font-600 tracking-widest uppercase text-ibm-blue dark:text-ibm-blue20 hidden sm:block">IBM</span>
+        <span class="text-ibm-gray40 hidden sm:block">|</span>
+        <span class="font-sans text-sm font-semibold text-ibm-gray80 dark:text-ibm-gray20 hidden sm:block">Data Pipeline Domain Model</span>
+        <span class="font-sans text-sm font-semibold text-ibm-gray80 dark:text-ibm-gray20 block sm:hidden">ETL Domain Model</span>
+      </div>
+      <!-- Controls -->
+      <div class="flex items-center gap-2">
+        <!-- Search toggle -->
+        <button onclick="toggleSearch()" id="search-btn"
+          class="p-2 rounded text-ibm-gray60 dark:text-ibm-gray40 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray90 transition-colors"
+          title="Search terms" aria-label="Search">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </button>
+        <!-- Expand All -->
+        <button onclick="expandAll()" 
+          class="hidden sm:block text-xs font-mono px-2 py-1 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray60 dark:text-ibm-gray40 hover:border-ibm-blue hover:text-ibm-blue dark:hover:text-ibm-blue20 transition-colors rounded-none">
+          Expand All
+        </button>
+        <!-- Dark mode toggle -->
+        <button onclick="toggleTheme()" id="theme-btn"
+          class="p-2 rounded text-ibm-gray60 dark:text-ibm-gray40 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray90 transition-colors"
+          title="Toggle dark mode" aria-label="Toggle theme">
+          <svg id="icon-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+          <svg id="icon-moon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <!-- Search bar (hidden by default) -->
+    <div id="search-bar" class="hidden pb-3">
+      <input id="search-input" type="search" placeholder="Search terms and definitions…"
+        oninput="filterTerms(this.value)"
+        class="w-full border-b-2 border-ibm-blue bg-transparent px-0 py-2 text-sm font-mono text-ibm-gray100 dark:text-white placeholder-ibm-gray40 focus:outline-none"/>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════ HERO BANNER ═══════════════════════ -->
+<section class="bg-ibm-blue10 dark:bg-ibm-gray90 border-b border-ibm-gray20 dark:border-ibm-gray80">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <p class="font-mono text-xs tracking-widest text-ibm-blue dark:text-ibm-blue20 uppercase mb-2">Reference / v1.0</p>
+    <h1 class="text-2xl sm:text-4xl font-bold text-ibm-blue dark:text-white leading-tight mb-3">
+      ETL &amp; Apache NiFi<br class="sm:hidden"/> Domain Vocabulary
+    </h1>
+    <p class="text-sm sm:text-base text-ibm-gray60 dark:text-ibm-gray40 max-w-2xl font-light">
+      A structured glossary of terms used in data extraction, transformation, loading pipelines, and NiFi dataflow architectures. 
+      Covers 6 domains · 57 terms.
+    </p>
+    <!-- Pipeline flow chips -->
+    <div class="flex flex-wrap items-center gap-1 mt-5 font-mono text-xs">
+      <span class="flow-arrow bg-white dark:bg-ibm-gray100 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray80 dark:text-ibm-gray20 px-2 py-1">SOURCE</span>
+      <span class="flow-arrow bg-white dark:bg-ibm-gray100 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray80 dark:text-ibm-gray20 px-2 py-1">FLOW</span>
+      <span class="flow-arrow bg-white dark:bg-ibm-gray100 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray80 dark:text-ibm-gray20 px-2 py-1">TRANSFORM</span>
+      <span class="flow-arrow bg-white dark:bg-ibm-gray100 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray80 dark:text-ibm-gray20 px-2 py-1">QUALITY</span>
+      <span class="bg-white dark:bg-ibm-gray100 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray80 dark:text-ibm-gray20 px-2 py-1">LOAD</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ DOMAIN QUICK NAV ═══════════════════════ -->
+<nav class="border-b border-ibm-gray20 dark:border-ibm-gray80 bg-white dark:bg-ibm-gray100 overflow-x-auto" id="domain-nav">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6">
+    <div class="flex gap-0 min-w-max">
+      <a href="#domain-source"    class="domain-nav-link px-3 sm:px-4 py-3 text-xs font-mono font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blue20 border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Source</a>
+      <a href="#domain-flow"      class="domain-nav-link px-3 sm:px-4 py-3 text-xs font-mono font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blue20 border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Flow Control</a>
+      <a href="#domain-transform" class="domain-nav-link px-3 sm:px-4 py-3 text-xs font-mono font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blue20 border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Transform</a>
+      <a href="#domain-quality"   class="domain-nav-link px-3 sm:px-4 py-3 text-xs font-mono font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blue20 border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Data Quality</a>
+      <a href="#domain-load"      class="domain-nav-link px-3 sm:px-4 py-3 text-xs font-mono font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blue20 border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Load &amp; Storage</a>
+      <a href="#domain-ops"       class="domain-nav-link px-3 sm:px-4 py-3 text-xs font-mono font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blue20 border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Orchestration</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════ MAIN CONTENT ═══════════════════════ -->
+<main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-2" id="domains-container">
+
+  <!-- ── DOMAIN 1: DATA SOURCES ── -->
+  <section id="domain-source" class="fade-up domain-section" data-domain="source">
+    <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+      <!-- Domain header / accordion trigger -->
+      <button onclick="toggleDomain('source')"
+        class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left group">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 bg-ibm-blue flex-shrink-0"></div>
+          <div>
+            <div class="font-mono text-xs tracking-widest uppercase text-ibm-blue dark:text-ibm-blue20 mb-0.5">01 — Extract</div>
+            <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Data Sources &amp; Ingestion</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-xs text-ibm-gray40 hidden sm:block">9 terms</span>
+          <svg id="chevron-source" class="w-5 h-5 text-ibm-blue dark:text-ibm-blue20 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </button>
+      <!-- Terms body -->
+      <div id="body-source" class="accordion-body open">
+        <div class="border-t border-ibm-gray20 dark:border-ibm-gray80">
+          <div class="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-ibm-gray20 dark:divide-ibm-gray80">
+            <div class="sm:col-span-2">
+              <!-- Term rows -->
+              <div class="divide-y divide-ibm-gray20 dark:divide-ibm-gray80">
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Source System" data-def="Originating system where data is extracted from — a database, REST API, flat file, or event stream.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Source System</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Originating system where data is extracted from — a database, REST API, flat file, or event stream.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Ingestion" data-def="The process of importing raw data into a pipeline from source systems, the entry point of any ETL flow.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Ingestion</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">The process of importing raw data into a pipeline from source systems — the entry point of any ETL flow.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Extract" data-def="The E in ETL. Pulling data out of source systems, including full snapshots or incremental deltas.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Extract</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">The <strong class="font-semibold">E</strong> in ETL. Pulling data out of source systems, including full snapshots or incremental deltas.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Connector" data-def="A configured interface to a specific source or destination system (e.g. JDBC connector, S3 connector, Kafka connector).">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Connector</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A configured interface to a specific source or destination (e.g. JDBC, S3, Kafka connector).</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Reader" data-def="Component that parses and reads data in a specific format: CSV, JSON, Avro, Parquet, XML, etc.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Reader</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Component that parses and reads data in a specific format: CSV, JSON, Avro, Parquet, XML, etc.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Schema" data-def="The structural definition of data — field names, data types, nullability, and constraints. Shared contract between producer and consumer.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Schema</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">The structural definition of data — field names, data types, nullability, and constraints. Shared contract between producer and consumer.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Change Data Capture (CDC)" data-def="Technique that tracks row-level inserts, updates, and deletes in source databases to enable incremental and near-real-time ingestion.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Change Data Capture (CDC)</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Tracks row-level inserts, updates, and deletes in source databases to enable incremental and near-real-time ingestion.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Polling" data-def="Periodically querying a source system on a schedule to check for new or changed data since the last run.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Polling</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Periodically querying a source system on a schedule to check for new or changed data since the last run.</span>
+                </div>
+                <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Event-Driven Ingestion" data-def="Triggering data ingestion based on events such as file arrival, a message on a queue, or a webhook notification.">
+                  <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blue20 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Event-Driven Ingestion</span>
+                  <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Triggering data ingestion based on events — file arrival, a message on a queue, or a webhook notification.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOMAIN 2: FLOW CONTROL (NiFi) ── -->
+  <section id="domain-flow" class="fade-up domain-section" data-domain="flow">
+    <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+      <button onclick="toggleDomain('flow')"
+        class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 bg-ibm-cyan flex-shrink-0"></div>
+          <div>
+            <div class="font-mono text-xs tracking-widest uppercase text-ibm-cyan dark:text-cyan-300 mb-0.5">02 — Apache NiFi</div>
+            <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Flow Control &amp; Dataflow</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-xs text-ibm-gray40 hidden sm:block">10 terms</span>
+          <svg id="chevron-flow" class="w-5 h-5 text-ibm-cyan dark:text-cyan-300 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </button>
+      <div id="body-flow" class="accordion-body">
+        <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 divide-y divide-ibm-gray20 dark:divide-ibm-gray80">
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Pipeline" data-def="An end-to-end sequence of data processing steps connecting a source to a destination, including extraction, transformation, and loading.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Pipeline</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">An end-to-end sequence of processing steps connecting a source to a destination, covering extract, transform, and load.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Dataflow" data-def="NiFi's programming model — routing data as FlowFiles through a directed graph of processors and connections.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Dataflow</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">NiFi's programming model — routing data as FlowFiles through a directed graph of processors and connections.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="FlowFile" data-def="NiFi's core data unit. A bundle of binary content plus a map of string attributes (filename, uuid, size, mime.type, etc.) that travels through the flow.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">FlowFile</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">NiFi's core data unit — binary content plus a map of string attributes (filename, uuid, size, mime.type) that travels through the flow.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Processor" data-def="A NiFi component that performs one specific operation on FlowFiles, such as GetFile, RouteOnAttribute, ConvertRecord, or PutDatabaseRecord.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Processor</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A NiFi component performing one specific operation on FlowFiles — e.g. GetFile, RouteOnAttribute, ConvertRecord, or PutDatabaseRecord.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Connection" data-def="A queue between two NiFi processors. Buffers FlowFiles in transit and applies back-pressure when full.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Connection</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A queue between two NiFi processors that buffers FlowFiles in transit and applies back-pressure when thresholds are met.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Process Group" data-def="A logical container that groups processors and connections into a reusable, version-controllable sub-flow unit in NiFi.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Process Group</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A logical container grouping processors and connections into a reusable, version-controllable sub-flow unit in NiFi.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Controller Service" data-def="A shared NiFi service (e.g. DBCPConnectionPool, AvroSchemaRegistry) that multiple processors reference without duplicating configuration.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Controller Service</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A shared NiFi service (e.g. DBCPConnectionPool, AvroSchemaRegistry) referenced by multiple processors to avoid duplicating configuration.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Back Pressure" data-def="NiFi's flow control mechanism that pauses upstream processors when a connection queue reaches its configured object count or data size threshold.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Back Pressure</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Flow control mechanism that pauses upstream processors when a connection queue exceeds its object count or data size threshold.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Funnel" data-def="A NiFi component that merges multiple connection streams into a single output connection for simplified routing.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Funnel</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A NiFi component that merges multiple incoming connection streams into a single output for simplified routing.</span>
+          </div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Remote Process Group (RPG)" data-def="Enables NiFi site-to-site data transfer between separate NiFi instances or NiFi clusters over HTTP or RAW socket.">
+            <span class="font-mono text-xs font-semibold text-ibm-cyan dark:text-cyan-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Remote Process Group (RPG)</span>
+            <span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Enables NiFi site-to-site data transfer between separate NiFi instances or clusters over HTTP or RAW socket protocol.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOMAIN 3: TRANSFORMATION ── -->
+  <section id="domain-transform" class="fade-up domain-section" data-domain="transform">
+    <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+      <button onclick="toggleDomain('transform')"
+        class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 bg-ibm-teal flex-shrink-0"></div>
+          <div>
+            <div class="font-mono text-xs tracking-widest uppercase text-ibm-teal dark:text-teal-300 mb-0.5">03 — Transform</div>
+            <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Transformation &amp; Mapping</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-xs text-ibm-gray40 hidden sm:block">10 terms</span>
+          <svg id="chevron-transform" class="w-5 h-5 text-ibm-teal dark:text-teal-300 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </button>
+      <div id="body-transform" class="accordion-body">
+        <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 divide-y divide-ibm-gray20 dark:divide-ibm-gray80">
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Transform" data-def="The T in ETL — converting, restructuring, or calculating data values and shapes to meet target requirements."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Transform</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">The <strong class="font-semibold">T</strong> in ETL — converting, restructuring, or calculating data values and shapes to meet target requirements.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Mapping" data-def="Defining how source fields correspond to target fields, including type coercions, renames, and derived calculations."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Mapping</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Defining how source fields correspond to target fields, including type coercions, renames, and derived calculations.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Enrichment" data-def="Augmenting records with additional information from lookup tables, reference datasets, or external APIs."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Enrichment</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Augmenting records with additional information from lookup tables, reference datasets, or external APIs.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Normalization" data-def="Restructuring relational data to reduce redundancy — splitting data across tables to minimize duplication."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Normalization</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Restructuring relational data to reduce redundancy — splitting across tables to eliminate duplication.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Denormalization" data-def="Combining tables and repeating data intentionally to optimize query read performance at the cost of storage efficiency."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Denormalization</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Combining tables and repeating data intentionally to optimize read performance at the cost of storage efficiency.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Expression Language (NiFi EL)" data-def="NiFi's built-in DSL using ${attribute} syntax to dynamically evaluate and manipulate FlowFile attributes in processor properties."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Expression Language (NiFi EL)</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">NiFi's built-in DSL using <code class="font-mono text-xs bg-ibm-gray10 dark:bg-ibm-gray80 px-1 rounded">${"{attribute}"}</code> syntax to dynamically evaluate and manipulate FlowFile attributes.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Scripting Processor" data-def="NiFi processors such as ExecuteScript or ExecuteGroovy that let you run custom Python, Groovy, or JavaScript logic inline within the flow."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Scripting Processor</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">NiFi processors (ExecuteScript, ExecuteGroovy) that run custom Python, Groovy, or JS logic inline within the flow.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Record Processor" data-def="NiFi processors that operate on structured records (rows) within a FlowFile, such as UpdateRecord, QueryRecord, and ConvertRecord."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Record Processor</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">NiFi processors operating on structured records within a FlowFile — UpdateRecord, QueryRecord, ConvertRecord, etc.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Lookup Service" data-def="A NiFi controller service that enriches records by resolving field values against an external store — a database, file, or in-memory cache."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Lookup Service</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A NiFi controller service enriching records by resolving field values against a database, file, or in-memory cache.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Schema Registry" data-def="Centralized store for data schemas and their versions (Confluent Schema Registry, NiFi AvroSchemaRegistry), enabling schema evolution and compatibility checks."><span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Schema Registry</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Centralized store for data schemas and their versions (Confluent, NiFi Avro), enabling schema evolution and compatibility checks.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOMAIN 4: DATA QUALITY ── -->
+  <section id="domain-quality" class="fade-up domain-section" data-domain="quality">
+    <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+      <button onclick="toggleDomain('quality')"
+        class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 bg-ibm-green flex-shrink-0"></div>
+          <div>
+            <div class="font-mono text-xs tracking-widest uppercase text-ibm-green dark:text-green-400 mb-0.5">04 — Quality</div>
+            <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Data Quality &amp; Governance</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-xs text-ibm-gray40 hidden sm:block">9 terms</span>
+          <svg id="chevron-quality" class="w-5 h-5 text-ibm-green dark:text-green-400 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </button>
+      <div id="body-quality" class="accordion-body">
+        <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 divide-y divide-ibm-gray20 dark:divide-ibm-gray80">
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Validation" data-def="Checking that data conforms to expected types, value ranges, formats, and business rules before further processing."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Validation</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Checking that data conforms to expected types, value ranges, formats, and business rules before further processing.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Cleansing" data-def="Correcting or removing inaccurate, incomplete, inconsistent, or malformed records from the dataset."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Cleansing</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Correcting or removing inaccurate, incomplete, inconsistent, or malformed records from the dataset.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Deduplication" data-def="Identifying and removing duplicate records using key matching, fuzzy matching, or hash-based comparison."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Deduplication</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Identifying and removing duplicate records using key matching, fuzzy matching, or hash-based comparison.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Null Handling" data-def="Strategy for managing missing or null field values — reject, substitute defaults, propagate nulls, or flag for review."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Null Handling</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Strategy for managing missing or null field values — reject, substitute defaults, propagate nulls, or flag for review.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Data Profiling" data-def="Statistical analysis of a dataset to understand its structure, completeness, value distributions, and anomalies."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Data Profiling</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Statistical analysis of a dataset to understand structure, completeness, value distributions, and anomalies.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Quarantine" data-def="Isolating invalid or suspect records in a separate queue or table for human review without halting the main pipeline."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Quarantine</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Isolating invalid or suspect records in a separate queue or table for review without halting the main pipeline.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Dead Letter Queue (DLQ)" data-def="A dedicated holding queue for FlowFiles or messages that fail processing after all retries, awaiting inspection or replay."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Dead Letter Queue (DLQ)</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A dedicated holding queue for FlowFiles or messages that fail processing after all retries, awaiting inspection or replay.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Lineage" data-def="A record of a data element's origin, movements, transformations, and usage throughout its lifecycle across systems."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Lineage</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A record of a data element's origin, movements, transformations, and usage throughout its lifecycle across systems.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Data Contract" data-def="A formal agreement on the structure, semantics, SLAs, and ownership of data exchanged between producing and consuming teams."><span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Data Contract</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A formal agreement on the structure, semantics, SLAs, and ownership of data exchanged between producing and consuming teams.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOMAIN 5: LOAD & STORAGE ── -->
+  <section id="domain-load" class="fade-up domain-section" data-domain="load">
+    <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+      <button onclick="toggleDomain('load')"
+        class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 bg-ibm-orange flex-shrink-0"></div>
+          <div>
+            <div class="font-mono text-xs tracking-widest uppercase text-ibm-orange dark:text-orange-300 mb-0.5">05 — Load</div>
+            <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Load &amp; Storage Targets</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-xs text-ibm-gray40 hidden sm:block">10 terms</span>
+          <svg id="chevron-load" class="w-5 h-5 text-ibm-orange dark:text-orange-300 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </button>
+      <div id="body-load" class="accordion-body">
+        <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 divide-y divide-ibm-gray20 dark:divide-ibm-gray80">
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Load" data-def="The L in ETL — writing transformed data into a target storage system."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Load</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">The <strong class="font-semibold">L</strong> in ETL — writing transformed data into a target storage system.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Target / Sink" data-def="The destination system receiving loaded data — a data warehouse, data lake, relational DB, message queue, or API endpoint."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Target / Sink</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">The destination system receiving loaded data — a data warehouse, lake, relational DB, message queue, or API endpoint.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Full Load" data-def="Loading the complete dataset on every run, replacing or truncating existing data. Simple but expensive for large datasets."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Full Load</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Loading the complete dataset on every run, replacing or truncating existing data. Simple but costly for large volumes.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Incremental Load" data-def="Loading only new or changed records since the last pipeline run, using a watermark, CDC, or timestamp filter."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Incremental Load</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Loading only new or changed records since the last pipeline run, using a watermark, CDC, or timestamp filter.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Upsert" data-def="Insert new records and update existing ones in a single operation based on a primary key — prevents duplicates on reruns."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Upsert</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Insert new records and update existing ones in a single operation on a primary key — prevents duplicates on reruns.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Partitioning" data-def="Dividing stored data into logical segments by a column (date, region, category) for parallelism and query pruning."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Partitioning</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Dividing stored data into logical segments by a column (date, region, category) for parallelism and query pruning.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Writer" data-def="Component that serializes and writes records to a target system in a specific format (Parquet, JSON, ORC, CSV)."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Writer</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Component that serializes and writes records to a target in a specific format — Parquet, JSON, ORC, CSV.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Staging Area" data-def="An intermediate storage zone where raw or semi-processed data lands before final transformation and loading into the target."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Staging Area</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Intermediate storage where raw or semi-processed data lands before final transformation and loading into the target.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Data Lake" data-def="A large-scale storage repository holding raw, unprocessed data in its native format (S3, ADLS, GCS), schema-on-read."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Data Lake</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A large-scale repository holding raw data in native format (S3, ADLS, GCS) — schema-on-read, high flexibility.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Data Warehouse" data-def="Structured, query-optimized storage for historical, curated data (Snowflake, Redshift, BigQuery) — schema-on-write, high performance."><span class="font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Data Warehouse</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Structured, query-optimized storage for historical, curated data (Snowflake, Redshift, BigQuery) — schema-on-write.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOMAIN 6: ORCHESTRATION & OPS ── -->
+  <section id="domain-ops" class="fade-up domain-section" data-domain="ops">
+    <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+      <button onclick="toggleDomain('ops')"
+        class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 bg-ibm-magenta flex-shrink-0"></div>
+          <div>
+            <div class="font-mono text-xs tracking-widest uppercase text-ibm-magenta dark:text-pink-300 mb-0.5">06 — Operations</div>
+            <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Orchestration &amp; Observability</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mono text-xs text-ibm-gray40 hidden sm:block">10 terms</span>
+          <svg id="chevron-ops" class="w-5 h-5 text-ibm-magenta dark:text-pink-300 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </button>
+      <div id="body-ops" class="accordion-body">
+        <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 divide-y divide-ibm-gray20 dark:divide-ibm-gray80">
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Orchestration" data-def="Coordinating the sequence, scheduling, dependencies, and retry behavior of pipeline tasks (e.g. Apache Airflow, Prefect, NiFi)."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Orchestration</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Coordinating the sequence, scheduling, dependencies, and retry behavior of pipeline tasks (Airflow, Prefect, NiFi).</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Scheduling" data-def="Running pipelines on a defined CRON expression, at a fixed interval, or on-demand in response to an external trigger."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Scheduling</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Running pipelines on a CRON expression, at a fixed interval, or on-demand in response to an external trigger.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="DAG (Directed Acyclic Graph)" data-def="An Airflow / workflow concept — a graph of tasks with defined dependency edges and no cycles, representing pipeline execution order."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">DAG (Directed Acyclic Graph)</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A graph of pipeline tasks with defined dependency edges and no cycles — the execution model of Apache Airflow and similar tools.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Retry Logic" data-def="Automatically re-executing failed tasks a configured number of times with optional exponential backoff between attempts."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Retry Logic</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Automatically re-executing failed tasks a configured number of times with optional exponential backoff between attempts.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Idempotency" data-def="The property of a pipeline operation that can be safely re-run multiple times without producing duplicate or unintended side effects."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Idempotency</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A pipeline operation that can be safely re-run multiple times without producing duplicate or unintended side effects.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Watermark" data-def="A high-water mark timestamp or offset tracking the furthest point successfully processed — used to resume incremental loads."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Watermark</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">A high-water mark timestamp or offset tracking the furthest point successfully processed — used to resume incremental loads.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Throughput" data-def="Data volume processed per unit of time (records/sec, MB/s) — a key performance metric for pipeline capacity planning."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Throughput</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Data volume processed per unit of time (records/sec, MB/s) — a key metric for capacity planning.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Latency" data-def="End-to-end time delay between data arriving at the source and becoming available at the destination — critical for real-time pipelines."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Latency</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">End-to-end time delay between data arriving at source and being available at destination — critical for real-time pipelines.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Monitoring &amp; Alerting" data-def="Observing pipeline health, error rates, SLA breaches, queue depths, and notifying on-call engineers when thresholds are exceeded."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Monitoring &amp; Alerting</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">Observing pipeline health, error rates, SLA breaches, and queue depths; notifying engineers when thresholds are exceeded.</span></div>
+          <div class="term-row px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:gap-8" data-term="Provenance (NiFi)" data-def="NiFi's detailed audit event history — every action (RECEIVE, SEND, FORK, JOIN, DROP, MODIFY) taken on every FlowFile, with timestamps and chain of custody."><span class="font-mono text-xs font-semibold text-ibm-magenta dark:text-pink-300 sm:w-52 flex-shrink-0 mb-1 sm:mb-0 pt-0.5">Provenance (NiFi)</span><span class="text-sm text-ibm-gray80 dark:text-ibm-gray20 font-light leading-relaxed">NiFi's detailed audit event history — every action (RECEIVE, SEND, FORK, JOIN, DROP, MODIFY) on every FlowFile, with timestamps and chain of custody.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- No results message (hidden) -->
+  <div id="no-results" class="hidden text-center py-16">
+    <div class="font-mono text-sm text-ibm-gray40">No terms match your search.</div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<footer class="border-t border-ibm-gray20 dark:border-ibm-gray80 mt-8">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div class="font-mono text-xs text-ibm-gray40">
+      6 domains · 58 terms · ETL &amp; Apache NiFi
+    </div>
+    <div class="flex gap-4 font-mono text-xs text-ibm-gray40">
+      <span>Extract · Transform · Load</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════════════ JAVASCRIPT ═══════════════════════ -->
+<script>
+  // ── Theme ──────────────────────────────────────────────────
+  const html = document.documentElement;
+  const sunIcon = document.getElementById('icon-sun');
+  const moonIcon = document.getElementById('icon-moon');
+
+  function setTheme(dark) {
+    if (dark) {
+      html.classList.add('dark');
+      sunIcon.classList.remove('hidden');
+      moonIcon.classList.add('hidden');
+    } else {
+      html.classList.remove('dark');
+      sunIcon.classList.add('hidden');
+      moonIcon.classList.remove('hidden');
+    }
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  }
+
+  function toggleTheme() {
+    setTheme(!html.classList.contains('dark'));
+  }
+
+  // Respect system preference on first load
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    setTheme(true);
+  }
+
+  // ── Accordion ──────────────────────────────────────────────
+  const domainStates = { source: true, flow: false, transform: false, quality: false, load: false, ops: false };
+
+  function toggleDomain(id) {
+    domainStates[id] = !domainStates[id];
+    const body = document.getElementById('body-' + id);
+    const chevron = document.getElementById('chevron-' + id);
+    body.classList.toggle('open', domainStates[id]);
+    chevron.style.transform = domainStates[id] ? '' : 'rotate(180deg)';
+  }
+
+  // Init chevrons
+  Object.keys(domainStates).forEach(id => {
+    const chevron = document.getElementById('chevron-' + id);
+    if (!domainStates[id]) chevron.style.transform = 'rotate(180deg)';
+  });
+
+  function expandAll() {
+    Object.keys(domainStates).forEach(id => {
+      domainStates[id] = true;
+      const body = document.getElementById('body-' + id);
+      const chevron = document.getElementById('chevron-' + id);
+      body.classList.add('open');
+      chevron.style.transform = '';
+    });
+  }
+
+  // ── Search ─────────────────────────────────────────────────
+  function toggleSearch() {
+    const bar = document.getElementById('search-bar');
+    const input = document.getElementById('search-input');
+    const hidden = bar.classList.toggle('hidden');
+    if (!hidden) { input.focus(); }
+    else { filterTerms(''); input.value = ''; }
+  }
+
+  function filterTerms(query) {
+    const q = query.toLowerCase().trim();
+    const rows = document.querySelectorAll('.term-row');
+    const sections = document.querySelectorAll('.domain-section');
+    let anyVisible = false;
+
+    if (!q) {
+      rows.forEach(r => {
+        r.style.display = '';
+        r.querySelector('span:first-child').innerHTML = r.dataset.term;
+        r.querySelector('span:last-child').innerHTML = r.dataset.def;
+      });
+      sections.forEach(s => s.style.display = '');
+      document.getElementById('no-results').classList.add('hidden');
+      return;
+    }
+
+    // Expand all when searching
+    expandAll();
+
+    sections.forEach(section => {
+      const sectionRows = section.querySelectorAll('.term-row');
+      let sectionVisible = false;
+
+      sectionRows.forEach(row => {
+        const term = row.dataset.term || '';
+        const def  = row.dataset.def  || '';
+        const match = term.toLowerCase().includes(q) || def.toLowerCase().includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) {
+          sectionVisible = true;
+          anyVisible = true;
+          // Highlight
+          row.querySelector('span:first-child').innerHTML = highlight(term, q);
+          row.querySelector('span:last-child').innerHTML  = highlight(def, q);
+        }
+      });
+
+      section.style.display = sectionVisible ? '' : 'none';
+    });
+
+    document.getElementById('no-results').classList.toggle('hidden', anyVisible);
+  }
+
+  function highlight(text, q) {
+    if (!q) return text;
+    const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return text.replace(re, '<mark>$1</mark>');
+  }
+</script>
+</body>
+</html>
