@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Real-Time Executive Intelligence — NiFi + AI Grocery Tutorial</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"IBM Plex Sans"','sans-serif'],
+        mono: ['"IBM Plex Mono"','monospace'],
+      },
+      colors: {
+        ibm: {
+          blue:'#0f62fe', blueDark:'#0043ce', blueLight:'#d0e2ff',
+          cyan:'#1192e8', cyanLight:'#bae6ff',
+          teal:'#009d9a', tealLight:'#9ef0f0',
+          green:'#198038', greenLight:'#a7f0ba',
+          orange:'#ff832b', orangeLight:'#ffd9be',
+          magenta:'#ee5396', magentaLight:'#ffd6e8',
+          red:'#da1e28', redLight:'#ffd7d9',
+          purple:'#8a3ffc', purpleLight:'#e8daff',
+          gray10:'#f4f4f4', gray20:'#e0e0e0',
+          gray40:'#a8a8a8', gray60:'#6f6f6f',
+          gray80:'#393939', gray90:'#262626', gray100:'#161616',
+        }
+      }
+    }
+  }
+}
+</script>
+<style>
+  *{box-sizing:border-box}
+  html{transition:background .2s,color .2s;scroll-behavior:smooth}
+  body{font-family:'IBM Plex Sans',sans-serif}
+
+  /* Accordion */
+  .acc-body{max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(.4,0,.2,1)}
+  .acc-body.open{max-height:9999px}
+
+  /* Step connector line */
+  .step-line{position:relative}
+  .step-line::before{content:'';position:absolute;left:19px;top:44px;bottom:-8px;width:2px;
+    background:linear-gradient(180deg,#0f62fe44,transparent);z-index:0}
+
+  /* Flow arrow connector */
+  .flow-arrow{position:relative}
+  .flow-arrow::after{content:'↓';position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);
+    color:#0f62fe;font-size:1.1rem;opacity:.5;z-index:1}
+
+  /* Sticky nav shadow */
+  .sticky-nav{box-shadow:0 1px 0 #e0e0e0}
+  .dark .sticky-nav{box-shadow:0 1px 0 #393939}
+
+  /* Term hover */
+  .term-row:hover{background:rgba(15,98,254,.05)}
+  .dark .term-row:hover{background:rgba(15,98,254,.1)}
+
+  /* Timeline dot pulse */
+  @keyframes pulse{0%,100%{opacity:.4;transform:scale(.9)}50%{opacity:1;transform:scale(1)}}
+  .pulse-dot{animation:pulse 2.5s infinite}
+
+  /* Fade-in on load */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .fade-up{animation:fadeUp .5s ease both}
+
+  /* Search highlight */
+  mark{background:#d0e2ff;color:#0043ce;border-radius:2px;padding:0 2px}
+  .dark mark{background:#002d9c;color:#a6c8ff}
+
+  /* Callout left bar */
+  .callout{border-left:4px solid var(--accent-color);padding-left:1rem}
+
+  /* Scrollbar thin */
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#a8a8a8;border-radius:3px}
+  .dark ::-webkit-scrollbar-thumb{background:#6f6f6f}
+
+  /* Mobile nav overflow */
+  #section-nav::-webkit-scrollbar{display:none}
+  #section-nav{-ms-overflow-style:none;scrollbar-width:none}
+
+  /* Print */
+  @media print{.no-print{display:none!important}.print-break{page-break-before:always}}
+</style>
+</head>
+<body class="bg-white dark:bg-ibm-gray100 text-ibm-gray100 dark:text-white min-h-screen">
+
+<!-- ═══════════════ STICKY HEADER ═══════════════ -->
+<header class="sticky top-0 z-50 bg-white dark:bg-ibm-gray100 sticky-nav no-print">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <div class="flex items-center justify-between h-12">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-6 h-6 bg-ibm-blue flex-shrink-0"></div>
+        <span class="font-mono text-xs font-semibold tracking-widest uppercase text-ibm-blue dark:text-ibm-blueLight hidden sm:block">IBM</span>
+        <span class="text-ibm-gray40 hidden sm:block">|</span>
+        <span class="font-sans text-sm font-semibold text-ibm-gray80 dark:text-ibm-gray20 truncate hidden sm:block">NiFi + AI · Grocery Executive Tutorial</span>
+        <span class="font-sans text-sm font-semibold text-ibm-gray80 dark:text-ibm-gray20 truncate block sm:hidden">NiFi + AI Tutorial</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="toggleSearch()" class="p-2 rounded text-ibm-gray60 dark:text-ibm-gray40 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray90 transition-colors" aria-label="Search">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+        <button onclick="expandAll()" class="hidden sm:block font-mono text-xs px-2 py-1 border border-ibm-gray20 dark:border-ibm-gray80 text-ibm-gray60 dark:text-ibm-gray40 hover:border-ibm-blue hover:text-ibm-blue transition-colors">Expand All</button>
+        <button onclick="toggleTheme()" class="p-2 rounded text-ibm-gray60 dark:text-ibm-gray40 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray90 transition-colors" aria-label="Toggle theme">
+          <svg id="icon-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg id="icon-moon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Search bar -->
+    <div id="search-bar" class="hidden pb-3">
+      <input id="search-input" type="search" placeholder="Search sections, scenarios, processors, AI models…"
+        oninput="filterContent(this.value)"
+        class="w-full border-b-2 border-ibm-blue bg-transparent px-0 py-2 text-sm font-mono text-ibm-gray100 dark:text-white placeholder-ibm-gray40 focus:outline-none"/>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════ SECTION NAV ═══════════════ -->
+<nav id="section-nav" class="border-b border-ibm-gray20 dark:border-ibm-gray80 bg-white dark:bg-ibm-gray100 overflow-x-auto no-print">
+  <div class="flex min-w-max px-4 sm:px-6 max-w-6xl mx-auto">
+    <a href="#overview"     class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Overview</a>
+    <a href="#architecture" class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Architecture</a>
+    <a href="#streams"      class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Data Streams</a>
+    <a href="#nifi"         class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">NiFi Build</a>
+    <a href="#ai"           class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-purple dark:text-purple-300 border-b-2 border-transparent hover:border-ibm-purple transition-all whitespace-nowrap">AI + Agents</a>
+    <a href="#scenarios"    class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Scenarios</a>
+    <a href="#framework"    class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Framework</a>
+    <a href="#appendix"     class="nav-link px-3 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-ibm-blue dark:text-ibm-blueLight border-b-2 border-transparent hover:border-ibm-blue transition-all whitespace-nowrap">Appendix</a>
+  </div>
+</nav>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<section class="bg-ibm-blueLight dark:bg-ibm-gray90 border-b border-ibm-gray20 dark:border-ibm-gray80">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+    <p class="font-mono text-xs tracking-widest text-ibm-blue dark:text-ibm-blueLight uppercase mb-3">IBM · Grocery Retail Practice · Tutorial v1.0</p>
+    <h1 class="text-3xl sm:text-5xl font-bold text-ibm-blue dark:text-white leading-tight mb-4">
+      Real-Time Executive Intelligence<br class="hidden sm:block"/>
+      <span class="text-ibm-blueDark dark:text-ibm-blueLight">for Grocery Retail</span>
+    </h1>
+    <p class="text-base sm:text-lg text-ibm-gray60 dark:text-ibm-gray40 max-w-3xl font-light mb-6">
+      How Apache NiFi event-driven dataflows, machine learning models, and autonomous AI agents work together to help grocery executives respond in real time — increasing sales, managing costs, and improving service.
+    </p>
+    <!-- Tag chips -->
+    <div class="flex flex-wrap gap-2 mb-6">
+      <span class="font-mono text-xs px-2 py-1 bg-ibm-blue text-white">Apache NiFi</span>
+      <span class="font-mono text-xs px-2 py-1 bg-ibm-purple text-white">AI Agents</span>
+      <span class="font-mono text-xs px-2 py-1 bg-white dark:bg-ibm-gray80 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20">Sales · Inventory · Vendors</span>
+      <span class="font-mono text-xs px-2 py-1 bg-white dark:bg-ibm-gray80 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20">Customer Feedback · CDC Recalls</span>
+      <span class="font-mono text-xs px-2 py-1 bg-ibm-red text-white">Event Logs</span>
+    </div>
+    <!-- Stats strip -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-white dark:bg-ibm-gray80 border border-ibm-gray20 dark:border-ibm-gray60 px-4 py-3">
+        <div class="font-mono text-2xl font-semibold text-ibm-blue">6</div>
+        <div class="font-mono text-xs text-ibm-gray60 dark:text-ibm-gray40 uppercase tracking-wider">Data Streams</div>
+      </div>
+      <div class="bg-white dark:bg-ibm-gray80 border border-ibm-gray20 dark:border-ibm-gray60 px-4 py-3">
+        <div class="font-mono text-2xl font-semibold text-ibm-purple">7</div>
+        <div class="font-mono text-xs text-ibm-gray60 dark:text-ibm-gray40 uppercase tracking-wider">ML Models</div>
+      </div>
+      <div class="bg-white dark:bg-ibm-gray80 border border-ibm-gray20 dark:border-ibm-gray60 px-4 py-3">
+        <div class="font-mono text-2xl font-semibold text-ibm-teal">3</div>
+        <div class="font-mono text-xs text-ibm-gray60 dark:text-ibm-gray40 uppercase tracking-wider">AI Agents</div>
+      </div>
+      <div class="bg-white dark:bg-ibm-gray80 border border-ibm-gray20 dark:border-ibm-gray60 px-4 py-3">
+        <div class="font-mono text-2xl font-semibold text-ibm-orange">4</div>
+        <div class="font-mono text-xs text-ibm-gray60 dark:text-ibm-gray40 uppercase tracking-wider">Live Scenarios</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-2" id="main-content">
+
+<!-- ═══════════════ 1. OVERVIEW ═══════════════ -->
+<section id="overview" class="fade-up content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('overview')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-blue flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-blue dark:text-ibm-blueLight mb-0.5">01 — Context</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Executive Overview & Business Case</div>
+        </div>
+      </div>
+      <svg id="chev-overview" class="w-5 h-5 text-ibm-blue flex-shrink-0 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-overview" class="acc-body open">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6 space-y-4">
+        <p class="text-sm text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed font-light">Grocery retail operates on razor-thin margins in a high-velocity, high-complexity environment. A single product recall, an unexpected demand spike, a vendor delivery failure, or a wave of negative customer feedback can erode profitability within hours if the right decision-makers don't have the right information at the right time.</p>
+        <p class="text-sm text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed font-light">This tutorial demonstrates how Apache NiFi — combined with AI models, autonomous agents, and a real-time executive intelligence layer — transforms raw operational data from dozens of grocery store systems into clear, actionable insight.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          <div class="border-l-4 border-ibm-blue pl-4 py-1 bg-ibm-blueLight dark:bg-ibm-gray80 pr-4">
+            <div class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blueLight mb-2 uppercase tracking-wider">Why Apache NiFi?</div>
+            <p class="text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">Guaranteed delivery, full provenance audit trail, back-pressure management for peak loads, and 300+ processors connecting to every system in the grocery stack — POS, ERP, WMS, CRM, IoT sensors, vendor EDI, and government recall APIs — without custom code.</p>
+          </div>
+          <div class="border-l-4 border-ibm-purple pl-4 py-1 bg-ibm-purpleLight dark:bg-ibm-gray80 pr-4">
+            <div class="font-mono text-xs font-semibold text-ibm-purple dark:text-purple-300 mb-2 uppercase tracking-wider">Why AI Agents?</div>
+            <p class="text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">LLMs and specialized ML models transform NiFi event streams from raw data into executive-ready intelligence. Agents close the loop — not just surfacing insights but autonomously executing approved response playbooks: drafting recalls, adjusting inventory thresholds, routing tickets, and generating board-ready situation reports in seconds.</p>
+          </div>
+        </div>
+        <div class="pt-2">
+          <div class="font-mono text-xs font-semibold text-ibm-gray80 dark:text-ibm-gray20 uppercase tracking-wider mb-3">Executive Capabilities Enabled</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="flex items-start gap-3 text-sm text-ibm-gray80 dark:text-ibm-gray20">
+              <div class="w-2 h-2 bg-ibm-blue mt-1.5 flex-shrink-0"></div>
+              <span>Detect product safety recalls and coordinate store responses within 90 seconds</span>
+            </div>
+            <div class="flex items-start gap-3 text-sm text-ibm-gray80 dark:text-ibm-gray20">
+              <div class="w-2 h-2 bg-ibm-blue mt-1.5 flex-shrink-0"></div>
+              <span>Identify sales velocity anomalies and trigger dynamic pricing interventions</span>
+            </div>
+            <div class="flex items-start gap-3 text-sm text-ibm-gray80 dark:text-ibm-gray20">
+              <div class="w-2 h-2 bg-ibm-blue mt-1.5 flex-shrink-0"></div>
+              <span>Monitor vendor delivery performance and automatically escalate SLA breaches</span>
+            </div>
+            <div class="flex items-start gap-3 text-sm text-ibm-gray80 dark:text-ibm-gray20">
+              <div class="w-2 h-2 bg-ibm-blue mt-1.5 flex-shrink-0"></div>
+              <span>Analyze customer feedback in real time to surface emerging quality issues</span>
+            </div>
+            <div class="flex items-start gap-3 text-sm text-ibm-gray80 dark:text-ibm-gray20">
+              <div class="w-2 h-2 bg-ibm-blue mt-1.5 flex-shrink-0"></div>
+              <span>Receive AI-generated situation reports and ranked action plans</span>
+            </div>
+            <div class="flex items-start gap-3 text-sm text-ibm-gray80 dark:text-ibm-gray20">
+              <div class="w-2 h-2 bg-ibm-blue mt-1.5 flex-shrink-0"></div>
+              <span>Deploy autonomous AI agents acting on approved playbooks without human bottlenecks</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 2. ARCHITECTURE ═══════════════ -->
+<section id="architecture" class="content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('architecture')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-cyan flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-cyan dark:text-cyan-300 mb-0.5">02 — Design</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Architecture Overview & Data Flow</div>
+        </div>
+      </div>
+      <svg id="chev-architecture" class="w-5 h-5 text-ibm-cyan flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-architecture" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6 space-y-6">
+        <!-- Layer table -->
+        <div>
+          <div class="font-mono text-xs font-semibold uppercase tracking-wider text-ibm-gray80 dark:text-ibm-gray20 mb-3">Four-Layer Architecture</div>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+              <thead>
+                <tr class="bg-ibm-blue text-white">
+                  <th class="px-4 py-2 text-left font-mono text-xs font-semibold uppercase tracking-wider border border-ibm-blueDark">Layer</th>
+                  <th class="px-4 py-2 text-left font-mono text-xs font-semibold uppercase tracking-wider border border-ibm-blueDark">Components</th>
+                  <th class="px-4 py-2 text-left font-mono text-xs font-semibold uppercase tracking-wider border border-ibm-blueDark">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="bg-ibm-blueLight dark:bg-ibm-gray80"><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 font-mono text-xs font-semibold text-ibm-blueDark dark:text-ibm-blueLight">1 — Sources</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">POS, ERP/WMS, IoT, Vendor EDI, CRM, Recall APIs, Web/Mobile</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">Originate raw operational events across all store systems</td></tr>
+                <tr class="bg-white dark:bg-ibm-gray90"><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 font-mono text-xs font-semibold text-ibm-blueDark dark:text-ibm-blueLight">2 — NiFi Dataflow</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">Processors, FlowFiles, Connections, Process Groups, Controller Services</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">Ingest, route, transform, validate, enrich, and deliver all event streams</td></tr>
+                <tr class="bg-ibm-blueLight dark:bg-ibm-gray80"><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 font-mono text-xs font-semibold text-ibm-purple dark:text-purple-300">3 — AI & Analytics</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">ML Models, LLM Agents, Anomaly Detectors, NLP Pipelines, Decision Engines</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">Score, classify, summarize, and act on enriched events in real time</td></tr>
+                <tr class="bg-white dark:bg-ibm-gray90"><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 font-mono text-xs font-semibold text-ibm-orange dark:text-orange-300">4 — Executive Intel</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">Dashboard, Alert Console, Situation Reports, Action Plans</td><td class="px-4 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-ibm-gray80 dark:text-ibm-gray20 text-xs">Deliver ranked insights, recommendations, and agent actions to leadership</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Flow steps -->
+        <div>
+          <div class="font-mono text-xs font-semibold uppercase tracking-wider text-ibm-gray80 dark:text-ibm-gray20 mb-4">Canonical Event Journey</div>
+          <div class="space-y-3">
+            <!-- Steps rendered as visual flow -->
+            <div id="flow-steps" class="space-y-1">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 3. DATA STREAMS ═══════════════ -->
+<section id="streams" class="content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('streams')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-teal flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-teal dark:text-teal-300 mb-0.5">03 — Ingestion</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Data Stream Catalog</div>
+        </div>
+      </div>
+      <svg id="chev-streams" class="w-5 h-5 text-ibm-teal flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-streams" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 divide-y divide-ibm-gray20 dark:divide-ibm-gray80" id="streams-content">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 4. NIFI BUILD ═══════════════ -->
+<section id="nifi" class="content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('nifi')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-blue flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-blue dark:text-ibm-blueLight mb-0.5">04 — Tutorial Part 1</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Building the NiFi Dataflow</div>
+        </div>
+      </div>
+      <svg id="chev-nifi" class="w-5 h-5 text-ibm-blue flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-nifi" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6" id="nifi-content"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 5. AI + AGENTS ═══════════════ -->
+<section id="ai" class="content-section">
+  <div class="border border-ibm-purple dark:border-purple-700">
+    <button onclick="toggleSection('ai')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-purpleLight dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-purple flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-purple dark:text-purple-300 mb-0.5">05 — Tutorial Part 2</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">AI Models & Autonomous Agents</div>
+        </div>
+      </div>
+      <svg id="chev-ai" class="w-5 h-5 text-ibm-purple flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-ai" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6" id="ai-content"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 6. SCENARIOS ═══════════════ -->
+<section id="scenarios" class="content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('scenarios')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-orange flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-orange dark:text-orange-300 mb-0.5">06 — Tutorial Part 3</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Live Executive Scenarios</div>
+        </div>
+      </div>
+      <svg id="chev-scenarios" class="w-5 h-5 text-ibm-orange flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-scenarios" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6" id="scenarios-content"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 7. FRAMEWORK ═══════════════ -->
+<section id="framework" class="content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('framework')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-green flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-green dark:text-green-400 mb-0.5">07 — Framework</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Issue Detection & Action Planning</div>
+        </div>
+      </div>
+      <svg id="chev-framework" class="w-5 h-5 text-ibm-green flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-framework" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6" id="framework-content"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 8. APPENDIX ═══════════════ -->
+<section id="appendix" class="content-section">
+  <div class="border border-ibm-gray20 dark:border-ibm-gray80">
+    <button onclick="toggleSection('appendix')" class="w-full flex items-center justify-between px-4 sm:px-6 py-4 bg-white dark:bg-ibm-gray90 hover:bg-ibm-gray10 dark:hover:bg-ibm-gray80 transition-colors text-left">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-ibm-gray60 flex-shrink-0"></div>
+        <div>
+          <div class="font-mono text-xs tracking-widest uppercase text-ibm-gray60 dark:text-ibm-gray40 mb-0.5">08 — Reference</div>
+          <div class="font-bold text-base sm:text-lg text-ibm-gray100 dark:text-white">Appendix — Configuration & KPI Reference</div>
+        </div>
+      </div>
+      <svg id="chev-appendix" class="w-5 h-5 text-ibm-gray60 flex-shrink-0 transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div id="body-appendix" class="acc-body">
+      <div class="border-t border-ibm-gray20 dark:border-ibm-gray80 px-4 sm:px-6 py-6" id="appendix-content"></div>
+    </div>
+  </div>
+</section>
+
+<!-- No results -->
+<div id="no-results" class="hidden text-center py-16">
+  <div class="font-mono text-sm text-ibm-gray40">No content matches your search.</div>
+</div>
+
+</main>
+
+<!-- ═══════════════ FOOTER ═══════════════ -->
+<footer class="border-t border-ibm-gray20 dark:border-ibm-gray80 mt-8 no-print">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div class="font-mono text-xs text-ibm-gray40">IBM Grocery Retail Practice · NiFi + AI Tutorial · v1.0</div>
+    <div class="font-mono text-xs text-ibm-gray40">Apache NiFi · AI Agents · Real-Time Executive Intelligence</div>
+  </div>
+</footer>
+
+<!-- ═══════════════ JAVASCRIPT ═══════════════ -->
+<script>
+// ── Theme ──────────────────────────────────────────────────
+function setTheme(dark){
+  document.documentElement.classList.toggle('dark',dark);
+  document.getElementById('icon-sun').classList.toggle('hidden',!dark);
+  document.getElementById('icon-moon').classList.toggle('hidden',dark);
+  localStorage.setItem('theme',dark?'dark':'light');
+}
+function toggleTheme(){ setTheme(!document.documentElement.classList.contains('dark')); }
+const saved=localStorage.getItem('theme');
+if(saved==='dark'||(!saved&&window.matchMedia('(prefers-color-scheme:dark)').matches)) setTheme(true);
+
+// ── Accordion ─────────────────────────────────────────────
+const sectionState={overview:true,architecture:false,streams:false,nifi:false,ai:false,scenarios:false,framework:false,appendix:false};
+function toggleSection(id){
+  sectionState[id]=!sectionState[id];
+  document.getElementById('body-'+id).classList.toggle('open',sectionState[id]);
+  const chev=document.getElementById('chev-'+id);
+  chev.style.transform=sectionState[id]?'':'rotate(180deg)';
+}
+// Init chevrons for closed sections
+Object.keys(sectionState).forEach(id=>{
+  if(!sectionState[id]) document.getElementById('chev-'+id).style.transform='rotate(180deg)';
+});
+function expandAll(){
+  Object.keys(sectionState).forEach(id=>{
+    sectionState[id]=true;
+    document.getElementById('body-'+id).classList.add('open');
+    document.getElementById('chev-'+id).style.transform='';
+  });
+}
+
+// ── Search ─────────────────────────────────────────────────
+function toggleSearch(){
+  const bar=document.getElementById('search-bar');
+  const hidden=bar.classList.toggle('hidden');
+  if(!hidden) document.getElementById('search-input').focus();
+  else{ filterContent(''); document.getElementById('search-input').value=''; }
+}
+function filterContent(q){
+  const query=q.toLowerCase().trim();
+  const sections=document.querySelectorAll('.content-section');
+  let any=false;
+  if(!query){ sections.forEach(s=>s.style.display=''); document.getElementById('no-results').classList.add('hidden'); return; }
+  expandAll();
+  sections.forEach(s=>{
+    const text=s.innerText.toLowerCase();
+    const match=text.includes(query);
+    s.style.display=match?'':'none';
+    if(match) any=true;
+  });
+  document.getElementById('no-results').classList.toggle('hidden',any);
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function stepHTML(num, title, desc, color){
+  return `<div class="flex gap-4 items-start">
+    <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center text-white font-mono font-bold text-sm" style="background:${color}">${num}</div>
+    <div class="flex-1 min-w-0 border-b border-ibm-gray20 dark:border-ibm-gray80 pb-3">
+      <div class="font-semibold text-sm mb-1" style="color:${color}">${title}</div>
+      <div class="text-xs text-ibm-gray60 dark:text-ibm-gray40 leading-relaxed">${desc}</div>
+    </div>
+  </div>`;
+}
+
+function tableHTML(headers, rows, accentColor='#0f62fe'){
+  const ths=headers.map(h=>`<th class="px-3 py-2 text-left font-mono text-xs font-semibold uppercase tracking-wider border border-opacity-50 text-white" style="border-color:${accentColor}">${h}</th>`).join('');
+  const trs=rows.map((row,i)=>{
+    const bg=i%2===0?'bg-ibm-gray10 dark:bg-ibm-gray80':'bg-white dark:bg-ibm-gray90';
+    const tds=row.map((cell,ci)=>`<td class="px-3 py-2 border border-ibm-gray20 dark:border-ibm-gray60 text-xs ${ci===0?'font-semibold text-ibm-blueDark dark:text-ibm-blueLight':'text-ibm-gray80 dark:text-ibm-gray20'} leading-relaxed">${cell}</td>`).join('');
+    return `<tr class="${bg}">${tds}</tr>`;
+  }).join('');
+  return `<div class="overflow-x-auto"><table class="w-full border-collapse text-sm"><thead><tr style="background:${accentColor}">${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+
+function calloutHTML(label, text, color, bg=''){
+  const bgClass=bg||'bg-ibm-gray10 dark:bg-ibm-gray80';
+  return `<div class="flex gap-0 border border-ibm-gray20 dark:border-ibm-gray60">
+    <div class="flex-shrink-0 w-16 flex items-center justify-center py-3 px-2" style="background:${color}">
+      <span class="font-mono text-xs font-bold text-white text-center leading-tight">${label}</span>
+    </div>
+    <div class="flex-1 px-4 py-3 ${bgClass}">
+      <p class="text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">${text}</p>
+    </div>
+  </div>`;
+}
+
+function agentCardHTML(title, fields, color){
+  const rows=fields.map(([k,v])=>`<div class="border-b border-ibm-gray20 dark:border-ibm-gray60 py-2 flex flex-col sm:flex-row sm:gap-6"><span class="font-mono text-xs font-semibold flex-shrink-0 sm:w-40 mb-1 sm:mb-0" style="color:${color}">${k}</span><span class="text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">${v}</span></div>`).join('');
+  return `<div class="border-l-4 pl-4 mb-6" style="border-color:${color}">
+    <h4 class="font-bold text-sm mb-3" style="color:${color}">${title}</h4>
+    ${rows}
+  </div>`;
+}
+
+function scenarioHTML(icon, title, trigger, steps, result, actionPlan, color){
+  const stepItems=steps.map((s,i)=>`<div class="flex gap-3 items-start py-2 border-b border-ibm-gray20 dark:border-ibm-gray60">
+    <div class="w-6 h-6 flex-shrink-0 flex items-center justify-center text-white font-mono font-bold text-xs" style="background:${color}">${i+1}</div>
+    <div class="flex-1 text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">${s}</div>
+  </div>`).join('');
+  const planItems=actionPlan.map(p=>`<div class="flex gap-2 items-start py-1.5"><div class="w-2 h-2 mt-1 flex-shrink-0" style="background:${color}"></div><span class="text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">${p}</span></div>`).join('');
+  return `<div class="border border-ibm-gray20 dark:border-ibm-gray60 mb-6">
+    <div class="flex items-center gap-3 px-4 py-3 border-b border-ibm-gray20 dark:border-ibm-gray60" style="background:${color}22">
+      <div class="w-8 h-8 flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style="background:${color}">${icon}</div>
+      <h3 class="font-bold text-base" style="color:${color}">${title}</h3>
+    </div>
+    <div class="px-4 py-3 bg-ibm-gray10 dark:bg-ibm-gray80 border-b border-ibm-gray20 dark:border-ibm-gray60">
+      <span class="font-mono text-xs font-semibold uppercase tracking-wider" style="color:${color}">Trigger Event: </span>
+      <span class="text-xs text-ibm-gray80 dark:text-ibm-gray20">${trigger}</span>
+    </div>
+    <div class="px-4 py-4">
+      <div class="font-mono text-xs font-semibold uppercase tracking-wider text-ibm-gray60 dark:text-ibm-gray40 mb-3">NiFi + AI Response Flow</div>
+      <div class="space-y-0">${stepItems}</div>
+      <div class="mt-4 border-l-4 pl-4 py-2 bg-green-50 dark:bg-ibm-gray80" style="border-color:#198038">
+        <div class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 uppercase tracking-wider mb-1">Result</div>
+        <p class="text-xs text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed">${result}</p>
+      </div>
+      <div class="mt-4">
+        <div class="font-mono text-xs font-semibold uppercase tracking-wider text-ibm-gray60 dark:text-ibm-gray40 mb-2">Action Plan</div>
+        ${planItems}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── DATA ───────────────────────────────────────────────────
+
+// Flow Steps
+const flowSteps=[
+  ['1','Event Generation','A raw event occurs: POS transaction, vendor delivery confirmation, customer feedback, FDA recall alert, or CDC database trigger.','#0f62fe'],
+  ['2','NiFi Ingestion','A NiFi processor (ConsumeKafka, GetHTTP, ListenHTTP, QueryDatabaseTable) captures the event as a FlowFile. Attributes set: store_id, event_type, source_system, timestamp, priority.','#1192e8'],
+  ['3','Validation & Enrichment','FlowFile passes through ValidateRecord and LookupRecord processors. Enriched with product master, store master, vendor registry. Invalid records → quarantine.','#009d9a'],
+  ['4','AI Scoring','Enriched events sent to AI model endpoints via InvokeHTTP. Scores written back as FlowFile attributes: anomaly_score, sentiment_score, stockout_probability, etc.','#8a3ffc'],
+  ['5','AI Agent Evaluation','Agent evaluates scored events against playbooks. For high-priority events, agent autonomously executes response actions and logs all to provenance trail.','#ee5396'],
+  ['6','Executive Delivery','AI-annotated events delivered to executive dashboard, alert console, and reporting store. Situation reports pushed to executive mobile alerts.','#ff832b'],
+];
+
+document.getElementById('flow-steps').innerHTML=flowSteps.map(([n,t,d,c])=>stepHTML(n,t,d,c)).join('<div class="ml-5 w-px h-3 bg-ibm-blue opacity-30"></div>');
+
+// Data Streams
+const streams=[
+  {
+    id:'pos', color:'#0f62fe', num:'3.1', label:'POS Transactions',
+    rows:[
+      ['Source System','POS terminals — Kafka topic: pos.transactions.raw'],
+      ['Event Frequency','Continuous; 200–2,000 events/minute per store'],
+      ['Key Fields','store_id, transaction_id, timestamp, sku_list, quantities, prices, loyalty_card_id'],
+      ['Ingestion Pattern','Streaming via ConsumeKafka; micro-batch aggregation every 60 seconds'],
+      ['Business Use','Real-time sales velocity, basket analysis, hourly revenue, promotion effectiveness'],
+      ['AI Layer','Demand forecasting model predicts next-hour sales velocity per SKU; anomaly detector flags unusual transaction patterns'],
+    ]
+  },
+  {
+    id:'inventory', color:'#1192e8', num:'3.2', label:'Inventory CDC',
+    rows:[
+      ['Source System','WMS database — Change Data Capture via Debezium; Kafka topic: debezium.wms.inventory'],
+      ['Event Frequency','Event-driven; fires on every INSERT, UPDATE, DELETE in inventory tables'],
+      ['Key Fields','sku_id, store_id, quantity_on_hand, reorder_point, expiry_date, cost_price'],
+      ['Ingestion Pattern','CDC events from Debezium Kafka connector; full inventory snapshot daily at 02:00'],
+      ['Business Use','Stock level monitoring, out-of-stock prevention, waste detection, reorder automation'],
+      ['AI Layer','Replenishment ML predicts stockout probability per SKU/store/hour; waste model flags items approaching expiry for markdown'],
+    ]
+  },
+  {
+    id:'vendors', color:'#ff832b', num:'3.3', label:'Vendor Deliveries',
+    rows:[
+      ['Source System','Vendor EDI portal (X12 856 ASN), internal WMS receiving events, IoT dock sensors'],
+      ['Event Frequency','Event-driven; 50–300 delivery events per store per day'],
+      ['Key Fields','vendor_id, purchase_order_id, scheduled_delivery_window, actual_arrival_time, items_received, temperature_log'],
+      ['Ingestion Pattern','EDI files via GetSFTP + XML parsing; WMS events via Kafka; dock sensors via MQTT (ListenMQTT)'],
+      ['Business Use','On-time delivery tracking, order accuracy, vendor SLA compliance, cold chain integrity'],
+      ['AI Layer','Delivery risk model predicts late/incomplete delivery; anomaly detection on temperature logs for cold chain compliance'],
+    ]
+  },
+  {
+    id:'customer', color:'#009d9a', num:'3.4', label:'Customer Service & Feedback',
+    rows:[
+      ['Source System','CRM, mobile app feedback API, in-store kiosks, social media listener, call center CTI'],
+      ['Event Frequency','Variable; 100–500 events per store per day; social media near-continuous'],
+      ['Key Fields','feedback_id, channel, store_id, timestamp, free_text_comment, rating_score, skus_mentioned'],
+      ['Ingestion Pattern','CRM via Kafka; app/kiosk via ListenHTTP; social media via InvokeHTTP poll every 5 min'],
+      ['Business Use','Customer satisfaction tracking, complaint escalation, product quality signals, NPS trend'],
+      ['AI Layer','NLP sentiment model classifies every comment; topic classifier extracts issues (freshness, checkout, staff, pricing); urgency scorer prioritizes escalation'],
+    ]
+  },
+  {
+    id:'recalls', color:'#da1e28', num:'3.5', label:'Product Recalls (CDC + Gov APIs)',
+    rows:[
+      ['Source System','FDA Recalls API, USDA FSIS recalls feed, internal ERP product master, CDC outbreak alerts'],
+      ['Event Frequency','Low frequency — 0–5 federal recall events per day nationally; ERP CDC triggers on affected SKU updates'],
+      ['Key Fields','recall_id, issuing_agency, recall_class (I/II/III), affected_skus, lot_numbers, upc_codes, reason_code'],
+      ['Ingestion Pattern','Government APIs polled every 10 minutes via InvokeHTTP; internal ERP CDC via Debezium'],
+      ['Business Use','Immediate stock removal, customer notification, regulatory compliance documentation'],
+      ['AI Layer','Impact assessment model calculates exposure; AI agent drafts FDA-compliant notices and customer communications within 90 seconds'],
+    ]
+  },
+  {
+    id:'events', color:'#8a3ffc', num:'3.6', label:'Store Event Logs',
+    rows:[
+      ['Source System','Store operations system, security logs, HVAC/refrigeration IoT sensors, self-checkout, associate mobile app'],
+      ['Event Frequency','High volume; 500–5,000 log events per store per hour'],
+      ['Key Fields','event_id, store_id, device_id, event_type, severity, timestamp, location_zone, description'],
+      ['Ingestion Pattern','Syslog/JSON tailed via TailFile; IoT events via MQTT; structured events via Kafka'],
+      ['Business Use','Equipment failure early warning, security incident detection, operational efficiency'],
+      ['AI Layer','Time-series anomaly detection identifies refrigeration drift before failure; predictive maintenance scheduling'],
+    ]
+  },
+];
+
+document.getElementById('streams-content').innerHTML = streams.map(s=>`
+  <div class="px-4 sm:px-6 py-5" style="border-left:4px solid ${s.color}">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="font-mono text-xs font-semibold uppercase tracking-wider" style="color:${s.color}">${s.num}</span>
+      <h3 class="font-bold text-sm text-ibm-gray100 dark:text-white">${s.label}</h3>
+    </div>
+    ${tableHTML(['Field','Detail'], s.rows, s.color)}
+  </div>
+`).join('<div class="border-t border-ibm-gray20 dark:border-ibm-gray80"></div>');
+
+// NiFi Process Groups
+document.getElementById('nifi-content').innerHTML = `
+<div class="space-y-6">
+  <p class="text-sm text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed font-light">The flow is organized into six Process Groups, each owning one domain of data. All share global Controller Services for database connectivity, schema registry, and AI model endpoints.</p>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-blue dark:text-ibm-blueLight mb-3 font-mono uppercase tracking-wider">Global Controller Services</h3>
+    ${tableHTML(['Service Name','Type','Purpose'],[
+      ['GroceryDB_ConnectionPool','DBCPConnectionPool','JDBC connection pool to central grocery PostgreSQL store'],
+      ['KafkaConsumerService','StandardKafkaClientService','Shared Kafka consumer configuration (brokers, security, consumer group)'],
+      ['GrocerySchemaRegistry','AvroSchemaRegistry','Centralized schema store for all event types'],
+      ['AIModelService','RestLookupService','HTTP endpoint for AI scoring models: https://ai.grocery-internal/v1'],
+      ['ProductMasterLookup','DatabaseRecordLookupService','Enrich events with product name, category, department from product master'],
+      ['StoreMasterLookup','DatabaseRecordLookupService','Enrich events with store name, region, district manager from store master'],
+    ],'#0f62fe')}
+  </div>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-blue dark:text-ibm-blueLight mb-3 font-mono uppercase tracking-wider">PG1 — POS Sales Ingestion</h3>
+    <div class="space-y-2" id="pg1-steps"></div>
+    <div class="mt-3">${calloutHTML('NIFI TIP','Configure back-pressure on ConsumeKafka → ValidateRecord connection: Object Threshold = 10,000, Size Threshold = 500 MB. This prevents queue overflow during peak trading hours. NiFi automatically pauses the Kafka consumer when the queue is full.','#0f62fe')}</div>
+  </div>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-red dark:text-red-400 mb-3 font-mono uppercase tracking-wider">PG3 — Recall Management (Highest Priority)</h3>
+    <div class="space-y-2" id="pg3-steps"></div>
+    <div class="mt-3">${calloutHTML('COMPLIANCE','All recall events and agent actions are recorded in NiFi Provenance Repository with full event chain: RECEIVE → SEND → MODIFY → SEND. This provenance trail constitutes the compliance audit log required for FDA enforcement response.','#da1e28')}</div>
+  </div>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-teal dark:text-teal-300 mb-3 font-mono uppercase tracking-wider">PG4 — Customer Intelligence</h3>
+    <div class="space-y-2" id="pg4-steps"></div>
+  </div>
+</div>`;
+
+const pg1=[
+  ['ConsumeKafka_POS','ConsumeKafka','Topic: pos.transactions.raw | Group ID: nifi-pos-consumer | Max Poll Records: 500 | Record Reader: POSAvroReader'],
+  ['ValidateRecord','ValidateRecord','Validates against POS schema (required: store_id, transaction_id, timestamp, sku_list). Invalid → quarantine.failure'],
+  ['SplitRecord_ByTransaction','SplitRecord','Splits multi-record FlowFiles into individual transaction records for per-transaction routing and enrichment'],
+  ['LookupRecord_StoreMaster','LookupRecord','Enriches each record with store_name, region, district from StoreMasterLookup keyed on store_id'],
+  ['LookupRecord_ProductMaster','LookupRecord','Enriches each SKU with product_name, category, department, cost_price from ProductMasterLookup'],
+  ['InvokeHTTP_DemandScorer','InvokeHTTP','POST to /v1/score/demand-anomaly. Response adds: anomaly_score (0.0–1.0), anomaly_type, confidence'],
+  ['RouteOnAttribute_Anomaly','RouteOnAttribute','anomaly_score > 0.75 → executive-alert Kafka topic. All records continue to data lake'],
+  ['PublishKafka_Analytics','PublishKafka','Topic: pos.transactions.enriched. Consumed by demand forecasting, executive dashboard, BI platform'],
+  ['PutS3Object_DataLake','PutS3Object','s3://grocery-datalake/pos/year=.../month=.../day=.../  in Parquet format, partitioned by date'],
+];
+document.getElementById('pg1-steps').innerHTML=pg1.map(([name,type,desc])=>`
+  <div class="flex gap-3 items-start border border-ibm-gray20 dark:border-ibm-gray60 bg-ibm-gray10 dark:bg-ibm-gray80 p-3">
+    <div class="flex-shrink-0 min-w-0">
+      <span class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blueLight">${name}</span>
+      <span class="font-mono text-xs text-ibm-gray40 ml-2">[${type}]</span>
+    </div>
+    <div class="text-xs text-ibm-gray60 dark:text-ibm-gray40 leading-relaxed flex-1">${desc}</div>
+  </div>`).join('');
+
+const pg3=[
+  ['InvokeHTTP_FDARecallAPI','InvokeHTTP','GET https://api.fda.gov/food/enforcement.json?search=status:Ongoing every 10 minutes. CRON: 0 */10 * * * ?'],
+  ['InvokeHTTP_USDARecallAPI','InvokeHTTP','GET USDA FSIS recall feed every 10 minutes. Parallel to FDA poll.'],
+  ['MergeContent_RecallFeeds','MergeContent','Merges FDA and USDA recall FlowFiles into unified event stream. Defragmentation Strategy: Defragment. Max Bin Age: 1 min.'],
+  ['QueryRecord_NewRecalls','QueryRecord','SQL: SELECT * FROM FLOWFILE WHERE recall_id NOT IN processed_recalls table. Filters to unprocessed events only.'],
+  ['LookupRecord_InventoryCrossRef','LookupRecord','Cross-references each recalled UPC/lot against live inventory. Adds: units_in_store, stores_affected, lot_numbers_held, estimated_retail_value.'],
+  ['RouteOnAttribute_RecallClass','RouteOnAttribute','Class I → immediate-response (highest priority). Class II → urgent-response. Class III → routine-response.'],
+  ['InvokeHTTP_RecallAgent','InvokeHTTP','POST full recall context to /v1/agent/recall-response. Agent executes full recall playbook and returns actions_taken, draft_communications, compliance_checklist.'],
+  ['PublishKafka_RecallAlerts','PublishKafka','Topic: recalls.executive.immediate | Class I recalls trigger push notification to all executive mobile devices within 90 seconds.'],
+];
+document.getElementById('pg3-steps').innerHTML=pg3.map(([name,type,desc])=>`
+  <div class="flex gap-3 items-start border border-ibm-redLight dark:border-ibm-red bg-red-50 dark:bg-ibm-gray80 p-3">
+    <div class="flex-shrink-0 min-w-0">
+      <span class="font-mono text-xs font-semibold text-ibm-red dark:text-red-400">${name}</span>
+      <span class="font-mono text-xs text-ibm-gray40 ml-2">[${type}]</span>
+    </div>
+    <div class="text-xs text-ibm-gray60 dark:text-ibm-gray40 leading-relaxed flex-1">${desc}</div>
+  </div>`).join('');
+
+const pg4=[
+  ['Multi-Source Ingestion','Parallel','ListenHTTP (app/kiosk webhooks, port 8083) + InvokeHTTP (social media every 5 min) + ConsumeKafka (CRM events, topic: crm.feedback.raw). Each processor sets channel attribute.'],
+  ['UnifiedFeedbackSchema','UpdateRecord','Maps all channel schemas to canonical GroceryFeedback schema: feedback_id, store_id, channel, timestamp, free_text, rating, skus_mentioned.'],
+  ['InvokeHTTP_SentimentNLP','InvokeHTTP','POST to /v1/score/sentiment-nlp. Returns: sentiment, sentiment_score (-1 to +1), topics[], urgency_score, key_entities[].'],
+  ['RouteOnAttribute_Urgency','RouteOnAttribute','urgency_score > 0.80 OR (sentiment = negative AND topics contains food_safety) → immediate-escalation path.'],
+  ['PublishKafka_Sentiment','PublishKafka','Topic: customer.sentiment.enriched. Consumed by executive dashboard for real-time NPS trend and topic frequency charts.'],
+];
+document.getElementById('pg4-steps').innerHTML=pg4.map(([name,type,desc])=>`
+  <div class="flex gap-3 items-start border border-ibm-tealLight dark:border-ibm-teal bg-teal-50 dark:bg-ibm-gray80 p-3">
+    <div class="flex-shrink-0 min-w-0">
+      <span class="font-mono text-xs font-semibold text-ibm-teal dark:text-teal-300">${name}</span>
+      <span class="font-mono text-xs text-ibm-gray40 ml-2">[${type}]</span>
+    </div>
+    <div class="text-xs text-ibm-gray60 dark:text-ibm-gray40 leading-relaxed flex-1">${desc}</div>
+  </div>`).join('');
+
+// AI Content
+document.getElementById('ai-content').innerHTML=`
+<div class="space-y-8">
+  <p class="text-sm text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed font-light">Two distinct AI tiers work alongside NiFi: <strong>ML models</strong> (trained on historical grocery data, called synchronously by NiFi processors for fast scoring) and <strong>LLM-based autonomous agents</strong> (large language models with tool access, called for complex situation assessment, communication generation, and action execution).</p>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="border-l-4 border-ibm-purple pl-4 py-2 bg-ibm-purpleLight dark:bg-ibm-gray80 pr-4">
+      <div class="font-mono text-xs font-semibold text-ibm-purple dark:text-purple-300 uppercase tracking-wider mb-2">AI Architecture Principles</div>
+      <ul class="space-y-1.5 text-xs text-ibm-gray80 dark:text-ibm-gray20">
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-purple mt-1 flex-shrink-0"></div>Models are stateless REST microservices — no AI logic lives inside NiFi itself</li>
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-purple mt-1 flex-shrink-0"></div>AI scores added as FlowFile attributes, preserving original content for downstream processors</li>
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-purple mt-1 flex-shrink-0"></div>All AI calls logged in NiFi Provenance with request/response snapshots for full auditability</li>
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-purple mt-1 flex-shrink-0"></div>Every agent action is reversible within a defined window (30 min for comms, 2 hr for system updates)</li>
+      </ul>
+    </div>
+    <div class="border-l-4 border-ibm-blue pl-4 py-2 bg-ibm-blueLight dark:bg-ibm-gray80 pr-4">
+      <div class="font-mono text-xs font-semibold text-ibm-blue dark:text-ibm-blueLight uppercase tracking-wider mb-2">Human-in-the-Loop Gates</div>
+      <ul class="space-y-1.5 text-xs text-ibm-gray80 dark:text-ibm-gray20">
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-blue mt-1 flex-shrink-0"></div>Agents act autonomously below defined escalation thresholds</li>
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-blue mt-1 flex-shrink-0"></div>High-impact actions queue for human approval (NiFi polls approval DB every 30 seconds)</li>
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-blue mt-1 flex-shrink-0"></div>Rejected actions feed back to agent context store for future calibration</li>
+        <li class="flex gap-2"><div class="w-1.5 h-1.5 bg-ibm-blue mt-1 flex-shrink-0"></div>All actions logged in AI_ACTION_LOG for monthly governance review</li>
+      </ul>
+    </div>
+  </div>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-purple dark:text-purple-300 mb-3 font-mono uppercase tracking-wider">ML Model Catalog (7 Models)</h3>
+    ${tableHTML(['Model','Input Features','Output & Use'],[
+      ['Demand Anomaly Detector','SKU, store_id, hour_of_day, day_of_week, rolling_7d_avg, weather, local_events','anomaly_score 0–1; anomaly_type; confidence. Triggers dynamic pricing and stock transfer recommendations.'],
+      ['Stockout Probability','quantity_on_hand, reorder_point, 24h_sales_velocity, pending_orders, foot_traffic','stockout_probability 0–1; estimated_hours_to_stockout; recommended_reorder_qty. Drives automated replenishment.'],
+      ['Waste Risk Predictor','quantity_on_hand, days_to_expiry, current_sales_velocity, historical_markdown_lift','waste_risk_score 0–1; recommended_markdown_pct; markdown_urgency. Reduces fresh food write-offs.'],
+      ['Delivery Risk Predictor','vendor_id, day_of_week, distance, weather_forecast, vendor_30d_otd_rate, order_size','on_time_probability; fill_rate_prediction; cold_chain_risk. Enables proactive vendor management.'],
+      ['Sentiment NLP (LLM fine-tuned)','Feedback free text (all channels), rating, channel, store_id','sentiment_score; topic tags; urgency_score; key_entities. Powers customer intelligence dashboard.'],
+      ['Equipment Anomaly Detector','Temperature time-series (IoT), vibration, power, device_age, maintenance_history','anomaly_probability; estimated_time_to_failure; maintenance_priority. Prevents refrigeration failures.'],
+      ['Recall Impact Assessor','Affected SKUs/UPCs/lots, live inventory snapshot, loyalty transaction history (90d)','units_in_store; units_sold_to_loyalty; estimated_regulatory_exposure; recommended_actions.'],
+    ],'#8a3ffc')}
+  </div>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-purple dark:text-purple-300 mb-4 font-mono uppercase tracking-wider">Three Autonomous AI Agents</h3>
+    ${agentCardHTML('Agent 1: Recall Response Agent',[
+      ['Role','Recall Crisis Coordinator — activates immediately on any Class I or II recall affecting stocked products'],
+      ['LLM Base','GPT-4o or Claude 3.5 Sonnet with function calling / tool use'],
+      ['Tool Access','Read: live inventory API, loyalty transaction history, store directory. Write: executive alert publisher, email/SMS draft queue, FDA compliance log, ERP recall hold flag.'],
+      ['Autonomous Actions','1. Calculate full exposure (units in store + units sold + stores affected). 2. Set ERP recall hold flag across all stores. 3. Draft store manager removal instructions. 4. Draft FDA-compliant regulatory response. 5. Draft loyalty customer notification for affected purchasers. 6. Generate executive situation report.'],
+      ['Escalation Gate','Class I recall affecting >500 units or >200 loyalty customers requires VP Supply Chain approval before customer notifications are sent.'],
+      ['SLA','Executive alert within 90 seconds. All draft communications ready within 4 minutes.'],
+    ],'#da1e28')}
+    ${agentCardHTML('Agent 2: Sales Intelligence Agent',[
+      ['Role','Demand & Revenue Optimizer — monitors sales anomalies, inventory positions, and promotional opportunities'],
+      ['LLM Base','Claude 3.5 Sonnet or GPT-4o with structured output'],
+      ['Tool Access','Read: real-time POS stream, inventory API, pricing system, competitor price feed, weather/events API. Write: pricing recommendation queue, promotion brief template, replenishment order draft.'],
+      ['Autonomous Actions','1. Detect demand spikes and cross-reference inventory. 2. Generate dynamic pricing recommendation with margin impact. 3. Identify cross-sell opportunities from basket patterns. 4. Flag understocked items during high-demand periods and draft emergency transfers. 5. Generate hourly sales narrative for executive mobile alert.'],
+      ['Escalation Gate','Pricing changes >15% or emergency stock transfers >$10,000 require Category Manager approval.'],
+      ['SLA','Demand anomaly assessment within 2 minutes. Pricing recommendation within 5 minutes.'],
+    ],'#0f62fe')}
+    ${agentCardHTML('Agent 3: Customer Experience Agent',[
+      ['Role','Customer Experience Guardian — monitors feedback sentiment, escalates issues, coordinates service recovery'],
+      ['LLM Base','Claude 3.5 Sonnet (optimized for NLP and empathetic communication generation)'],
+      ['Tool Access','Read: real-time feedback stream (NLP scored), CRM customer API, complaint history, store ops. Write: CRM case creator, service recovery offer queue, store manager alert publisher, executive sentiment dashboard.'],
+      ['Autonomous Actions','1. Detect complaint clusters (same store + same topic + multiple customers within 2 hours). 2. Create CRM escalation case with full context. 3. Draft personalized service recovery for high-value customers. 4. Alert store manager with specific actionable guidance. 5. Generate daily customer experience briefing.'],
+      ['Escalation Gate','Food safety mentions, litigation keywords, or social posts with >1,000 impressions escalate to VP Customer Experience immediately.'],
+      ['SLA','Cluster detection within 10 min. Store alert within 15 min. Service recovery offer within 30 min.'],
+    ],'#009d9a')}
+  </div>
+
+  ${calloutHTML('NiFi INTEGRATION','All three agents follow the same InvokeHTTP integration pattern: POST enriched FlowFile (JSON) including all upstream AI scores → agent endpoint. Response parsed for actions_taken[], recommendations[], draft_content[]. Connection Timeout: 30s | Read Timeout: 60s | Retry Count: 2 with 5s backoff. All calls logged in NiFi Provenance with full request/response payload.','#8a3ffc')}
+</div>`;
+
+// Scenarios
+document.getElementById('scenarios-content').innerHTML=`
+<div class="space-y-6">
+  <p class="text-sm text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed font-light">Four real-world scenarios demonstrate how NiFi dataflows and AI agents work together to detect issues, coordinate responses, and generate executive action plans — with exact timelines and measurable outcomes.</p>
+
+  ${scenarioHTML('!','Scenario A — Recall Crisis Response',
+    'FDA publishes Class I recall: Romaine Lettuce Lot #RL-2024-448 — Listeria contamination. NiFi PG3 receives event at 14:30:00.',
+    [
+      '<strong>14:30:02</strong> — ValidateRecord confirms schema. LookupRecord_InventoryCrossRef finds 847 units across 12 stores. Lot confirmed in inventory.',
+      '<strong>14:30:04</strong> — RouteOnAttribute: Class I → immediate path. InvokeHTTP_RecallAgent posts full context to Recall Response Agent.',
+      '<strong>14:30:35</strong> — Agent completes: 847 units in stores, 312 sold to 289 loyalty members. ERP recall hold set autonomously on all 12 stores. P1 executive alert fired.',
+      '<strong>14:32:15</strong> — VP Supply Chain approves store manager communications. NiFi routes to email/SMS delivery processor.',
+      '<strong>14:33:00</strong> — All 12 store managers receive precise removal instructions via SMS and store operations app.',
+      '<strong>14:41:00</strong> — 289 loyalty member notifications drafted (personalized with product return/refund offer). Queued for VP approval.',
+      '<strong>15:30:00</strong> — All 12 stores confirm 100% removal. NiFi compliance tracker records closure. FDA audit log written.',
+    ],
+    'Total response time from FDA API event to all stores notified: 3 minutes. Full compliance closure: 60 minutes. Without NiFi + AI, estimated manual response time: 2–4 hours.',
+    ['IMMEDIATE: Complete shelf removal with photo confirmation via store associate app.','24 HOURS: Formal supplier audit request to Green Valley Farms. Future orders on conditional hold.','48 HOURS: Loyalty purchase analysis — identify customers who may have consumed product.','1 WEEK: Review romaine sourcing diversification. AI procurement agent identifies alternative certified suppliers.','ONGOING: Add CDC outbreak surveillance feed as new NiFi data stream.'],
+    '#da1e28')}
+
+  ${scenarioHTML('$','Scenario B — Flash Sales Opportunity',
+    'Demand Anomaly Detector fires on Charcoal Briquettes at Stores 07, 11, 14, 22: anomaly_score=0.91, 340% above 7-day rolling average. Weather forecast: 85°F weekend.',
+    [
+      'PG1 InvokeHTTP_DemandScorer returns anomaly_score=0.91. RouteOnAttribute → executive-alert topic and Sales Intelligence Agent activation.',
+      'Agent reads live inventory API: Stores 07, 11, 14 have <3 days supply at current velocity. Warehouse has 4,200 units available.',
+      'Agent calculates: distributing 4,000 units to stores 07/11/14 before weekend = projected additional revenue $18,400.',
+      'Basket analysis: 73% of charcoal buyers also buy lighter fluid, 61% buy disposable plates — both understocked at same stores. Expanded recommendation generated.',
+      'P3 alert to Category Manager and VP Merchandising with specific transfer and co-merchandising recommendations.',
+      'Category Manager approves transfer order via executive app. NiFi routes to ERP transfer order API. WMS pick lists generated automatically.',
+    ],
+    'Weekend sales: $21,200 in charcoal and co-sell items across 4 stores. Without detection, stores would have stocked out Saturday morning. Net gain: ~$15,000 in recovered revenue.',
+    ['Approve emergency stock transfer Thursday AM for Friday delivery.','Activate co-merchandising: charcoal + lighter fluid + plates end-cap display.','Dynamic pricing: hold price on charcoal (demand inelastic), promote accessories.','Post-weekend: add seasonal demand forecasting calendar event for Memorial Day, 4th of July, Labor Day.'],
+    '#0f62fe')}
+
+  ${scenarioHTML('!','Scenario C — Vendor Delivery Failure',
+    'Store 03 dairy delivery from Sunrise Dairy (V-0112) not arrived. Scheduled: 05:00–06:30. Actual: not arrived by 07:45. PO contains 840 units 2% milk, 320 units Greek yogurt, 160 units cream cheese.',
+    [
+      'PG5 RouteOnAttribute_Breaches: SLA breach confirmed (75 min late). Vendor Delivery Agent activated.',
+      'Agent reads inventory: Store 03 — 2% milk: 2.3 hours supply remaining at morning velocity. Greek yogurt: 1.8 hours. Urgent.',
+      'Agent uses vendor contact API: retrieves dispatch phone, sends automated EDI 824 flagging SLA breach, drafts incident report for Procurement.',
+      'Agent identifies alternate supplier Valley Fresh (V-0089) with same SKUs, can deliver within 3 hours. Drafts emergency PO.',
+      'Store 07 (8 miles away) has 4+ days supply — agent drafts emergency inter-store transfer to cover until alternate delivery arrives.',
+      'P2 alert to VP Procurement and Regional Director. Vendor Scorecard updated: Sunrise Dairy OTD drops to 91.2% (below 95% SLA). Third breach in 90 days — review triggered.',
+    ],
+    'Inter-store transfer completed by 09:00. Alternative delivery by 10:30. No stockout at Store 03. Sunrise Dairy formally notified with SLA breach documentation.',
+    ['IMMEDIATE: Approve inter-store transfer from Store 07.','SAME DAY: Procurement calls Sunrise Dairy for root cause. Formal SLA breach notice issued.','30 DAYS: Full vendor risk assessment for all dairy suppliers. Sourcing diversification strategy.','ONGOING: Add Sunrise Dairy to enhanced monitoring — GPS-based ETA tracking from 2 hours before scheduled window.'],
+    '#ff832b')}
+
+  ${scenarioHTML('*','Scenario D — Customer Sentiment Spike',
+    'Customer Experience Agent detects complaint cluster: Store 14, topic=FRESHNESS, 7 negative events in 90 min, avg sentiment=-0.78. Two comments mention "mold", one mentions "expiry date passed". urgency_score=0.92.',
+    [
+      'PG4 urgency_score=0.92 + food_safety keyword detected → P1 escalation path. Customer Experience Agent activated.',
+      'Agent reads inventory API for Store 14: bagged salad mix received 4 days ago — 2 of 3 SKUs within 1 day of expiry. Systemic freshness issue confirmed.',
+      'P1 store manager alert sent: immediate fresh produce inspection required — Section 4 (salad/fresh cut). Specific SKUs flagged. Photo documentation requested.',
+      'For 7 affected loyalty members: agent drafts personalized apology + $10 store credit offer. Queued for VP Customer Experience approval.',
+      'Agent queries NiFi provenance: traces affected SKUs to Vendor Fresh Farms Direct (V-0201), Monday delivery batch. Checks if same batch sent to stores 03, 07, 11.',
+      'Stores 03, 07, 11 receive precautionary inspection alert for same SKUs — proactive check before complaints escalate.',
+    ],
+    'Store 14: 60% of affected salad mix removed ($340 write-off). Stores 03/07/11: borderline quality marked down 40% — recovered $890 vs. $0 write-off. Root cause: Fresh Farms Direct refrigeration fault confirmed via cold chain IoT data in NiFi provenance.',
+    ['Store manager: complete fresh produce inspection and remove all affected items.','Loyalty recovery: send $10 store credit to 7 affected customers within 30 minutes.','Contact Fresh Farms Direct: request cold chain incident report and corrective action plan.','Key learning: integrate customer feedback NLP with inventory CDC + vendor delivery for compound issue detection no single system provides alone.'],
+    '#009d9a')}
+</div>`;
+
+// Framework
+document.getElementById('framework-content').innerHTML=`
+<div class="space-y-6">
+  <p class="text-sm text-ibm-gray80 dark:text-ibm-gray20 leading-relaxed font-light">The true power of the NiFi + AI architecture emerges when the system correlates signals across multiple data streams to detect compound issues. The following matrix defines the cross-stream detection rules AI agents evaluate continuously.</p>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-green dark:text-green-400 mb-3 font-mono uppercase tracking-wider">Multi-Signal Issue Detection Matrix</h3>
+    ${tableHTML(['Signal Combination','Detected Issue','Agent Response'],[
+      ['Demand spike (POS) + Inventory declining (CDC) + No pending delivery','Imminent stockout during high-demand period','Emergency transfer order + dynamic pricing + backup vendor outreach'],
+      ['Customer freshness complaints (NLP) + Short shelf life (Inventory CDC) + Vendor delivery late','Quality failure from cold chain breach','Store inspection alert + loyalty recovery + vendor audit trigger + multi-store check'],
+      ['Recall event (FDA API) + Inventory held (CDC) + Loyalty purchase history','Active recall with confirmed customer exposure','Full recall response playbook — Scenario A'],
+      ['Vendor short shipment + High-demand period ahead + Inventory at reorder point','Category stockout from vendor failure','Alternate sourcing + inter-store transfer + category manager P2 alert'],
+      ['Equipment anomaly (IoT) + Perishables in affected zone + Recent delivery','In-store cold chain failure — product at risk','Maintenance dispatch + inventory temp audit + precautionary markdown'],
+      ['Negative sentiment spike (NLP) + Multi-topic + Store event log: high checkout wait','Operational breakdown — multi-dimensional service failure','Regional Manager alert + root cause analysis + staffing recommendation'],
+      ['Sales below plan 3+ days + Competitor price lower + No promo','Competitive pricing erosion','AI pricing analysis + targeted promotional recommendation + margin impact model'],
+    ],'#198038')}
+  </div>
+
+  <div>
+    <h3 class="font-bold text-sm text-ibm-green dark:text-green-400 mb-3 font-mono uppercase tracking-wider">AI-Generated Action Plan Structure</h3>
+    <div class="space-y-2">
+      ${[
+        ['SITUATION SUMMARY','One-paragraph executive summary: what happened, when, at which locations, current status. Plain business language, no jargon.'],
+        ['BUSINESS IMPACT','Quantified financial exposure (inventory at risk, revenue at risk, regulatory cost). Customer impact (number affected, loyalty tier). Operational impact (stores, team hours).'],
+        ['ROOT CAUSE ANALYSIS','AI-determined probable root cause with confidence level. Supporting evidence from each data stream (NiFi provenance chain). Contributing factors ranked by likelihood.'],
+        ['IMMEDIATE ACTIONS (0–4 hrs)','Specific, assigned, time-bound actions already taken autonomously + actions requiring human execution. Owner / Due / Status for each.'],
+        ['SHORT-TERM ACTIONS (4–72 hrs)','Vendor management, customer communications, inventory corrections, staffing adjustments. Each with owner, deadline, expected outcome.'],
+        ['STRATEGIC ACTIONS (1–4 weeks)','Process improvements, sourcing strategy updates, technology enhancements, policy revisions to prevent recurrence.'],
+        ['METRICS TO MONITOR','KPIs to track to confirm resolution. NiFi dashboard links for real-time monitoring. Alert thresholds to tighten during recovery.'],
+      ].map(([label,desc],i)=>`
+        <div class="flex gap-0 border border-ibm-gray20 dark:border-ibm-gray60">
+          <div class="w-8 flex items-center justify-center text-white font-mono font-bold text-xs flex-shrink-0" style="background:#198038">${i+1}</div>
+          <div class="flex-1 px-4 py-2 bg-ibm-gray10 dark:bg-ibm-gray80">
+            <span class="font-mono text-xs font-semibold text-ibm-green dark:text-green-400 uppercase tracking-wider">${label}: </span>
+            <span class="text-xs text-ibm-gray80 dark:text-ibm-gray20">${desc}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  ${calloutHTML('EXECUTIVE TAKEAWAY','The NiFi + AI architecture does not replace human judgment — it dramatically amplifies it. Executives make better decisions faster because they have complete, AI-synthesized context within minutes of an event, not hours. Agents handle data gathering, cross-referencing, communication drafting, and routine actions autonomously, freeing leadership to focus on decisions that genuinely require human expertise, relationships, and accountability. Over time, the system learns what good decisions look like in your specific retail environment.','#0f62fe')}
+</div>`;
+
+// Appendix
+document.getElementById('appendix-content').innerHTML=`
+<div class="space-y-6">
+  <div>
+    <h3 class="font-bold text-sm text-ibm-blue dark:text-ibm-blueLight mb-3 font-mono uppercase tracking-wider">Process Group Summary</h3>
+    ${tableHTML(['Process Group','Key Processors','Output Topics'],[
+      ['PG1 — POS Sales','ConsumeKafka, ValidateRecord, SplitRecord, LookupRecord ×2, InvokeHTTP (Demand Scorer), RouteOnAttribute, PublishKafka, PutS3Object','pos.transactions.enriched, executive.alerts.p3'],
+      ['PG2 — Inventory CDC','ConsumeKafka (Debezium), EvaluateJsonPath, RouteOnAttribute, InvokeHTTP (Stockout + Waste), PublishKafka','inventory.alerts.executive, inventory.enriched'],
+      ['PG3 — Recall Mgmt','InvokeHTTP (FDA + USDA), MergeContent, QueryRecord, LookupRecord (Inventory), RouteOnAttribute, InvokeHTTP (Recall Agent), PublishKafka','recalls.executive.immediate, compliance.audit.log'],
+      ['PG4 — Customer Intel','ListenHTTP, InvokeHTTP (Social), ConsumeKafka (CRM), UpdateRecord, InvokeHTTP (Sentiment NLP), RouteOnAttribute, PublishKafka','customer.sentiment.enriched, escalations.immediate'],
+      ['PG5 — Vendor Delivery','GetSFTP (EDI), ConsumeKafka (Receiving), InvokeHTTP (Delivery Scorer), RouteOnAttribute, InvokeHTTP (Vendor Agent), PublishKafka','vendor.delivery.enriched, vendor.sla.breaches'],
+      ['PG6 — Store Events','TailFile (syslog), ListenMQTT (IoT), InvokeHTTP (Anomaly Detector), RouteOnAttribute, PublishKafka','store.events.enriched, equipment.alerts.maintenance'],
+    ],'#0f62fe')}
+  </div>
+  <div>
+    <h3 class="font-bold text-sm text-ibm-purple dark:text-purple-300 mb-3 font-mono uppercase tracking-wider">AI Model Endpoint Reference</h3>
+    ${tableHTML(['Endpoint','Model Type','Description'],[
+      ['/v1/score/demand-anomaly','Random Forest + LSTM','anomaly_score, anomaly_type, confidence'],
+      ['/v1/score/stockout-probability','Gradient Boosted Trees','probability, hours_to_stockout, recommended_reorder_qty'],
+      ['/v1/score/waste-risk','Survival Analysis','waste_risk_score, recommended_markdown_pct, urgency'],
+      ['/v1/score/delivery-risk','Logistic Regression + Vendor History','on_time_probability, fill_rate_prediction, cold_chain_risk_score'],
+      ['/v1/score/sentiment-nlp','Fine-tuned LLM (Claude 3 Haiku)','sentiment, sentiment_score, topics[], urgency_score, key_entities[]'],
+      ['/v1/score/equipment-anomaly','Isolation Forest (IoT time-series)','anomaly_probability, estimated_time_to_failure, maintenance_priority'],
+      ['/v1/agent/recall-response','Claude 3.5 Sonnet + tools','Full recall playbook: actions_taken[], draft_communications[], compliance_checklist'],
+      ['/v1/agent/sales-intelligence','Claude 3.5 Sonnet + tools','Demand + pricing: recommendations[], opportunity_value, draft_transfer_orders[]'],
+      ['/v1/agent/customer-experience','Claude 3.5 Sonnet + tools','Sentiment + recovery: escalations[], store_alerts[], recovery_drafts[], root_cause'],
+    ],'#8a3ffc')}
+  </div>
+  <div>
+    <h3 class="font-bold text-sm text-ibm-blue dark:text-ibm-blueLight mb-3 font-mono uppercase tracking-wider">Pipeline KPI Targets</h3>
+    ${tableHTML(['KPI','Target','Monitoring Method'],[
+      ['End-to-end recall alert latency','< 90 seconds (Class I)','NiFi Provenance: RECEIVE → executive-alert timestamp delta'],
+      ['POS event processing lag','< 30 seconds','Kafka consumer lag + NiFi bulletin board'],
+      ['AI model call latency (p95)','< 2 seconds','InvokeHTTP transaction time attribute; Prometheus metrics'],
+      ['Inventory CDC event processing','< 10 seconds','Debezium event timestamp vs. NiFi completion timestamp'],
+      ['Customer feedback NLP latency','< 60 seconds per event','FlowFile queued time + InvokeHTTP duration'],
+      ['Data lake write throughput','> 50 MB/s sustained','PutS3Object byte transfer rate (NiFi reporting task)'],
+      ['Pipeline error rate','< 0.1% of FlowFiles','Failure relationship counts / total FlowFiles processed'],
+      ['Back-pressure events','< 5 per hour','NiFi Connection queue depth alerts via Grafana'],
+    ],'#0f62fe')}
+  </div>
+</div>`;
+
+</script>
+</body>
+</html>
