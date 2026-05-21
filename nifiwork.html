@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NiFi Flow Deployment — Admin Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  /* ── IBM DESIGN TOKENS ── */
+  :root {
+    /* IBM core palette */
+    --ibm-blue-70:  #0043ce;
+    --ibm-blue-60:  #0f62fe;
+    --ibm-blue-50:  #4589ff;
+    --ibm-blue-40:  #78a9ff;
+    --ibm-blue-10:  #edf5ff;
+    --ibm-blue-20:  #d0e2ff;
+    --ibm-gray-100: #161616;
+    --ibm-gray-90:  #262626;
+    --ibm-gray-80:  #393939;
+    --ibm-gray-70:  #525252;
+    --ibm-gray-50:  #8d8d8d;
+    --ibm-gray-30:  #c6c6c6;
+    --ibm-gray-20:  #e0e0e0;
+    --ibm-gray-10:  #f4f4f4;
+    --ibm-white:    #ffffff;
+    /* Semantic */
+    --bg:       var(--ibm-white);
+    --surface:  var(--ibm-gray-10);
+    --border:   var(--ibm-gray-20);
+    --border-strong: var(--ibm-gray-30);
+    --text-primary:   var(--ibm-gray-100);
+    --text-secondary: var(--ibm-gray-70);
+    --text-helper:    var(--ibm-gray-50);
+    --accent:   var(--ibm-blue-60);
+    --accent-hover: var(--ibm-blue-70);
+    --accent-light: var(--ibm-blue-10);
+    --accent-light2: var(--ibm-blue-20);
+    /* Environment colors */
+    --dev:     #198038;   /* IBM green-60 */
+    --dev-bg:  #defbe6;
+    --stg:     #b28600;   /* IBM yellow-40 */
+    --stg-bg:  #fdf6dd;
+    --prod:    #da1e28;   /* IBM red-60 */
+    --prod-bg: #fff1f1;
+    /* Alerts */
+    --alert-warn-bg:  #fdf6dd;
+    --alert-warn-bdr: #f1c21b;
+    --alert-info-bg:  var(--ibm-blue-10);
+    --alert-info-bdr: var(--ibm-blue-60);
+    --alert-ok-bg:    #defbe6;
+    --alert-ok-bdr:   #24a148;
+    /* Code block — keep dark for readability */
+    --code-bg:    #1e1e1e;
+    --code-border:#333;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--ibm-gray-100);
+    border-bottom: 3px solid var(--accent);
+    padding: 36px 48px 28px;
+  }
+  .header-tag {
+    font-size: 12px; letter-spacing: 2px;
+    color: var(--ibm-blue-40); text-transform: uppercase;
+    margin-bottom: 10px; font-weight: 500;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  h1 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: clamp(26px, 4vw, 44px);
+    font-weight: 700;
+    color: var(--ibm-white);
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+  }
+  h1 span { color: var(--ibm-blue-40); }
+  .header-sub {
+    margin-top: 10px;
+    color: var(--ibm-gray-30);
+    font-size: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── PIPELINE BAR ── */
+  .pipeline {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 48px;
+    background: var(--ibm-gray-90);
+    border-bottom: 1px solid var(--ibm-gray-80);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .env-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 22px;
+    font-weight: 600; font-size: 13px; letter-spacing: 1.5px;
+    text-transform: uppercase; cursor: default;
+    border-bottom: 3px solid transparent;
+    transition: border-color 0.15s;
+    white-space: nowrap;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .env-badge.dev  { color: #42be65; border-bottom-color: #42be65; }
+  .env-badge.stg  { color: #f1c21b; border-bottom-color: #f1c21b; }
+  .env-badge.prod { color: #ff8389; border-bottom-color: #ff8389; }
+  .arrow { font-size: 16px; color: var(--ibm-gray-50); padding: 0 4px; flex-shrink: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.dev  { background: #42be65; }
+  .dot.stg  { background: #f1c21b; }
+  .dot.prod { background: #ff8389; }
+  .pipeline-label {
+    margin-left: auto; font-size: 12px;
+    color: var(--ibm-gray-50); letter-spacing: 0.5px;
+    white-space: nowrap; padding: 14px 0;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 1400px; margin: 0 auto; padding: 36px 48px; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 0; margin-bottom: 32px;
+    border-bottom: 2px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 14px 22px; cursor: pointer;
+    font-size: 14px; font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    user-select: none;
+    min-height: 48px; /* touch-friendly */
+    display: flex; align-items: center;
+  }
+  .tab:hover { color: var(--text-primary); background: var(--ibm-gray-10); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── SECTION PANELS ── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── CARDS ── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .card {
+    background: var(--ibm-white);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--line-color, var(--accent));
+    border-radius: 0;
+    padding: 24px;
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(15,98,254,0.10); }
+  .card-title {
+    font-size: 16px; font-weight: 600;
+    color: var(--text-primary); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .card-title .icon { font-size: 18px; }
+  .card p { color: var(--text-secondary); margin-bottom: 10px; font-size: 14px; line-height: 1.6; }
+
+  /* ── CODE BLOCKS ── */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0;
+    padding: 20px 20px 20px 20px;
+    overflow-x: auto;
+    position: relative;
+    margin: 14px 0;
+  }
+  .code-block .lang-tag {
+    position: absolute; top: 8px; right: 12px;
+    font-size: 11px; color: #6a737d; letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .code-block pre {
+    color: #cdd9e5;
+    line-height: 1.75;
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+    white-space: pre;
+  }
+  .kw  { color: #79c0ff; }
+  .str { color: #aff5b4; }
+  .cm  { color: #6a737d; font-style: italic; }
+  .num { color: #ffa657; }
+  .fn  { color: #d2a8ff; }
+  .key { color: #ff7b72; }
+  .val { color: #e3b341; }
+  .path { color: #7ee787; }
+  .env-dev  { color: #56d364; font-weight: 600; }
+  .env-stg  { color: #e3b341; font-weight: 600; }
+  .env-prod { color: #f87171; font-weight: 600; }
+  .good { color: #56d364; }
+  .warn { color: #e3b341; }
+  .err  { color: #ff7b72; }
+
+  /* ── STEP FLOW ── */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: flex; gap: 0; align-items: flex-start;
+    padding: 20px 0 20px 44px;
+    border-left: 2px solid var(--border-strong);
+    margin-left: 18px;
+    position: relative;
+  }
+  .step::before {
+    content: attr(data-n);
+    position: absolute; left: -18px; top: 22px;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--ibm-white);
+    border: 2px solid var(--step-color, var(--accent));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    color: var(--step-color, var(--accent));
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .step-content { flex: 1; }
+  .step-title {
+    font-weight: 600; color: var(--text-primary); font-size: 15px;
+    margin-bottom: 8px;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .step p { font-size: 14px; margin-bottom: 8px; color: var(--text-secondary); }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 14px 0; }
+  .data-table th {
+    background: var(--ibm-gray-10);
+    color: var(--text-primary);
+    padding: 12px 16px; text-align: left;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    border-bottom: 2px solid var(--border-strong);
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  .data-table tr:hover td { background: var(--accent-light); }
+  .data-table code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    background: var(--ibm-gray-10);
+    padding: 2px 6px;
+    border-radius: 2px;
+    color: var(--accent);
+  }
+
+  /* ── VERSION HISTORY ── */
+  .version-list { display: flex; flex-direction: column; gap: 8px; }
+  .version-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 18px;
+    background: var(--ibm-white);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border-strong);
+    transition: border-color 0.15s, background 0.15s;
+    flex-wrap: wrap;
+  }
+  .version-item:hover { background: var(--accent-light); border-left-color: var(--accent); }
+  .v-num {
+    font-weight: 700; color: var(--accent); min-width: 48px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+  }
+  .v-env {
+    font-size: 11px; padding: 4px 10px; font-weight: 600;
+    text-align: center; letter-spacing: 1px; text-transform: uppercase;
+    font-family: 'IBM Plex Mono', monospace; border-radius: 2px;
+    white-space: nowrap;
+  }
+  .v-env.dev  { background: var(--dev-bg);  color: var(--dev); }
+  .v-env.stg  { background: var(--stg-bg);  color: var(--stg); }
+  .v-env.prod { background: var(--prod-bg); color: var(--prod); }
+  .v-msg { flex: 1; color: var(--text-primary); font-size: 14px; min-width: 200px; }
+  .v-date { color: var(--text-helper); font-size: 12px; font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+  .v-author { font-size: 12px; color: var(--accent); min-width: 80px; font-family: 'IBM Plex Mono', monospace; }
+
+  /* ── ALERT ── */
+  .alert {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px 18px;
+    margin: 14px 0; font-size: 14px; line-height: 1.6;
+    border-radius: 0;
+  }
+  .alert.warn    { background: var(--alert-warn-bg); border-left: 4px solid var(--alert-warn-bdr); color: #7d5a00; }
+  .alert.info    { background: var(--alert-info-bg); border-left: 4px solid var(--alert-info-bdr); color: var(--ibm-gray-90); }
+  .alert.success { background: var(--alert-ok-bg);   border-left: 4px solid var(--alert-ok-bdr);  color: #0e6027; }
+  .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── FILE TREE ── */
+  .file-tree {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-left: 3px solid var(--ibm-blue-50);
+    padding: 20px;
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.9;
+  }
+  .file-tree .dir     { color: #79c0ff; font-weight: 600; }
+  .file-tree .file    { color: #cdd9e5; padding-left: 20px; }
+  .file-tree .file-xml  { color: #aff5b4; }
+  .file-tree .file-json { color: #ffa657; }
+  .file-tree .file-sh   { color: #7ee787; }
+  .file-tree .comment   { color: #6a737d; font-style: italic; }
+  .file-tree .indent    { padding-left: 20px; }
+
+  /* ── BADGE ── */
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    padding: 3px 9px; letter-spacing: 0.5px;
+    text-transform: uppercase; vertical-align: middle;
+    font-family: 'IBM Plex Mono', monospace;
+    border-radius: 2px;
+  }
+  .badge-blue   { background: var(--accent-light2); color: var(--ibm-blue-70); }
+  .badge-green  { background: var(--dev-bg);  color: var(--dev); }
+  .badge-yellow { background: var(--stg-bg);  color: var(--stg); }
+  .badge-red    { background: var(--prod-bg); color: var(--prod); }
+
+  h2 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 22px; font-weight: 600;
+    color: var(--text-primary); margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 16px; font-weight: 600;
+    color: var(--accent); margin: 22px 0 10px;
+  }
+
+  ul.list { list-style: none; padding: 0; }
+  ul.list li {
+    padding: 6px 0 6px 20px;
+    position: relative;
+    color: var(--text-secondary); font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  ul.list li:last-child { border-bottom: none; }
+  ul.list li::before { content: '→'; position: absolute; left: 0; color: var(--accent); font-weight: 600; }
+
+  code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    background: var(--ibm-gray-10);
+    padding: 2px 6px;
+    border-radius: 2px;
+    color: var(--accent);
+  }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* ── MOBILE ── */
+  @media (max-width: 768px) {
+    header { padding: 24px 20px 20px; }
+    .pipeline { padding: 0 16px; }
+    .pipeline-label { display: none; }
+    .container { padding: 24px 16px; }
+    .tabs { gap: 0; }
+    .tab { padding: 12px 14px; font-size: 13px; }
+    .two-col { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr; }
+    .version-item { flex-wrap: wrap; gap: 8px; }
+    .v-msg { min-width: 100%; order: 10; }
+    .code-block pre { font-size: 12px; }
+    h2 { font-size: 19px; }
+    h3 { font-size: 15px; }
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--ibm-gray-10); }
+  ::-webkit-scrollbar-thumb { background: var(--ibm-gray-30); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ibm-gray-50); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-tag">Apache NiFi · Administrator Reference</div>
+  <h1>Flow <span>Deployment</span> Lifecycle</h1>
+  <p class="header-sub">NiFi Registry · Version Control · Environment Promotion · Rollback · CI/CD</p>
+</header>
+
+<!-- Pipeline Bar -->
+<div class="pipeline">
+  <span class="env-badge dev active"><span class="dot dev"></span>DEV</span>
+  <span class="arrow">──▶</span>
+  <span class="env-badge stg"><span class="dot stg"></span>STAGING</span>
+  <span class="arrow">──▶</span>
+  <span class="env-badge prod"><span class="dot prod"></span>PRODUCTION</span>
+  <span class="pipeline-label">NiFi Registry · Bucket-based promotion · Version-controlled</span>
+</div>
+
+<div class="container">
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('overview')">Overview</div>
+    <div class="tab" onclick="showTab('registry')">Registry Setup</div>
+    <div class="tab" onclick="showTab('versioning')">Version Control</div>
+    <div class="tab" onclick="showTab('promote')">Promote Flows</div>
+    <div class="tab" onclick="showTab('files')">Files & Config</div>
+    <div class="tab" onclick="showTab('history')">Version History</div>
+    <div class="tab" onclick="showTab('cicd')">CI/CD & Rollback</div>
+  </div>
+
+  <!-- ─────────────────── OVERVIEW ─────────────────── -->
+  <div class="section active" id="tab-overview">
+    <h2>NiFi Flow Deployment Architecture</h2>
+
+    <div class="grid">
+      <div class="card" style="--line-color: #0f62fe;">
+        <div class="card-title"><span class="icon">🗂️</span> What is NiFi Registry?</div>
+        <p>NiFi Registry is a standalone service that provides flow version control. It stores snapshots of Process Group flows, tied to a Git-backed or local storage provider.</p>
+        <p>Every save creates an immutable snapshot. Flows can be imported into any NiFi instance by referencing the Registry bucket + flow ID + version number.</p>
+        <div class="alert info"><span class="alert-icon">ℹ️</span> Registry is <strong>separate</strong> from NiFi itself — it runs on its own port (default 18080) and can serve multiple NiFi clusters.</div>
+      </div>
+
+      <div class="card" style="--line-color: #198038;">
+        <div class="card-title"><span class="icon">🔁</span> Promotion Model</div>
+        <p>Flows are <strong>version-pinned</strong>. Each environment imports a specific version from a Registry bucket. Promotion means pointing the next environment at a validated version.</p>
+        <table class="data-table">
+          <tr><th>Environment</th><th>Bucket</th><th>Policy</th></tr>
+          <tr><td><span class="env-dev">DEV</span></td><td>dev-flows</td><td>Any version, frequent saves</td></tr>
+          <tr><td><span class="env-stg">STAGING</span></td><td>staging-flows</td><td>Promoted + reviewed only</td></tr>
+          <tr><td><span class="env-prod">PROD</span></td><td>prod-flows</td><td>Change-board approved</td></tr>
+        </table>
+      </div>
+
+      <div class="card" style="--line-color: #b28600;">
+        <div class="card-title"><span class="icon">📁</span> Key Files Touched</div>
+        <ul class="list">
+          <li>Registry: <code>nifi-registry.properties</code></li>
+          <li>NiFi: <code>nifi.properties</code></li>
+          <li>Flow snapshots: <code>*.json</code> in Registry store</li>
+          <li>Bucket configs: <code>providers.xml</code></li>
+          <li>Env variables: <code>parameter-context.json</code></li>
+          <li>Promote scripts: <code>promote-flow.sh</code></li>
+          <li>CI pipeline: <code>.github/workflows/nifi-deploy.yml</code></li>
+        </ul>
+      </div>
+
+      <div class="card" style="--line-color: #da1e28;">
+        <div class="card-title"><span class="icon">👤</span> Admin Activities</div>
+        <ul class="list">
+          <li>Configure Registry + connect NiFi instances</li>
+          <li>Create & manage buckets per environment</li>
+          <li>Commit flow versions from DEV canvas</li>
+          <li>Pull latest version into Staging</li>
+          <li>Update Parameter Contexts per env</li>
+          <li>Approve and promote to Production</li>
+          <li>Monitor version drift across clusters</li>
+          <li>Roll back broken versions</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── REGISTRY SETUP ─────────────────── -->
+  <div class="section" id="tab-registry">
+    <h2>Registry Setup & NiFi Connection</h2>
+
+    <h3>1. nifi-registry.properties — Core Registry Config</h3>
+    <div class="code-block">
+      <span class="lang-tag">properties</span>
+      <pre><span class="cm"># /opt/nifi-registry/conf/nifi-registry.properties</span>
+<span class="key">nifi.registry.web.http.port</span>=<span class="num">18080</span>
+<span class="key">nifi.registry.web.https.port</span>=<span class="num">18443</span>
+
+<span class="cm"># Flow persistence — where snapshot JSON files live on disk</span>
+<span class="key">nifi.registry.db.directory</span>=<span class="path">./database</span>
+<span class="key">nifi.registry.flow.provider.id</span>=<span class="str">git-flow-provider</span>
+
+<span class="cm"># Security</span>
+<span class="key">nifi.registry.security.keystore</span>=<span class="path">./conf/keystore.jks</span>
+<span class="key">nifi.registry.security.keystorePasswd</span>=<span class="str">changeit</span>
+<span class="key">nifi.registry.security.truststore</span>=<span class="path">./conf/truststore.jks</span>
+
+<span class="cm"># LDAP / identity provider</span>
+<span class="key">nifi.registry.security.identity.provider</span>=<span class="str">ldap-identity-provider</span>
+<span class="key">nifi.registry.security.authorization.manager</span>=<span class="str">managed-authorizer</span></pre>
+    </div>
+
+    <h3>2. providers.xml — Git-backed Flow Storage</h3>
+    <div class="code-block">
+      <span class="lang-tag">xml</span>
+      <pre><span class="cm">&lt;!-- /opt/nifi-registry/conf/providers.xml --&gt;</span>
+<span class="kw">&lt;providers&gt;</span>
+
+  <span class="cm">&lt;!-- Git provider: flows stored as JSON in a Git repo --&gt;</span>
+  <span class="kw">&lt;flowPersistenceProvider&gt;</span>
+    <span class="kw">&lt;class&gt;</span><span class="str">org.apache.nifi.registry.provider.flow.git.GitFlowPersistenceProvider</span><span class="kw">&lt;/class&gt;</span>
+    <span class="kw">&lt;property name=</span><span class="str">"Flow Storage Directory"</span><span class="kw">&gt;</span><span class="path">./flow-storage</span><span class="kw">&lt;/property&gt;</span>
+    <span class="kw">&lt;property name=</span><span class="str">"Remote To Push"</span><span class="kw">&gt;</span><span class="str">origin</span><span class="kw">&lt;/property&gt;</span>
+    <span class="kw">&lt;property name=</span><span class="str">"Remote Access User"</span><span class="kw">&gt;</span><span class="str">git-nifi-svc</span><span class="kw">&lt;/property&gt;</span>
+    <span class="kw">&lt;property name=</span><span class="str">"Remote Access Password"</span><span class="kw">&gt;</span><span class="str">${GIT_TOKEN}</span><span class="kw">&lt;/property&gt;</span>
+  <span class="kw">&lt;/flowPersistenceProvider&gt;</span>
+
+  <span class="cm">&lt;!-- Event hook: notify Slack on new version committed --&gt;</span>
+  <span class="kw">&lt;eventHookProvider&gt;</span>
+    <span class="kw">&lt;class&gt;</span><span class="str">org.apache.nifi.registry.provider.hook.ScriptEventHookProvider</span><span class="kw">&lt;/class&gt;</span>
+    <span class="kw">&lt;property name=</span><span class="str">"Script Path"</span><span class="kw">&gt;</span><span class="path">./conf/hooks/notify-slack.sh</span><span class="kw">&lt;/property&gt;</span>
+  <span class="kw">&lt;/eventHookProvider&gt;</span>
+
+<span class="kw">&lt;/providers&gt;</span></pre>
+    </div>
+
+    <h3>3. Connect NiFi Instance to Registry (nifi.properties)</h3>
+    <div class="code-block">
+      <span class="lang-tag">properties</span>
+      <pre><span class="cm"># /opt/nifi/conf/nifi.properties  (repeat on each cluster: dev, staging, prod)</span>
+
+<span class="cm"># DEV cluster points to registry</span>
+<span class="key">nifi.registry.client.url</span>=<span class="str">https://nifi-registry.internal:18443</span>
+<span class="key">nifi.registry.client.id</span>=<span class="str">dev-nifi-client</span>
+<span class="key">nifi.registry.client.name</span>=<span class="str">Dev NiFi Client</span></pre>
+    </div>
+
+    <div class="alert success"><span class="alert-icon">✅</span> After restart, go to NiFi UI → Controller Settings → Registry Clients → Add, then verify the connection shows <strong>Connected</strong> status with the bucket list populated.</div>
+
+    <h3>4. Create Buckets via Registry REST API</h3>
+    <div class="code-block">
+      <span class="lang-tag">bash</span>
+      <pre><span class="cm"># Create the three environment buckets</span>
+<span class="kw">for</span> ENV <span class="kw">in</span> dev staging prod; <span class="kw">do</span>
+  curl -s -X POST <span class="str">"https://nifi-registry.internal:18443/nifi-registry-api/buckets"</span> \
+    -H <span class="str">"Content-Type: application/json"</span> \
+    -H <span class="str">"Authorization: Bearer ${REGISTRY_TOKEN}"</span> \
+    -d <span class="str">"{\"name\": \"${ENV}-flows\", \"description\": \"Flows for ${ENV} environment\"}"</span> \
+    | jq <span class="str">'.identifier'</span>
+<span class="kw">done</span>
+
+<span class="cm"># Output (save these bucket IDs!):</span>
+<span class="cm"># dev    → "a1b2c3d4-0001-..."</span>
+<span class="cm"># staging→ "a1b2c3d4-0002-..."</span>
+<span class="cm"># prod   → "a1b2c3d4-0003-..."</span></pre>
+    </div>
+  </div>
+
+  <!-- ─────────────────── VERSIONING ─────────────────── -->
+  <div class="section" id="tab-versioning">
+    <h2>Version Control — Save & Track Flow Changes</h2>
+
+    <div class="steps">
+      <div class="step" data-n="1" style="--step-color: var(--dev);">
+        <div class="step-content">
+          <div class="step-title">Start Version Control on a Process Group (DEV)</div>
+          <p>Right-click the Process Group on canvas → <strong>Version → Start Version Control</strong></p>
+          <div class="code-block">
+            <span class="lang-tag">ui action</span>
+            <pre>Registry Client : <span class="env-dev">Dev NiFi Client</span>
+Bucket          : <span class="env-dev">dev-flows</span>
+Flow Name       : <span class="str">IngestCustomerOrders</span>
+Flow Description: <span class="str">Kafka → NiFi → S3 pipeline for order ingestion</span>
+Comments        : <span class="str">Initial version - base structure</span>   <span class="cm">← required</span></pre>
+          </div>
+          <p>NiFi creates <span class="badge badge-green">v1</span> and the Process Group border turns green.</p>
+        </div>
+      </div>
+
+      <div class="step" data-n="2" style="--step-color: var(--dev);">
+        <div class="step-content">
+          <div class="step-title">Commit Changes as New Version</div>
+          <p>After modifying processors: Right-click PG → <strong>Version → Commit Local Changes</strong></p>
+          <div class="code-block">
+            <span class="lang-tag">bash (NiFi REST API equivalent)</span>
+            <pre><span class="cm"># Commit via REST — useful in scripts/CI</span>
+curl -X POST <span class="str">"https://nifi-dev:8443/nifi-api/versions/process-groups/{pgId}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "processGroupRevision": {"version": 12},
+    "versionedFlow": {
+      "registryId": "dev-client-id",
+      "bucketId":   "a1b2c3d4-0001-...",
+      "flowId":     "flow-uuid-xxxx",
+      "comments":   "Add error handling + retry loop on S3 put"
+    }
+  }'</span>
+
+<span class="cm"># Response includes the new version number</span>
+<span class="cm"># → "version": 5</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" data-n="3" style="--step-color: var(--dev);">
+        <div class="step-content">
+          <div class="step-title">What the Registry Stores (Flow Snapshot JSON)</div>
+          <p>The Registry persists a <code>.snapshot.json</code> (or git-committed JSON) per version:</p>
+          <div class="code-block">
+            <span class="lang-tag">json — flow snapshot excerpt</span>
+            <pre><span class="cm">// flow-storage/dev-flows/IngestCustomerOrders/5.snapshot.json</span>
+{
+  <span class="key">"flowContents"</span>: {
+    <span class="key">"identifier"</span>: <span class="str">"flow-uuid-xxxx"</span>,
+    <span class="key">"name"</span>: <span class="str">"IngestCustomerOrders"</span>,
+    <span class="key">"processors"</span>: [
+      {
+        <span class="key">"identifier"</span>: <span class="str">"proc-001"</span>,
+        <span class="key">"name"</span>: <span class="str">"ConsumeKafka_2_6"</span>,
+        <span class="key">"type"</span>: <span class="str">"org.apache.nifi.processors.kafka.pubsub.ConsumeKafka_2_6"</span>,
+        <span class="key">"properties"</span>: {
+          <span class="key">"bootstrap.servers"</span>: <span class="str">"#{KAFKA_BROKERS}"</span>,    <span class="cm">// ← parameter ref</span>
+          <span class="key">"topic"</span>: <span class="str">"#{KAFKA_TOPIC}"</span>,
+          <span class="key">"group.id"</span>: <span class="str">"nifi-ingest-group"</span>
+        }
+      },
+      {
+        <span class="key">"name"</span>: <span class="str">"PutS3Object"</span>,
+        <span class="key">"properties"</span>: {
+          <span class="key">"Bucket"</span>: <span class="str">"#{S3_BUCKET}"</span>,          <span class="cm">// ← parameter ref</span>
+          <span class="key">"Region"</span>: <span class="str">"us-east-1"</span>
+        }
+      }
+    ],
+    <span class="key">"parameterContextName"</span>: <span class="str">"#{ENV_PARAM_CONTEXT}"</span>
+  },
+  <span class="key">"timestamp"</span>: <span class="num">1716300000000</span>,
+  <span class="key">"author"</span>: <span class="str">"j.smith@company.com"</span>,
+  <span class="key">"comments"</span>: <span class="str">"Add error handling + retry loop on S3 put"</span>
+}</pre>
+          </div>
+          <div class="alert warn"><span class="alert-icon">⚠️</span> Sensitive values (passwords, keys) must use <strong>Parameter Contexts</strong> with <code>#{VAR}</code> references — never hardcoded in the snapshot JSON. Each environment provides its own Parameter Context.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── PROMOTE ─────────────────── -->
+  <div class="section" id="tab-promote">
+    <h2>Promoting Flows: DEV → STAGING → PROD</h2>
+
+    <div class="alert info"><span class="alert-icon">ℹ️</span> Promotion is <strong>not a copy</strong> of the NiFi canvas — it's importing a specific version number from Registry into the next environment's NiFi instance, then updating the Parameter Context to that environment's values.</div>
+
+    <h3>Step-by-step: DEV → STAGING</h3>
+    <div class="steps">
+      <div class="step" data-n="1" style="--step-color: var(--staging);">
+        <div class="step-content">
+          <div class="step-title">Export the versioned flow from DEV Registry</div>
+          <div class="code-block"><span class="lang-tag">bash</span>
+<pre><span class="cm"># Export version 5 of the flow to a JSON file</span>
+curl -s \
+  <span class="str">"https://nifi-registry.internal:18443/nifi-registry-api/buckets/<span class="path">BUCKET_ID</span>/flows/<span class="path">FLOW_ID</span>/versions/5"</span> \
+  -H <span class="str">"Authorization: Bearer ${REGISTRY_TOKEN}"</span> \
+  -o <span class="path">IngestCustomerOrders_v5.json</span>
+
+<span class="good">ls -lh IngestCustomerOrders_v5.json</span>
+<span class="cm"># -rw-r--r-- 1 nifi nifi 47K May 21 09:12 IngestCustomerOrders_v5.json</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" data-n="2" style="--step-color: var(--staging);">
+        <div class="step-content">
+          <div class="step-title">Import flow version into STAGING Registry bucket</div>
+          <div class="code-block"><span class="lang-tag">bash</span>
+<pre><span class="cm"># Import the same snapshot into the staging bucket</span>
+curl -s -X POST \
+  <span class="str">"https://nifi-registry.internal:18443/nifi-registry-api/buckets/<span class="path">STAGING_BUCKET_ID</span>/flows/<span class="path">STAGING_FLOW_ID</span>/versions"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -H <span class="str">"Authorization: Bearer ${REGISTRY_TOKEN}"</span> \
+  -d @<span class="path">IngestCustomerOrders_v5.json</span>
+
+<span class="cm"># Returns version "1" in staging bucket (staging versions are independent)</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" data-n="3" style="--step-color: var(--staging);">
+        <div class="step-content">
+          <div class="step-title">Update Staging NiFi — change flow to new version</div>
+          <div class="code-block"><span class="lang-tag">bash</span>
+<pre><span class="cm"># Get current PG info</span>
+PG_ID=<span class="str">"staging-pg-uuid"</span>
+PG_VERSION=$(curl -s <span class="str">"https://nifi-staging:8443/nifi-api/process-groups/${PG_ID}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> | jq <span class="str">'.revision.version'</span>)
+
+<span class="cm"># Update to new registry version</span>
+curl -X PUT \
+  <span class="str">"https://nifi-staging:8443/nifi-api/versions/process-groups/${PG_ID}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">"{
+    \"processGroupRevision\": {\"version\": ${PG_VERSION}},
+    \"versionedFlow\": {
+      \"registryId\": \"staging-registry-client\",
+      \"bucketId\":   \"STAGING_BUCKET_ID\",
+      \"flowId\":     \"STAGING_FLOW_ID\",
+      \"version\":    1
+    }
+  }"</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" data-n="4" style="--step-color: var(--staging);">
+        <div class="step-content">
+          <div class="step-title">Apply STAGING Parameter Context</div>
+          <div class="code-block"><span class="lang-tag">json — staging-params.json</span>
+<pre>{
+  <span class="key">"revision"</span>: {<span class="key">"version"</span>: <span class="num">0</span>},
+  <span class="key">"component"</span>: {
+    <span class="key">"name"</span>: <span class="str">"staging-context"</span>,
+    <span class="key">"parameters"</span>: [
+      {<span class="key">"parameter"</span>: {<span class="key">"name"</span>: <span class="str">"KAFKA_BROKERS"</span>, <span class="key">"value"</span>: <span class="str">"kafka-stg-1:9092,kafka-stg-2:9092"</span>}},
+      {<span class="key">"parameter"</span>: {<span class="key">"name"</span>: <span class="str">"KAFKA_TOPIC"</span>,   <span class="key">"value"</span>: <span class="str">"orders-staging"</span>}},
+      {<span class="key">"parameter"</span>: {<span class="key">"name"</span>: <span class="str">"S3_BUCKET"</span>,     <span class="key">"value"</span>: <span class="str">"company-data-staging"</span>}},
+      {<span class="key">"parameter"</span>: {<span class="key">"name"</span>: <span class="str">"DB_PASSWORD"</span>,   <span class="key">"value"</span>: <span class="str">"{{vault:staging/db/pass}}"</span>,
+                              <span class="key">"sensitive"</span>: <span class="val">true</span>}}
+    ]
+  }
+}</pre>
+          </div>
+          <div class="code-block"><span class="lang-tag">bash</span>
+<pre>curl -X POST <span class="str">"https://nifi-staging:8443/nifi-api/parameter-contexts"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d @<span class="path">staging-params.json</span></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top: 24px;">Promote STAGING → PRODUCTION (change-board gated)</h3>
+    <div class="code-block"><span class="lang-tag">bash — promote-to-prod.sh</span>
+<pre><span class="cm">#!/bin/bash
+# promote-to-prod.sh — run after CAB approval
+# Usage: ./promote-to-prod.sh IngestCustomerOrders 5</span>
+
+FLOW_NAME=<span class="str">"$1"</span>
+SRC_VERSION=<span class="str">"$2"</span>
+PROD_BUCKET=<span class="str">"a1b2c3d4-0003-..."</span>
+PROD_NIFI=<span class="str">"https://nifi-prod:8443"</span>
+
+<span class="kw">set -euo pipefail</span>
+
+echo <span class="str">"[+] Promoting ${FLOW_NAME} v${SRC_VERSION} → PROD"</span>
+
+<span class="cm"># 1. Export from staging registry</span>
+curl -s -o <span class="path">/tmp/${FLOW_NAME}_v${SRC_VERSION}.json</span> \
+  <span class="str">"https://nifi-registry.internal:18443/nifi-registry-api/buckets/${STAGING_BUCKET}/flows/${FLOW_ID}/versions/${SRC_VERSION}"</span> \
+  -H <span class="str">"Authorization: Bearer ${REGISTRY_TOKEN}"</span>
+
+<span class="cm"># 2. Import to prod registry bucket</span>
+PROD_VERSION=$(curl -s -X POST \
+  <span class="str">"https://nifi-registry.internal:18443/nifi-registry-api/buckets/${PROD_BUCKET}/flows/${PROD_FLOW_ID}/versions"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> -H <span class="str">"Authorization: Bearer ${REGISTRY_TOKEN}"</span> \
+  -d @<span class="path">/tmp/${FLOW_NAME}_v${SRC_VERSION}.json</span> | jq <span class="str">'.versionedFlowSnapshotMetadata.version'</span>)
+
+echo <span class="good">"[+] Imported as PROD v${PROD_VERSION}"</span>
+
+<span class="cm"># 3. Update prod NiFi process group</span>
+./update-pg-version.sh <span class="str">"${PROD_NIFI}"</span> <span class="str">"${PROD_PG_ID}"</span> <span class="str">"${PROD_VERSION}"</span>
+
+<span class="cm"># 4. Apply prod parameter context</span>
+./apply-params.sh <span class="str">"${PROD_NIFI}"</span> <span class="str">"prod-params.json"</span>
+
+echo <span class="good">"✓ Production deployment complete: ${FLOW_NAME} v${PROD_VERSION}"</span></pre>
+    </div>
+  </div>
+
+  <!-- ─────────────────── FILES ─────────────────── -->
+  <div class="section" id="tab-files">
+    <h2>Files & Configuration Reference</h2>
+
+    <div class="two-col">
+      <div>
+        <h3>Repository / File Structure</h3>
+        <div class="file-tree">
+          <div><span class="dir">nifi-flows-repo/</span>  <span class="comment">← Git repo</span></div>
+          <div class="indent"><span class="dir">registry/</span></div>
+          <div class="indent indent"><span class="file file-xml">providers.xml</span></div>
+          <div class="indent indent"><span class="file file-xml">authorizers.xml</span></div>
+          <div class="indent indent"><span class="file">nifi-registry.properties</span></div>
+          <div class="indent"><span class="dir">flows/</span></div>
+          <div class="indent indent"><span class="dir">dev-flows/</span></div>
+          <div class="indent indent indent"><span class="file file-json">IngestCustomerOrders/</span></div>
+          <div class="indent indent indent indent"><span class="file file-json">1.snapshot.json</span></div>
+          <div class="indent indent indent indent"><span class="file file-json">2.snapshot.json</span></div>
+          <div class="indent indent indent indent"><span class="file file-json">5.snapshot.json</span>  <span class="comment">← latest</span></div>
+          <div class="indent indent"><span class="dir">prod-flows/</span></div>
+          <div class="indent indent indent"><span class="file file-json">IngestCustomerOrders/</span></div>
+          <div class="indent indent indent indent"><span class="file file-json">1.snapshot.json</span></div>
+          <div class="indent"><span class="dir">params/</span></div>
+          <div class="indent indent"><span class="file file-json">dev-params.json</span></div>
+          <div class="indent indent"><span class="file file-json">staging-params.json</span></div>
+          <div class="indent indent"><span class="file file-json">prod-params.json</span>  <span class="comment">← no secrets</span></div>
+          <div class="indent"><span class="dir">scripts/</span></div>
+          <div class="indent indent"><span class="file file-sh">promote-flow.sh</span></div>
+          <div class="indent indent"><span class="file file-sh">rollback-flow.sh</span></div>
+          <div class="indent indent"><span class="file file-sh">apply-params.sh</span></div>
+          <div class="indent indent"><span class="file file-sh">update-pg-version.sh</span></div>
+          <div class="indent"><span class="dir">.github/workflows/</span></div>
+          <div class="indent indent"><span class="file file-json">nifi-deploy.yml</span></div>
+          <div class="indent indent"><span class="file file-json">nifi-rollback.yml</span></div>
+        </div>
+      </div>
+
+      <div>
+        <h3>Bucket metadata.json (Registry)</h3>
+        <div class="code-block">
+          <span class="lang-tag">json</span>
+          <pre>{
+  <span class="key">"buckets"</span>: [
+    {
+      <span class="key">"identifier"</span>: <span class="str">"a1b2c3d4-0001"</span>,
+      <span class="key">"name"</span>: <span class="str">"dev-flows"</span>,
+      <span class="key">"createdTimestamp"</span>: <span class="num">1716200000</span>,
+      <span class="key">"permissions"</span>: {
+        <span class="key">"canRead"</span>: <span class="val">true</span>,
+        <span class="key">"canWrite"</span>: <span class="val">true</span>,
+        <span class="key">"canDelete"</span>: <span class="val">false</span>
+      }
+    },
+    {
+      <span class="key">"identifier"</span>: <span class="str">"a1b2c3d4-0003"</span>,
+      <span class="key">"name"</span>: <span class="str">"prod-flows"</span>,
+      <span class="key">"permissions"</span>: {
+        <span class="key">"canRead"</span>: <span class="val">true</span>,
+        <span class="key">"canWrite"</span>: <span class="val">false</span>,  <span class="cm">// only CI can write</span>
+        <span class="key">"canDelete"</span>: <span class="val">false</span>
+      }
+    }
+  ]
+}</pre>
+        </div>
+
+        <h3>Key NiFi REST API Endpoints</h3>
+        <table class="data-table">
+          <tr><th>Action</th><th>Endpoint</th></tr>
+          <tr><td>List flows in bucket</td><td><code>GET /nifi-registry-api/buckets/{id}/flows</code></td></tr>
+          <tr><td>Get version</td><td><code>GET /buckets/{b}/flows/{f}/versions/{v}</code></td></tr>
+          <tr><td>Current PG version</td><td><code>GET /nifi-api/versions/process-groups/{id}</code></td></tr>
+          <tr><td>Update PG version</td><td><code>PUT /nifi-api/versions/process-groups/{id}</code></td></tr>
+          <tr><td>Get param context</td><td><code>GET /nifi-api/parameter-contexts/{id}</code></td></tr>
+          <tr><td>Update params</td><td><code>PUT /nifi-api/parameter-contexts/{id}</code></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── HISTORY ─────────────────── -->
+  <div class="section" id="tab-history">
+    <h2>Version History — IngestCustomerOrders</h2>
+
+    <div class="version-list">
+      <div class="version-item">
+        <span class="v-num">v5</span>
+        <span class="v-env prod">PROD</span>
+        <span class="v-env stg">STAGING</span>
+        <span class="v-msg">Add dead-letter queue routing + retry on S3 5xx errors</span>
+        <span class="v-author">j.smith</span>
+        <span class="v-date">2025-05-21 09:12</span>
+      </div>
+      <div class="version-item">
+        <span class="v-num">v4</span>
+        <span class="v-env stg">STAGING</span>
+        <span class="v-msg">Tune Kafka consumer threads from 4→8, add FlowFile attrs</span>
+        <span class="v-author">a.patel</span>
+        <span class="v-date">2025-05-19 14:30</span>
+      </div>
+      <div class="version-item">
+        <span class="v-num">v3</span>
+        <span class="v-env dev">DEV</span>
+        <span class="v-msg">Refactor: extract DB lookup into child PG, add logging</span>
+        <span class="v-author">a.patel</span>
+        <span class="v-date">2025-05-18 11:05</span>
+      </div>
+      <div class="version-item">
+        <span class="v-num">v2</span>
+        <span class="v-env prod">PROD ↩ rolled back</span>
+        <span class="v-msg">Schema validation step — caused OOM in PROD (rolled back)</span>
+        <span class="v-author">r.chen</span>
+        <span class="v-date">2025-05-15 16:00</span>
+      </div>
+      <div class="version-item">
+        <span class="v-num">v1</span>
+        <span class="v-env prod">PROD</span>
+        <span class="v-msg">Initial baseline — Kafka → S3 happy path only</span>
+        <span class="v-author">j.smith</span>
+        <span class="v-date">2025-05-01 10:00</span>
+      </div>
+    </div>
+
+    <h3 style="margin-top:24px;">Compare Versions via API</h3>
+    <div class="code-block"><span class="lang-tag">bash</span>
+<pre><span class="cm"># List all versions of a flow</span>
+curl -s \
+  <span class="str">"https://nifi-registry.internal:18443/nifi-registry-api/buckets/${BUCKET_ID}/flows/${FLOW_ID}/versions"</span> \
+  -H <span class="str">"Authorization: Bearer ${REGISTRY_TOKEN}"</span> \
+  | jq <span class="str">'[.[] | {version: .versionedFlowSnapshotMetadata.version,
+                      author:  .versionedFlowSnapshotMetadata.author,
+                      comment: .versionedFlowSnapshotMetadata.comments,
+                      ts:      .versionedFlowSnapshotMetadata.timestamp}]'</span>
+
+<span class="cm"># Output:</span>
+[
+  { <span class="key">"version"</span>: <span class="num">5</span>, <span class="key">"author"</span>: <span class="str">"j.smith"</span>, <span class="key">"comment"</span>: <span class="str">"Add DLQ + retry"</span>,          <span class="key">"ts"</span>: <span class="num">1716300000000</span> },
+  { <span class="key">"version"</span>: <span class="num">4</span>, <span class="key">"author"</span>: <span class="str">"a.patel"</span>, <span class="key">"comment"</span>: <span class="str">"Kafka thread tuning"</span>,       <span class="key">"ts"</span>: <span class="num">1716115800000</span> },
+  { <span class="key">"version"</span>: <span class="num">3</span>, <span class="key">"author"</span>: <span class="str">"a.patel"</span>, <span class="key">"comment"</span>: <span class="str">"Refactor child PG"</span>,         <span class="key">"ts"</span>: <span class="num">1716030300000</span> },
+  { <span class="key">"version"</span>: <span class="num">2</span>, <span class="key">"author"</span>: <span class="str">"r.chen"</span>,  <span class="key">"comment"</span>: <span class="str">"Schema validation (REVERTED)"</span>,<span class="key">"ts"</span>: <span class="num">1715785200000</span> },
+  { <span class="key">"version"</span>: <span class="num">1</span>, <span class="key">"author"</span>: <span class="str">"j.smith"</span>, <span class="key">"comment"</span>: <span class="str">"Initial baseline"</span>,          <span class="key">"ts"</span>: <span class="num">1714557600000</span> }
+]</pre>
+    </div>
+  </div>
+
+  <!-- ─────────────────── CI/CD & ROLLBACK ─────────────────── -->
+  <div class="section" id="tab-cicd">
+    <h2>CI/CD Pipeline & Rollback</h2>
+
+    <h3>GitHub Actions — nifi-deploy.yml</h3>
+    <div class="code-block"><span class="lang-tag">yaml</span>
+<pre><span class="cm"># .github/workflows/nifi-deploy.yml</span>
+<span class="key">name</span>: <span class="str">NiFi Flow Deploy</span>
+
+<span class="key">on</span>:
+  <span class="key">workflow_dispatch</span>:
+    <span class="key">inputs</span>:
+      <span class="key">flow_name</span>:    {<span class="key">description</span>: <span class="str">"Flow name"</span>,    <span class="key">required</span>: <span class="val">true</span>}
+      <span class="key">flow_version</span>: {<span class="key">description</span>: <span class="str">"Version to deploy"</span>, <span class="key">required</span>: <span class="val">true</span>}
+      <span class="key">target_env</span>:   {<span class="key">description</span>: <span class="str">"staging or prod"</span>, <span class="key">required</span>: <span class="val">true</span>}
+
+<span class="key">jobs</span>:
+  <span class="key">deploy</span>:
+    <span class="key">runs-on</span>: <span class="str">ubuntu-latest</span>
+    <span class="key">environment</span>: <span class="str">${{ inputs.target_env }}</span>   <span class="cm"># requires env approval in prod</span>
+    <span class="key">steps</span>:
+      - <span class="key">uses</span>: <span class="str">actions/checkout@v4</span>
+
+      - <span class="key">name</span>: <span class="str">Promote flow</span>
+        <span class="key">env</span>:
+          <span class="key">REGISTRY_TOKEN</span>: <span class="str">${{ secrets.NIFI_REGISTRY_TOKEN }}</span>
+          <span class="key">NIFI_TOKEN</span>:     <span class="str">${{ secrets.NIFI_API_TOKEN }}</span>
+        <span class="key">run</span>: |
+          <span class="path">./scripts/promote-flow.sh</span> \
+            <span class="str">"${{ inputs.flow_name }}"</span> \
+            <span class="str">"${{ inputs.flow_version }}"</span> \
+            <span class="str">"${{ inputs.target_env }}"</span>
+
+      - <span class="key">name</span>: <span class="str">Run smoke tests</span>
+        <span class="key">run</span>: <span class="path">./scripts/smoke-test.sh</span> <span class="str">"${{ inputs.target_env }}"</span>
+
+      - <span class="key">name</span>: <span class="str">Notify Slack on failure</span>
+        <span class="key">if</span>: <span class="str">failure()</span>
+        <span class="key">uses</span>: <span class="str">slackapi/slack-github-action@v1</span>
+        <span class="key">with</span>:
+          <span class="key">payload</span>: <span class="str">|
+            {"text": "❌ NiFi deploy FAILED: ${{inputs.flow_name}} v${{inputs.flow_version}} → ${{inputs.target_env}}"}</span></pre>
+    </div>
+
+    <h3>Rollback Script</h3>
+    <div class="code-block"><span class="lang-tag">bash — rollback-flow.sh</span>
+<pre><span class="cm">#!/bin/bash
+# rollback-flow.sh — revert prod to a known-good version
+# Usage: ./rollback-flow.sh IngestCustomerOrders 4</span>
+
+FLOW_NAME=<span class="str">"$1"</span>
+TARGET_VERSION=<span class="str">"$2"</span>
+NIFI_PROD=<span class="str">"https://nifi-prod:8443"</span>
+
+echo <span class="warn">"⚠️  Rolling back ${FLOW_NAME} to v${TARGET_VERSION} in PRODUCTION"</span>
+
+<span class="cm"># Stop the process group first (prevent data loss)</span>
+curl -s -X PUT <span class="str">"${NIFI_PROD}/nifi-api/flow/process-groups/${PROD_PG_ID}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"id":"'${PROD_PG_ID}'","state":"STOPPED"}'</span>
+
+sleep <span class="num">5</span>   <span class="cm"># allow in-flight FlowFiles to drain</span>
+
+<span class="cm"># Revert to target version via versions API</span>
+PG_REV=$(curl -s <span class="str">"${NIFI_PROD}/nifi-api/process-groups/${PROD_PG_ID}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> | jq <span class="str">'.revision.version'</span>)
+
+curl -X PUT <span class="str">"${NIFI_PROD}/nifi-api/versions/process-groups/${PROD_PG_ID}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">"{
+    \"processGroupRevision\": {\"version\": ${PG_REV}},
+    \"versionedFlow\": {
+      \"registryId\": \"prod-registry-client\",
+      \"bucketId\":   \"${PROD_BUCKET_ID}\",
+      \"flowId\":     \"${PROD_FLOW_ID}\",
+      \"version\":    ${TARGET_VERSION}
+    }
+  }"</span>
+
+<span class="cm"># Restart</span>
+curl -s -X PUT <span class="str">"${NIFI_PROD}/nifi-api/flow/process-groups/${PROD_PG_ID}"</span> \
+  -H <span class="str">"Authorization: Bearer ${NIFI_TOKEN}"</span> \
+  -d <span class="str">'{"id":"'${PROD_PG_ID}'","state":"RUNNING"}'</span>
+
+echo <span class="good">"✓ Rollback complete. Running v${TARGET_VERSION}"</span></pre>
+    </div>
+
+    <div class="alert warn"><span class="alert-icon">⚠️</span> Always stop the Process Group before rolling back. FlowFiles in the queue stay intact — the processor configuration changes atomically, but the queue contents from the broken version may need manual review in the Data Provenance / Queue viewer.</div>
+
+    <h3>Admin Checklist — Per Deployment</h3>
+    <table class="data-table">
+      <tr><th>#</th><th>Task</th><th>Tool/File</th></tr>
+      <tr><td>1</td><td>Verify version committed in dev Registry with comments</td><td>NiFi Registry UI / REST</td></tr>
+      <tr><td>2</td><td>Export snapshot JSON, check no hardcoded secrets</td><td><code>grep -r "password" *.json</code></td></tr>
+      <tr><td>3</td><td>Import to staging bucket, assign version</td><td><code>promote-flow.sh</code></td></tr>
+      <tr><td>4</td><td>Apply staging Parameter Context</td><td><code>staging-params.json</code></td></tr>
+      <tr><td>5</td><td>Run smoke tests against staging</td><td><code>smoke-test.sh staging</code></td></tr>
+      <tr><td>6</td><td>Raise change request, attach snapshot JSON as artifact</td><td>ServiceNow / Jira</td></tr>
+      <tr><td>7</td><td>CAB approval → trigger GitHub Actions workflow_dispatch</td><td><code>nifi-deploy.yml</code></td></tr>
+      <tr><td>8</td><td>Monitor prod bulletin board for 15 min post-deploy</td><td>NiFi UI → Summary</td></tr>
+      <tr><td>9</td><td>Update runbook with new version + change ticket link</td><td>Confluence / README</td></tr>
+    </table>
+  </div>
+
+</div>
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const idx = ['overview','registry','versioning','promote','files','history','cicd'].indexOf(id);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+</script>
+</body>
+</html>
