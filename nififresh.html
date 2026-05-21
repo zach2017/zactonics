@@ -1,0 +1,1385 @@
+<!doctype html>
+<html lang="en" class="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How FreshMart Works · A guided tour of NiFi, Kafka, and the whole pipeline</title>
+
+<!-- Tailwind via Play CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- IBM Plex fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script>
+  // ── Tailwind config: enable class-based dark mode + IBM palette ────────
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans:  ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono:  ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+          serif: ['"IBM Plex Serif"', 'serif'],
+        },
+        colors: {
+          ibm: {
+            blue:         '#0f62fe',
+            'blue-hover': '#0353e9',
+            'blue-light': '#d0e2ff',
+            'blue-deep':  '#002d9c',
+            black:        '#161616',
+            gray10:       '#f4f4f4',
+            gray20:       '#e0e0e0',
+            gray30:       '#c6c6c6',
+            gray60:       '#6f6f6f',
+            gray70:       '#525252',
+            gray90:       '#262626',
+            red:          '#da1e28',
+            'red-light':  '#fff1f1',
+            green:        '#198038',
+            'green-light':'#defbe6',
+            yellow:       '#f1c21b',
+            purple:       '#8a3ffc',
+          }
+        },
+      }
+    }
+  };
+
+  // ── Apply theme before paint (no flash) ────────────────────────────────
+  (function () {
+    const saved = localStorage.getItem('fm-theme');
+    const sys   = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const mode  = saved || (sys ? 'dark' : 'light');
+    document.documentElement.classList.toggle('dark', mode === 'dark');
+    document.documentElement.classList.toggle('light', mode === 'light');
+  })();
+</script>
+
+<style>
+  :root {
+    --bg:       #ffffff;
+    --bg-soft:  #f4f4f4;
+    --fg:       #161616;
+    --fg-soft:  #525252;
+    --border:   #e0e0e0;
+    --accent:   #0f62fe;        /* IBM blue */
+    --accent-hover: #0353e9;
+    --accent-light: #d0e2ff;
+    --rail:     #0f62fe;        /* left rail bar */
+  }
+  .dark {
+    --bg:       #161616;
+    --bg-soft:  #262626;
+    --fg:       #f4f4f4;
+    --fg-soft:  #c6c6c6;
+    --border:   #393939;
+    --accent:   #78a9ff;        /* lighter blue for dark mode legibility */
+    --accent-hover: #a6c8ff;
+    --accent-light: #001d6c;
+    --rail:     #78a9ff;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .serif{ font-family: 'IBM Plex Serif', serif; }
+
+  /* Carbon design system — sharp 1px borders, no rounded corners */
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .card-soft {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+  }
+  .rail {
+    border-left: 4px solid var(--rail);
+    background: var(--bg-soft);
+  }
+  .accent       { color: var(--accent); }
+  .accent-bg    { background: var(--accent); color: white; }
+  .accent-bg:hover { background: var(--accent-hover); }
+  .accent-light-bg { background: var(--accent-light); }
+  .border-accent   { border-color: var(--accent); }
+
+  /* Code blocks */
+  pre.code {
+    background: var(--bg-soft);
+    border-left: 3px solid var(--accent);
+    padding: 14px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--fg);
+  }
+  code.inline {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg-soft);
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    font-size: 0.875em;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  /* Info chips: click to expand */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .chip:hover { background: var(--accent); color: white; }
+  .chip::before { content: 'ⓘ'; font-size: 12px; }
+
+  /* Focus ring (Carbon style) */
+  button:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Modal backdrop */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 100;
+    overflow-y: auto;
+    padding: 60px 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-panel {
+    background: var(--bg);
+    color: var(--fg);
+    width: 100%;
+    max-width: 640px;
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--accent);
+    box-shadow: 0 24px 48px rgba(0,0,0,0.25);
+    max-height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    line-height: 1.65;
+  }
+  .modal-foot {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: var(--bg-soft);
+  }
+
+  /* Smooth scroll for in-page anchors */
+  html { scroll-behavior: smooth; }
+
+  /* Annotated code line highlight */
+  .line-num {
+    color: var(--fg-soft);
+    user-select: none;
+    padding-right: 12px;
+    font-size: 11px;
+    text-align: right;
+    min-width: 28px;
+    display: inline-block;
+  }
+  .annotate {
+    cursor: pointer;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .annotate:hover {
+    background: var(--accent-light);
+  }
+
+  /* Architecture diagram boxes */
+  .arch-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+  .arch-arrow {
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: center;
+    user-select: none;
+  }
+
+  /* Step list */
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    background: var(--accent);
+    color: white;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  /* Definitions */
+  dl.gloss dt {
+    font-weight: 600;
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  dl.gloss dd { color: var(--fg-soft); margin-left: 0; margin-top: 2px; }
+
+  /* TOC sticky on desktop */
+  @media (min-width: 1024px) {
+    .toc { position: sticky; top: 80px; }
+  }
+
+  /* Section reveal accent */
+  h2.section {
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--accent);
+    margin-bottom: 24px;
+  }
+
+  /* Print-friendly */
+  @media print {
+    .no-print { display: none !important; }
+    pre.code  { page-break-inside: avoid; }
+  }
+</style>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     HEADER (sticky, Carbon-style)
+     ═══════════════════════════════════════════════════════════════════ -->
+<header class="sticky top-0 z-40 no-print"
+        style="background:var(--bg);border-bottom:1px solid var(--border)">
+  <div class="max-w-6xl mx-auto flex items-center gap-3 px-4 py-3">
+    <a href="#top" class="flex items-center gap-2 mr-auto">
+      <div class="w-7 h-7 accent-bg grid place-items-center">
+        <span class="mono font-bold text-xs text-white">FM</span>
+      </div>
+      <div>
+        <div class="text-sm font-semibold">FreshMart · How It Works</div>
+        <div class="mono text-[10px]" style="color:var(--fg-soft)">A guided tour</div>
+      </div>
+    </a>
+
+    <!-- TOC dropdown on mobile, ignored on desktop -->
+    <details class="lg:hidden relative">
+      <summary class="cursor-pointer px-3 py-2 mono text-xs border" style="border-color:var(--border)">☰ Sections</summary>
+      <nav class="absolute right-0 mt-1 w-64 card p-3 text-sm space-y-1 z-50">
+        <a href="#why-nifi"      class="block hover:accent">1 · Why NiFi?</a>
+        <a href="#core-concepts" class="block hover:accent">2 · Core concepts</a>
+        <a href="#architecture"  class="block hover:accent">3 · Architecture</a>
+        <a href="#services"      class="block hover:accent">4 · Each service</a>
+        <a href="#workflows"     class="block hover:accent">5 · The 6 workflows</a>
+        <a href="#code"          class="block hover:accent">6 · Code line-by-line</a>
+        <a href="#run"           class="block hover:accent">7 · How to run it</a>
+        <a href="#glossary"      class="block hover:accent">8 · Glossary</a>
+      </nav>
+    </details>
+
+    <button id="theme-toggle"
+            class="px-3 py-2 mono text-xs border flex items-center gap-2"
+            style="border-color:var(--border)"
+            aria-label="Toggle dark mode">
+      <span id="theme-icon">☼</span><span class="hidden sm:inline" id="theme-label">Light</span>
+    </button>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="max-w-6xl mx-auto px-4 pt-12 pb-8">
+  <div class="mono text-xs uppercase tracking-widest mb-3" style="color:var(--fg-soft)">A guided tour · Read top to bottom</div>
+  <h1 class="font-light text-4xl md:text-6xl leading-tight mb-6">
+    How a grocery store moves <span class="accent font-medium">millions of events a day</span> &mdash; explained simply.
+  </h1>
+  <p class="text-lg md:text-xl max-w-3xl" style="color:var(--fg-soft)">
+    This page walks through the FreshMart demo step by step. You'll learn what
+    Apache NiFi does, how Kafka works as a message bus, why we use Postgres
+    and LocalStack, and how all six workflows connect together. Every
+    technical word is explained, and every blue
+    <span class="chip" onclick="openModal('demo','What are these chips?', 'Click any blue chip throughout this page to open a detailed explanation in a popup. Each one gives you a deeper look at a concept, plus links to the real official documentation. They never take you away from this page.')">like&nbsp;this</span>
+    chip opens a popup with more detail and links to official docs.
+  </p>
+
+  <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-px card-soft">
+    <a href="#why-nifi"     class="p-4 card hover:accent-light-bg transition-colors">
+      <div class="mono text-[10px] uppercase tracking-widest mb-1" style="color:var(--fg-soft)">Start here</div>
+      <div class="font-medium">Why NiFi?</div>
+    </a>
+    <a href="#workflows"    class="p-4 card hover:accent-light-bg transition-colors">
+      <div class="mono text-[10px] uppercase tracking-widest mb-1" style="color:var(--fg-soft)">Main event</div>
+      <div class="font-medium">6 Workflows</div>
+    </a>
+    <a href="#code"         class="p-4 card hover:accent-light-bg transition-colors">
+      <div class="mono text-[10px] uppercase tracking-widest mb-1" style="color:var(--fg-soft)">Deep dive</div>
+      <div class="font-medium">Code Tour</div>
+    </a>
+    <a href="#run"          class="p-4 card hover:accent-light-bg transition-colors">
+      <div class="mono text-[10px] uppercase tracking-widest mb-1" style="color:var(--fg-soft)">Hands on</div>
+      <div class="font-medium">Run It</div>
+    </a>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MAIN LAYOUT — sidebar TOC + content
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="max-w-6xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-8">
+
+  <!-- TOC sidebar (desktop) -->
+  <aside class="hidden lg:block">
+    <nav class="toc card-soft p-4 text-sm space-y-2">
+      <div class="mono text-[10px] uppercase tracking-widest mb-2" style="color:var(--fg-soft)">Sections</div>
+      <a href="#why-nifi"      class="block hover:accent">1 · Why NiFi?</a>
+      <a href="#core-concepts" class="block hover:accent">2 · Core concepts</a>
+      <a href="#architecture"  class="block hover:accent">3 · Architecture</a>
+      <a href="#services"      class="block hover:accent">4 · Each service</a>
+      <a href="#workflows"     class="block hover:accent">5 · The 6 workflows</a>
+      <a href="#code"          class="block hover:accent">6 · Code line-by-line</a>
+      <a href="#run"           class="block hover:accent">7 · How to run it</a>
+      <a href="#glossary"      class="block hover:accent">8 · Glossary</a>
+    </nav>
+  </aside>
+
+  <main class="space-y-20">
+
+    <!-- ─── SECTION 1 · WHY NIFI? ───────────────────────────────────── -->
+    <section id="why-nifi">
+      <h2 class="section font-light text-3xl">1 · Why use Apache NiFi at all?</h2>
+
+      <p class="text-lg mb-5">
+        Picture a real grocery store. Every minute, things are <em>happening</em>:
+      </p>
+      <ul class="space-y-2 text-lg mb-6 ml-5" style="color:var(--fg-soft)">
+        <li class="list-disc">A cashier scans a box of cereal at the register.</li>
+        <li class="list-disc">A truck arrives at the loading dock with 240 cases of bananas.</li>
+        <li class="list-disc">A shopper fills out a form saying the milk smelled bad.</li>
+        <li class="list-disc">A manager moves the chips from Aisle 5 to Aisle 12.</li>
+      </ul>
+
+      <p class="mb-5">
+        Each one of those is a small piece of information &mdash; we call them
+        <span class="chip" onclick="openModal('event', 'What is an &quot;event&quot;?', 'An <strong>event</strong> is a single thing that happened, at a specific time. \"Alice scanned a banana at 2:47 PM\" is an event. Big data systems treat each one like a tiny letter you can send, store, count, and reply to. Events are the basic unit of information in modern data pipelines.', [{label:'Event-driven architecture (Wikipedia)', url:'https://en.wikipedia.org/wiki/Event-driven_architecture'}])">events</span>.
+        FreshMart needs all of them to land in the right places &mdash; the
+        sales database, the warehouse system, an alert system, an email
+        inbox. Doing this by hand would be impossible. So we use a tool that
+        moves data automatically.
+      </p>
+
+      <p class="mb-5">
+        That tool is <strong class="accent">Apache NiFi</strong>. Think of NiFi like a
+        giant <em>kitchen</em> with conveyor belts running between stations.
+        You drop ingredients (data) onto a belt, and tiny robot chefs
+        (called <em>processors</em>) chop, mix, season, and plate them as
+        they roll by. At the end, the finished dish lands in the right
+        place. NiFi is the kitchen. You design it by dragging pictures
+        around on a screen &mdash; no programming needed.
+      </p>
+
+      <div class="rail p-5 mb-6">
+        <div class="mono text-xs uppercase tracking-widest mb-2 accent">In one sentence</div>
+        <p class="text-lg">
+          NiFi is a visual tool for building <em>data pipelines</em> &mdash; programs
+          that take data from one place, change it, and send it somewhere else &mdash;
+          all by drag-and-drop instead of writing code.
+        </p>
+      </div>
+
+      <h3 class="text-xl font-medium mt-8 mb-3">What NiFi features does FreshMart use?</h3>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Drag-and-drop processors</div>
+          <p>NiFi has 400+ built-in "Lego blocks" called processors.
+          We pick the ones we need (like <code class="inline">ConsumeKafka</code>,
+          <code class="inline">PutDatabaseRecord</code>, <code class="inline">PublishSNS</code>)
+          and connect them with arrows.
+          <span class="chip" onclick="openModal('processors', 'NiFi Processors', '<p>Processors are the small programs that do one job &mdash; like \"read a file\", \"split JSON into records\", or \"send to Kafka\". You connect them with arrows on the canvas and data flows through.</p><p>NiFi ships with hundreds of built-in processors. You can also write your own in Java or Python.</p><p>Names follow a pattern: <code>Get*</code> and <code>Listen*</code> bring data in. <code>Put*</code> and <code>Publish*</code> send data out. <code>Route*</code> chooses which path to take. <code>Transform*</code> changes the data.</p>', [{label:'NiFi processor list (official)', url:'https://nifi.apache.org/components/'}, {label:'NiFi User Guide', url:'https://nifi.apache.org/docs/nifi-docs/html/user-guide.html'}])">More info</span>
+          </p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">FlowFile model</div>
+          <p>Every piece of data inside NiFi is wrapped in a <em>FlowFile</em> &mdash;
+          a small package with the data itself plus tags about it (size, source,
+          time received).
+          <span class="chip" onclick="openModal('flowfile', 'What is a FlowFile?', '<p>A <strong>FlowFile</strong> is NiFi\\'s name for one piece of data moving through the pipeline. It has two parts:</p><ul><li><strong>Content</strong>: the data itself (a JSON record, a CSV row, a file).</li><li><strong>Attributes</strong>: key-value tags that describe it (filename, size, timestamp, custom labels you add).</li></ul><p>Think of it like a FedEx package: the box holds the contents, and the shipping label has all the info about where it came from and where it goes.</p>', [{label:'NiFi Getting Started · FlowFile', url:'https://nifi.apache.org/nifi-docs/getting-started.html'}])">More info</span>
+          </p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Back-pressure</div>
+          <p>If the database gets slow, NiFi automatically pauses the
+          upstream processors so data doesn't pile up and crash anything.
+          Like a traffic light at a busy intersection.
+          <span class="chip" onclick="openModal('backpressure', 'Back-pressure', '<p>Imagine you\\'re pouring water into a funnel and the pipe below is clogged. Without back-pressure, water would overflow. With back-pressure, you stop pouring.</p><p>NiFi watches every queue between processors. When a queue fills up (default: 10,000 items), it tells the upstream processor to stop sending more until the queue drains. This protects the whole system from a slow downstream service.</p>', [{label:'NiFi User Guide · Connections', url:'https://nifi.apache.org/docs/nifi-docs/html/user-guide.html#connection'}])">More info</span>
+          </p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Data provenance</div>
+          <p>NiFi remembers every single thing that ever happened to every
+          piece of data &mdash; like a security camera for your pipeline.
+          You can replay any event, see what changed it, when, and why.
+          <span class="chip" onclick="openModal('provenance', 'Data provenance', '<p>Provenance means \"where did this come from?\" Every time data enters NiFi, gets transformed, routed, copied, or sent out, NiFi writes a small note about it.</p><p>Later you can search those notes: \"Show me every event for store FM-042 from 2pm-3pm yesterday\", and NiFi will replay each step, including what the data looked like before and after.</p><p>This is huge for auditing, debugging, and compliance &mdash; especially in regulated industries like banking or healthcare.</p>', [{label:'NiFi User Guide · Provenance', url:'https://nifi.apache.org/docs/nifi-docs/html/user-guide.html#data_provenance'}])">More info</span>
+          </p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Expression Language</div>
+          <p>A mini scripting language inside NiFi that lets you write things
+          like <code class="inline">${filename:substringBefore('_')}</code> right
+          inside a processor's config &mdash; no Java required.
+          <span class="chip" onclick="openModal('el', 'NiFi Expression Language', '<p>The Expression Language (EL) is a small language built into NiFi for working with FlowFile attributes. You use it inside processor properties to do things like:</p><ul><li><code>${filename}</code> &mdash; the value of an attribute</li><li><code>${filename:substringBefore(\\'.csv\\')}</code> &mdash; trim a suffix</li><li><code>${qty:toNumber():gt(0)}</code> &mdash; compare numbers</li><li><code>${now():format(\\'yyyy-MM-dd\\')}</code> &mdash; format dates</li></ul><p>FreshMart uses EL to extract the vendor name from a CSV filename like <code>DOLE_20241101_delivery.csv</code> → vendor_id = <code>DOLE</code>.</p>', [{label:'Expression Language Guide', url:'https://nifi.apache.org/docs/nifi-docs/html/expression-language-guide.html'}])">More info</span>
+          </p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Record-oriented processing</div>
+          <p>Instead of handling one row at a time, NiFi can grab a batch of
+          a thousand records and process them together &mdash; 100&times; faster
+          than one-by-one.
+          <span class="chip" onclick="openModal('record', 'Record-oriented processing', '<p>Old NiFi processors handled one item at a time, like reading a CSV line, transforming it, then writing it. That works but is slow.</p><p>Newer \"Record\" processors (<code>QueryRecord</code>, <code>SplitRecord</code>, <code>PutDatabaseRecord</code>) work with batches. They read 1000 records, do something, and write them in one operation. Much faster.</p><p>To use them, you configure a <strong>Reader</strong> (how to parse incoming data) and a <strong>Writer</strong> (how to format outgoing data) as Controller Services that are shared across processors.</p>', [{label:'RecordPath Guide', url:'https://nifi.apache.org/docs/nifi-docs/html/record-path-guide.html'}])">More info</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="card-soft p-5 mt-8">
+        <div class="mono text-xs uppercase tracking-widest mb-2 accent">Why not just write a Python script?</div>
+        <p style="color:var(--fg-soft)">
+          You could, for small jobs. But a real grocery chain has dozens of
+          pipelines running at once, each needing to be monitored, paused, replayed,
+          and updated without taking the whole system down. NiFi gives you a
+          visual control panel for all of that, plus security, encryption, audit
+          logs, and back-pressure &mdash; without writing a line of Java or Python
+          for the most common cases. When you do need custom logic, you can
+          drop in a small <code class="inline">ExecuteScript</code> processor.
+        </p>
+      </div>
+    </section>
+
+
+    <!-- ─── SECTION 2 · CORE CONCEPTS ───────────────────────────────── -->
+    <section id="core-concepts">
+      <h2 class="section font-light text-3xl">2 · Core concepts you need first</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        Before we look at FreshMart, here are five ideas you'll see over and over.
+      </p>
+
+      <dl class="gloss text-base space-y-1">
+        <dt>1. Pipeline</dt>
+        <dd>
+          A pipeline is a chain of steps that data flows through. Like an
+          assembly line in a car factory: a chassis goes in one end, gets bolted
+          together, painted, inspected, and rolls out as a finished car. In
+          FreshMart, a sale at the register flows through a pipeline that
+          validates it, stores it, alerts other systems, and updates the
+          inventory count.
+          <span class="chip" onclick="openModal('pipeline', 'Data pipeline', '<p>A <strong>data pipeline</strong> is software that automatically moves data from where it&apos;s created to where it&apos;s used.</p><p>Examples in everyday life:</p><ul><li>Your phone uploads photos to the cloud → a pipeline.</li><li>Netflix tracks what you watched → a pipeline.</li><li>A grocery scanner updates inventory in real time → a pipeline.</li></ul><p>A pipeline usually has these stages: <strong>ingest</strong> (bring data in), <strong>validate</strong> (check it&apos;s correct), <strong>transform</strong> (change its shape), <strong>route</strong> (decide where it goes), and <strong>load</strong> (write to the destination).</p>', [{label:'Data pipeline (Wikipedia)', url:'https://en.wikipedia.org/wiki/Data_pipeline'}])">More info</span>
+        </dd>
+
+        <dt>2. Message / Topic</dt>
+        <dd>
+          A <em>message</em> is a small package of data (usually JSON) sent over
+          a network. A <em>topic</em> is like a labeled mailbox where messages
+          land. FreshMart has a topic called <code class="inline">pos-sales</code> &mdash;
+          every sale event is dropped into that mailbox, and anyone who cares
+          about sales reads from there. Kafka is the post office.
+          <span class="chip" onclick="openModal('kafka-topics', 'Kafka topics', '<p>A <strong>Kafka topic</strong> is a named log file (sort of) that messages get appended to. Producers add new messages to the end. Consumers read messages in order.</p><p>FreshMart has 8 topics:</p><ul class=\"mono text-xs\"><li>pos-sales</li><li>vendor-deliveries</li><li>customer-feedback</li><li>reorder-alerts</li><li>planogram-updates</li><li>product-recalls</li><li>hr-notifications</li><li>dead-letter-queue (for errors)</li></ul><p>Topics are split into <strong>partitions</strong> for parallel processing. A message goes to a specific partition based on its key (we use store_id), so all messages for the same store stay in order.</p>', [{label:'Kafka Introduction', url:'https://kafka.apache.org/intro'}, {label:'Kafka quickstart', url:'https://kafka.apache.org/quickstart'}])">More info</span>
+        </dd>
+
+        <dt>3. Producer / Consumer</dt>
+        <dd>
+          A <em>producer</em> creates messages and sends them to a topic. A
+          <em>consumer</em> reads from a topic and does something with each
+          message. The dashboard is a producer (it sends new sale events). NiFi
+          is a consumer (it reads them and stores them in the database).
+        </dd>
+
+        <dt>4. Database (Postgres)</dt>
+        <dd>
+          A <em>database</em> is software that stores data in tables, like a
+          giant spreadsheet that many programs can read and write at the same
+          time without colliding. FreshMart uses <strong>PostgreSQL</strong>,
+          a free, very reliable, very popular database.
+          <span class="chip" onclick="openModal('postgres', 'PostgreSQL', '<p>PostgreSQL (often called \"Postgres\") is a free, open-source database that&apos;s been around for 30+ years. It&apos;s known for being rock-solid reliable, supporting complex queries, and having a huge community.</p><p>FreshMart uses Postgres for the data warehouse. The schema has 11 tables: sales, inventory, employees, stores, etc.</p><p>Why Postgres and not MySQL or MongoDB? Postgres handles structured data (rows and columns) extremely well, supports the kind of joins and aggregations a grocery chain needs, and has features like JSONB columns for semi-structured data (like our EVENT_LOG audit table).</p>', [{label:'PostgreSQL official site', url:'https://www.postgresql.org/about/'}, {label:'PostgreSQL tutorial', url:'https://www.postgresql.org/docs/current/tutorial.html'}])">More info</span>
+        </dd>
+
+        <dt>5. Container / Docker</dt>
+        <dd>
+          A <em>container</em> is a lightweight package containing one program
+          plus everything it needs to run (its libraries, settings, files). You
+          can run a container on any computer without installing all those
+          things yourself. Docker is the tool that builds and runs containers.
+          FreshMart runs each piece (NiFi, Kafka, the dashboard) in its own
+          container, so they can all talk to each other but not get tangled up.
+          <span class="chip" onclick="openModal('docker', 'Docker & containers', '<p>Imagine you wrote a program that works perfectly on your laptop. You send it to a friend, but their laptop has different software versions and your program breaks. Frustrating!</p><p>A <strong>container</strong> solves this. You package your program <em>plus</em> the exact versions of everything it needs into one bundle. That bundle (a container) runs the same way on any computer.</p><p><strong>Docker</strong> is the most popular tool for building and running containers. <strong>Docker Compose</strong> is for running many containers together with one command. FreshMart has 10 containers all defined in <code>docker-compose.yml</code>.</p>', [{label:'Docker · Get started', url:'https://docs.docker.com/get-started/'}, {label:'Docker Compose docs', url:'https://docs.docker.com/compose/'}])">More info</span>
+        </dd>
+      </dl>
+    </section>
+
+
+    <!-- ─── SECTION 3 · ARCHITECTURE ────────────────────────────────── -->
+    <section id="architecture">
+      <h2 class="section font-light text-3xl">3 · The big picture</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        Here's a map of every service that runs in the demo, and the arrows show
+        how data flows between them. Tap any box for a pop-up explanation.
+      </p>
+
+      <div class="card-soft p-6 space-y-3 text-center mono">
+        <button class="arch-box w-full md:w-3/4 mx-auto block text-left"
+          onclick="openModal('arch-dashboard', 'Dashboard layer', '<p>The IBM-style web page you see at <code>http://localhost:8000</code>. Built with plain HTML, Tailwind CSS, and JavaScript. Served by an Nginx container.</p><p>It does three things: <em>(1)</em> shows the current state of the pipeline via 7 KPI tiles, <em>(2)</em> lets you click buttons to fire events, <em>(3)</em> shows live tables of what just happened.</p><p>The browser never talks to Kafka or Postgres directly. It only talks to the POS Simulator service via <code>/api/*</code> calls, which Nginx forwards.</p>', [{label:'Nginx config docs', url:'https://nginx.org/en/docs/'}, {label:'Tailwind CSS', url:'https://tailwindcss.com/docs'}])">
+          DASHBOARD &nbsp;·&nbsp; html + tailwind + js &nbsp;·&nbsp; <span class="accent">port 8000</span>
+        </button>
+        <div class="arch-arrow">↓ /api/* (proxied)</div>
+
+        <button class="arch-box w-full md:w-3/4 mx-auto block text-left"
+          onclick="openModal('arch-sim', 'POS Simulator (Event Gateway)', '<p>A small Python Flask service. Acts as the &quot;cash register&quot;.</p><p>When the dashboard clicks &quot;Scan&quot;, this service: <em>(1)</em> validates the data, <em>(2)</em> publishes a message to Kafka, <em>(3)</em> writes a row to Postgres, <em>(4)</em> logs the action to EVENT_LOG.</p><p>It also exposes read endpoints (<code>/api/stats</code>, <code>/api/recent/*</code>) so the dashboard can show live data.</p>', [{label:'Flask docs', url:'https://flask.palletsprojects.com/'}, {label:'kafka-python-ng', url:'https://github.com/wbarnha/kafka-python-ng'}])">
+          POS SIMULATOR &nbsp;·&nbsp; python + flask &nbsp;·&nbsp; <span class="accent">port 9090</span>
+        </button>
+        <div class="arch-arrow">↓ &nbsp; ↓ &nbsp; ↓</div>
+
+        <div class="grid md:grid-cols-3 gap-3">
+          <button class="arch-box text-left"
+            onclick="openModal('arch-kafka', 'Apache Kafka', '<p>The <strong>event bus</strong>. Kafka is a high-speed, durable message queue. Producers append messages to topics; consumers read them in order. Messages stay around for hours or days even after they\\'re read.</p><p>This demo runs Kafka in <strong>KRaft mode</strong> &mdash; the new way that doesn\\'t need ZooKeeper. One Kafka container is both broker (handles messages) and controller (manages cluster state).</p><p>FreshMart has 8 topics. Each is split into 3 partitions so multiple consumers can read in parallel.</p>', [{label:'Apache Kafka docs', url:'https://kafka.apache.org/documentation/'}, {label:'KRaft mode', url:'https://developer.confluent.io/learn/kraft/'}])">
+            KAFKA<br/><span class="accent">port 9092</span><br/>8 topics
+          </button>
+          <button class="arch-box text-left"
+            onclick="openModal('arch-pg', 'PostgreSQL', '<p>The <strong>data warehouse</strong>. Holds 11 tables: sales, inventory, customers, employees, stores, products, reorders, vendor deliveries, etc.</p><p>The schema is in <code>sql/init.sql</code>. Seed data (5 stores, 10 products, 8 employees) is in <code>sql/seed.sql</code>.</p><p>You can inspect data with the included pgAdmin UI at <code>http://localhost:8082</code>.</p>', [{label:'PostgreSQL docs', url:'https://www.postgresql.org/docs/'}, {label:'pgAdmin', url:'https://www.pgadmin.org/docs/'}])">
+            POSTGRES<br/><span class="accent">port 5432</span><br/>11 tables
+          </button>
+          <button class="arch-box text-left"
+            onclick="openModal('arch-ls', 'LocalStack (AWS emulator)', '<p>Real grocery chains use AWS services like SQS (queues) and SNS (notifications). To test without paying AWS, we use <strong>LocalStack</strong> &mdash; a local emulator that pretends to be AWS.</p><p>FreshMart uses it for:</p><ul><li>7 SQS queues (urgent alerts, reorders, ESL labels...)</li><li>2 SNS topics (recalls, planogram fan-out)</li><li>3 S3 buckets (data lake, archive, errors)</li></ul><p>Your code calls LocalStack the exact same way it would call real AWS &mdash; just point at <code>http://localhost:4566</code> instead.</p>', [{label:'LocalStack docs', url:'https://docs.localstack.cloud/overview/'}, {label:'AWS SQS', url:'https://docs.aws.amazon.com/sqs/'}, {label:'AWS SNS', url:'https://docs.aws.amazon.com/sns/'}])">
+            LOCALSTACK<br/><span class="accent">port 4566</span><br/>SQS · SNS · S3
+          </button>
+        </div>
+        <div class="arch-arrow">↓ &nbsp; ↓ &nbsp; ↓</div>
+
+        <button class="arch-box w-full md:w-3/4 mx-auto block text-left"
+          onclick="openModal('arch-nifi', 'Apache NiFi', '<p>The <strong>pipeline engine</strong>. Six process groups, one per workflow. Each process group is a chain of processors connected by arrows.</p><p>Open the UI at <code>https://localhost:8443/nifi</code> (login admin / FreshMart2024Secret!) to see and edit them visually.</p><p>NiFi reads from Kafka topics, validates, transforms, routes, and writes to Postgres or pushes to SQS/SNS. It also has a built-in scheduler so workflow 5 (HR sync) can run every Monday at 6 AM automatically.</p>', [{label:'NiFi User Guide', url:'https://nifi.apache.org/docs/nifi-docs/html/user-guide.html'}, {label:'NiFi processor reference', url:'https://nifi.apache.org/components/'}])">
+          APACHE NIFI &nbsp;·&nbsp; <span class="accent">port 8443</span> &nbsp;·&nbsp; 6 process groups
+        </button>
+        <div class="arch-arrow">↓ InvokeHTTP for validation</div>
+
+        <button class="arch-box w-full md:w-3/4 mx-auto block text-left"
+          onclick="openModal('arch-go', 'Go Validator', '<p>A tiny Go microservice that NiFi calls to check if a sale event has all the required fields. Returns 200 OK if valid, 400 with errors if not.</p><p>Why Go? Tiny binary (small Docker image), fast startup, low memory. Perfect for a focused service like this.</p><p>NiFi uses the <code>InvokeHTTP</code> processor to call it, then routes the FlowFile based on the response code (200 → continue, 400 → dead-letter queue).</p>', [{label:'Go documentation', url:'https://go.dev/doc/'}, {label:'NiFi InvokeHTTP', url:'https://nifi.apache.org/components/'}])">
+          GO VALIDATOR &nbsp;·&nbsp; go microservice &nbsp;·&nbsp; <span class="accent">port 8080</span>
+        </button>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-3 mt-6">
+        <div class="card p-3">
+          <div class="mono text-[10px] uppercase mb-1" style="color:var(--fg-soft)">Inspect Kafka</div>
+          <div class="text-sm">Kafka UI · port <span class="mono accent">8081</span></div>
+        </div>
+        <div class="card p-3">
+          <div class="mono text-[10px] uppercase mb-1" style="color:var(--fg-soft)">Inspect Postgres</div>
+          <div class="text-sm">pgAdmin · port <span class="mono accent">8082</span></div>
+        </div>
+        <div class="card p-3">
+          <div class="mono text-[10px] uppercase mb-1" style="color:var(--fg-soft)">Total containers</div>
+          <div class="text-sm"><span class="mono accent">10</span> running services</div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ─── SECTION 4 · EACH SERVICE ────────────────────────────────── -->
+    <section id="services">
+      <h2 class="section font-light text-3xl">4 · Every service, explained</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        Each container in the demo, what it does, and the official docs link.
+      </p>
+
+      <div class="space-y-5">
+
+        <!-- NIFI -->
+        <details class="card" open>
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">1</span>
+            <div class="flex-1">
+              <div class="font-medium">apache/nifi:2.7.0 &nbsp;·&nbsp; The pipeline brain</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">https://localhost:8443/nifi</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">Apache NiFi is the visual data pipeline tool we already explained. In FreshMart, it hosts the <strong>6 workflows</strong>. You build them by dragging processors onto a canvas. NiFi 2.x is the current major version; it requires Java 21 and supports processors written in Python too.</p>
+            <ul class="text-sm space-y-1 mb-3 ml-5" style="color:var(--fg-soft)">
+              <li class="list-disc">Login: <code class="inline">admin / FreshMart2024Secret!</code></li>
+              <li class="list-disc">The UI is HTTPS with a self-signed cert &mdash; your browser will warn. That's fine for local dev.</li>
+              <li class="list-disc">Heap is set to 2 GB. NiFi is memory-hungry.</li>
+              <li class="list-disc">Workflows are saved to a "flow archive" volume so they survive restarts.</li>
+            </ul>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://nifi.apache.org/docs/nifi-docs/html/user-guide.html">User Guide</a>
+              <a class="chip" target="_blank" href="https://nifi.apache.org/components/">Processor catalog</a>
+              <a class="chip" target="_blank" href="https://nifi.apache.org/docs/nifi-docs/html/expression-language-guide.html">Expression Language</a>
+              <a class="chip" target="_blank" href="https://github.com/apache/nifi">Source on GitHub</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- KAFKA -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">2</span>
+            <div class="flex-1">
+              <div class="font-medium">confluentinc/cp-kafka:7.7.1 &nbsp;·&nbsp; The message bus</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">localhost:9092 (host)  ·  kafka:29092 (containers)</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">Kafka is a distributed log system. You write messages to <strong>topics</strong>; consumers read them in order. Each topic is split into <strong>partitions</strong> for parallelism. Messages have a <strong>key</strong> &mdash; all messages with the same key go to the same partition, so order is preserved within a key.</p>
+            <p class="mb-3"><strong>FreshMart runs Kafka in KRaft mode</strong>. The old way required a separate service called ZooKeeper. KRaft (Kafka Raft) replaces it with the broker managing itself. Less complexity, fewer containers.</p>
+            <p class="mb-3 text-sm"><strong>Two listeners trick:</strong> Kafka has two ports inside the network. One (<code class="inline">kafka:29092</code>) is for other containers. The other (<code class="inline">localhost:9092</code>) is for programs on your host machine. This is essential because the address a container sees is different from what your laptop sees.</p>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://kafka.apache.org/documentation/">Kafka docs</a>
+              <a class="chip" target="_blank" href="https://kafka.apache.org/intro">5-minute intro</a>
+              <a class="chip" target="_blank" href="https://developer.confluent.io/learn/kraft/">What is KRaft mode</a>
+              <a class="chip" target="_blank" href="https://hub.docker.com/r/confluentinc/cp-kafka">Image on Docker Hub</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- POSTGRES -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">3</span>
+            <div class="flex-1">
+              <div class="font-medium">postgres:17-alpine &nbsp;·&nbsp; The data warehouse</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">localhost:5432</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">PostgreSQL 17 is the latest version. It runs as a single container. On first boot, Docker automatically runs every <code class="inline">.sql</code> file in the <code class="inline">/docker-entrypoint-initdb.d/</code> folder &mdash; we mount <code class="inline">sql/init.sql</code> (schema) and <code class="inline">sql/seed.sql</code> (data) there.</p>
+            <p class="mb-3"><strong>11 tables:</strong> DW_SALES_FACT, INVENTORY, REORDER_LOG, PRODUCT_CATALOG, CUSTOMER_FEEDBACK, VENDOR_DELIVERIES, PRODUCT_LOCATIONS, PAYROLL_ATTENDANCE, EMPLOYEES, STORES, EVENT_LOG.</p>
+            <p class="mb-3">Why Postgres and not MongoDB? Grocery data is structured (every sale has the same fields: store, sku, qty, price). Postgres is great at structured data and complex queries with joins.</p>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://www.postgresql.org/docs/current/">Postgres docs</a>
+              <a class="chip" target="_blank" href="https://www.postgresql.org/docs/current/tutorial.html">Tutorial</a>
+              <a class="chip" target="_blank" href="https://hub.docker.com/_/postgres">Image on Docker Hub</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- LOCALSTACK -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">4</span>
+            <div class="flex-1">
+              <div class="font-medium">localstack/localstack:3.8 &nbsp;·&nbsp; Fake AWS</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">localhost:4566</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">A program that <strong>impersonates AWS</strong> on your laptop. Your code thinks it's talking to Amazon, but it's actually talking to LocalStack. Saves money and lets you work offline.</p>
+            <p class="mb-3">FreshMart uses three AWS services through it:</p>
+            <ul class="text-sm space-y-1 mb-3 ml-5" style="color:var(--fg-soft)">
+              <li class="list-disc"><strong>SQS</strong> &mdash; Simple Queue Service. Like Kafka but simpler. Used for one-to-one delivery (a single consumer).</li>
+              <li class="list-disc"><strong>SNS</strong> &mdash; Simple Notification Service. Lets you send one message and have many consumers all get a copy (called <em>fan-out</em>). FreshMart uses this for planogram updates &mdash; one publish reaches POS, mobile app, and shelf labels all at once.</li>
+              <li class="list-disc"><strong>S3</strong> &mdash; Simple Storage Service. File storage. Used to archive vendor CSVs.</li>
+            </ul>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://docs.localstack.cloud/overview/">LocalStack docs</a>
+              <a class="chip" target="_blank" href="https://docs.aws.amazon.com/sqs/">AWS SQS docs</a>
+              <a class="chip" target="_blank" href="https://docs.aws.amazon.com/sns/">AWS SNS docs</a>
+              <a class="chip" target="_blank" href="https://docs.aws.amazon.com/s3/">AWS S3 docs</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- POS SIMULATOR -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">5</span>
+            <div class="flex-1">
+              <div class="font-medium">pos-simulator &nbsp;·&nbsp; The event gateway (Python + Flask)</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">localhost:9090</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">A small Flask app (~700 lines) that the dashboard talks to. It's the "cash register" of the demo &mdash; whenever the dashboard fires an event, this service:</p>
+            <ol class="text-sm space-y-1 mb-3 ml-5" style="color:var(--fg-soft)">
+              <li class="list-decimal">Validates the data (right fields? right types?)</li>
+              <li class="list-decimal">Publishes to Kafka so NiFi (and any other consumer) can react</li>
+              <li class="list-decimal">Writes to Postgres directly, so the dashboard shows changes immediately</li>
+              <li class="list-decimal">Logs to EVENT_LOG for the full audit trail</li>
+            </ol>
+            <p class="mb-3 text-sm"><strong>Why write to Postgres directly if NiFi will also do it?</strong> So the demo works <em>before</em> you wire up NiFi. You can run the dashboard, see KPI tiles move, and learn the flow &mdash; then layer NiFi on top to handle production-grade routing.</p>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://flask.palletsprojects.com/">Flask docs</a>
+              <a class="chip" target="_blank" href="https://github.com/wbarnha/kafka-python-ng">kafka-python-ng (Python 3.12+)</a>
+              <a class="chip" target="_blank" href="https://www.psycopg.org/docs/">psycopg2 (Postgres driver)</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- GO VALIDATOR -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">6</span>
+            <div class="flex-1">
+              <div class="font-medium">go-validator &nbsp;·&nbsp; Schema validation microservice</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">localhost:8080</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">A tiny Go service. NiFi calls it via HTTP to check if a sale message is valid. Returns 200 if yes, 400 with a list of errors if no.</p>
+            <p class="mb-3 text-sm">Why a separate service? You could do this inside NiFi with a Groovy script processor, but a real microservice is more flexible: you can swap implementations, scale it independently, and unit-test it cleanly.</p>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://go.dev/doc/">Go docs</a>
+              <a class="chip" target="_blank" href="https://pkg.go.dev/database/sql">Go database/sql</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- DASHBOARD -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">7</span>
+            <div class="flex-1">
+              <div class="font-medium">dashboard &nbsp;·&nbsp; The web UI (HTML + Tailwind + JS in Nginx)</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">localhost:8000</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <p class="mb-3">One HTML file, one JS file, served by Nginx. Uses Tailwind CSS via the Play CDN (no build step). The Nginx config proxies <code class="inline">/api/*</code> to the POS Simulator container so the browser never has to deal with CORS.</p>
+            <p class="mb-3 text-sm">7 role tabs (Cashier, Manager, Vendor, Customer, HR, Ops, Kafka Inspector), 7 KPI tiles, live log panels that refresh every 4 seconds.</p>
+            <div class="flex flex-wrap gap-2">
+              <a class="chip" target="_blank" href="https://tailwindcss.com/docs">Tailwind CSS</a>
+              <a class="chip" target="_blank" href="https://nginx.org/en/docs/">Nginx docs</a>
+              <a class="chip" target="_blank" href="https://www.ibm.com/design/language/">IBM Design Language</a>
+            </div>
+          </div>
+        </details>
+
+        <!-- INSPECTORS -->
+        <details class="card">
+          <summary class="p-4 cursor-pointer flex items-center gap-3">
+            <span class="step-num">8</span>
+            <div class="flex-1">
+              <div class="font-medium">kafka-ui &nbsp;·&nbsp; pgAdmin &nbsp;·&nbsp; kafka-init</div>
+              <div class="mono text-xs" style="color:var(--fg-soft)">supporting tools</div>
+            </div>
+            <span class="mono text-xs accent">↓</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 border-t" style="border-color:var(--border)">
+            <ul class="text-sm space-y-2 ml-5" style="color:var(--fg-soft)">
+              <li class="list-disc"><strong>kafka-ui</strong> (port 8081) &mdash; web UI to browse Kafka topics, see partitions, read messages.</li>
+              <li class="list-disc"><strong>pgAdmin</strong> (port 8082) &mdash; web UI for Postgres. Pre-configured to connect to the database container.</li>
+              <li class="list-disc"><strong>kafka-init</strong> &mdash; runs once when the stack starts up, creates all 8 topics, then exits. No port; just does its job and quits.</li>
+            </ul>
+            <div class="flex flex-wrap gap-2 mt-3">
+              <a class="chip" target="_blank" href="https://docs.kafka-ui.provectus.io/">Kafka UI docs</a>
+              <a class="chip" target="_blank" href="https://www.pgadmin.org/docs/">pgAdmin docs</a>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+
+    <!-- ─── SECTION 5 · WORKFLOWS ────────────────────────────────── -->
+    <section id="workflows">
+      <h2 class="section font-light text-3xl">5 · The six workflows in detail</h2>
+      <p class="mb-8 text-lg" style="color:var(--fg-soft)">
+        FreshMart has six pipelines, one per business scenario. Click each
+        workflow to expand it &mdash; you'll see the trigger, the processors used,
+        and what data ends up where.
+      </p>
+
+      <!-- WORKFLOW 1 -->
+      <details class="card mb-4" open>
+        <summary class="p-5 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <span class="step-num">1</span>
+            <div class="flex-1">
+              <div class="font-medium text-lg">POS Sales: Register → Database → Kafka</div>
+              <div class="text-sm" style="color:var(--fg-soft)">Role: <strong>Cashier</strong> · Trigger: every barcode scan</div>
+            </div>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 pt-2 border-t" style="border-color:var(--border)">
+          <p class="mb-4">When Alice the cashier scans a box of cereal, a JSON message gets sent from the register to NiFi. This is the "hello world" of FreshMart &mdash; the most common event by far (thousands per minute at peak).</p>
+
+          <div class="grid md:grid-cols-2 gap-4 mb-4">
+            <div class="rail p-4">
+              <div class="mono text-xs uppercase tracking-widest mb-1 accent">What goes in</div>
+              <pre class="code mt-2 text-xs">{
+  "store_id":   "FM-042",
+  "sku":        "BAN-CAVENDISH-1LB",
+  "qty":        3,
+  "price":      0.99,
+  "cashier_id": "EMP-1147",
+  "timestamp":  "2024-11-01T14:23:00Z"
+}</pre>
+            </div>
+            <div class="rail p-4">
+              <div class="mono text-xs uppercase tracking-widest mb-1 accent">What comes out</div>
+              <ul class="text-sm mt-2 space-y-1">
+                <li>1 row in <code class="inline">DW_SALES_FACT</code></li>
+                <li>1 decrement on <code class="inline">INVENTORY</code></li>
+                <li>1 Kafka msg on <code class="inline">pos-sales</code></li>
+                <li>1 audit row in <code class="inline">EVENT_LOG</code></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mono text-xs uppercase tracking-widest mb-3 accent">Processors used (in order)</div>
+          <ol class="space-y-2 text-sm">
+            <li class="flex items-start gap-3"><span class="mono accent">1.</span><div><strong>ListenHTTP</strong> &mdash; opens port 9090, accepts JSON. <span class="chip" onclick="openModal('ListenHTTP', 'ListenHTTP', '<p>Opens a port on the NiFi server and accepts incoming HTTP POST requests. Each request becomes a FlowFile. Use it when you need NiFi to act as a server that other systems push data to.</p>', [{label:'ListenHTTP docs', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">2.</span><div><strong>ValidateRecord</strong> &mdash; uses Avro schema to check fields. Bad ones go to a "failure" queue. <span class="chip" onclick="openModal('ValidateRecord', 'ValidateRecord', '<p>Validates records against a schema (usually Avro). Records that pass go to the &quot;valid&quot; relationship; ones that fail go to &quot;invalid&quot; with the error attached as an attribute.</p>', [{label:'NiFi processors', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">3.</span><div><strong>JoltTransformJSON</strong> &mdash; renames fields (<code class="inline">price → unit_price</code>). <span class="chip" onclick="openModal('JoltTransform', 'JoltTransformJSON', '<p>Jolt is a JSON-to-JSON transformation library. You write a spec describing the input and the output shape, and Jolt converts. Used for renaming, restructuring, and flattening JSON.</p>', [{label:'Jolt library on GitHub', url:'https://github.com/bazaarvoice/jolt'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">4.</span><div><strong>UpdateAttribute</strong> &mdash; adds context like <code class="inline">environment=prod</code>.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5.</span><div><strong>MergeRecord</strong> &mdash; batches 100 records together for one DB insert (much faster than 100 individual inserts).</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">6a.</span><div><strong>PutDatabaseRecord</strong> → Postgres. <span class="chip" onclick="openModal('PutDatabaseRecord', 'PutDatabaseRecord', '<p>Inserts (or updates) records into a relational database. Uses a Reader to parse the FlowFile and a DBCP Connection Pool to connect. Way faster than running individual INSERT statements because it uses JDBC batch mode.</p>', [{label:'NiFi DB processors', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">6b.</span><div><strong>PublishKafkaRecord</strong> → Kafka topic <code class="inline">pos-sales</code>. <span class="chip" onclick="openModal('PublishKafka', 'PublishKafkaRecord', '<p>Sends each record in the FlowFile as a separate Kafka message. You configure the topic, the key (we use store_id), partition strategy, and serializer.</p>', [{label:'NiFi Kafka processors', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+          </ol>
+        </div>
+      </details>
+
+      <!-- WORKFLOW 2 -->
+      <details class="card mb-4">
+        <summary class="p-5 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <span class="step-num">2</span>
+            <div class="flex-1">
+              <div class="font-medium text-lg">Inventory Tracking &amp; Auto-Reorder</div>
+              <div class="text-sm" style="color:var(--fg-soft)">Role: <strong>Store Manager</strong> · Trigger: timer, every 5 min</div>
+            </div>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 pt-2 border-t" style="border-color:var(--border)">
+          <p class="mb-4">Every 5 minutes, NiFi wakes up, looks at the inventory table, and asks: "are we running low on anything?" If yes, it automatically places a reorder with the vendor.</p>
+          <p class="mb-4 text-sm">In the demo, click <strong>Run Inventory Sweep</strong> on the Manager tab to fire it manually. Items below their threshold go red in the table; new rows appear in <code class="inline">REORDER_LOG</code>; messages land in Kafka topic <code class="inline">reorder-alerts</code> and SQS queue <code class="inline">freshmart-reorder-alerts.fifo</code>.</p>
+
+          <div class="mono text-xs uppercase tracking-widest mb-3 accent">Processors used</div>
+          <ol class="space-y-2 text-sm">
+            <li class="flex items-start gap-3"><span class="mono accent">1.</span><div><strong>QueryDatabaseTableRecord</strong> &mdash; polls INVENTORY for new/changed rows.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">2.</span><div><strong>RouteOnAttribute</strong> &mdash; checks <code class="inline">${qty:lt(${reorder_threshold})}</code>.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">3.</span><div><strong>InvokeHTTP</strong> → calls the vendor API to place the order.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">4.</span><div><strong>PutSQS</strong> → AWS SQS FIFO queue (ordered alerts). <span class="chip" onclick="openModal('PutSQS', 'PutSQS', '<p>Sends the FlowFile content as a message to an AWS SQS queue. We point it at LocalStack instead of real AWS via the &quot;Endpoint Override URL&quot; property.</p><p>FIFO queues guarantee message ordering and exactly-once delivery within a message group.</p>', [{label:'AWS SQS FIFO', url:'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5.</span><div><strong>PutDatabaseRecord</strong> &mdash; UPSERT into REORDER_LOG.</div></li>
+          </ol>
+        </div>
+      </details>
+
+      <!-- WORKFLOW 3 -->
+      <details class="card mb-4">
+        <summary class="p-5 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <span class="step-num">3</span>
+            <div class="flex-1">
+              <div class="font-medium text-lg">Vendor CSV Ingestion</div>
+              <div class="text-sm" style="color:var(--fg-soft)">Role: <strong>Vendor</strong> · Trigger: file drop in <code class="inline">vendor-data/</code></div>
+            </div>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 pt-2 border-t" style="border-color:var(--border)">
+          <p class="mb-4">DOLE uploads a CSV called <code class="inline">DOLE_20241101_delivery.csv</code> via SFTP. NiFi sees the file, parses each row, looks up the vendor's product code in <code class="inline">PRODUCT_CATALOG</code> to find FreshMart's SKU, then writes to <code class="inline">VENDOR_DELIVERIES</code> and Kafka.</p>
+          <p class="mb-4 text-sm"><strong>The lookup is key.</strong> DOLE calls the product <code class="inline">DOLE-BAN-001</code>; FreshMart calls it <code class="inline">BAN-CAVENDISH-1LB</code>. The catalog table maps between them so we don't have to make the vendor learn our SKUs.</p>
+
+          <div class="mono text-xs uppercase tracking-widest mb-3 accent">Processors used</div>
+          <ol class="space-y-2 text-sm">
+            <li class="flex items-start gap-3"><span class="mono accent">1.</span><div><strong>GetFile</strong> &mdash; polls <code class="inline">/sftp/vendor/incoming/*.csv</code>. <span class="chip" onclick="openModal('GetFile', 'GetFile', '<p>Polls a directory for new files. When it finds one, it reads it into a FlowFile and (optionally) deletes the original. The polling interval is configurable; default is 0 sec (constant polling).</p><p>You can also filter by filename pattern, age, size.</p>', [{label:'NiFi processors', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">2.</span><div><strong>UpdateAttribute</strong> &mdash; extract vendor_id with EL: <code class="inline">${filename:substringBefore('_')}</code></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">3.</span><div><strong>SplitRecord</strong> &mdash; one CSV → many FlowFiles, one per row.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">4.</span><div><strong>LookupRecord</strong> &mdash; uses DatabaseRecordLookup to map vendor codes → FreshMart SKUs.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5a.</span><div><strong>PublishKafkaRecord</strong> → topic <code class="inline">vendor-deliveries</code></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5b.</span><div><strong>PutS3Object</strong> → archive to S3 bucket <code class="inline">freshmart-data-lake</code></div></li>
+          </ol>
+        </div>
+      </details>
+
+      <!-- WORKFLOW 4 -->
+      <details class="card mb-4">
+        <summary class="p-5 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <span class="step-num">4</span>
+            <div class="flex-1">
+              <div class="font-medium text-lg">Planogram Sync (SNS Fan-out)</div>
+              <div class="text-sm" style="color:var(--fg-soft)">Role: <strong>Operations / HQ</strong> · Trigger: manual push or scheduled</div>
+            </div>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 pt-2 border-t" style="border-color:var(--border)">
+          <p class="mb-4">When HQ changes the store layout (planogram = where each product sits on the shelf), they need to tell <em>everyone</em>: the POS register, the mobile employee app, the electronic shelf labels (ESL), and the warehouse system. One publish → four delivery channels. This is <strong>SNS fan-out</strong>.</p>
+          <p class="mb-4 text-sm">In the demo, picking <strong>store_id = ALL</strong> on the Ops tab fans out to every store in the database.</p>
+
+          <div class="mono text-xs uppercase tracking-widest mb-3 accent">Processors used</div>
+          <ol class="space-y-2 text-sm">
+            <li class="flex items-start gap-3"><span class="mono accent">1.</span><div><strong>InvokeHTTP</strong> → pulls latest planogram from HQ's API.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">2.</span><div><strong>SplitJson</strong> → one FlowFile per SKU update.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">3.</span><div><strong>UpdateAttribute</strong> &mdash; extracts aisle, section, shelf level into attributes.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">4.</span><div><strong>PutDatabaseRecord</strong> &mdash; UPSERT into PRODUCT_LOCATIONS.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5.</span><div><strong>PublishSNS</strong> &mdash; fires once; SNS replicates to 4 subscribed SQS queues. <span class="chip" onclick="openModal('SNS', 'AWS SNS · Fan-out', '<p>SNS (Simple Notification Service) is a pub/sub messaging service. You publish a message to a <strong>topic</strong>, and SNS delivers a copy to every <strong>subscriber</strong>.</p><p>Subscribers can be SQS queues, email addresses, HTTP endpoints, Lambda functions, or mobile push notifications.</p><p>This pattern is called <strong>fan-out</strong>: one publisher, many consumers, each gets their own copy. It&apos;s how you keep many systems in sync without writing custom code for each integration.</p>', [{label:'AWS SNS docs', url:'https://docs.aws.amazon.com/sns/'}, {label:'SNS-to-SQS fanout', url:'https://docs.aws.amazon.com/sns/latest/dg/sns-common-scenarios.html'}])">docs</span></div></li>
+          </ol>
+        </div>
+      </details>
+
+      <!-- WORKFLOW 5 -->
+      <details class="card mb-4">
+        <summary class="p-5 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <span class="step-num">5</span>
+            <div class="flex-1">
+              <div class="font-medium text-lg">Staff Scheduling &amp; HR Sync</div>
+              <div class="text-sm" style="color:var(--fg-soft)">Role: <strong>HR</strong> · Trigger: cron, Monday 6 AM</div>
+            </div>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 pt-2 border-t" style="border-color:var(--border)">
+          <p class="mb-4">Every Monday at 6 AM, NiFi pulls next week's shift schedule from the HR system, sends each employee an email with their hours, and updates the payroll attendance table.</p>
+          <p class="mb-4 text-sm"><strong>How does Monday 6 AM work?</strong> NiFi processors have a property called "Run Schedule" with a CRON expression: <code class="inline">0 0 6 ? * MON *</code>. <span class="chip" onclick="openModal('cron', 'CRON expressions', '<p>CRON is a way of writing recurring schedules as a short string. The fields are: <em>second minute hour day-of-month month day-of-week year</em>.</p><ul class=\"mono text-xs\"><li><code>0 0 6 ? * MON *</code> &mdash; Monday at 6:00:00 AM</li><li><code>0 *&#47;15 * * * ?</code> &mdash; Every 15 minutes</li><li><code>0 0 0 1 * ?</code> &mdash; First of every month, midnight</li></ul><p>NiFi uses Quartz CRON syntax (with seconds), slightly different from Linux cron.</p>', [{label:'Quartz CRON reference', url:'https://www.quartz-scheduler.org/documentation/quartz-2.3.0/tutorials/crontrigger.html'}])">how it works</span></p>
+
+          <div class="mono text-xs uppercase tracking-widest mb-3 accent">Processors used</div>
+          <ol class="space-y-2 text-sm">
+            <li class="flex items-start gap-3"><span class="mono accent">1.</span><div><strong>InvokeHTTP</strong> → GET schedule from HR API.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">2.</span><div><strong>SplitRecord</strong> → one FlowFile per shift.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">3.</span><div><strong>RouteOnAttribute</strong> → split by department.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">4.</span><div><strong>ReplaceText</strong> → fill in an email template.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5.</span><div><strong>PutEmail</strong> → SMTP. <span class="chip" onclick="openModal('PutEmail', 'PutEmail', '<p>Sends the FlowFile content (or part of it) as an email via SMTP. Configure server, port, credentials, from-address, recipients, and subject/body templates with Expression Language.</p>', [{label:'NiFi processors', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">6.</span><div><strong>PutDatabaseRecord</strong> → UPSERT into PAYROLL_ATTENDANCE.</div></li>
+          </ol>
+        </div>
+      </details>
+
+      <!-- WORKFLOW 6 -->
+      <details class="card mb-4">
+        <summary class="p-5 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <span class="step-num">6</span>
+            <div class="flex-1">
+              <div class="font-medium text-lg">Customer Feedback &amp; Recall Detection</div>
+              <div class="text-sm" style="color:var(--fg-soft)">Role: <strong>Customer</strong> · Trigger: feedback form submission</div>
+            </div>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 pt-2 border-t" style="border-color:var(--border)">
+          <p class="mb-4">A customer types "this milk was spoiled" into the feedback form. NiFi sees the word "spoiled" and classifies the feedback as SAFETY. If 5 or more SAFETY complaints come in on the same product within an hour, NiFi automatically triggers a <strong>product recall</strong> — broadcasts an urgent alert to every store via SNS.</p>
+          <p class="mb-4 text-sm">In the demo, click <strong>Fire 5 SAFETY → Trigger Recall</strong> on the Customer tab to see it happen.</p>
+
+          <div class="mono text-xs uppercase tracking-widest mb-3 accent">Processors used</div>
+          <ol class="space-y-2 text-sm">
+            <li class="flex items-start gap-3"><span class="mono accent">1.</span><div><strong>ConsumeKafka</strong> → reads from topic <code class="inline">customer-feedback</code>.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">2.</span><div><strong>RouteOnContent</strong> &mdash; regex match on safety keywords. <span class="chip" onclick="openModal('RouteOnContent', 'RouteOnContent', '<p>Routes FlowFiles based on regex patterns matching the content body. Used here to detect safety keywords like <em>spoiled, rotten, expired, mold, sick</em> in feedback text.</p>', [{label:'NiFi processors', url:'https://nifi.apache.org/components/'}])">docs</span></div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">3.</span><div><strong>ExecuteGroovyScript</strong> &mdash; counts SAFETY complaints per SKU in NiFi's cluster state; sets <code class="inline">recall_triggered=true</code> if count ≥ 5.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">4.</span><div><strong>RouteOnAttribute</strong> → if recall, go to PublishSNS; else just log.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5a.</span><div><strong>PublishSNS</strong> → topic <code class="inline">freshmart-product-recalls</code>, severity CRITICAL.</div></li>
+            <li class="flex items-start gap-3"><span class="mono accent">5b.</span><div><strong>PutDatabaseRecord</strong> → INSERT into CUSTOMER_FEEDBACK with recall flag.</div></li>
+          </ol>
+        </div>
+      </details>
+    </section>
+
+
+    <!-- ─── SECTION 6 · CODE LINE-BY-LINE ──────────────────────────── -->
+    <section id="code">
+      <h2 class="section font-light text-3xl">6 · Code tour — line by line</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        The most important files in the project, annotated. Hover or tap any
+        <span class="annotate">underlined word</span> for a pop-up explanation.
+      </p>
+
+      <h3 class="text-xl font-medium mt-6 mb-3">6.1 · <code class="inline">docker-compose.yml</code> &mdash; the Kafka service</h3>
+      <p class="mb-3" style="color:var(--fg-soft)">This is the recipe for the Kafka container. Every line is annotated below.</p>
+      <pre class="code"><span class="line-num">1</span>kafka:
+<span class="line-num">2</span>  <span class="annotate" onclick="openModal('img', 'image', '<p>The Docker <strong>image</strong> to run. <code>confluentinc/cp-kafka:7.7.1</code> means: pull the official Confluent Community Kafka image, version 7.7.1, from Docker Hub.</p><p>If you don&apos;t pin a version (e.g. just <code>cp-kafka:latest</code>), Docker may pull a different one tomorrow and break your setup. Always pin.</p>', [{label:'Image on Docker Hub', url:'https://hub.docker.com/r/confluentinc/cp-kafka'}])">image</span>: confluentinc/cp-kafka:7.7.1
+<span class="line-num">3</span>  ports:
+<span class="line-num">4</span>    - "<span class="annotate" onclick="openModal('ports', 'ports mapping', '<p>The format is <code>HOST:CONTAINER</code>. <code>9092:9092</code> means: traffic arriving on your laptop&apos;s port 9092 forwards to the container&apos;s port 9092.</p><p>You only need to expose ports you want to talk to from outside the Docker network. Containers can talk to each other on any port via the network <code>freshmart</code>.</p>', [{label:'Docker ports', url:'https://docs.docker.com/compose/networking/'}])">9092:9092</span>"
+<span class="line-num">5</span>  environment:
+<span class="line-num">6</span>    KAFKA_NODE_ID: 1
+<span class="line-num">7</span>    <span class="annotate" onclick="openModal('process-roles', 'KAFKA_PROCESS_ROLES', '<p>In KRaft mode, each Kafka node can play two roles: <strong>broker</strong> (handles messages) and <strong>controller</strong> (manages cluster state).</p><p>For a tiny demo, one node does both. For production, you split them: a few dedicated controllers + many brokers.</p>', [{label:'KRaft mode explained', url:'https://developer.confluent.io/learn/kraft/'}])">KAFKA_PROCESS_ROLES</span>: "broker,controller"
+<span class="line-num">8</span>    KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,..."
+<span class="line-num">9</span>    <span class="annotate" onclick="openModal('advertised', 'Advertised listeners', '<p>Tricky! Kafka tells clients <em>which address to use to reach me</em>. If a container inside the network connects, Kafka responds &quot;use <code>kafka:29092</code>&quot;. If a program on your laptop connects, Kafka responds &quot;use <code>localhost:9092</code>&quot;.</p><p>If you got this wrong, clients would connect successfully, get told to use a hostname they can&apos;t resolve, and silently fail. This is the #1 cause of &quot;why isn&apos;t my Kafka working?&quot; pain.</p>', [{label:'Confluent: connecting Kafka', url:'https://www.confluent.io/blog/kafka-listeners-explained/'}])">KAFKA_ADVERTISED_LISTENERS</span>: "PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092"
+<span class="line-num">10</span>    KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+<span class="line-num">11</span>  <span class="annotate" onclick="openModal('healthcheck', 'Docker healthchecks', '<p>Tells Docker how to test if the container is ready. The check runs every 15 seconds. Other services with <code>depends_on: condition: service_healthy</code> will wait until this passes.</p><p>Without this, the kafka-init container would start before Kafka is ready and fail.</p>', [{label:'Healthcheck reference', url:'https://docs.docker.com/reference/dockerfile/#healthcheck'}])">healthcheck</span>:
+<span class="line-num">12</span>    test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092"]
+<span class="line-num">13</span>    interval: 15s
+<span class="line-num">14</span>    retries: 10</pre>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">6.2 · <code class="inline">pos-simulator/app.py</code> &mdash; the sale endpoint</h3>
+      <p class="mb-3" style="color:var(--fg-soft)">This is the most important function. It runs whenever the dashboard fires a sale.</p>
+      <pre class="code"><span class="line-num">1</span><span class="annotate" onclick="openModal('decorator', '@app.route', '<p>A Flask <strong>decorator</strong>. It binds the function below to a URL. So when someone POSTs to <code>/api/pos/sale</code>, this function runs.</p>', [{label:'Flask routing', url:'https://flask.palletsprojects.com/en/3.0.x/quickstart/#routing'}])">@app.route</span>("/api/pos/sale", methods=["POST"])
+<span class="line-num">2</span>def pos_sale():
+<span class="line-num">3</span>    payload = <span class="annotate" onclick="openModal('parse-body', 'parse_body()', '<p>Reads the JSON body from the HTTP request. Returns an empty dict <code>{}</code> if the body is missing or invalid &mdash; so we never crash with NoneType errors.</p>', [])">parse_body()</span>
+<span class="line-num">4</span>    errs = <span class="annotate" onclick="openModal('validate_sale', 'validate_sale()', '<p>Checks: store_id present? sku present? qty positive int? price positive number? timestamp is ISO8601 if provided?</p><p>Returns a list of error strings. Empty list means valid. Bad input gets a 400 response with the errors back to the dashboard, which shows them in a toast.</p>', [])">validate_sale</span>(payload)
+<span class="line-num">5</span>    if errs:
+<span class="line-num">6</span>        return fail(errs, <span class="annotate" onclick="openModal('http400', 'HTTP 400', '<p>400 means &quot;Bad Request&quot;. Use it when the client sent invalid data. The client should not retry without fixing the request.</p><p>Other common codes: 200 (OK), 401 (you need to log in), 403 (you can&apos;t do this), 404 (not found), 500 (server crashed), 502 (a downstream service failed).</p>', [{label:'MDN HTTP status codes', url:'https://developer.mozilla.org/en-US/docs/Web/HTTP/Status'}])">400</span>)
+<span class="line-num">7</span>
+<span class="line-num">8</span>    payload.setdefault("timestamp", now_iso())
+<span class="line-num">9</span>
+<span class="line-num">10</span>    # Publish to Kafka — NiFi&apos;s ConsumeKafka will pick this up
+<span class="line-num">11</span>    producer().send(<span class="annotate" onclick="openModal('topic-const', 'TOPIC_POS_SALES', '<p>A constant that holds the topic name <code>&quot;pos-sales&quot;</code>. Keeping it as a constant means: change it in one place if you ever rename the topic, and search for usages is reliable.</p>', [])">TOPIC_POS_SALES</span>, key=payload["store_id"], value=payload)
+<span class="line-num">12</span>    producer().<span class="annotate" onclick="openModal('flush', 'producer.flush()', '<p>Kafka producers batch messages for efficiency. <code>flush()</code> forces all buffered messages out <em>right now</em> and waits for them to be acknowledged. We do this so we know the message landed before responding to the dashboard.</p>', [])">flush</span>(timeout=5)
+<span class="line-num">13</span>
+<span class="line-num">14</span>    # Direct write so dashboard sees activity even before NiFi is wired up
+<span class="line-num">15</span>    <span class="annotate" onclick="openModal('record-sale', '_record_sale()', '<p>Helper that does two SQL writes: INSERT into DW_SALES_FACT, then UPDATE INVENTORY to decrement qty. Wrapped in a single transaction.</p>', [])">_record_sale</span>(payload)
+<span class="line-num">16</span>    <span class="annotate" onclick="openModal('audit', 'audit()', '<p>Writes a row to EVENT_LOG with the event type, source (\&quot;dashboard\&quot;), and full payload as JSONB. Every action gets logged so you can audit later.</p>', [])">audit</span>("POS_SALE", "dashboard", payload)
+<span class="line-num">17</span>
+<span class="line-num">18</span>    return jsonify({"ok": True, "kafka_topic": TOPIC_POS_SALES, "payload": payload})</pre>
+
+
+      <h3 class="text-xl font-medium mt-10 mb-3">6.3 · <code class="inline">sql/init.sql</code> &mdash; the sales table</h3>
+      <p class="mb-3" style="color:var(--fg-soft)">This is what gets created in Postgres on first boot.</p>
+      <pre class="code"><span class="line-num">1</span><span class="annotate" onclick="openModal('createtable', 'CREATE TABLE IF NOT EXISTS', '<p>Creates the table only if it doesn&apos;t already exist. Makes the init script safe to re-run.</p>', [{label:'PostgreSQL CREATE TABLE', url:'https://www.postgresql.org/docs/current/sql-createtable.html'}])">CREATE TABLE IF NOT EXISTS</span> DW_SALES_FACT (
+<span class="line-num">2</span>  id            <span class="annotate" onclick="openModal('bigserial', 'BIGSERIAL', '<p>An auto-incrementing 64-bit integer. Each new row gets the next number automatically. The PK index is created implicitly.</p>', [{label:'Postgres serial types', url:'https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-SERIAL'}])">BIGSERIAL</span> PRIMARY KEY,
+<span class="line-num">3</span>  store_id      VARCHAR(20)   NOT NULL,
+<span class="line-num">4</span>  sku           VARCHAR(50)   NOT NULL,
+<span class="line-num">5</span>  qty           INTEGER       NOT NULL <span class="annotate" onclick="openModal('check', 'CHECK constraint', '<p>A rule the database enforces on every insert. <code>CHECK (qty > 0)</code> means: any attempt to insert qty=0 or negative gets rejected by the database, before NiFi or any app code can store bad data.</p>', [{label:'Postgres constraints', url:'https://www.postgresql.org/docs/current/ddl-constraints.html'}])">CHECK (qty > 0)</span>,
+<span class="line-num">6</span>  unit_price    DECIMAL(10,2) NOT NULL,
+<span class="line-num">7</span>  emp_id        VARCHAR(20),
+<span class="line-num">8</span>  sale_ts       <span class="annotate" onclick="openModal('tz', 'TIMESTAMPTZ', '<p>Timestamp <em>with</em> time zone. Postgres stores all timestamps as UTC internally; the TZ part means it knows to convert when displaying.</p><p>Always use TIMESTAMPTZ over TIMESTAMP. The non-TZ version causes endless time zone bugs.</p>', [{label:'Postgres date/time types', url:'https://www.postgresql.org/docs/current/datatype-datetime.html'}])">TIMESTAMPTZ</span>   NOT NULL,
+<span class="line-num">9</span>  ingest_time   TIMESTAMPTZ   DEFAULT NOW()
+<span class="line-num">10</span>);
+<span class="line-num">11</span>
+<span class="line-num">12</span><span class="annotate" onclick="openModal('index', 'CREATE INDEX', '<p>An index speeds up queries that filter or sort by certain columns. Without an index, Postgres reads every row (a &quot;sequential scan&quot;). With an index, it jumps straight to the matching ones.</p><p>The tradeoff: indexes take space and slow down inserts. Add indexes for columns you query often.</p>', [{label:'Postgres indexes', url:'https://www.postgresql.org/docs/current/indexes.html'}])">CREATE INDEX IF NOT EXISTS idx_sales_store_ts</span> ON DW_SALES_FACT (store_id, sale_ts);</pre>
+
+      <h3 class="text-xl font-medium mt-10 mb-3">6.4 · <code class="inline">dashboard/app.js</code> &mdash; the form handler</h3>
+      <p class="mb-3" style="color:var(--fg-soft)">When you click "Scan &amp; Send Event" on the Cashier tab, this runs in the browser.</p>
+      <pre class="code"><span class="line-num">1</span>document.getElementById('form-sale').<span class="annotate" onclick="openModal('addEventListener', 'addEventListener', '<p>Attaches a function to an event on a DOM element. <code>submit</code> fires when the user submits a form. <code>click</code> fires on a button click. <code>change</code> fires when an input value changes.</p>', [{label:'MDN addEventListener', url:'https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener'}])">addEventListener</span>('submit', async e => {
+<span class="line-num">2</span>  <span class="annotate" onclick="openModal('preventdefault', 'preventDefault()', '<p>Stops the browser&apos;s default behavior for an event. For a form submit, the default is to refresh the page with form data in the URL. We don&apos;t want that &mdash; we want to handle it with JS &mdash; so we cancel it.</p>', [])">e.preventDefault</span>();
+<span class="line-num">3</span>  try {
+<span class="line-num">4</span>    const r = <span class="annotate" onclick="openModal('await', 'await', '<p>Pauses the function until a Promise resolves. <code>fetch()</code> is async &mdash; it returns a Promise. <code>await</code> lets us write asynchronous code as if it were synchronous, much easier to read.</p>', [{label:'MDN async/await', url:'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await'}])">await</span> postJSON(`${API}/pos/sale`, formToJson(e.target));
+<span class="line-num">5</span>    toast(`POS sale published to kafka.${r.kafka_topic}`, 'success');
+<span class="line-num">6</span>    refreshAll();
+<span class="line-num">7</span>  } catch (err) {
+<span class="line-num">8</span>    toast(`Sale failed: ${err.message}`, 'error');
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>});</pre>
+
+    </section>
+
+
+    <!-- ─── SECTION 7 · RUN ─────────────────────────────────────────── -->
+    <section id="run">
+      <h2 class="section font-light text-3xl">7 · How to run and test it</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        Three commands and you're up. Make sure Docker Desktop is installed and running first.
+      </p>
+
+      <div class="space-y-4">
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Step 1 · Start the stack</div>
+          <pre class="code">cd freshmart-nifi
+docker compose up -d --build</pre>
+          <p class="text-sm mt-3" style="color:var(--fg-soft)">First run downloads about 2 GB of images. NiFi takes about 90 seconds to fully boot.</p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Step 2 · Open the dashboard</div>
+          <pre class="code">open http://localhost:8000        # macOS
+xdg-open http://localhost:8000    # Linux
+start http://localhost:8000       # Windows</pre>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Step 3 · Smoke-test (optional)</div>
+          <pre class="code">bash scripts/smoke-test.sh</pre>
+          <p class="text-sm mt-3" style="color:var(--fg-soft)">Curls every endpoint, then prints stats and topic counts. If all 10 steps succeed, the pipeline is healthy.</p>
+        </div>
+
+        <div class="card-soft p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">URLs once it's running</div>
+          <ul class="text-sm space-y-1 mono">
+            <li><a class="accent" target="_blank" href="http://localhost:8000">localhost:8000</a> &mdash; The dashboard</li>
+            <li><a class="accent" target="_blank" href="https://localhost:8443/nifi">localhost:8443/nifi</a> &mdash; NiFi UI (admin / FreshMart2024Secret!)</li>
+            <li><a class="accent" target="_blank" href="http://localhost:8081">localhost:8081</a> &mdash; Kafka UI</li>
+            <li><a class="accent" target="_blank" href="http://localhost:8082">localhost:8082</a> &mdash; pgAdmin (admin@freshmart.local / FreshMart2024!)</li>
+          </ul>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Run the offline test suite</div>
+          <pre class="code">pip install flask flask-cors kafka-python-ng psycopg2-binary
+python3 tests/test_pos_simulator.py</pre>
+          <p class="text-sm mt-3" style="color:var(--fg-soft)">Runs 22 scenarios with 64 assertions, no Docker needed. Mocks Kafka, uses SQLite for Postgres. Should print <code class="inline">RESULT: 64 passed, 0 failed</code>.</p>
+        </div>
+
+        <div class="card p-5">
+          <div class="mono text-xs uppercase tracking-widest mb-2 accent">Tear down</div>
+          <pre class="code">docker compose down       # stop, keep data
+docker compose down -v    # stop and wipe all data</pre>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ─── SECTION 8 · GLOSSARY ───────────────────────────────────── -->
+    <section id="glossary">
+      <h2 class="section font-light text-3xl">8 · Glossary</h2>
+      <p class="mb-6 text-lg" style="color:var(--fg-soft)">
+        Every technical word from this page, in alphabetical order, plain English.
+      </p>
+
+      <dl class="gloss space-y-1">
+        <dt>API (Application Programming Interface)</dt>
+        <dd>A set of rules letting one program ask another to do something. Like a menu at a restaurant — you don't go in the kitchen, you order through the menu.</dd>
+
+        <dt>Avro</dt>
+        <dd>A way to write down what a piece of data looks like (its <em>schema</em>) so different programs can agree on the shape.</dd>
+
+        <dt>Broker</dt>
+        <dd>A Kafka server. It receives messages from producers and gives them to consumers. FreshMart has one broker.</dd>
+
+        <dt>CRON</dt>
+        <dd>A way to write a schedule, like "every Monday at 6 AM", as a short text string: <code class="inline">0 0 6 ? * MON *</code>.</dd>
+
+        <dt>Container</dt>
+        <dd>A bundled-up program that runs the same way on any computer. Like a sealed lunch box.</dd>
+
+        <dt>DLQ (Dead Letter Queue)</dt>
+        <dd>A separate place where messages that failed processing go, so they can be investigated later without blocking the main pipeline.</dd>
+
+        <dt>FIFO</dt>
+        <dd>"First In, First Out". The order you put things in is the order you get them back. Like a normal grocery line.</dd>
+
+        <dt>FlowFile</dt>
+        <dd>NiFi's name for one piece of data flowing through. Has Content (the data) and Attributes (tags).</dd>
+
+        <dt>JSON (JavaScript Object Notation)</dt>
+        <dd>A simple text format for data. Looks like <code class="inline">{"name": "Alice", "age": 12}</code>. Easy for both humans and computers to read.</dd>
+
+        <dt>Kafka topic</dt>
+        <dd>A named mailbox in Kafka. Producers put messages in; consumers take them out (without removing them — they stay for replaying).</dd>
+
+        <dt>KPI (Key Performance Indicator)</dt>
+        <dd>A number that tells you how something is going. "Sales today" is a KPI.</dd>
+
+        <dt>KRaft</dt>
+        <dd>The new way Kafka manages itself, without needing a separate ZooKeeper service.</dd>
+
+        <dt>Partition</dt>
+        <dd>A slice of a Kafka topic. A topic with 3 partitions can be read by 3 consumers at once, in parallel.</dd>
+
+        <dt>Pipeline</dt>
+        <dd>An automated chain of steps that moves data from start to finish.</dd>
+
+        <dt>Planogram</dt>
+        <dd>A map of the store: which products go on which aisle, section, and shelf.</dd>
+
+        <dt>Process Group</dt>
+        <dd>A folder in NiFi that groups related processors. Each FreshMart workflow is one process group.</dd>
+
+        <dt>Processor</dt>
+        <dd>A single building block in NiFi. Does one job: read a file, send to Kafka, validate JSON, etc.</dd>
+
+        <dt>Producer / Consumer</dt>
+        <dd>A producer writes messages to Kafka. A consumer reads them.</dd>
+
+        <dt>Recall</dt>
+        <dd>An urgent notice that a product is unsafe and should be removed from shelves.</dd>
+
+        <dt>S3</dt>
+        <dd>Amazon's file storage service. Stores big files cheaply.</dd>
+
+        <dt>Schema</dt>
+        <dd>A description of what data should look like: which fields, which types.</dd>
+
+        <dt>SKU (Stock Keeping Unit)</dt>
+        <dd>A unique code for one product. <code class="inline">BAN-CAVENDISH-1LB</code> is one.</dd>
+
+        <dt>SMTP</dt>
+        <dd>The protocol for sending emails between mail servers.</dd>
+
+        <dt>SNS (Simple Notification Service)</dt>
+        <dd>AWS service for pub/sub messaging. Publish once → many subscribers each get a copy.</dd>
+
+        <dt>SQS (Simple Queue Service)</dt>
+        <dd>AWS service for message queues. Like Kafka but simpler — one message, one receiver.</dd>
+
+        <dt>UPSERT</dt>
+        <dd>Insert if new, update if already exists. Saves an extra round-trip to check first.</dd>
+
+        <dt>UTC (Coordinated Universal Time)</dt>
+        <dd>The world's "master clock" time. Always store timestamps in UTC; convert to local time only for display.</dd>
+
+        <dt>YAML</dt>
+        <dd>A human-readable text format used for config files (like <code class="inline">docker-compose.yml</code>). Cousin of JSON.</dd>
+      </dl>
+    </section>
+
+
+    <!-- ─── FOOTER ──────────────────────────────────────────────────── -->
+    <footer class="mt-20 mb-10 pt-8 border-t" style="border-color:var(--border)">
+      <div class="grid md:grid-cols-3 gap-6 text-sm" style="color:var(--fg-soft)">
+        <div>
+          <div class="mono text-[10px] uppercase tracking-widest mb-3 accent">Official documentation</div>
+          <ul class="space-y-1">
+            <li><a target="_blank" class="hover:accent underline" href="https://nifi.apache.org/docs/nifi-docs/html/user-guide.html">Apache NiFi User Guide</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://kafka.apache.org/documentation/">Apache Kafka Documentation</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://www.postgresql.org/docs/current/">PostgreSQL Documentation</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://docs.localstack.cloud/overview/">LocalStack Documentation</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://docs.docker.com/compose/">Docker Compose Documentation</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="mono text-[10px] uppercase tracking-widest mb-3 accent">Tools used here</div>
+          <ul class="space-y-1">
+            <li><a target="_blank" class="hover:accent underline" href="https://tailwindcss.com/docs">Tailwind CSS</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://flask.palletsprojects.com/">Flask</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://github.com/wbarnha/kafka-python-ng">kafka-python-ng</a></li>
+            <li><a target="_blank" class="hover:accent underline" href="https://www.ibm.com/design/language/">IBM Carbon Design</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="mono text-[10px] uppercase tracking-widest mb-3 accent">In this project</div>
+          <ul class="space-y-1">
+            <li><a class="hover:accent underline" href="../README.md">Project README</a></li>
+            <li><a class="hover:accent underline" href="../tests/test_pos_simulator.py">Test suite</a></li>
+            <li><a class="hover:accent underline" href="../flows/freshmart-flows-reference.json">Flow blueprints</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="text-xs mt-10 mono" style="color:var(--fg-soft)">
+        FreshMart Pipeline · A teaching demo built around Apache NiFi.<br/>
+        All product names, store IDs, and employees are fictional.
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MODAL — popup detail box
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="modal" class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+  <div class="modal-panel">
+    <div class="modal-head">
+      <div class="flex-1 min-w-0">
+        <div class="mono text-[10px] uppercase tracking-widest" style="color:var(--fg-soft)">More info</div>
+        <h3 id="modal-title" class="text-xl font-medium mt-1">Title</h3>
+      </div>
+      <button class="text-2xl leading-none px-2" onclick="closeModal()" aria-label="Close">&times;</button>
+    </div>
+    <div id="modal-body" class="modal-body text-base"></div>
+    <div id="modal-foot" class="modal-foot text-sm hidden"></div>
+  </div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// DARK / LIGHT MODE TOGGLE
+// ═══════════════════════════════════════════════════════════════════════
+const themeBtn   = document.getElementById('theme-toggle');
+const themeIcon  = document.getElementById('theme-icon');
+const themeLabel = document.getElementById('theme-label');
+
+function applyThemeUI() {
+  const isDark = document.documentElement.classList.contains('dark');
+  themeIcon.textContent  = isDark ? '☾' : '☼';
+  themeLabel.textContent = isDark ? 'Dark' : 'Light';
+}
+applyThemeUI();
+
+themeBtn.addEventListener('click', () => {
+  const html   = document.documentElement;
+  const isDark = html.classList.contains('dark');
+  html.classList.toggle('dark', !isDark);
+  html.classList.toggle('light',  isDark);
+  localStorage.setItem('fm-theme', !isDark ? 'dark' : 'light');
+  applyThemeUI();
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// MODAL SYSTEM
+// ═══════════════════════════════════════════════════════════════════════
+const modal     = document.getElementById('modal');
+const modalT    = document.getElementById('modal-title');
+const modalB    = document.getElementById('modal-body');
+const modalFoot = document.getElementById('modal-foot');
+
+/**
+ * openModal(id, title, html, [{label, url}, ...])
+ *   id       — short identifier (for analytics/anchors; not strictly used)
+ *   title    — popup header text
+ *   html     — HTML content (can include <p>, <ul>, <code>)
+ *   links    — optional array of doc links shown in the footer
+ */
+function openModal(id, title, html, links) {
+  modalT.textContent = title;
+  modalB.innerHTML   = html;
+  if (links && links.length) {
+    modalFoot.innerHTML =
+      '<div class="mr-auto mono text-xs" style="color:var(--fg-soft)">References:</div>' +
+      links.map(l =>
+        `<a href="${l.url}" target="_blank" rel="noopener" class="chip" style="text-decoration:none">${l.label} ↗</a>`
+      ).join('');
+    modalFoot.classList.remove('hidden');
+  } else {
+    modalFoot.classList.add('hidden');
+  }
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+window.openModal  = openModal;
+window.closeModal = closeModal;
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+});
+</script>
+
+</body>
+</html>
