@@ -209,6 +209,7 @@
     <a href="#s6" class="theme-blue-tag px-3 py-1 rounded-full hover:opacity-80">06 · Monitoring</a>
     <a href="#s7" class="theme-blue-tag px-3 py-1 rounded-full hover:opacity-80">07 · AWS Services</a>
     <a href="#s8" class="theme-blue-tag px-3 py-1 rounded-full hover:opacity-80">08 · Handoff</a>
+    <a href="#s9" class="theme-blue-tag px-3 py-1 rounded-full hover:opacity-80">09 · Law Firm ETL</a>
   </div>
 </div>
 
@@ -987,6 +988,485 @@ grep -i "ERROR\|WARN\|Exception" /opt/nifi/logs/nifi-app.log | tail -100</pre>
 
   <!-- Footer -->
   <hr class="theme-divider mb-8"/>
+
+  <!-- SECTION 9: LAW FIRM ETL EXAMPLE -->
+  <section id="s9" class="mb-12">
+    <div class="flex items-center gap-3 mb-6">
+      <span class="number-badge w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0">09</span>
+      <div>
+        <h2 class="text-xl font-semibold">Real-World Example: Law Firm AI Document Pipeline</h2>
+        <p class="theme-text-muted text-sm">A complete ETL use case — contract review and brief preparation powered by NiFi, Claude AI, and Elasticsearch on AWS.</p>
+      </div>
+    </div>
+
+    <div class="info-block rounded p-4 mb-6 text-sm">
+      <strong>Scenario:</strong> A law firm receives hundreds of documents weekly in mixed formats — scanned contracts, Word briefs, email attachments, court filing images. This pipeline converts everything to searchable text, enriches it with AI, and stores it so attorneys can search, review, and build briefs quickly.
+    </div>
+
+    <!-- Overview diagram -->
+    <h3 class="font-semibold text-sm mb-3">Pipeline overview — high level</h3>
+    <div class="theme-bg-2 border theme-border rounded-lg p-4 mb-6 overflow-x-auto">
+      <svg width="100%" viewBox="0 0 680 480" role="img">
+        <title>Law firm AI pipeline overview</title>
+        <desc>Document sources flowing through NiFi, OCR extraction, Claude AI enrichment, and Elasticsearch storage to attorney UI</desc>
+        <defs><marker id="arr9a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <style>
+          .s9-blue { fill: #dbeafe; stroke: #2563eb; stroke-width:1; }
+          .s9-purple { fill: #ede9fe; stroke: #7c3aed; stroke-width:1; }
+          .s9-teal { fill: #d1fae5; stroke: #059669; stroke-width:1; }
+          .s9-amber { fill: #fef3c7; stroke: #d97706; stroke-width:1; }
+          .s9-coral { fill: #fee2e2; stroke: #dc2626; stroke-width:1; }
+          .s9-gray { fill: #f3f4f6; stroke: #6b7280; stroke-width:1; }
+          .s9-lbl { font-family: var(--font-sans, sans-serif); font-size:13px; fill: #111827; font-weight:600; }
+          .s9-sub { font-family: var(--font-sans, sans-serif); font-size:10.5px; fill: #4b5563; }
+          .s9-stage { font-family: var(--font-sans, sans-serif); font-size:11px; fill: #6b7280; font-weight:600; letter-spacing:0.05em; }
+          body.dark .s9-blue { fill: #1e3a5f; stroke: #60a5fa; }
+          body.dark .s9-purple { fill: #2e1065; stroke: #a78bfa; }
+          body.dark .s9-teal { fill: #064e3b; stroke: #34d399; }
+          body.dark .s9-amber { fill: #451a03; stroke: #fbbf24; }
+          body.dark .s9-coral { fill: #450a0a; stroke: #f87171; }
+          body.dark .s9-gray { fill: #1f2937; stroke: #9ca3af; }
+          body.dark .s9-lbl { fill: #f3f4f6; }
+          body.dark .s9-sub { fill: #d1d5db; }
+          body.dark .s9-stage { fill: #9ca3af; }
+        </style>
+        <!-- Stage labels on left (left-anchored, away from edge) -->
+        <text class="s9-stage" x="20" y="75">SOURCES</text>
+        <text class="s9-stage" x="20" y="172">ORCHESTRATE</text>
+        <text class="s9-stage" x="20" y="252">EXTRACT</text>
+        <text class="s9-stage" x="20" y="332">ENRICH</text>
+        <text class="s9-stage" x="20" y="412">STORE</text>
+        <!-- Sources row: 5 boxes evenly spaced from x=130 to x=650 -->
+        <rect class="s9-gray" x="130" y="50" width="92" height="50" rx="6"/>
+        <text class="s9-lbl" x="176" y="72" text-anchor="middle">PDF</text>
+        <text class="s9-sub" x="176" y="88" text-anchor="middle">Contracts, filings</text>
+        <rect class="s9-gray" x="234" y="50" width="92" height="50" rx="6"/>
+        <text class="s9-lbl" x="280" y="72" text-anchor="middle">DOCX</text>
+        <text class="s9-sub" x="280" y="88" text-anchor="middle">Briefs, memos</text>
+        <rect class="s9-gray" x="338" y="50" width="92" height="50" rx="6"/>
+        <text class="s9-lbl" x="384" y="72" text-anchor="middle">Images</text>
+        <text class="s9-sub" x="384" y="88" text-anchor="middle">Scans, faxes</text>
+        <rect class="s9-gray" x="442" y="50" width="92" height="50" rx="6"/>
+        <text class="s9-lbl" x="488" y="72" text-anchor="middle">Email</text>
+        <text class="s9-sub" x="488" y="88" text-anchor="middle">MSG, EML</text>
+        <rect class="s9-gray" x="546" y="50" width="104" height="50" rx="6"/>
+        <text class="s9-lbl" x="598" y="72" text-anchor="middle">Other</text>
+        <text class="s9-sub" x="598" y="88" text-anchor="middle">TXT, HTML, XML</text>
+        <!-- All sources funnel down to NiFi via vertical lines into a horizontal collector -->
+        <line x1="176" y1="100" x2="176" y2="120" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="280" y1="100" x2="280" y2="120" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="384" y1="100" x2="384" y2="120" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="488" y1="100" x2="488" y2="120" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="598" y1="100" x2="598" y2="120" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="176" y1="120" x2="598" y2="120" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="387" y1="120" x2="387" y2="146" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9a)"/>
+        <!-- NiFi -->
+        <rect class="s9-blue" x="240" y="148" width="294" height="56" rx="8"/>
+        <text class="s9-lbl" x="387" y="170" text-anchor="middle">Apache NiFi</text>
+        <text class="s9-sub" x="387" y="188" text-anchor="middle">Ingestion, routing, orchestration</text>
+        <line x1="387" y1="204" x2="387" y2="226" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9a)"/>
+        <!-- OCR -->
+        <rect class="s9-purple" x="240" y="228" width="294" height="56" rx="8"/>
+        <text class="s9-lbl" x="387" y="250" text-anchor="middle">OCR + text extraction</text>
+        <text class="s9-sub" x="387" y="268" text-anchor="middle">Textract / Tesseract / Apache Tika</text>
+        <line x1="387" y1="284" x2="387" y2="306" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9a)"/>
+        <!-- AI -->
+        <rect class="s9-amber" x="240" y="308" width="294" height="56" rx="8"/>
+        <text class="s9-lbl" x="387" y="330" text-anchor="middle">AI enrichment</text>
+        <text class="s9-sub" x="387" y="348" text-anchor="middle">Claude API - classify, extract, flag</text>
+        <line x1="387" y1="364" x2="387" y2="386" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9a)"/>
+        <!-- ES -->
+        <rect class="s9-teal" x="240" y="388" width="294" height="56" rx="8"/>
+        <text class="s9-lbl" x="387" y="410" text-anchor="middle">Elasticsearch</text>
+        <text class="s9-sub" x="387" y="428" text-anchor="middle">Full-text + vector search store</text>
+        <!-- Attorney UI to right of ES -->
+        <rect class="s9-coral" x="554" y="388" width="110" height="56" rx="8"/>
+        <text class="s9-lbl" x="609" y="410" text-anchor="middle">Attorney UI</text>
+        <text class="s9-sub" x="609" y="428" text-anchor="middle">Kibana / portal</text>
+        <line x1="534" y1="416" x2="552" y2="416" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9a)"/>
+        <!-- Caption -->
+        <text class="s9-sub" x="387" y="466" text-anchor="middle">High-level ETL flow - law firm AI document pipeline</text>
+      </svg>
+    </div>
+
+    <!-- NiFi Process Group Detail Diagram -->
+    <h3 class="font-semibold text-sm mb-3">NiFi processor chain — detailed flow</h3>
+    <div class="theme-bg-2 border theme-border rounded-lg p-4 mb-6 overflow-x-auto">
+      <svg width="100%" viewBox="0 0 680 620" role="img">
+        <title>NiFi process group detail for law firm document pipeline</title>
+        <desc>NiFi processors arranged top-down: sources merge into RouteOnAttribute, branch to extractors, then converge through UpdateAttribute, InvokeHTTP to Claude, EvaluateJsonPath, and PutElasticsearchRecord</desc>
+        <defs><marker id="arr9b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <style>
+          .p9t  { font-family: var(--font-sans, sans-serif); font-size:13px; fill: #111827; font-weight:600; }
+          .p9s  { font-family: var(--font-sans, sans-serif); font-size:10.5px; fill: #4b5563; }
+          .p9-teal   { fill:#d1fae5; stroke:#059669; stroke-width:1; }
+          .p9-blue   { fill:#dbeafe; stroke:#2563eb; stroke-width:1; }
+          .p9-purple { fill:#ede9fe; stroke:#7c3aed; stroke-width:1; }
+          .p9-amber  { fill:#fef3c7; stroke:#d97706; stroke-width:1; }
+          .p9-coral  { fill:#fee2e2; stroke:#dc2626; stroke-width:1; }
+          .p9-red    { fill:#fecaca; stroke:#b91c1c; stroke-width:1; }
+          body.dark .p9t { fill:#f3f4f6; }
+          body.dark .p9s { fill:#d1d5db; }
+          body.dark .p9-teal   { fill:#064e3b; stroke:#34d399; }
+          body.dark .p9-blue   { fill:#1e3a5f; stroke:#60a5fa; }
+          body.dark .p9-purple { fill:#2e1065; stroke:#a78bfa; }
+          body.dark .p9-amber  { fill:#451a03; stroke:#fbbf24; }
+          body.dark .p9-coral  { fill:#450a0a; stroke:#f87171; }
+          body.dark .p9-red    { fill:#450a0a; stroke:#ef4444; }
+        </style>
+        <!-- Process group outline -->
+        <rect x="18" y="20" width="644" height="582" rx="10" fill="none" stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="6 4"/>
+        <text class="p9s" x="32" y="38" style="font-weight:600">Process group: LawFirm_Document_Ingest</text>
+
+        <!-- ROW 1: Intake sources (3 boxes side by side) -->
+        <rect class="p9-teal" x="50"  y="58" width="160" height="50" rx="6"/>
+        <text class="p9t" x="130" y="80" text-anchor="middle">GetS3Object</text>
+        <text class="p9s" x="130" y="96" text-anchor="middle">Poll S3 intake bucket</text>
+
+        <rect class="p9-teal" x="260" y="58" width="160" height="50" rx="6"/>
+        <text class="p9t" x="340" y="80" text-anchor="middle">ListenHTTP</text>
+        <text class="p9s" x="340" y="96" text-anchor="middle">API / direct upload</text>
+
+        <rect class="p9-teal" x="470" y="58" width="160" height="50" rx="6"/>
+        <text class="p9t" x="550" y="80" text-anchor="middle">FetchSFTP</text>
+        <text class="p9s" x="550" y="96" text-anchor="middle">Firm SFTP drop</text>
+
+        <!-- Sources merge: vertical lines down, joined by horizontal line -->
+        <line x1="130" y1="108" x2="130" y2="128" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="340" y1="108" x2="340" y2="128" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="550" y1="108" x2="550" y2="128" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="130" y1="128" x2="550" y2="128" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="340" y1="128" x2="340" y2="148" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+
+        <!-- ROW 2: RouteOnAttribute -->
+        <rect class="p9-blue" x="240" y="150" width="200" height="50" rx="6"/>
+        <text class="p9t" x="340" y="172" text-anchor="middle">RouteOnAttribute</text>
+        <text class="p9s" x="340" y="188" text-anchor="middle">Detect MIME type</text>
+
+        <!-- Branching: 3 lines down from RouteOnAttribute to 3 extractor boxes -->
+        <line x1="340" y1="200" x2="340" y2="216" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="130" y1="216" x2="550" y2="216" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="130" y1="216" x2="130" y2="232" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+        <line x1="340" y1="216" x2="340" y2="232" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+        <line x1="550" y1="216" x2="550" y2="232" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+
+        <!-- ROW 3: Extractors (3 boxes) -->
+        <rect class="p9-purple" x="50"  y="234" width="160" height="50" rx="6"/>
+        <text class="p9t" x="130" y="256" text-anchor="middle">PDF extractor</text>
+        <text class="p9s" x="130" y="272" text-anchor="middle">Textract / Tika</text>
+
+        <rect class="p9-purple" x="260" y="234" width="160" height="50" rx="6"/>
+        <text class="p9t" x="340" y="256" text-anchor="middle">DOCX extractor</text>
+        <text class="p9s" x="340" y="272" text-anchor="middle">Apache POI / Tika</text>
+
+        <rect class="p9-purple" x="470" y="234" width="160" height="50" rx="6"/>
+        <text class="p9t" x="550" y="256" text-anchor="middle">OCR processor</text>
+        <text class="p9s" x="550" y="272" text-anchor="middle">Tesseract / Textract</text>
+
+        <!-- Extractors merge: 3 lines down to horizontal collector -->
+        <line x1="130" y1="284" x2="130" y2="304" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="340" y1="284" x2="340" y2="304" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="550" y1="284" x2="550" y2="304" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="130" y1="304" x2="550" y2="304" stroke="#6b7280" stroke-width="1.2" fill="none"/>
+        <line x1="340" y1="304" x2="340" y2="322" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+
+        <!-- ROW 4: UpdateAttribute -->
+        <rect class="p9-blue" x="240" y="324" width="200" height="50" rx="6"/>
+        <text class="p9t" x="340" y="346" text-anchor="middle">UpdateAttribute</text>
+        <text class="p9s" x="340" y="362" text-anchor="middle">Add matter ID, type, timestamp</text>
+        <line x1="340" y1="374" x2="340" y2="396" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+
+        <!-- ROW 5: InvokeHTTP (center) + Claude API (right side) -->
+        <rect class="p9-amber" x="240" y="398" width="200" height="50" rx="6"/>
+        <text class="p9t" x="340" y="420" text-anchor="middle">InvokeHTTP</text>
+        <text class="p9s" x="340" y="436" text-anchor="middle">POST to Claude API</text>
+
+        <rect class="p9-coral" x="490" y="398" width="140" height="50" rx="6"/>
+        <text class="p9t" x="560" y="420" text-anchor="middle">Claude API</text>
+        <text class="p9s" x="560" y="436" text-anchor="middle">Classify, extract, flag</text>
+
+        <!-- Request/response between InvokeHTTP and Claude API (clearly separated) -->
+        <line x1="440" y1="416" x2="488" y2="416" stroke="#d97706" stroke-width="1.2" stroke-dasharray="4 3" fill="none" marker-end="url(#arr9b)"/>
+        <text class="p9s" x="464" y="411" text-anchor="middle" style="font-size:9.5px">request</text>
+        <line x1="488" y1="432" x2="440" y2="432" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" fill="none" marker-end="url(#arr9b)"/>
+        <text class="p9s" x="464" y="446" text-anchor="middle" style="font-size:9.5px">response</text>
+
+        <!-- Down to EvaluateJsonPath -->
+        <line x1="340" y1="448" x2="340" y2="470" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+
+        <!-- ROW 6: EvaluateJsonPath -->
+        <rect class="p9-blue" x="240" y="472" width="200" height="46" rx="6"/>
+        <text class="p9t" x="340" y="491" text-anchor="middle">EvaluateJsonPath</text>
+        <text class="p9s" x="340" y="507" text-anchor="middle">Parse Claude JSON response</text>
+        <line x1="340" y1="518" x2="340" y2="540" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+
+        <!-- ROW 7: PutElasticsearchRecord -->
+        <rect class="p9-teal" x="240" y="542" width="200" height="46" rx="6"/>
+        <text class="p9t" x="340" y="561" text-anchor="middle">PutElasticsearchRecord</text>
+        <text class="p9s" x="340" y="577" text-anchor="middle">Index to Elasticsearch</text>
+
+        <!-- Failure side branch from InvokeHTTP to LogAttribute -->
+        <rect class="p9-red" x="50" y="475" width="160" height="40" rx="6"/>
+        <text class="p9t" x="130" y="492" text-anchor="middle">LogAttribute</text>
+        <text class="p9s" x="130" y="507" text-anchor="middle">Dead-letter queue</text>
+
+        <!-- failure arrow from EvaluateJsonPath left to LogAttribute (clean horizontal) -->
+        <line x1="240" y1="495" x2="212" y2="495" stroke="#b91c1c" stroke-width="1.2" fill="none" marker-end="url(#arr9b)"/>
+        <text class="p9s" x="226" y="488" text-anchor="middle" style="font-size:9.5px; fill:#b91c1c">failure</text>
+
+        <text class="p9s" x="340" y="608" text-anchor="middle">Dashed lines = external API calls. Solid = internal NiFi flow.</text>
+      </svg>
+    </div>
+
+    <!-- AWS Architecture Diagram -->
+    <h3 class="font-semibold text-sm mb-3">AWS services architecture</h3>
+    <div class="theme-bg-2 border theme-border rounded-lg p-4 mb-6 overflow-x-auto">
+      <svg width="100%" viewBox="0 0 680 540" role="img">
+        <title>AWS architecture for law firm document pipeline</title>
+        <desc>VPC containing NiFi cluster, Elasticsearch, ALB, Secrets Manager, CloudWatch, S3 buckets, with external Claude API and attorney portal connections</desc>
+        <defs><marker id="arr9c" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <style>
+          .a9t  { font-family: var(--font-sans, sans-serif); font-size:13px; fill: #111827; font-weight:600; }
+          .a9s  { font-family: var(--font-sans, sans-serif); font-size:10.5px; fill: #4b5563; }
+          .a9-blue   { fill:#dbeafe; stroke:#2563eb; stroke-width:1; }
+          .a9-teal   { fill:#d1fae5; stroke:#059669; stroke-width:1; }
+          .a9-purple { fill:#ede9fe; stroke:#7c3aed; stroke-width:1; }
+          .a9-amber  { fill:#fef3c7; stroke:#d97706; stroke-width:1; }
+          .a9-gray   { fill:#f3f4f6; stroke:#6b7280; stroke-width:1; }
+          .a9-coral  { fill:#fee2e2; stroke:#dc2626; stroke-width:1; }
+          body.dark .a9t { fill:#f3f4f6; }
+          body.dark .a9s { fill:#d1d5db; }
+          body.dark .a9-blue   { fill:#1e3a5f; stroke:#60a5fa; }
+          body.dark .a9-teal   { fill:#064e3b; stroke:#34d399; }
+          body.dark .a9-purple { fill:#2e1065; stroke:#a78bfa; }
+          body.dark .a9-amber  { fill:#451a03; stroke:#fbbf24; }
+          body.dark .a9-coral  { fill:#450a0a; stroke:#f87171; }
+          body.dark .a9-gray   { fill:#1f2937; stroke:#9ca3af; }
+        </style>
+
+        <!-- VPC outer container: x=20, w=440 (leaves 220px on right for externals) -->
+        <rect x="20" y="30" width="440" height="480" rx="14" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="8 4"/>
+        <text class="a9t" x="40" y="52" style="font-size:14px">AWS VPC - us-east-1</text>
+
+        <!-- Private subnet -->
+        <rect x="36" y="64" width="408" height="280" rx="8" fill="none" stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="4 3"/>
+        <text class="a9s" x="48" y="80" style="font-weight:600">PRIVATE SUBNET</text>
+
+        <!-- Row 1: NiFi + Elasticsearch -->
+        <rect class="a9-blue" x="48" y="90" width="186" height="78" rx="8"/>
+        <text class="a9t" x="141" y="112" text-anchor="middle">NiFi cluster</text>
+        <text class="a9s" x="141" y="130" text-anchor="middle">3x m5.2xlarge EC2</text>
+        <text class="a9s" x="141" y="146" text-anchor="middle">+ ZooKeeper (embedded)</text>
+
+        <rect class="a9-teal" x="246" y="90" width="186" height="78" rx="8"/>
+        <text class="a9t" x="339" y="112" text-anchor="middle">Elasticsearch</text>
+        <text class="a9s" x="339" y="130" text-anchor="middle">Amazon OpenSearch</text>
+        <text class="a9s" x="339" y="146" text-anchor="middle">2x r6i.xlarge data nodes</text>
+
+        <!-- NiFi -> ES arrow -->
+        <line x1="234" y1="128" x2="244" y2="128" stroke="#6b7280" stroke-width="1.2" fill="none" marker-end="url(#arr9c)"/>
+
+        <!-- Row 2: Secrets, CloudWatch, MSK -->
+        <rect class="a9-amber" x="48" y="186" width="140" height="50" rx="6"/>
+        <text class="a9t" x="118" y="207" text-anchor="middle">Secrets Manager</text>
+        <text class="a9s" x="118" y="223" text-anchor="middle">API keys, creds</text>
+
+        <rect class="a9-gray" x="200" y="186" width="120" height="50" rx="6"/>
+        <text class="a9t" x="260" y="207" text-anchor="middle">CloudWatch</text>
+        <text class="a9s" x="260" y="223" text-anchor="middle">Logs + alarms</text>
+
+        <rect class="a9-gray" x="332" y="186" width="100" height="50" rx="6"/>
+        <text class="a9t" x="382" y="207" text-anchor="middle">MSK</text>
+        <text class="a9s" x="382" y="223" text-anchor="middle">Optional queue</text>
+
+        <!-- Row 3: IAM + ALB -->
+        <rect class="a9-purple" x="48" y="254" width="140" height="50" rx="6"/>
+        <text class="a9t" x="118" y="275" text-anchor="middle">IAM role</text>
+        <text class="a9s" x="118" y="291" text-anchor="middle">Least-privilege EC2</text>
+
+        <rect class="a9-blue" x="200" y="254" width="232" height="50" rx="6"/>
+        <text class="a9t" x="316" y="275" text-anchor="middle">Application Load Balancer</text>
+        <text class="a9s" x="316" y="291" text-anchor="middle">TLS termination, NiFi UI</text>
+
+        <!-- Connectors NiFi -> Secrets, NiFi -> CW, NiFi -> ALB -->
+        <line x1="118" y1="168" x2="118" y2="184" stroke="#6b7280" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+        <line x1="260" y1="168" x2="260" y2="184" stroke="#6b7280" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+
+        <!-- Public subnet -->
+        <rect x="36" y="358" width="408" height="86" rx="8" fill="none" stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="4 3"/>
+        <text class="a9s" x="48" y="374" style="font-weight:600">PUBLIC SUBNET</text>
+
+        <rect class="a9-teal" x="48" y="384" width="140" height="46" rx="6"/>
+        <text class="a9t" x="118" y="404" text-anchor="middle">S3 intake bucket</text>
+        <text class="a9s" x="118" y="420" text-anchor="middle">Document drop</text>
+
+        <rect class="a9-amber" x="200" y="384" width="100" height="46" rx="6"/>
+        <text class="a9t" x="250" y="404" text-anchor="middle">KMS</text>
+        <text class="a9s" x="250" y="420" text-anchor="middle">Encrypt at rest</text>
+
+        <rect class="a9-gray" x="312" y="384" width="120" height="46" rx="6"/>
+        <text class="a9t" x="372" y="404" text-anchor="middle">VPC endpoints</text>
+        <text class="a9s" x="372" y="420" text-anchor="middle">S3, Secrets, TX</text>
+
+        <!-- S3 -> NiFi via VPC endpoint (route up the left side, no crossing) -->
+        <path d="M 118 384 L 118 354 L 30 354 L 30 100 L 46 100" stroke="#6b7280" stroke-width="1" stroke-dasharray="5 3" fill="none" marker-end="url(#arr9c)"/>
+
+        <!-- WAF -->
+        <rect class="a9-gray" x="48" y="464" width="140" height="32" rx="5"/>
+        <text class="a9t" x="118" y="484" text-anchor="middle">AWS WAF</text>
+
+        <rect class="a9-gray" x="200" y="464" width="100" height="32" rx="5"/>
+        <text class="a9t" x="250" y="484" text-anchor="middle">NAT gateway</text>
+
+        <rect class="a9-gray" x="312" y="464" width="120" height="32" rx="5"/>
+        <text class="a9t" x="372" y="484" text-anchor="middle">AWS Backup</text>
+
+        <!-- Outside VPC: External services on right -->
+        <text class="a9s" x="572" y="52" text-anchor="middle" style="font-weight:600">EXTERNAL</text>
+
+        <!-- Claude API -->
+        <rect class="a9-coral" x="488" y="90" width="168" height="78" rx="8"/>
+        <text class="a9t" x="572" y="112" text-anchor="middle">Claude API</text>
+        <text class="a9s" x="572" y="130" text-anchor="middle">Anthropic (HTTPS)</text>
+        <text class="a9s" x="572" y="146" text-anchor="middle">via NAT gateway</text>
+
+        <!-- NiFi -> Claude arrow (clearly through gap, not over VPC border) -->
+        <line x1="460" y1="128" x2="486" y2="128" stroke="#d97706" stroke-width="1.2" stroke-dasharray="4 3" fill="none" marker-end="url(#arr9c)"/>
+
+        <!-- Attorney portal -->
+        <rect class="a9-coral" x="488" y="186" width="168" height="78" rx="8"/>
+        <text class="a9t" x="572" y="208" text-anchor="middle">Attorney portal</text>
+        <text class="a9s" x="572" y="226" text-anchor="middle">Kibana or custom</text>
+        <text class="a9s" x="572" y="242" text-anchor="middle">React + ES API</text>
+
+        <!-- ES -> Attorney portal arrow -->
+        <line x1="460" y1="224" x2="486" y2="224" stroke="#dc2626" stroke-width="1.2" fill="none" marker-end="url(#arr9c)"/>
+
+        <!-- Legend at bottom (well clear of all content) -->
+        <line x1="40" y1="518" x2="64" y2="518" stroke="#6b7280" stroke-width="1.2"/>
+        <text class="a9s" x="72" y="521">Internal VPC traffic</text>
+        <line x1="200" y1="518" x2="224" y2="518" stroke="#6b7280" stroke-width="1" stroke-dasharray="5 3"/>
+        <text class="a9s" x="232" y="521">Via VPC endpoint / NAT GW</text>
+        <line x1="420" y1="518" x2="444" y2="518" stroke="#d97706" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text class="a9s" x="452" y="521">External HTTPS API</text>
+      </svg>
+    </div>
+
+    <!-- Subsections -->
+    <div class="space-y-5">
+
+      <div class="theme-card rounded-lg p-5">
+        <h3 class="font-semibold text-sm mb-3">9.1 — Text Extraction Details</h3>
+        <div class="text-sm theme-text-muted space-y-3">
+          <p>Documents are routed by MIME type after <code class="theme-code px-1 rounded mono text-xs">IdentifyMimeType</code> inspection:</p>
+          <pre class="theme-code rounded p-3 text-xs mono overflow-x-auto"># RouteOnAttribute rules
+pdf:       ${mime.type:equals('application/pdf')}
+docx:      ${mime.type:equals('application/vnd.openxmlformats...')}
+image:     ${mime.type:startsWith('image/')}
+email:     ${mime.type:equals('message/rfc822')}
+plaintext: ${mime.type:equals('text/plain')}</pre>
+          <div class="grid md:grid-cols-3 gap-3 mt-3 text-xs">
+            <div class="info-block rounded p-3"><strong class="theme-text">PDF</strong><br/>AWS Textract (async) for scanned PDFs. Apache Tika for text-native PDFs. Async job result retrieved via SQS notification.</div>
+            <div class="info-block rounded p-3"><strong class="theme-text">DOCX</strong><br/>Apache POI via ExecuteStreamCommand. Preserves headings, paragraphs, tables. Also handles legacy .doc via LibreOffice conversion.</div>
+            <div class="info-block rounded p-3"><strong class="theme-text">Images</strong><br/>AWS Textract DetectDocumentText (JPG/PNG/TIFF). AnalyzeDocument for forms with key-value pairs. Tesseract as offline fallback.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="theme-card rounded-lg p-5">
+        <h3 class="font-semibold text-sm mb-3">9.2 — Claude AI Enrichment</h3>
+        <div class="text-sm theme-text-muted space-y-2">
+          <p>InvokeHTTP calls the Claude API with extracted text. The system prompt instructs Claude to return structured JSON only:</p>
+          <pre class="theme-code rounded p-3 text-xs mono overflow-x-auto">System: You are a legal document analyst. Return ONLY valid JSON with this schema:
+{
+  "document_type": "contract|brief|motion|exhibit|correspondence|order",
+  "parties": ["Party A", "Party B"],
+  "key_clauses": ["indemnification", "auto-renewal"],
+  "risk_flags": ["unilateral modification rights"],
+  "summary": "3-5 sentence plain English summary for attorneys",
+  "matter_tags": ["M&A", "commercial"],
+  "governing_law": "Delaware"
+}</pre>
+          <div class="warn-block rounded p-3 text-xs mt-2">
+            <strong>⚠ Large documents:</strong> Use <code class="mono">SplitText</code> to chunk contracts over 80,000 tokens into overlapping 50,000-token segments before calling Claude. Reassemble with <code class="mono">MergeContent</code> after enrichment.
+          </div>
+        </div>
+      </div>
+
+      <div class="theme-card rounded-lg p-5">
+        <h3 class="font-semibold text-sm mb-3">9.3 — Elasticsearch Document Schema</h3>
+        <div class="text-sm theme-text-muted space-y-2">
+          <pre class="theme-code rounded p-3 text-xs mono overflow-x-auto">{
+  "document_id":   "uuid",
+  "matter_id":     "2024-CORP-0041",
+  "filename":      "MSA_Acme_Corp_v2.pdf",
+  "document_type": "contract",
+  "parties":       ["Acme Corp", "Client LLC"],
+  "received_at":   "2024-05-21T14:22:00Z",
+  "extracted_text":"Full plain text of the document...",
+  "summary":       "3-5 sentence attorney summary",
+  "key_clauses":   ["indemnification", "auto-renewal"],
+  "risk_flags":    ["unilateral modification"],
+  "matter_tags":   ["M&A", "commercial"],
+  "governing_law": "Delaware",
+  "sha256":        "a3f9...",
+  "pipeline_version": "1.4.0"
+}</pre>
+          <p class="text-xs">Field mapping: <code class="mono">extracted_text</code> → text/standard; <code class="mono">document_type</code>, <code class="mono">matter_tags</code>, <code class="mono">governing_law</code> → keyword (faceted filters); <code class="mono">received_at</code> → date. Enable ILM: warm after 30 days, delete after 7 years.</p>
+        </div>
+      </div>
+
+      <div class="theme-card rounded-lg p-5">
+        <h3 class="font-semibold text-sm mb-3">9.4 — AWS Services Required</h3>
+        <div class="grid md:grid-cols-2 gap-4 text-xs theme-text-muted">
+          <div>
+            <p class="font-semibold theme-text mb-2">Compute</p>
+            <ul class="space-y-1 list-disc list-inside">
+              <li>3× EC2 m5.2xlarge — NiFi cluster</li>
+              <li>2× EC2 r6i.xlarge — Elasticsearch data nodes</li>
+              <li>1× EC2 t3.medium — ES master node</li>
+            </ul>
+            <p class="font-semibold theme-text mt-3 mb-2">Storage</p>
+            <ul class="space-y-1 list-disc list-inside">
+              <li>S3: intake + archive (Glacier ILM)</li>
+              <li>EBS GP3: 500 GB/node content_repository</li>
+              <li>EBS GP3: 2 TB/node Elasticsearch</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-semibold theme-text mb-2">AWS managed services</p>
+            <ul class="space-y-1 list-disc list-inside">
+              <li>AWS Textract — PDF/image OCR</li>
+              <li>Secrets Manager — API keys, credentials</li>
+              <li>KMS — EBS + S3 encryption at rest</li>
+              <li>CloudWatch — logs, alarms, dashboards</li>
+              <li>AWS WAF — protect NiFi ALB</li>
+              <li>AWS Backup — daily EBS snapshots</li>
+              <li>MSK (optional) — durable intake queue</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="theme-card rounded-lg p-5">
+        <h3 class="font-semibold text-sm mb-3">9.5 — Review Questions for This Pipeline</h3>
+        <div class="space-y-3 text-sm theme-text-muted">
+          <div class="checklist-item"><div class="check-box" onclick="toggleCheck(this)"></div><p>Is Textract async job polling handled correctly? (StartDocumentTextDetection → polling loop via SQS)</p></div>
+          <div class="checklist-item"><div class="check-box" onclick="toggleCheck(this)"></div><p>Is the Claude API called with chunked text for contracts over 80k tokens?</p></div>
+          <div class="checklist-item"><div class="check-box" onclick="toggleCheck(this)"></div><p>Is there a dead-letter re-processing path for failed AI enrichment records?</p></div>
+          <div class="checklist-item"><div class="check-box" onclick="toggleCheck(this)"></div><p>Are attorney PII and privilege obligations met? (Zero-retention API agreement with Anthropic confirmed?)</p></div>
+          <div class="checklist-item"><div class="check-box" onclick="toggleCheck(this)"></div><p>Are extracted texts stored in ES or referenced from S3? (Index size vs. search latency trade-off reviewed?)</p></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="mt-4 text-xs theme-text-muted">
+      📖 Reference: <a href="https://tika.apache.org/" class="theme-link" target="_blank">Apache Tika</a> · <a href="https://docs.aws.amazon.com/textract/latest/dg/what-is.html" class="theme-link" target="_blank">AWS Textract</a> · <a href="https://docs.anthropic.com/en/api/getting-started" class="theme-link" target="_blank">Claude API</a> · <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html" class="theme-link" target="_blank">Elasticsearch mapping</a>
+    </div>
+  </section>
+
+  <hr class="theme-divider mb-8"/>
+
   <div class="theme-bg-2 border theme-border rounded-lg p-6">
     <h3 class="font-semibold mb-3 text-sm">Official Documentation References</h3>
     <div class="grid md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
