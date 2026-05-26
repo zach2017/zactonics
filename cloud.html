@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Grocery Store ETL Guide — AWS + NiFi + Kafka</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          'ibm': ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          'mono': ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+          'serif': ['"IBM Plex Serif"', 'serif'],
+        },
+        colors: {
+          'ibm-blue': {
+            50:  '#edf5ff',
+            100: '#d0e2ff',
+            200: '#a6c8ff',
+            300: '#78a9ff',
+            400: '#4589ff',
+            500: '#0f62fe',  /* signature IBM blue */
+            600: '#0043ce',
+            700: '#002d9c',
+            800: '#001d6c',
+            900: '#001141',
+          }
+        }
+      }
+    }
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --base-font-size: 16px;
+  }
+  html { font-size: var(--base-font-size); }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: #ffffff;
+    color: #0f62fe;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+  html.dark body {
+    background: #0b0f17;
+    color: #78a9ff;
+  }
+
+  /* IBM-style left bar accent */
+  .ibm-accent {
+    border-left: 4px solid #0f62fe;
+    padding-left: 1rem;
+  }
+  html.dark .ibm-accent { border-left-color: #78a9ff; }
+
+  /* Code blocks */
+  pre.code-block {
+    font-family: 'IBM Plex Mono', monospace;
+    background: #f4f4f4;
+    color: #002d9c;
+    border-left: 4px solid #0f62fe;
+    padding: 1em;
+    overflow-x: auto;
+    font-size: 0.85em;
+    line-height: 1.5;
+    border-radius: 0 4px 4px 0;
+  }
+  html.dark pre.code-block {
+    background: #161b22;
+    color: #a6c8ff;
+    border-left-color: #4589ff;
+  }
+
+  /* Subtle grid background pattern */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(15,98,254,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,98,254,0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  html.dark .grid-bg {
+    background-image:
+      linear-gradient(rgba(120,169,255,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,169,255,0.05) 1px, transparent 1px);
+  }
+
+  /* Card style */
+  .card {
+    background: #ffffff;
+    border: 1px solid #d0e2ff;
+    transition: all 0.2s ease;
+  }
+  html.dark .card {
+    background: #0f1620;
+    border-color: #002d9c;
+  }
+  .card:hover {
+    border-color: #0f62fe;
+    box-shadow: 0 4px 12px rgba(15,98,254,0.1);
+  }
+  html.dark .card:hover {
+    border-color: #4589ff;
+    box-shadow: 0 4px 12px rgba(69,137,255,0.15);
+  }
+
+  /* Floating control panel */
+  .control-panel {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 50;
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(8px);
+    border: 1px solid #d0e2ff;
+    padding: 0.5rem;
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  html.dark .control-panel {
+    background: rgba(11,15,23,0.92);
+    border-color: #002d9c;
+  }
+  .control-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.4rem 0.6rem;
+    background: #0f62fe;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    min-width: 32px;
+  }
+  .control-btn:hover { background: #0043ce; }
+  .control-btn:disabled { background: #8d8d8d; cursor: not-allowed; }
+  html.dark .control-btn { background: #4589ff; }
+  html.dark .control-btn:hover { background: #0f62fe; }
+
+  /* Section dividers IBM style */
+  .section-rule {
+    height: 1px;
+    background: linear-gradient(90deg, #0f62fe 0%, transparent 100%);
+    margin: 2rem 0;
+  }
+  html.dark .section-rule {
+    background: linear-gradient(90deg, #78a9ff 0%, transparent 100%);
+  }
+
+  /* Grocery emoji badge */
+  .grocery-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #edf5ff;
+    color: #002d9c;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8em;
+    font-family: 'IBM Plex Mono', monospace;
+    border-left: 3px solid #0f62fe;
+  }
+  html.dark .grocery-badge {
+    background: #001141;
+    color: #a6c8ff;
+    border-left-color: #4589ff;
+  }
+
+  /* Step number circles */
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    background: #0f62fe;
+    color: white;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    margin-right: 0.75rem;
+    border-radius: 2px;
+  }
+  html.dark .step-num { background: #4589ff; }
+
+  /* Table of contents nav */
+  .toc-link {
+    display: block;
+    padding: 0.3rem 0;
+    color: #0043ce;
+    text-decoration: none;
+    border-bottom: 1px dotted transparent;
+    transition: border-color 0.15s ease;
+    font-size: 0.9em;
+  }
+  .toc-link:hover { border-bottom-color: #0f62fe; }
+  html.dark .toc-link { color: #78a9ff; }
+  html.dark .toc-link:hover { border-bottom-color: #78a9ff; }
+
+  /* SVG diagram container */
+  .diagram-wrap {
+    background: #ffffff;
+    border: 1px solid #d0e2ff;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  html.dark .diagram-wrap {
+    background: #0f1620;
+    border-color: #002d9c;
+  }
+
+  /* Print friendly */
+  @media print {
+    .control-panel, .no-print { display: none !important; }
+    body { color: #001141 !important; background: white !important; }
+  }
+</style>
+</head>
+<body class="grid-bg min-h-screen">
+
+<!-- FLOATING CONTROL PANEL -->
+<div class="control-panel no-print" role="toolbar" aria-label="Display controls">
+  <button class="control-btn" id="font-down" aria-label="Decrease font size" title="Smaller text">A−</button>
+  <button class="control-btn" id="font-up" aria-label="Increase font size" title="Larger text">A+</button>
+  <button class="control-btn" id="font-reset" aria-label="Reset font size" title="Reset text size">RESET</button>
+  <button class="control-btn" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle light/dark">☀/☾</button>
+</div>
+
+<main class="max-w-5xl mx-auto px-4 sm:px-8 py-12 sm:py-16">
+
+  <!-- HEADER -->
+  <header class="mb-12">
+    <div class="grocery-badge mb-4">▎ETL INFRASTRUCTURE GUIDE · 2026 EDITION</div>
+    <h1 class="font-ibm font-light text-4xl sm:text-5xl md:text-6xl leading-tight tracking-tight mb-4">
+      The Grocery Store Guide<br>
+      <span class="font-semibold">to AWS Data Pipelines</span>
+    </h1>
+    <p class="text-lg sm:text-xl opacity-80 max-w-3xl font-light">
+      A step-by-step walkthrough of building an ETL platform on AWS using NiFi, Kafka, OpenSearch, S3, and Postgres — explained as if your data pipeline were a grocery store.
+    </p>
+    <div class="section-rule"></div>
+    <p class="text-sm opacity-70 font-mono">
+      Built with: Terraform 1.10+ · Ansible 2.18+ · NiFi 2.9.0 · Kafka 4.2.0 (KRaft) · OpenSearch 3.5 · PostgreSQL 16
+    </p>
+  </header>
+
+  <!-- TABLE OF CONTENTS -->
+  <nav class="card p-6 mb-12 no-print" aria-label="Table of contents">
+    <h2 class="font-mono text-sm uppercase tracking-wider mb-3 opacity-70">▎Contents</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-1">
+      <a href="#overview" class="toc-link">01 · The Grocery Store Story</a>
+      <a href="#services" class="toc-link">02 · Services and Their Jobs</a>
+      <a href="#diagram" class="toc-link">03 · The VPC Diagram</a>
+      <a href="#prereqs" class="toc-link">04 · Prerequisites</a>
+      <a href="#step1" class="toc-link">05 · Step 1 — AWS Account Setup</a>
+      <a href="#step2" class="toc-link">06 · Step 2 — Terraform VPC &amp; Network</a>
+      <a href="#step3" class="toc-link">07 · Step 3 — Terraform Managed Services</a>
+      <a href="#step4" class="toc-link">08 · Step 4 — Terraform Compute (EC2)</a>
+      <a href="#step5" class="toc-link">09 · Step 5 — Ansible Inventory</a>
+      <a href="#step6" class="toc-link">10 · Step 6 — Ansible Install Kafka</a>
+      <a href="#step7" class="toc-link">11 · Step 7 — Ansible Install NiFi</a>
+      <a href="#step8" class="toc-link">12 · Step 8 — Upload Form + Text Extract</a>
+      <a href="#step9" class="toc-link">13 · Step 9 — Wire It All Together</a>
+      <a href="#step10" class="toc-link">14 · Step 10 — Test &amp; Monitor</a>
+      <a href="#zookeeper" class="toc-link">15 · About ZooKeeper (Important)</a>
+      <a href="#files" class="toc-link">16 · File Index</a>
+    </div>
+  </nav>
+
+  <!-- ===== 01 OVERVIEW ===== -->
+  <section id="overview" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2">01 — The Grocery Store Story</h2>
+    <div class="section-rule"></div>
+
+    <div class="ibm-accent mb-6">
+      <p class="text-lg italic opacity-90">
+        Imagine your company's data system is a big grocery store. Every department has a job. Every shelf has a purpose. Every receipt tells a story. If one part breaks, the whole store gets weird. ETL — Extract, Transform, Load — is just a fancy way of saying "get the stuff, clean it up, and put it on the right shelf."
+      </p>
+    </div>
+
+    <p class="mb-4">
+      In a real grocery store, raw produce arrives on a truck, gets washed and labeled, then placed where customers can find it. In our data store, raw files and events arrive from outside apps, get cleaned and tagged by NiFi, streamed by Kafka, and stored where searchers can find them — in OpenSearch, S3, and Postgres.
+    </p>
+    <p class="mb-4">
+      The whole guide uses this metaphor. Whenever you see <span class="grocery-badge">🛒 GROCERY</span>, that's the simple-English version of what just happened.
+    </p>
+
+    <div class="grocery-badge mt-6">
+      🛒 GROCERY · Your AWS account is the grocery store building. Your VPC is the floor plan with aisles. Subnets are individual aisles. Security groups are the doors that decide who gets through.
+    </div>
+  </section>
+
+  <!-- ===== 02 SERVICES ===== -->
+  <section id="services" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2">02 — Services and Their Jobs</h2>
+    <div class="section-rule"></div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎LOADING DOCK</div>
+        <h3 class="font-semibold text-xl mb-2">Upload Form (S3 + Lambda)</h3>
+        <p class="text-sm mb-3">A web form where users upload PDFs, Word docs, scans, etc. Lambda runs <code class="font-mono text-xs">textract</code> to pull words out, then sends them downstream.</p>
+        <div class="grocery-badge">🛒 The back door where delivery trucks drop off boxes of new product.</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎CONVEYOR BELT</div>
+        <h3 class="font-semibold text-xl mb-2">Apache NiFi 2.9.0</h3>
+        <p class="text-sm mb-3">The visual flow tool that grabs files, calls Textract for OCR, splits records, and routes each one to its destination. Drag-and-drop, no big code rewrites.</p>
+        <div class="grocery-badge">🛒 The stock clerks who unbox the truck, sort items by aisle, and label every box.</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎INTERCOM SYSTEM</div>
+        <h3 class="font-semibold text-xl mb-2">Apache Kafka 4.2.0 (KRaft)</h3>
+        <p class="text-sm mb-3">A streaming bus. Anything that needs to be shared across teams in real time gets published to a topic. Other services subscribe. Kafka 4.x runs in KRaft mode — no more ZooKeeper.</p>
+        <div class="grocery-badge">🛒 The store-wide intercom. "Lane 3 is open!" Everyone hears it instantly.</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎FILE CABINET</div>
+        <h3 class="font-semibold text-xl mb-2">Amazon S3</h3>
+        <p class="text-sm mb-3">Object storage. Every original document gets dropped here with versioning and lifecycle rules. Cheap, durable, infinite. Source of truth for raw docs.</p>
+        <div class="grocery-badge">🛒 The giant warehouse out back. Every box that's ever come in is filed there forever.</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎SEARCH KIOSK</div>
+        <h3 class="font-semibold text-xl mb-2">Amazon OpenSearch 3.5</h3>
+        <p class="text-sm mb-3">Full-text search and analytics. Every doc gets indexed so external apps can search words inside any uploaded file in milliseconds.</p>
+        <div class="grocery-badge">🛒 The "Where do I find olives?" kiosk near the front door. Type and find anything.</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎CASH REGISTER LEDGER</div>
+        <h3 class="font-semibold text-xl mb-2">Amazon RDS PostgreSQL 16</h3>
+        <p class="text-sm mb-3">Relational database for structured records — sales, inventory levels, HR rows, customer feedback. Joins, transactions, the works.</p>
+        <div class="grocery-badge">🛒 The accountant's ledger book where every transaction lines up neatly in columns.</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎AISLE MAP</div>
+        <h3 class="font-semibold text-xl mb-2">VPC + Subnets</h3>
+        <p class="text-sm mb-3">The private cloud network. Public subnets face the internet (load balancer, upload form). Private subnets hide the brokers and databases.</p>
+        <div class="grocery-badge">🛒 The store layout. Aisles. Walls. Doors marked "employees only."</div>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-mono text-xs opacity-60 mb-1">▎SECURITY GUARDS</div>
+        <h3 class="font-semibold text-xl mb-2">IAM + Security Groups + KMS</h3>
+        <p class="text-sm mb-3">Permissions, firewalls, and encryption keys. Decides who can enter which aisle, what they can touch, and what's locked behind glass.</p>
+        <div class="grocery-badge">🛒 The badge readers, the cameras, and the manager's keyring.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== 03 SVG DIAGRAM ===== -->
+  <section id="diagram" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2">03 — How They Connect (The VPC Diagram)</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">
+      Below is the floor plan of the grocery store — every aisle, doorway, and shelf shown together. Data flows top-to-bottom: outside apps and users come in through the front, NiFi sorts everything, Kafka broadcasts to the back-of-house, and storage fans out to the right.
+    </p>
+
+    <div class="diagram-wrap mb-4">
+      <svg viewBox="0 0 980 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="diagram-title" class="w-full h-auto">
+        <title id="diagram-title">VPC Architecture Diagram showing data flow from external apps through NiFi and Kafka to storage layers</title>
+
+        <defs>
+          <!-- Arrow markers -->
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f62fe"/>
+          </marker>
+          <marker id="arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#78a9ff"/>
+          </marker>
+
+          <pattern id="vpc-pattern" patternUnits="userSpaceOnUse" width="20" height="20">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#d0e2ff" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- VPC outer container -->
+        <rect x="20" y="60" width="940" height="640" fill="url(#vpc-pattern)" stroke="#0f62fe" stroke-width="2" stroke-dasharray="6 4" rx="4"/>
+        <text x="40" y="50" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="#0f62fe">VPC · 10.0.0.0/16 · "The Grocery Store Building"</text>
+
+        <!-- External world (outside VPC) -->
+        <rect x="40" y="10" width="200" height="36" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5" rx="2"/>
+        <text x="140" y="33" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#002d9c" text-anchor="middle">External Apps + Users 🌐</text>
+
+        <rect x="760" y="10" width="200" height="36" fill="#edf5ff" stroke="#0f62fe" stroke-width="1.5" rx="2"/>
+        <text x="860" y="33" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#002d9c" text-anchor="middle">Document Authors 📄</text>
+
+        <!-- Public subnet -->
+        <rect x="40" y="80" width="900" height="120" fill="#ffffff" stroke="#4589ff" stroke-width="1.5" stroke-dasharray="3 3" rx="3"/>
+        <text x="55" y="100" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="#0043ce">PUBLIC SUBNET · 10.0.1.0/24 · "Front of Store"</text>
+
+        <!-- ALB -->
+        <rect x="80" y="120" width="160" height="60" fill="#0f62fe" stroke="#001d6c" stroke-width="1" rx="2"/>
+        <text x="160" y="145" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">Application LB</text>
+        <text x="160" y="162" font-family="IBM Plex Mono, monospace" font-size="9" fill="#a6c8ff" text-anchor="middle">🛒 Front door + greeter</text>
+
+        <!-- API Gateway -->
+        <rect x="270" y="120" width="160" height="60" fill="#0f62fe" stroke="#001d6c" stroke-width="1" rx="2"/>
+        <text x="350" y="145" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">API Gateway</text>
+        <text x="350" y="162" font-family="IBM Plex Mono, monospace" font-size="9" fill="#a6c8ff" text-anchor="middle">🛒 Customer service desk</text>
+
+        <!-- Upload Form (S3 static + Lambda) -->
+        <rect x="460" y="120" width="180" height="60" fill="#0f62fe" stroke="#001d6c" stroke-width="1" rx="2"/>
+        <text x="550" y="142" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">Upload Form</text>
+        <text x="550" y="157" font-family="IBM Plex Sans" font-size="10" fill="#ffffff" text-anchor="middle">(S3 + CloudFront + Lambda)</text>
+        <text x="550" y="172" font-family="IBM Plex Mono, monospace" font-size="9" fill="#a6c8ff" text-anchor="middle">🛒 Loading dock door</text>
+
+        <!-- NAT Gateway -->
+        <rect x="680" y="120" width="160" height="60" fill="#0f62fe" stroke="#001d6c" stroke-width="1" rx="2"/>
+        <text x="760" y="145" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">NAT Gateway</text>
+        <text x="760" y="162" font-family="IBM Plex Mono, monospace" font-size="9" fill="#a6c8ff" text-anchor="middle">🛒 Back hallway for outgoing trips</text>
+
+        <!-- Private subnet — compute -->
+        <rect x="40" y="220" width="900" height="180" fill="#ffffff" stroke="#4589ff" stroke-width="1.5" stroke-dasharray="3 3" rx="3"/>
+        <text x="55" y="240" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="#0043ce">PRIVATE SUBNET · 10.0.10.0/24 · "Back of Store · Stocking Floor"</text>
+
+        <!-- NiFi cluster -->
+        <rect x="80" y="265" width="200" height="115" fill="#d0e2ff" stroke="#0043ce" stroke-width="1.5" rx="2"/>
+        <text x="180" y="290" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001d6c" text-anchor="middle">NiFi Cluster</text>
+        <text x="180" y="306" font-family="IBM Plex Sans" font-size="10" fill="#002d9c" text-anchor="middle">3 × EC2 nodes</text>
+        <text x="180" y="320" font-family="IBM Plex Mono, monospace" font-size="9" fill="#002d9c" text-anchor="middle">v2.9.0 · ports 8443</text>
+        <line x1="100" y1="332" x2="260" y2="332" stroke="#4589ff" stroke-width="0.5"/>
+        <text x="180" y="350" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">🛒 Stock clerks</text>
+        <text x="180" y="365" font-family="IBM Plex Sans" font-size="9" fill="#002d9c" text-anchor="middle">unbox · sort · label</text>
+
+        <!-- Kafka cluster -->
+        <rect x="310" y="265" width="200" height="115" fill="#d0e2ff" stroke="#0043ce" stroke-width="1.5" rx="2"/>
+        <text x="410" y="290" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001d6c" text-anchor="middle">Kafka Cluster</text>
+        <text x="410" y="306" font-family="IBM Plex Sans" font-size="10" fill="#002d9c" text-anchor="middle">3 × EC2 nodes (KRaft)</text>
+        <text x="410" y="320" font-family="IBM Plex Mono, monospace" font-size="9" fill="#002d9c" text-anchor="middle">v4.2.0 · ports 9092/9093</text>
+        <line x1="330" y1="332" x2="490" y2="332" stroke="#4589ff" stroke-width="0.5"/>
+        <text x="410" y="350" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">🛒 Store intercom</text>
+        <text x="410" y="365" font-family="IBM Plex Sans" font-size="9" fill="#002d9c" text-anchor="middle">topics = announcements</text>
+
+        <!-- Textract / Lambda extractor -->
+        <rect x="540" y="265" width="180" height="115" fill="#d0e2ff" stroke="#0043ce" stroke-width="1.5" rx="2"/>
+        <text x="630" y="290" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001d6c" text-anchor="middle">Text Extractor</text>
+        <text x="630" y="306" font-family="IBM Plex Sans" font-size="10" fill="#002d9c" text-anchor="middle">Lambda + Textract</text>
+        <text x="630" y="320" font-family="IBM Plex Mono, monospace" font-size="9" fill="#002d9c" text-anchor="middle">OCR · PDF · DOCX</text>
+        <line x1="555" y1="332" x2="705" y2="332" stroke="#4589ff" stroke-width="0.5"/>
+        <text x="630" y="350" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">🛒 Price-tag printer</text>
+        <text x="630" y="365" font-family="IBM Plex Sans" font-size="9" fill="#002d9c" text-anchor="middle">turns scans into words</text>
+
+        <!-- Bastion -->
+        <rect x="750" y="265" width="170" height="115" fill="#d0e2ff" stroke="#0043ce" stroke-width="1.5" rx="2"/>
+        <text x="835" y="290" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001d6c" text-anchor="middle">Bastion / SSM</text>
+        <text x="835" y="306" font-family="IBM Plex Sans" font-size="10" fill="#002d9c" text-anchor="middle">Session Manager only</text>
+        <text x="835" y="320" font-family="IBM Plex Mono, monospace" font-size="9" fill="#002d9c" text-anchor="middle">no public SSH</text>
+        <line x1="765" y1="332" x2="905" y2="332" stroke="#4589ff" stroke-width="0.5"/>
+        <text x="835" y="350" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">🛒 Manager's office</text>
+        <text x="835" y="365" font-family="IBM Plex Sans" font-size="9" fill="#002d9c" text-anchor="middle">staff-only entry</text>
+
+        <!-- Private subnet — data -->
+        <rect x="40" y="420" width="900" height="200" fill="#ffffff" stroke="#4589ff" stroke-width="1.5" stroke-dasharray="3 3" rx="3"/>
+        <text x="55" y="440" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="#0043ce">PRIVATE SUBNET · 10.0.20.0/24 · "Storage Floor · The Warehouse"</text>
+
+        <!-- OpenSearch -->
+        <rect x="80" y="465" width="220" height="135" fill="#a6c8ff" stroke="#001d6c" stroke-width="1.5" rx="2"/>
+        <text x="190" y="490" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001141" text-anchor="middle">OpenSearch Domain</text>
+        <text x="190" y="506" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">3 master + 2 data nodes</text>
+        <text x="190" y="520" font-family="IBM Plex Mono, monospace" font-size="9" fill="#001d6c" text-anchor="middle">v3.5 · port 443</text>
+        <line x1="100" y1="532" x2="280" y2="532" stroke="#0043ce" stroke-width="0.5"/>
+        <text x="190" y="552" font-family="IBM Plex Sans" font-size="11" fill="#001141" text-anchor="middle">🛒 Search kiosk</text>
+        <text x="190" y="568" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">indexed text of every doc</text>
+        <text x="190" y="585" font-family="IBM Plex Sans" font-size="9" fill="#001d6c" text-anchor="middle">"Where do I find olives?"</text>
+
+        <!-- S3 -->
+        <rect x="330" y="465" width="220" height="135" fill="#a6c8ff" stroke="#001d6c" stroke-width="1.5" rx="2"/>
+        <text x="440" y="490" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001141" text-anchor="middle">S3 Buckets</text>
+        <text x="440" y="506" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">raw · processed · archive</text>
+        <text x="440" y="520" font-family="IBM Plex Mono, monospace" font-size="9" fill="#001d6c" text-anchor="middle">VPC endpoint · versioned</text>
+        <line x1="350" y1="532" x2="530" y2="532" stroke="#0043ce" stroke-width="0.5"/>
+        <text x="440" y="552" font-family="IBM Plex Sans" font-size="11" fill="#001141" text-anchor="middle">🛒 The warehouse</text>
+        <text x="440" y="568" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">every original document</text>
+        <text x="440" y="585" font-family="IBM Plex Sans" font-size="9" fill="#001d6c" text-anchor="middle">filed forever, never thrown out</text>
+
+        <!-- Postgres -->
+        <rect x="580" y="465" width="220" height="135" fill="#a6c8ff" stroke="#001d6c" stroke-width="1.5" rx="2"/>
+        <text x="690" y="490" font-family="IBM Plex Sans" font-size="13" font-weight="700" fill="#001141" text-anchor="middle">RDS PostgreSQL</text>
+        <text x="690" y="506" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">Multi-AZ · v16</text>
+        <text x="690" y="520" font-family="IBM Plex Mono, monospace" font-size="9" fill="#001d6c" text-anchor="middle">port 5432</text>
+        <line x1="600" y1="532" x2="780" y2="532" stroke="#0043ce" stroke-width="0.5"/>
+        <text x="690" y="552" font-family="IBM Plex Sans" font-size="11" fill="#001141" text-anchor="middle">🛒 Ledger book</text>
+        <text x="690" y="568" font-family="IBM Plex Sans" font-size="10" fill="#001d6c" text-anchor="middle">sales · inventory · HR rows</text>
+        <text x="690" y="585" font-family="IBM Plex Sans" font-size="9" fill="#001d6c" text-anchor="middle">neat columns, transactions</text>
+
+        <!-- Secrets Manager / KMS -->
+        <rect x="820" y="465" width="100" height="135" fill="#0f62fe" stroke="#001d6c" stroke-width="1.5" rx="2"/>
+        <text x="870" y="495" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">KMS +</text>
+        <text x="870" y="510" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Secrets</text>
+        <text x="870" y="525" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Manager</text>
+        <line x1="830" y1="540" x2="910" y2="540" stroke="#a6c8ff" stroke-width="0.5"/>
+        <text x="870" y="558" font-family="IBM Plex Sans" font-size="9" fill="#a6c8ff" text-anchor="middle">🛒 Manager's</text>
+        <text x="870" y="572" font-family="IBM Plex Sans" font-size="9" fill="#a6c8ff" text-anchor="middle">keyring</text>
+
+        <!-- Connection lines -->
+        <!-- External → ALB -->
+        <line x1="140" y1="46" x2="160" y2="120" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- External → API Gateway -->
+        <line x1="200" y1="46" x2="320" y2="120" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- Authors → Upload Form -->
+        <line x1="860" y1="46" x2="600" y2="120" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- ALB → NiFi -->
+        <line x1="160" y1="180" x2="180" y2="265" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- API Gateway → NiFi -->
+        <line x1="350" y1="180" x2="220" y2="265" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- Upload Form → Lambda Extractor -->
+        <line x1="600" y1="180" x2="630" y2="265" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- NiFi ↔ Kafka -->
+        <line x1="280" y1="322" x2="310" y2="322" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+        <!-- Kafka ↔ Extractor -->
+        <line x1="510" y1="322" x2="540" y2="322" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+
+        <!-- NiFi → OpenSearch -->
+        <line x1="180" y1="380" x2="190" y2="465" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+        <!-- NiFi → S3 (curved) -->
+        <path d="M 250 380 Q 350 420 410 465" stroke="#0f62fe" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <!-- Kafka → Postgres -->
+        <path d="M 460 380 Q 580 420 660 465" stroke="#0f62fe" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <!-- Extractor → S3 -->
+        <line x1="600" y1="380" x2="500" y2="465" stroke="#78a9ff" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-dim)"/>
+
+        <!-- KMS dotted to everything -->
+        <line x1="870" y1="465" x2="800" y2="380" stroke="#78a9ff" stroke-width="1" stroke-dasharray="2 3"/>
+        <line x1="870" y1="465" x2="700" y2="465" stroke="#78a9ff" stroke-width="1" stroke-dasharray="2 3"/>
+
+        <!-- Legend -->
+        <rect x="40" y="640" width="900" height="50" fill="#edf5ff" stroke="#0f62fe" stroke-width="1" rx="2"/>
+        <text x="55" y="660" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="#002d9c">LEGEND</text>
+        <line x1="120" y1="657" x2="160" y2="657" stroke="#0f62fe" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="165" y="660" font-family="IBM Plex Sans" font-size="11" fill="#002d9c">data flow</text>
+        <line x1="240" y1="657" x2="280" y2="657" stroke="#78a9ff" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-dim)"/>
+        <text x="285" y="660" font-family="IBM Plex Sans" font-size="11" fill="#002d9c">async / backup</text>
+        <line x1="395" y1="657" x2="435" y2="657" stroke="#78a9ff" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="440" y="660" font-family="IBM Plex Sans" font-size="11" fill="#002d9c">encryption</text>
+        <rect x="540" y="650" width="14" height="14" fill="#d0e2ff" stroke="#0043ce"/>
+        <text x="558" y="660" font-family="IBM Plex Sans" font-size="11" fill="#002d9c">compute (EC2)</text>
+        <rect x="670" y="650" width="14" height="14" fill="#a6c8ff" stroke="#001d6c"/>
+        <text x="688" y="660" font-family="IBM Plex Sans" font-size="11" fill="#002d9c">managed (AWS)</text>
+        <rect x="820" y="650" width="14" height="14" fill="#0f62fe" stroke="#001d6c"/>
+        <text x="838" y="660" font-family="IBM Plex Sans" font-size="11" fill="#002d9c">edge service</text>
+
+        <text x="55" y="682" font-family="IBM Plex Sans" font-size="10" fill="#002d9c" font-style="italic">🛒 The grocery store: front of store (top) → stocking floor (middle) → warehouse (bottom). Customers stay out front; staff and stock live in back.</text>
+      </svg>
+    </div>
+
+    <div class="grocery-badge">
+      🛒 GROCERY · Top row = front of the store (where customers walk in). Middle row = back of the store where employees work. Bottom row = the warehouse and ledger. Arrows are the conveyor belts that carry stuff between them.
+    </div>
+  </section>
+
+  <!-- ===== 04 PREREQS ===== -->
+  <section id="prereqs" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2">04 — Prerequisites</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Before you start, get these things ready on the laptop you'll be running commands from:</p>
+
+    <ul class="space-y-2 mb-6 list-none">
+      <li class="flex gap-3"><span class="font-mono opacity-60">→</span> AWS account with an admin IAM user (or SSO access)</li>
+      <li class="flex gap-3"><span class="font-mono opacity-60">→</span> AWS CLI v2 installed and configured (<code class="font-mono text-sm">aws configure</code>)</li>
+      <li class="flex gap-3"><span class="font-mono opacity-60">→</span> Terraform <span class="font-mono text-sm">≥ 1.10</span></li>
+      <li class="flex gap-3"><span class="font-mono opacity-60">→</span> Ansible <span class="font-mono text-sm">≥ 2.18</span> with <code class="font-mono text-sm">amazon.aws</code> collection</li>
+      <li class="flex gap-3"><span class="font-mono opacity-60">→</span> Python 3.11+, Git, jq</li>
+      <li class="flex gap-3"><span class="font-mono opacity-60">→</span> A registered domain (optional but recommended for HTTPS)</li>
+    </ul>
+
+    <div class="grocery-badge">🛒 GROCERY · These are the tools you bring before you walk into the empty store building. Hammer, nails, blueprints, and a key to the front door.</div>
+  </section>
+
+  <!-- ===== STEP 1 ===== -->
+  <section id="step1" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">01</span> AWS Account Setup</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Run the bootstrap script. It creates a Terraform-state S3 bucket, a DynamoDB lock table, and a least-privilege deploy role.</p>
+
+    <pre class="code-block"># From your laptop
+./scripts/00-bootstrap-aws.sh us-east-1 my-company-etl</pre>
+
+    <p class="mb-4 mt-4">What the script does, in plain English:</p>
+    <ol class="space-y-2 list-none mb-4">
+      <li>1. Creates an encrypted S3 bucket to hold Terraform state (<code class="font-mono text-sm">my-company-etl-tfstate</code>)</li>
+      <li>2. Creates a DynamoDB table for state locking so two engineers can't apply at once</li>
+      <li>3. Creates a KMS key for encrypting everything-secret</li>
+      <li>4. Creates an IAM role <code class="font-mono text-sm">etl-deployer</code> that Terraform will assume</li>
+      <li>5. Prints the values you'll paste into <code class="font-mono text-sm">terraform/backend.hcl</code></li>
+    </ol>
+
+    <div class="grocery-badge">🛒 GROCERY · Before you stock the shelves you need a building, a safe to hold the money, and a master key. This step buys you all three.</div>
+  </section>
+
+  <!-- ===== STEP 2 ===== -->
+  <section id="step2" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">02</span> Terraform VPC &amp; Network</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Build the VPC, subnets, NAT gateway, security groups, and VPC endpoints.</p>
+
+    <pre class="code-block">cd terraform/
+terraform init -backend-config=backend.hcl
+terraform plan  -target=module.network -out=network.tfplan
+terraform apply network.tfplan</pre>
+
+    <p class="mb-4 mt-4">Files involved:</p>
+    <ul class="space-y-1 list-none mb-4 font-mono text-sm">
+      <li>→ <code>terraform/network.tf</code> — VPC, subnets, route tables, NAT</li>
+      <li>→ <code>terraform/security.tf</code> — security groups, NACLs</li>
+      <li>→ <code>terraform/variables.tf</code> — region, CIDR ranges, tags</li>
+    </ul>
+
+    <div class="grocery-badge">🛒 GROCERY · You poured the foundation, framed the walls, put up "STAFF ONLY" signs on the back rooms, and ran a private hallway to the dumpster (NAT) so trash can leave without customers seeing it.</div>
+  </section>
+
+  <!-- ===== STEP 3 ===== -->
+  <section id="step3" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">03</span> Terraform Managed Services</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Stand up the managed AWS services that don't need EC2: S3 buckets, RDS Postgres, OpenSearch domain, Lambda, API Gateway.</p>
+
+    <pre class="code-block">terraform plan  -target=module.data -out=data.tfplan
+terraform apply data.tfplan</pre>
+
+    <p class="mb-4 mt-4">Files involved:</p>
+    <ul class="space-y-1 list-none mb-4 font-mono text-sm">
+      <li>→ <code>terraform/s3.tf</code> — three buckets: raw, processed, archive (lifecycle to Glacier)</li>
+      <li>→ <code>terraform/rds.tf</code> — PostgreSQL 16 Multi-AZ with KMS encryption</li>
+      <li>→ <code>terraform/opensearch.tf</code> — OpenSearch 3.5 domain in VPC</li>
+      <li>→ <code>terraform/lambda.tf</code> — Textract extractor function</li>
+      <li>→ <code>terraform/api_gateway.tf</code> — pre-signed upload URL endpoint</li>
+    </ul>
+
+    <div class="grocery-badge">🛒 GROCERY · The shelves arrive pre-built. AWS installs them, plugs them in, and you just say where to bolt them down.</div>
+  </section>
+
+  <!-- ===== STEP 4 ===== -->
+  <section id="step4" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">04</span> Terraform Compute (EC2 for NiFi &amp; Kafka)</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Provision the EC2 instances that will run NiFi and Kafka. Terraform writes their IPs to an Ansible inventory file.</p>
+
+    <pre class="code-block">terraform plan  -target=module.compute -out=compute.tfplan
+terraform apply compute.tfplan
+
+# Inventory is auto-generated:
+cat ../ansible/inventory/aws_ec2.yml</pre>
+
+    <p class="mb-4 mt-4">Defaults: 3 × <code class="font-mono text-sm">m7i.xlarge</code> for NiFi, 3 × <code class="font-mono text-sm">m7i.large</code> for Kafka brokers (combined mode KRaft controllers + brokers). All in private subnets, accessed only via SSM Session Manager.</p>
+
+    <div class="grocery-badge">🛒 GROCERY · You hired the stock clerks (NiFi) and the intercom operators (Kafka). They show up with empty toolbelts — next step is teaching them their jobs.</div>
+  </section>
+
+  <!-- ===== STEP 5 ===== -->
+  <section id="step5" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">05</span> Ansible Inventory</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Ansible reads the dynamic inventory and uses SSM to reach private hosts — no SSH keys to manage.</p>
+
+    <pre class="code-block">cd ansible/
+ansible-inventory --list -i inventory/aws_ec2.yml | jq '.kafka_brokers.hosts, .nifi_nodes.hosts'</pre>
+
+    <div class="grocery-badge">🛒 GROCERY · You wrote down everyone's locker number so you can find them later without yelling across the store.</div>
+  </section>
+
+  <!-- ===== STEP 6 ===== -->
+  <section id="step6" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">06</span> Ansible Installs Kafka (KRaft)</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Run the Kafka playbook. It installs Java 21, downloads Kafka 4.2.0, formats the KRaft metadata, and starts the three brokers as a quorum.</p>
+
+    <pre class="code-block">ansible-playbook -i inventory/aws_ec2.yml playbooks/kafka.yml</pre>
+
+    <p class="mb-4 mt-4 font-semibold opacity-90">Important — there is no ZooKeeper anymore.</p>
+    <p class="mb-4">Apache Kafka 4.0 (March 2025) removed ZooKeeper support permanently. Kafka 4.2.0 (Feb 2026) uses KRaft mode exclusively — controllers and brokers live in the same Kafka process and elect a leader using the Raft protocol. See <a href="#zookeeper" class="underline">Section 15</a> for what to do if you really need ZooKeeper for a legacy reason.</p>
+
+    <div class="grocery-badge">🛒 GROCERY · The intercom now works without a separate switchboard operator. It calls its own shots using a vote.</div>
+  </section>
+
+  <!-- ===== STEP 7 ===== -->
+  <section id="step7" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">07</span> Ansible Installs NiFi</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">NiFi 2.9.0 runs as a 3-node cluster. The playbook installs Java 21, pulls NiFi, configures TLS using certs from AWS ACM, then starts the cluster.</p>
+
+    <pre class="code-block">ansible-playbook -i inventory/aws_ec2.yml playbooks/nifi.yml</pre>
+
+    <p class="mb-4 mt-4">After the playbook finishes, open the NiFi UI at <code class="font-mono text-sm">https://nifi.your-domain.com/</code>. Login goes through your identity provider via OIDC.</p>
+
+    <div class="grocery-badge">🛒 GROCERY · The stock clerks are now in uniform, with name badges, and an org chart. Time to give them a procedure manual (the flow).</div>
+  </section>
+
+  <!-- ===== STEP 8 ===== -->
+  <section id="step8" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">08</span> Upload Form &amp; Text Extraction</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">A static React form is hosted in an S3 bucket behind CloudFront. When a user picks a file:</p>
+
+    <ol class="space-y-2 list-none mb-4">
+      <li>1. Form calls API Gateway → Lambda → returns a pre-signed S3 PUT URL</li>
+      <li>2. Browser uploads the file directly to S3 (raw bucket)</li>
+      <li>3. S3 event → Lambda extractor → calls Textract for PDFs/images, <code class="font-mono text-sm">mammoth</code> for DOCX</li>
+      <li>4. Extracted text is published to Kafka topic <code class="font-mono text-sm">documents.extracted</code></li>
+      <li>5. NiFi consumes that topic and indexes the text into OpenSearch + writes the metadata row into Postgres</li>
+    </ol>
+
+    <p class="mb-4">The form file is at <code class="font-mono text-sm">html/upload.html</code> — see the file index below.</p>
+
+    <div class="grocery-badge">🛒 GROCERY · A vendor backs the truck up to the dock, drops off a sealed box. The price-tag printer prints labels for what's inside. The intercom announces "New olives in aisle 4." The kiosk now finds them when customers ask.</div>
+  </section>
+
+  <!-- ===== STEP 9 ===== -->
+  <section id="step9" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">09</span> Wire It All Together</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Import the pre-built NiFi flow template. It contains processors for:</p>
+
+    <ul class="space-y-1 list-none mb-4 font-mono text-sm">
+      <li>→ <code>ConsumeKafka_4_0</code> from <code>documents.extracted</code></li>
+      <li>→ <code>JoltTransformJSON</code> to shape the record</li>
+      <li>→ <code>PutOpenSearchHttpRecord</code> to index it</li>
+      <li>→ <code>PutDatabaseRecord</code> to write metadata to Postgres</li>
+      <li>→ <code>PutS3Object</code> to archive the cleaned text</li>
+    </ul>
+
+    <pre class="code-block">./scripts/05-import-nifi-flow.sh https://nifi.your-domain.com flows/document-pipeline.json</pre>
+
+    <div class="grocery-badge">🛒 GROCERY · You hand the stock clerks the procedure manual: "Hear 'new olives' on the intercom → write 'olives, aisle 4' on the search kiosk and the ledger book, then put the box in the warehouse."</div>
+  </section>
+
+  <!-- ===== STEP 10 ===== -->
+  <section id="step10" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2 flex items-center"><span class="step-num">10</span> Test &amp; Monitor</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Run the smoke test, then watch CloudWatch dashboards.</p>
+
+    <pre class="code-block">./scripts/06-smoke-test.sh
+# Uploads a sample PDF and confirms it appears in OpenSearch + Postgres within 60s</pre>
+
+    <p class="mb-4 mt-4">Dashboards created automatically:</p>
+    <ul class="space-y-1 list-none mb-4">
+      <li>→ ETL Throughput (docs/min)</li>
+      <li>→ Kafka lag per consumer group</li>
+      <li>→ OpenSearch query latency p50/p95/p99</li>
+      <li>→ Postgres connections + slow queries</li>
+    </ul>
+
+    <div class="grocery-badge">🛒 GROCERY · The manager walks the aisles with a clipboard checking that shelves are stocked, lines aren't too long, and the kiosk gives the right answers.</div>
+  </section>
+
+  <!-- ===== ZOOKEEPER NOTE ===== -->
+  <section id="zookeeper" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2">15 — About ZooKeeper (Important Honest Note)</h2>
+    <div class="section-rule"></div>
+
+    <div class="ibm-accent mb-4">
+      <p class="font-semibold mb-2">You asked for "Kafka and ZooKeeper." Here's the honest 2026 reality.</p>
+      <p>Apache Kafka 4.0 (released March 2025) <strong>completely removed</strong> ZooKeeper support. The current 4.2.0 release (February 2026) only runs in KRaft mode — Kafka manages its own metadata using a built-in Raft consensus protocol. This guide uses KRaft because that's the modern, supported path.</p>
+    </div>
+
+    <p class="mb-4">If you have a hard requirement to use ZooKeeper anyway (legacy producers, an old Kafka Connect cluster you can't move yet), you have two options:</p>
+
+    <ol class="space-y-3 list-none mb-4">
+      <li><strong>Option A — Pin to Kafka 3.9.x.</strong> This was the last ZooKeeper-supporting release. Change <code class="font-mono text-sm">kafka_version: "3.9.1"</code> in <code class="font-mono text-sm">ansible/roles/kafka/defaults/main.yml</code> and uncomment the <code class="font-mono text-sm">playbooks/zookeeper.yml</code> play. You'll get bug fixes only — no new features.</li>
+      <li><strong>Option B — Run a separate ZooKeeper just for legacy clients.</strong> Keep Kafka on 4.2 (KRaft) and run a standalone ZooKeeper cluster elsewhere for any non-Kafka services that still need it (e.g. legacy HBase). Use the optional <code class="font-mono text-sm">playbooks/zookeeper-standalone.yml</code> play.</li>
+    </ol>
+
+    <p class="mb-4 opacity-80">Recommendation: stay on KRaft. The migration path back is painful and the entire Kafka ecosystem has moved on.</p>
+
+    <div class="grocery-badge">🛒 GROCERY · Your old store had a separate person whose only job was answering "who's in charge today?" That role got eliminated — the staff now vote among themselves. If you really want the old switchboard operator back you can, but no one's making new switchboards.</div>
+  </section>
+
+  <!-- ===== FILE INDEX ===== -->
+  <section id="files" class="mb-16">
+    <h2 class="font-ibm text-3xl font-semibold mb-2">16 — File Index</h2>
+    <div class="section-rule"></div>
+
+    <p class="mb-4">Everything in this project, listed by folder. All files are in the bundle you received with this guide.</p>
+
+    <div class="card p-5 mb-4">
+      <div class="font-mono text-sm">
+        etl-infra/<br>
+        ├── terraform/<br>
+        │   ├── main.tf · providers.tf · variables.tf · outputs.tf<br>
+        │   ├── network.tf · security.tf · s3.tf · rds.tf<br>
+        │   ├── opensearch.tf · lambda.tf · api_gateway.tf<br>
+        │   ├── compute.tf · iam.tf · backend.hcl<br>
+        ├── ansible/<br>
+        │   ├── ansible.cfg · requirements.yml<br>
+        │   ├── inventory/aws_ec2.yml<br>
+        │   ├── playbooks/<br>
+        │   │   ├── kafka.yml · nifi.yml · zookeeper.yml (optional)<br>
+        │   └── roles/<br>
+        │       ├── common/ · kafka/ · nifi/<br>
+        ├── scripts/<br>
+        │   ├── 00-bootstrap-aws.sh · 01-deploy-network.sh<br>
+        │   ├── 02-deploy-data.sh · 03-deploy-compute.sh<br>
+        │   ├── 04-run-ansible.sh · 05-import-nifi-flow.sh<br>
+        │   └── 06-smoke-test.sh · 99-destroy-all.sh<br>
+        ├── html/<br>
+        │   ├── index.html (this guide)<br>
+        │   └── upload.html (the document uploader)<br>
+        └── docs/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└── README.md
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="mt-20 pt-8 border-t border-ibm-blue-200 dark:border-ibm-blue-700">
+    <p class="text-sm opacity-60 font-mono">
+      ETL Infrastructure Guide · Built 2026 · NiFi 2.9.0 · Kafka 4.2.0 · OpenSearch 3.5 · PostgreSQL 16
+    </p>
+    <p class="text-xs opacity-50 mt-2 italic">
+      🛒 Remember: it's just a grocery store. Get the stuff, clean it up, put it on the shelf.
+    </p>
+  </footer>
+
+</main>
+
+<script>
+  // ===== Theme toggle =====
+  const themeToggle = document.getElementById('theme-toggle');
+  const root = document.documentElement;
+
+  // Load saved theme
+  const savedTheme = localStorage.getItem('etl-theme');
+  if (savedTheme === 'dark') {
+    root.classList.add('dark');
+    root.classList.remove('light');
+  }
+
+  themeToggle.addEventListener('click', () => {
+    if (root.classList.contains('dark')) {
+      root.classList.remove('dark');
+      root.classList.add('light');
+      localStorage.setItem('etl-theme', 'light');
+    } else {
+      root.classList.add('dark');
+      root.classList.remove('light');
+      localStorage.setItem('etl-theme', 'dark');
+    }
+  });
+
+  // ===== Font size control (14pt → 24pt, 2pt steps) =====
+  // 1pt ≈ 1.333px, so 14pt = ~18.67px, 24pt = ~32px
+  const SIZES = [14, 16, 18, 20, 22, 24]; // in pt
+  const PT_TO_PX = 1.3333;
+  let currentSizeIdx = 1; // default = 16pt (~21.3px) ≈ ~16px equivalent baseline
+
+  // Try to load default closer to user's expected 16px = ~12pt baseline; we start at index 1 (16pt)
+  const savedIdx = localStorage.getItem('etl-font-idx');
+  if (savedIdx !== null) currentSizeIdx = parseInt(savedIdx, 10);
+
+  function applyFontSize() {
+    const pt = SIZES[currentSizeIdx];
+    const px = (pt * PT_TO_PX).toFixed(2);
+    document.documentElement.style.setProperty('--base-font-size', px + 'px');
+    document.getElementById('font-down').disabled = currentSizeIdx === 0;
+    document.getElementById('font-up').disabled = currentSizeIdx === SIZES.length - 1;
+    localStorage.setItem('etl-font-idx', currentSizeIdx);
+  }
+
+  document.getElementById('font-up').addEventListener('click', () => {
+    if (currentSizeIdx < SIZES.length - 1) {
+      currentSizeIdx++;
+      applyFontSize();
+    }
+  });
+  document.getElementById('font-down').addEventListener('click', () => {
+    if (currentSizeIdx > 0) {
+      currentSizeIdx--;
+      applyFontSize();
+    }
+  });
+  document.getElementById('font-reset').addEventListener('click', () => {
+    currentSizeIdx = 1;
+    applyFontSize();
+  });
+
+  applyFontSize();
+
+  // Smooth scroll for TOC
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+</script>
+</body>
+</html>
