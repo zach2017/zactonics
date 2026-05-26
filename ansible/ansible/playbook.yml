@@ -1,0 +1,68 @@
+---
+- name: Setup web servers and manage configs
+  hosts: webservers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Refresh apt cache (skip if recent)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure Nginx is installed
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: Ensure custom log directory exists
+      ansible.builtin.file:
+        path: /var/log/nginx
+        state: directory
+        mode: '0755'
+
+    - name: Deploy custom Nginx config
+      ansible.builtin.copy:
+        src: custom_nginx.conf
+        dest: /etc/nginx/sites-available/default
+        mode: '0644'
+      notify: Restart Nginx
+
+    - name: Create simple web page
+      ansible.builtin.copy:
+        dest: /var/www/html/index.html
+        mode: '0644'
+        content: |
+          <!doctype html>
+          <html>
+          <head>
+            <title>Ansible Docker Lab</title>
+          </head>
+          <body>
+            <h1>Hello from {{ inventory_hostname }}</h1>
+            <p>This Nginx server was configured by Ansible.</p>
+          </body>
+          </html>
+
+    # Containers don't run systemd, so `service` module's status check is
+    # unreliable. We start Nginx via its init script if it isn't running.
+    - name: Check if Nginx is running
+      ansible.builtin.shell: pgrep -x nginx >/dev/null
+      register: nginx_running
+      changed_when: false
+      failed_when: false
+
+    - name: Start Nginx if not running
+      ansible.builtin.command: nginx
+      when: nginx_running.rc != 0
+      changed_when: nginx_running.rc != 0
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.shell: |
+        if pgrep -x nginx >/dev/null; then
+          nginx -s reload
+        else
+          nginx
+        fi
+      changed_when: true
