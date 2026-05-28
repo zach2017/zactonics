@@ -37,7 +37,7 @@
   @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 </style>
 </head>
-<body class="font-sans bg-white text-[#161616] dark:bg-[#161616] dark:text-[#f4f4f4] transition-colors duration-200">
+<body class="font-sans bg-white text-[#0a1f4d] dark:bg-[#161616] dark:text-[#f4f4f4] transition-colors duration-200">
 
 <!-- ============ HEADER (Carbon UI Shell) ============ -->
 <header class="sticky top-0 z-40 h-12 flex items-center justify-between px-4 bg-gray-100 text-white border-b border-gray-80">
@@ -52,11 +52,11 @@
 
 <!-- ============ HERO ============ -->
 <section class="max-w-6xl mx-auto px-4 pt-16 pb-10">
-  <p class="text-ibmblue-60 dark:text-ibmblue-60 font-mono text-sm mb-3">// reference architecture</p>
+  <p class="text-[#1b3a7a] dark:text-ibmblue-60 font-mono text-sm mb-3">// reference architecture</p>
   <h1 class="text-4xl sm:text-5xl font-light leading-tight mb-4">
     Deploying Apache Kafka<br>as a cluster on Amazon EC2
   </h1>
-  <p class="max-w-2xl text-[#525252] dark:text-[#c6c6c6] font-light text-lg">
+  <p class="max-w-2xl text-[#1b3a7a] dark:text-[#c6c6c6] font-light text-lg">
     A production-grade, multi-AZ KRaft deployment with infrastructure-as-code across
     Terraform, CloudFormation, Ansible, and CI/CD. Click any card for details and references.
   </p>
@@ -87,6 +87,65 @@
   <div id="toolGrid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-gray-20 dark:bg-gray-80"></div>
 </section>
 
+<!-- ============ DEPLOYMENT MODEL ============ -->
+<section class="max-w-6xl mx-auto px-4 pb-24">
+  <h2 class="text-2xl font-light mb-6 border-l-4 border-ibmblue-60 pl-3">Deployment model &amp; security baseline</h2>
+  <div class="grid md:grid-cols-2 gap-px bg-gray-20 dark:bg-gray-80">
+    <div class="bg-white dark:bg-[#262626] p-6">
+      <h3 class="font-semibold mb-3 text-[#0a1f4d] dark:text-ibmblue-60">What we deploy</h3>
+      <p class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] font-light leading-relaxed mb-4">
+        Start from a <strong>plain Amazon Linux 2023 base image only</strong> — no Kafka baked in at the
+        infrastructure layer. The IaC (Terraform / CloudFormation) provisions bare EC2 instances, EBS, the
+        NLB and security groups. Everything Kafka-specific is then layered on by <strong>Ansible</strong>.
+      </p>
+      <ul class="space-y-2 text-sm text-[#1b3a7a] dark:text-[#c6c6c6]">
+        <li class="flex gap-2"><span class="text-[#0a1f4d] dark:text-ibmblue-60 font-mono">1</span> IaC launches base AL2023 EC2 + EBS + NLB</li>
+        <li class="flex gap-2"><span class="text-[#0a1f4d] dark:text-ibmblue-60 font-mono">2</span> Ansible installs JDK 17, Kafka, systemd units</li>
+        <li class="flex gap-2"><span class="text-[#0a1f4d] dark:text-ibmblue-60 font-mono">3</span> Ansible templates <code>server.properties</code> from <code>cluster.yaml</code></li>
+        <li class="flex gap-2"><span class="text-[#0a1f4d] dark:text-ibmblue-60 font-mono">4</span> Ansible enforces the security baseline, then starts brokers</li>
+      </ul>
+    </div>
+    <div class="bg-white dark:bg-[#262626] p-6">
+      <h3 class="font-semibold mb-3 text-[#0a1f4d] dark:text-ibmblue-60">Security baseline (base image)</h3>
+      <p class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] font-light leading-relaxed mb-4">
+        Keep the base image minimal and hardened. Ansible is the single tool responsible for configuration,
+        so the attack surface stays small and auditable.
+      </p>
+      <ul class="space-y-2 text-sm text-[#1b3a7a] dark:text-[#c6c6c6] list-disc pl-5">
+        <li>Minimal AL2023 — no extra packages, latest patches via <code>dnf update</code></li>
+        <li>SSH key-only, no passwords; SSH limited to the bastion CIDR</li>
+        <li>Dedicated non-login <code>kafka</code> service user; brokers never run as root</li>
+        <li>SELinux enforcing; host firewall + tight security groups</li>
+        <li>TLS + SASL/SCRAM for all Kafka traffic; secrets pulled from SSM/Secrets Manager at config time</li>
+        <li>CloudWatch agent + auditd for an immutable audit trail</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ZK -> KRAFT MIGRATION ============ -->
+<section class="max-w-6xl mx-auto px-4 pb-24">
+  <h2 class="text-2xl font-light mb-2 border-l-4 border-ibmblue-60 pl-3">Migration: ZooKeeper &rarr; KRaft</h2>
+  <p class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] font-light mb-6 pl-4 max-w-3xl">
+    A no-downtime path. Brokers run in <strong>dual-write mode</strong> (metadata to both ZooKeeper and KRaft)
+    so you can roll back at any point until the final step. Click a stage for detail and references.
+  </p>
+  <ol id="migrationSteps" class="relative border-l-2 border-ibmblue-60 ml-3 space-y-px"></ol>
+  <p class="text-xs font-mono text-[#1b3a7a] dark:text-gray-50 mt-4 pl-4">
+    Track progress via JMX: kafka.controller &rarr; ZkMigrationState &nbsp;(target: MIGRATION_COMPLETED)
+  </p>
+</section>
+
+<!-- ============ BUILD KAFKA AMI ============ -->
+<section class="max-w-6xl mx-auto px-4 pb-24">
+  <h2 class="text-2xl font-light mb-2 border-l-4 border-ibmblue-60 pl-3">Optional: bake a Kafka AMI</h2>
+  <p class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] font-light mb-6 pl-4 max-w-3xl">
+    The model above installs Kafka at boot with Ansible. Alternatively you can pre-bake Kafka into a custom
+    AMI for faster, more repeatable launches. Three options, each with trade-offs &mdash; click for steps.
+  </p>
+  <div id="amiGrid" class="grid md:grid-cols-3 gap-px bg-gray-20 dark:bg-gray-80"></div>
+</section>
+
 <!-- ============ MODAL / POPUP ============ -->
 <div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-100/70 p-4">
   <div class="fade-in bg-white dark:bg-[#262626] max-w-lg w-full border border-gray-20 dark:border-gray-80 shadow-2xl">
@@ -95,7 +154,7 @@
       <button onclick="closeModal()" class="carbon-focus text-gray-50 hover:text-gray-100 dark:hover:text-white text-xl leading-none">×</button>
     </div>
     <div class="px-6 py-5">
-      <p id="modalBody" class="text-[#525252] dark:text-[#c6c6c6] font-light leading-relaxed mb-5"></p>
+      <div id="modalBody" class="text-[#1b3a7a] dark:text-[#c6c6c6] font-light leading-relaxed mb-5"></div>
       <p class="text-xs font-mono text-gray-50 mb-2">REFERENCES</p>
       <ul id="modalLinks" class="space-y-2"></ul>
     </div>
@@ -175,11 +234,72 @@ function cardHTML(c, accent) {
       <h3 class="font-semibold ${accent}">${c.t}</h3>
       <span class="text-gray-50 group-hover:text-ibmblue-60 transition-colors">→</span>
     </div>
-    <p class="text-sm text-[#525252] dark:text-[#c6c6c6] font-light line-clamp-3">${c.d}</p>
+    <p class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] font-light line-clamp-3">${c.d}</p>
   </button>`;
 }
 document.getElementById('cardGrid').innerHTML = cards.map(c => cardHTML(c,'')).join('');
-document.getElementById('toolGrid').innerHTML = tools.map(c => cardHTML(c,'text-ibmblue-60')).join('');
+document.getElementById('toolGrid').innerHTML = tools.map(c => cardHTML(c,'text-[#0a1f4d] dark:text-ibmblue-60')).join('');
+
+// ---------- Migration stages (ZooKeeper -> KRaft) ----------
+const migration = [
+  { t: 'Stage 0 — Prerequisites & plan', d: 'Inventory your cluster, back up ZooKeeper, and decide on dedicated KRaft controllers (combined mode is NOT supported for migration). Confirm Kafka is healthy with no under-replicated partitions before you begin.',
+    links: [['KIP-866','https://cwiki.apache.org/confluence/display/KAFKA/KIP-866+ZooKeeper+to+KRaft+Migration'],['Apache migration guide','https://kafka.apache.org/documentation/#kraft_zk_migration']] },
+  { t: 'Stage 1 — Upgrade to a bridge release', d: 'Roll the whole cluster onto a KRaft-capable "bridge" release (3.6.x+ is production-ready; 3.9.x recommended as the last 3.x line). This narrows the compatibility matrix and puts the migration logic in place. Still on ZooKeeper at this point.',
+    links: [['Bridge release','https://kafka.apache.org/documentation/#kraft'],['KIP-833','https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready']] },
+  { t: 'Stage 2 — Provision KRaft controllers', d: 'Stand up a new quorum of dedicated KRaft controllers (3 for production), pointing them at the existing cluster ID with migration enabled (zookeeper.metadata.migration.enable=true). They connect to ZooKeeper to read current metadata.',
+    links: [['Controller config','https://kafka.apache.org/documentation/#kraftbrokerconfigs']] },
+  { t: 'Stage 3 — Migrate metadata (dual-write)', d: 'The active KRaft controller copies all metadata from ZooKeeper into the KRaft log, then enters dual-write mode: every change is written to BOTH stores. The cluster keeps serving traffic the whole time. Rollback to ZooKeeper is still possible here.',
+    links: [['Metadata transactions (KIP-868)','https://cwiki.apache.org/confluence/display/KAFKA/KIP-868+Metadata+Transactions']] },
+  { t: 'Stage 4 — Roll brokers into KRaft mode', d: 'Restart brokers one at a time so each stops talking to ZooKeeper and uses the KRaft controllers instead. Done as a rolling restart, so there is no cluster downtime. Watch MigratingZkBrokerCount drop to zero.',
+    links: [['Rolling restart','https://kafka.apache.org/documentation/#basic_ops_restarting']] },
+  { t: 'Stage 5 — Finalize & decommission ZK', d: 'Once all brokers are migrated, take the controllers out of migration mode. This is the point of no return — dual-write stops and ZooKeeper is no longer updated. Verify ZkMigrationState = MIGRATION_COMPLETED, then shut down and remove ZooKeeper.',
+    links: [['Finalizing migration','https://kafka.apache.org/documentation/#kraft_zk_migration']] },
+];
+
+const ami = [
+  { t: 'A — No AMI (Ansible at boot)', pros: ['Simplest; one source of truth in Ansible','Easy to patch — just re-run the play','Smallest maintenance burden'], cons: ['Slower instance launch (installs every boot)','Depends on package repos being reachable at boot'],
+    d: 'The default model on this page. Launch a base AL2023 instance and let Ansible install and configure Kafka after boot. Best when launches are infrequent and you value simplicity.',
+    steps: ['IaC launches base AL2023 EC2','user-data triggers the Ansible play (or a pull from your control node)','Ansible installs JDK + Kafka and templates config','Broker starts via systemd'],
+    links: [['EC2 user data','https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html']] },
+  { t: 'B — Packer (bake with HashiCorp)', pros: ['Fast, identical launches (golden image)','Same Ansible code reused as the Packer provisioner','Version-controlled, repeatable builds'], cons: ['Extra build pipeline to maintain','Must rebuild + re-publish AMI for every Kafka/OS patch'],
+    d: 'Use HashiCorp Packer to boot a temporary AL2023 instance, run your existing Ansible playbook as the provisioner, then snapshot the result into a custom AMI. The IaC then launches from that AMI.',
+    steps: ['Write a Packer template using the amazon-ebs builder on AL2023','Point Packer at the SAME Ansible playbook (ansible provisioner)','Run "packer build" — it provisions then creates the AMI','Reference the new AMI ID in Terraform/CloudFormation','Launch instances — Kafka is already installed, only runtime config at boot'],
+    links: [['Packer AWS','https://developer.hashicorp.com/packer/integrations/hashicorp/amazon'],['Ansible provisioner','https://developer.hashicorp.com/packer/integrations/hashicorp/ansible']] },
+  { t: 'C — EC2 Image Builder (AWS-native)', pros: ['Fully managed by AWS; no build servers','Built-in scheduling, patching & CIS hardening','Integrates with security scanning + distribution'], cons: ['AWS-specific (less portable)','Pipeline concepts (components/recipes) add a learning curve'],
+    d: 'AWS EC2 Image Builder runs a managed pipeline: it builds from AL2023, applies your components (a shell/Ansible component that installs Kafka), tests, and distributes the hardened AMI on a schedule.',
+    steps: ['Create a component that installs Kafka (wraps your shell/Ansible steps)','Build a recipe = base AL2023 + your component + AWS hardening','Define a pipeline with a patch/build schedule','Image Builder produces, tests and distributes the AMI automatically','IaC launches from the distributed AMI ID'],
+    links: [['EC2 Image Builder','https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html']] },
+];
+
+function stepHTML(s, i) {
+  return `<li class="ml-6">
+    <span class="absolute -left-[11px] flex items-center justify-center w-5 h-5 bg-ibmblue-60 text-white text-xs font-mono rounded-full">${i}</span>
+    <button onclick='openModal(${JSON.stringify(JSON.stringify(s))})'
+      class="carbon-focus text-left w-full bg-white dark:bg-[#262626] p-4 mb-px hover:bg-[#f4f4f4] dark:hover:bg-[#393939] transition-colors group flex items-center justify-between">
+      <div>
+        <h3 class="font-semibold text-[#0a1f4d] dark:text-ibmblue-60">${s.t}</h3>
+        <p class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] font-light mt-1 line-clamp-2">${s.d}</p>
+      </div>
+      <span class="text-[#1b3a7a] dark:text-gray-50 group-hover:text-ibmblue-60 transition-colors ml-4">&rarr;</span>
+    </button>
+  </li>`;
+}
+document.getElementById('migrationSteps').innerHTML = migration.map((s,i) => stepHTML(s,i)).join('');
+
+function amiHTML(a) {
+  return `<button onclick='openAmiModal(${JSON.stringify(JSON.stringify(a))})'
+    class="carbon-focus text-left bg-white dark:bg-[#262626] p-5 hover:bg-[#f4f4f4] dark:hover:bg-[#393939] transition-colors group">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-semibold text-[#0a1f4d] dark:text-ibmblue-60">${a.t}</h3>
+      <span class="text-[#1b3a7a] dark:text-gray-50 group-hover:text-ibmblue-60 transition-colors">&rarr;</span>
+    </div>
+    <p class="text-xs font-mono text-[#1b3a7a] dark:text-gray-50 mb-1">PROS</p>
+    <ul class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] mb-3 space-y-1">${a.pros.map(p=>`<li class="flex gap-1"><span class="text-ibmblue-60">+</span>${p}</li>`).join('')}</ul>
+    <p class="text-xs font-mono text-[#1b3a7a] dark:text-gray-50 mb-1">CONS</p>
+    <ul class="text-sm text-[#1b3a7a] dark:text-[#c6c6c6] space-y-1">${a.cons.map(c=>`<li class="flex gap-1"><span class="text-[#1b3a7a] dark:text-gray-50">&minus;</span>${c}</li>`).join('')}</ul>
+  </button>`;
+}
+document.getElementById('amiGrid').innerHTML = ami.map(amiHTML).join('');
 
 // ---------- Modal ----------
 const modal = document.getElementById('modal');
@@ -189,8 +309,24 @@ function openModal(json) {
   document.getElementById('modalBody').textContent = c.d;
   document.getElementById('modalLinks').innerHTML = c.links.map(
     ([name,url]) => `<li><a href="${url}" target="_blank" rel="noopener"
-      class="carbon-focus text-ibmblue-60 hover:underline flex items-center gap-1 text-sm">
+      class="carbon-focus text-[#0a1f4d] dark:text-ibmblue-60 hover:underline flex items-center gap-1 text-sm">
       ${name} <span class="text-xs">↗</span></a></li>`).join('');
+  modal.classList.remove('hidden'); modal.classList.add('flex');
+}
+function openAmiModal(json) {
+  const a = JSON.parse(json);
+  document.getElementById('modalTitle').textContent = a.t;
+  // Build step-by-step instructions as simple numbered list
+  const steps = a.steps.map((s,i) =>
+    `<li class="flex gap-3"><span class="flex-shrink-0 w-5 h-5 bg-ibmblue-60 text-white text-xs font-mono rounded-full flex items-center justify-center">${i+1}</span><span>${s}</span></li>`).join('');
+  document.getElementById('modalBody').innerHTML =
+    `<p class="mb-4">${a.d}</p>
+     <p class="text-xs font-mono text-[#1b3a7a] dark:text-gray-50 mb-2">STEP BY STEP</p>
+     <ol class="space-y-2">${steps}</ol>`;
+  document.getElementById('modalLinks').innerHTML = a.links.map(
+    ([name,url]) => `<li><a href="${url}" target="_blank" rel="noopener"
+      class="carbon-focus text-[#0a1f4d] dark:text-ibmblue-60 hover:underline flex items-center gap-1 text-sm">
+      ${name} <span class="text-xs">&#8599;</span></a></li>`).join('');
   modal.classList.remove('hidden'); modal.classList.add('flex');
 }
 function closeModal() { modal.classList.add('hidden'); modal.classList.remove('flex'); }
