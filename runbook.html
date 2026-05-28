@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kafka Cluster — End-to-End Deployment Runbook</title>
+<title>Self-Managed Kafka on EC2 — Ansible Runbook</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -11,17 +11,12 @@
   :root, [data-theme="light"]{
     --bg:#ffffff; --bg-elevated:#ffffff; --text:#161616; --text-muted:#6f6f6f;
     --border:#e0e0e0; --accent:#0f62fe; --accent-strong:#0043ce; --accent-soft:#edf5ff;
-    --code-bg:#001141; --code-text:#e0e8ff; --diagram-box:#f4f4f4;
-  }
+    --code-bg:#001141; --code-text:#e0e8ff; }
   [data-theme="dark"]{
     --bg:#161616; --bg-elevated:#262626; --text:#f4f4f4; --text-muted:#a8a8a8;
     --border:#393939; --accent:#78a9ff; --accent-strong:#a6c8ff; --accent-soft:#1f2a44;
-    --code-bg:#000000; --code-text:#c6d4ff; --diagram-box:#262626;
-  }
-  :root, [data-theme]{
-    --ibm-gray-100:var(--text); --ibm-gray-50:var(--text-muted); --ibm-gray-20:var(--border);
-    --ibm-blue-90:var(--code-bg); --ibm-blue-80:var(--text); --ibm-blue-10:var(--accent-soft);
-  }
+    --code-bg:#000000; --code-text:#c6d4ff; }
+  :root, [data-theme]{ --ibm-gray-100:var(--text); --ibm-gray-50:var(--text-muted); --ibm-gray-20:var(--border); }
   body{ font-family:'IBM Plex Sans',sans-serif; color:var(--text); background:var(--bg);
         transition:background .25s ease, color .25s ease; }
   .mono{font-family:'IBM Plex Mono',monospace;}
@@ -29,33 +24,24 @@
   .ibm-blue-bg{background:var(--ibm-blue-60);}
   .surface{background:var(--bg);}
   .surface-elevated{background:var(--bg-elevated);}
-  .t-text{color:var(--text);}
-  .t-muted{color:var(--text-muted);}
-  .t-border{border-color:var(--border)!important;}
-  .ibm-card{ background:var(--bg-elevated); border:1px solid var(--border);
-    border-left:3px solid var(--accent);
+  .t-text{color:var(--text);} .t-muted{color:var(--text-muted);} .t-border{border-color:var(--border)!important;}
+  .ibm-card{ background:var(--bg-elevated); border:1px solid var(--border); border-left:3px solid var(--accent);
     transition:border-color .2s ease, box-shadow .2s ease, background .25s ease; }
   .ibm-card:hover{ border-left-color:var(--accent-strong); box-shadow:0 0 0 1px var(--accent); }
-  .code-block{ background:var(--code-bg); color:var(--code-text);
-    font-family:'IBM Plex Mono',monospace; font-size:.8rem; line-height:1.65;
-    transition:background .25s ease; overflow-x:auto; }
+  .code-block{ background:var(--code-bg); color:var(--code-text); font-family:'IBM Plex Mono',monospace;
+    font-size:.8rem; line-height:1.65; transition:background .25s ease; overflow-x:auto; }
   .code-block pre{white-space:pre; margin:0;}
   .nav-link{border-left:2px solid transparent;transition:all .15s ease;color:var(--text-muted);}
   .nav-link:hover,.nav-link.active{border-left-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);}
   .nav-sub{font-size:.78rem;padding-left:1.4rem;}
   .step-num{background:var(--ibm-blue-60);color:#fff;font-family:'IBM Plex Mono',monospace;}
-  .copy-btn{transition:all .15s ease;}
-  .copy-btn:hover{background:var(--ibm-blue-70);}
-  .fade-in{animation:fade .5s ease both;}
-  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .copy-btn{transition:all .15s ease;} .copy-btn:hover{background:var(--ibm-blue-70);}
+  .fade-in{animation:fade .5s ease both;} @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
   ::selection{background:var(--accent);color:var(--bg);}
   .prop-row:hover{background:var(--accent-soft);}
   .status-dot{width:8px;height:8px;border-radius:50%;}
   .theme-toggle{border:1px solid var(--border);color:var(--text);transition:all .15s ease;}
   .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
-  .tab-btn{transition:all .15s ease;}
-  .tab-btn.active{border-bottom:2px solid var(--accent);color:var(--accent-strong);font-weight:600;}
-  .pill{font-size:.68rem;border:1px solid var(--border);padding:1px 7px;}
   .filetree{font-size:.8rem;line-height:1.7;}
   h2 code,p code,li code,td code{font-family:'IBM Plex Mono',monospace;font-size:.85em;color:var(--accent);}
 </style>
@@ -65,551 +51,437 @@
 <header class="t-border border-b surface sticky top-0 z-30" style="border-bottom-width:1px">
   <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="ibm-blue-bg w-9 h-9 flex items-center justify-center">
-        <span class="text-white mono font-bold text-lg">K</span>
-      </div>
+      <div class="ibm-blue-bg w-9 h-9 flex items-center justify-center"><span class="text-white mono font-bold text-lg">K</span></div>
       <div>
-        <h1 class="text-lg font-semibold t-text">Kafka Cluster — End-to-End Deployment Runbook</h1>
-        <p class="text-xs t-muted">Linux base image · Ansible · AWS · CloudFormation · MSK</p>
+        <h1 class="text-lg font-semibold t-text">Self-Managed Kafka on EC2 — Ansible Runbook</h1>
+        <p class="text-xs t-muted">Base Amazon Linux AMI · KRaft mode · systemd · no MSK</p>
       </div>
     </div>
     <div class="flex items-center gap-4">
-      <div class="hidden md:flex items-center gap-2 text-xs mono">
-        <span class="status-dot" style="background:#24a148"></span>
-        <span class="t-muted">PRODUCTION READY</span>
-      </div>
-      <button id="themeToggle" class="theme-toggle px-3 py-1.5 text-xs mono flex items-center gap-2">
-        <span id="themeIcon">◐</span><span id="themeLabel">Dark</span>
-      </button>
+      <div class="hidden md:flex items-center gap-2 text-xs mono"><span class="status-dot" style="background:#24a148"></span><span class="t-muted">SELF-MANAGED</span></div>
+      <button id="themeToggle" class="theme-toggle px-3 py-1.5 text-xs mono flex items-center gap-2"><span id="themeIcon">◐</span><span id="themeLabel">Dark</span></button>
     </div>
   </div>
 </header>
 
 <div class="max-w-7xl mx-auto px-6 flex gap-8">
-
   <aside class="hidden lg:block w-60 flex-shrink-0 py-8 sticky top-20 self-start" style="max-height:90vh;overflow-y:auto">
     <p class="text-xs uppercase tracking-wider mb-3 font-semibold t-muted">Contents</p>
     <nav id="nav" class="space-y-1 text-sm">
-      <a href="#overview"   class="nav-link active block px-3 py-2">Overview</a>
-      <a href="#workstation"class="nav-link block px-3 py-2">1 · Workstation Setup</a>
-      <a href="#vscode"     class="nav-link nav-sub block px-3 py-1">VS Code &amp; extensions</a>
-      <a href="#tooling"    class="nav-link nav-sub block px-3 py-1">CLI tools</a>
-      <a href="#awsconfig"  class="nav-link block px-3 py-2">2 · AWS Configuration</a>
-      <a href="#layout"     class="nav-link block px-3 py-2">3 · Project Layout</a>
-      <a href="#cfn"        class="nav-link block px-3 py-2">4 · CloudFormation</a>
-      <a href="#ansible"    class="nav-link block px-3 py-2">5 · Ansible Automation</a>
-      <a href="#deploy"     class="nav-link block px-3 py-2">6 · Deploy</a>
-      <a href="#health"     class="nav-link block px-3 py-2">7 · Health Checks</a>
-      <a href="#client"     class="nav-link block px-3 py-2">8 · Python Client</a>
-      <a href="#properties" class="nav-link block px-3 py-2">Property Reference</a>
-      <a href="#rollback"   class="nav-link block px-3 py-2">Rollback</a>
+      <a href="#overview"  class="nav-link active block px-3 py-2">Overview</a>
+      <a href="#diff"      class="nav-link block px-3 py-2">MSK vs Self-Managed</a>
+      <a href="#arch"      class="nav-link block px-3 py-2">Architecture</a>
+      <a href="#control"   class="nav-link block px-3 py-2">1 · Control Node</a>
+      <a href="#provision" class="nav-link block px-3 py-2">2 · Provision EC2</a>
+      <a href="#inventory" class="nav-link block px-3 py-2">3 · Inventory</a>
+      <a href="#role"      class="nav-link block px-3 py-2">4 · Kafka Role</a>
+      <a href="#install"   class="nav-link nav-sub block px-3 py-1">install tasks</a>
+      <a href="#serverprops"class="nav-link nav-sub block px-3 py-1">server.properties</a>
+      <a href="#systemd"   class="nav-link nav-sub block px-3 py-1">systemd unit</a>
+      <a href="#playbook"  class="nav-link block px-3 py-2">5 · Site Playbook</a>
+      <a href="#run"       class="nav-link block px-3 py-2">6 · Run It</a>
+      <a href="#health"    class="nav-link block px-3 py-2">7 · Health Checks</a>
+      <a href="#client"    class="nav-link block px-3 py-2">8 · Python Client</a>
     </nav>
-    <div class="mt-6 ibm-card p-3 text-xs t-muted">
-      <p class="font-semibold mb-1 ibm-blue">Last verified</p>
-      <p class="mono" id="timestamp">—</p>
-    </div>
+    <div class="mt-6 ibm-card p-3 text-xs t-muted"><p class="font-semibold mb-1 ibm-blue">Last verified</p><p class="mono" id="timestamp">—</p></div>
   </aside>
 
   <main class="flex-1 py-8 min-w-0">
 
-    <!-- OVERVIEW -->
     <section id="overview" class="mb-14 fade-in">
       <span class="text-xs mono uppercase tracking-wider ibm-blue">00 — Overview</span>
-      <h2 class="text-3xl font-light mt-2 mb-4 t-text">From a bare Linux box to a working Kafka cluster</h2>
+      <h2 class="text-3xl font-light mt-2 mb-4 t-text">Install Kafka onto raw EC2 with Ansible</h2>
       <p class="leading-relaxed mb-4 t-text">
-        This runbook takes you from <strong>nothing</strong>—a freshly imaged Ubuntu 22.04 workstation—through installing
-        every tool, configuring AWS, authoring the CloudFormation template, driving the whole deployment with
-        <strong>Ansible</strong>, running health checks, and finally proving the cluster works with a Python
-        producer/consumer. Each block is copy-paste runnable.
+        This runbook builds a <strong>self-managed</strong> 3-broker Kafka cluster — you own the servers. Ansible provisions
+        three EC2 instances from a base <code>Amazon Linux 2023</code> AMI, then connects over SSH to install Java and
+        Apache Kafka, render a unique <code>server.properties</code> per broker, and run each broker as a
+        <code>systemd</code> service. Uses <strong>KRaft mode</strong> (no ZooKeeper).
       </p>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">8</p><p class="text-xs mt-1 t-muted">Phases</p></div>
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">3</p><p class="text-xs mt-1 t-muted">Brokers / AZs</p></div>
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">IaC</p><p class="text-xs mt-1 t-muted">Ansible + CFN</p></div>
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">~30m</p><p class="text-xs mt-1 t-muted">End to end</p></div>
-      </div>
-      <div class="ibm-card p-4 mt-6 text-sm t-text" style="border-left-color:#24a148">
-        <strong class="ibm-blue">Flow:</strong> Workstation tools → AWS creds → Project scaffold →
-        CloudFormation template → Ansible orchestrates validate/deploy/wait → Health checks → Python client round-trip.
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">3</p><p class="text-xs mt-1 t-muted">EC2 brokers</p></div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">KRaft</p><p class="text-xs mt-1 t-muted">No ZooKeeper</p></div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">SSH</p><p class="text-xs mt-1 t-muted">Ansible transport</p></div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">systemd</p><p class="text-xs mt-1 t-muted">Service mgmt</p></div>
       </div>
     </section>
 
-    <!-- 1 WORKSTATION -->
-    <section id="workstation" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Workstation Setup</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Prepare the base Linux image</h2>
-      <p class="text-sm mb-4 t-text">Assumes a clean <code>Ubuntu 22.04 LTS</code> machine with sudo. Start by updating the OS and installing core build dependencies.</p>
-
-      <div class="ibm-card p-5 mb-4">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">System update &amp; base packages</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y \
-  curl wget git unzip gnupg software-properties-common \
-  build-essential ca-certificates python3 python3-pip python3-venv</pre></div>
-      </div>
-
-      <div class="ibm-card p-5 mb-4">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">Install Python tooling &amp; Ansible</h3></div>
-        <p class="text-sm mb-2 t-muted">Ansible orchestrates the whole deploy. <code>boto3</code> lets Ansible talk to AWS.</p>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>python3 -m pip install --user --upgrade pip
-python3 -m pip install --user ansible boto3 botocore kafka-python
-
-# Add the Ansible AWS collection
-ansible-galaxy collection install amazon.aws community.aws
-
-# Verify
-ansible --version
-python3 -c "import boto3, kafka; print('python deps OK')"</pre></div>
-      </div>
-
-      <div class="ibm-card p-5 mb-4">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">3</span><h3 class="font-medium t-text">Install the AWS CLI v2</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
-unzip awscliv2.zip
-sudo ./aws/install
-aws --version   # expect aws-cli/2.x</pre></div>
-      </div>
-
-      <div class="ibm-card p-5">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">4</span><h3 class="font-medium t-text">Install Java (Kafka CLI tools need a JRE)</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>sudo apt-get install -y openjdk-17-jre-headless
-java -version</pre></div>
-      </div>
-    </section>
-
-    <!-- VS CODE -->
-    <section id="vscode" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">01b — Editor</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Install &amp; configure VS Code</h2>
-      <div class="ibm-card p-5 mb-4">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">Install via the Microsoft apt repo</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
-  | gpg --dearmor > packages.microsoft.gpg
-sudo install -o root -g root -m 644 packages.microsoft.gpg /usr/share/keyrings/
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/packages.microsoft.gpg] \
-https://packages.microsoft.com/repos/code stable main" \
-  | sudo tee /etc/apt/sources.list.d/vscode.list
-sudo apt-get update && sudo apt-get install -y code
-code --version</pre></div>
-      </div>
-      <div class="ibm-card p-5">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">Install the required extensions (from terminal)</h3></div>
-        <p class="text-sm mb-2 t-muted">These give you YAML schema validation, AWS resource browsing, Ansible linting, and Python support.</p>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>code --install-extension amazonwebservices.aws-toolkit-vscode
-code --install-extension redhat.vscode-yaml
-code --install-extension redhat.ansible
-code --install-extension ms-python.python
-code --install-extension ms-azuretools.vscode-docker</pre></div>
-        <p class="text-sm mt-3 t-muted">Recommended <code>.vscode/settings.json</code> so the YAML extension validates CloudFormation:</p>
-        <div class="code-block p-4 relative mt-2"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>{
-  "yaml.customTags": [
-    "!Ref", "!Sub", "!GetAtt", "!GetAZs", "!Select",
-    "!Join sequence", "!Equals sequence", "!If sequence"
-  ],
-  "files.associations": { "*.yaml": "yaml" },
-  "ansible.python.interpreterPath": "/usr/bin/python3"
-}</pre></div>
-      </div>
-    </section>
-
-    <!-- TOOLING SUMMARY -->
-    <section id="tooling" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">01c — Toolchain</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">What you should now have</h2>
+    <section id="diff" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">00b — Context</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Self-managed vs. MSK</h2>
       <div class="ibm-card overflow-hidden">
         <table class="w-full text-sm">
           <thead><tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
-            <th class="px-4 py-3">Tool</th><th class="px-4 py-3">Verify</th><th class="px-4 py-3 hidden md:table-cell">Purpose</th></tr></thead>
-          <tbody id="toolTable" class="t-text"></tbody>
+            <th class="px-4 py-3">Aspect</th><th class="px-4 py-3">Self-managed (this doc)</th><th class="px-4 py-3 hidden md:table-cell">MSK</th></tr></thead>
+          <tbody id="diffTable" class="t-text"></tbody>
         </table>
       </div>
     </section>
 
-    <!-- 2 AWS CONFIG -->
-    <section id="awsconfig" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — AWS Configuration</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Connect your credentials</h2>
-      <div class="ibm-card p-5 mb-4">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">Configure a named profile</h3></div>
-        <p class="text-sm mb-2 t-muted">Use an IAM user/role with MSK, EC2, IAM, and CloudFormation permissions.</p>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws configure --profile kafka-deploy
-# AWS Access Key ID     : ********************
-# AWS Secret Access Key : ********************
-# Default region name   : us-east-1
-# Default output format  : json
+    <section id="arch" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">00c — Architecture</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Topology</h2>
+      <div class="ibm-card p-6">
+        <div class="flex flex-col items-center gap-4">
+          <div class="border-2 px-4 py-2 text-sm mono" style="border-color:var(--ibm-blue-40);color:var(--accent-strong)">Ansible Control Node (your laptop)</div>
+          <div class="text-xs t-muted">↓ SSH (port 22) over the VPC ↓</div>
+          <div class="grid grid-cols-3 gap-4 w-full">
+            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">EC2 · broker.id 1</div><p class="text-xs mt-1 t-muted">node.id 1 · AZ-a</p></div>
+            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">EC2 · broker.id 2</div><p class="text-xs mt-1 t-muted">node.id 2 · AZ-b</p></div>
+            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">EC2 · broker.id 3</div><p class="text-xs mt-1 t-muted">node.id 3 · AZ-c</p></div>
+          </div>
+          <div class="text-xs mt-2 px-3 py-1 border t-border t-muted">KRaft quorum · controllers + brokers · port 9092 (client) / 9093 (controller)</div>
+        </div>
+      </div>
+    </section>
 
-export AWS_PROFILE=kafka-deploy
-aws sts get-caller-identity     # confirms who you are</pre></div>
+    <section id="control" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Control Node</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Prepare the Ansible control machine</h2>
+      <div class="ibm-card p-5 mb-4">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">Install Ansible + AWS deps</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>sudo apt-get update && sudo apt-get install -y python3-pip git
+python3 -m pip install --user ansible boto3 botocore kafka-python
+ansible-galaxy collection install amazon.aws community.general
+ansible --version</pre></div>
       </div>
       <div class="ibm-card p-5">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">Create an EC2 key pair (for bastion / SSH access)</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws ec2 create-key-pair --key-name kafka-key \
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">AWS creds + SSH key</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws configure --profile kafka     # keys + region
+export AWS_PROFILE=kafka
+
+aws ec2 create-key-pair --key-name kafka-key \
   --query 'KeyMaterial' --output text > ~/.ssh/kafka-key.pem
 chmod 400 ~/.ssh/kafka-key.pem</pre></div>
       </div>
     </section>
 
-    <!-- 3 LAYOUT -->
-    <section id="layout" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Project Layout</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Scaffold the repository</h2>
-      <div class="ibm-card p-5 mb-4">
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>mkdir -p kafka-iac/{cloudformation,playbooks,client} && cd kafka-iac
-code .   # open the whole project in VS Code</pre></div>
-        <p class="text-sm mt-4 mb-2 t-muted">Resulting structure:</p>
-        <div class="filetree mono ibm-card p-4 t-text" style="border-left-color:var(--accent)">
-kafka-iac/<br>
-├── <span class="ibm-blue">cloudformation/</span><br>
-│&nbsp;&nbsp;&nbsp;└── kafka-cluster.yaml<br>
-├── <span class="ibm-blue">playbooks/</span><br>
-│&nbsp;&nbsp;&nbsp;├── deploy.yml<br>
-│&nbsp;&nbsp;&nbsp;├── healthcheck.yml<br>
-│&nbsp;&nbsp;&nbsp;└── inventory.ini<br>
-├── <span class="ibm-blue">client/</span><br>
-│&nbsp;&nbsp;&nbsp;├── producer.py<br>
-│&nbsp;&nbsp;&nbsp;└── consumer.py<br>
-└── .vscode/settings.json
-        </div>
-      </div>
-    </section>
-
-    <!-- 4 CFN -->
-    <section id="cfn" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">04 — CloudFormation</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Author the cluster template</h2>
-      <p class="text-sm mb-3 t-muted">Save as <code>cloudformation/kafka-cluster.yaml</code>. Defines VPC, 3 subnets, security group, and the MSK cluster.</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>AWSTemplateFormatVersion: '2010-09-09'
-Description: Amazon MSK Kafka Cluster (3 brokers / 3 AZ)
-
-Parameters:
-  ClusterName: { Type: String, Default: my-kafka-cluster }
-  KafkaVersion: { Type: String, Default: 3.6.0 }
-  InstanceType: { Type: String, Default: kafka.m5.large }
-
-Resources:
-  KafkaVPC:
-    Type: AWS::EC2::VPC
-    Properties: { CidrBlock: 10.0.0.0/16, EnableDnsSupport: true, EnableDnsHostnames: true }
-
-  Subnet1:
-    Type: AWS::EC2::Subnet
-    Properties: { VpcId: !Ref KafkaVPC, CidrBlock: 10.0.1.0/24, AvailabilityZone: !Select [0, !GetAZs ''] }
-  Subnet2:
-    Type: AWS::EC2::Subnet
-    Properties: { VpcId: !Ref KafkaVPC, CidrBlock: 10.0.2.0/24, AvailabilityZone: !Select [1, !GetAZs ''] }
-  Subnet3:
-    Type: AWS::EC2::Subnet
-    Properties: { VpcId: !Ref KafkaVPC, CidrBlock: 10.0.3.0/24, AvailabilityZone: !Select [2, !GetAZs ''] }
-
-  KafkaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow Kafka traffic
-      VpcId: !Ref KafkaVPC
-      SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 9092, ToPort: 9098, CidrIp: 10.0.0.0/16 }
-
-  KafkaCluster:
-    Type: AWS::MSK::Cluster
-    Properties:
-      ClusterName: !Ref ClusterName
-      KafkaVersion: !Ref KafkaVersion
-      NumberOfBrokerNodes: 3
-      BrokerNodeGroupInfo:
-        InstanceType: !Ref InstanceType
-        ClientSubnets: [ !Ref Subnet1, !Ref Subnet2, !Ref Subnet3 ]
-        SecurityGroups: [ !Ref KafkaSecurityGroup ]
-        StorageInfo: { EBSStorageInfo: { VolumeSize: 100 } }
-      EncryptionInfo:
-        EncryptionInTransit: { ClientBroker: TLS, InCluster: true }
-
-Outputs:
-  ClusterArn: { Value: !Ref KafkaCluster }
-  VPCId: { Value: !Ref KafkaVPC }</pre></div>
-    </section>
-
-    <!-- 5 ANSIBLE -->
-    <section id="ansible" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Ansible Automation</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Orchestrate the deployment</h2>
-      <p class="text-sm mb-3 t-text">Ansible wraps CloudFormation so the whole stack is one idempotent command. Save as <code>playbooks/deploy.yml</code>.</p>
-      <div class="code-block p-4 relative mb-6"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
-- name: Deploy Kafka (MSK) via CloudFormation
+    <section id="provision" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — Provision EC2</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Launch three base instances with Ansible</h2>
+      <p class="text-sm mb-3 t-text">Save as <code>playbooks/provision.yml</code>. Creates a security group and three EC2 instances from the base Amazon Linux 2023 AMI.</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: Provision Kafka EC2 instances
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     region: us-east-1
-    stack_name: kafka-stack
-    template: ../cloudformation/kafka-cluster.yaml
+    keypair: kafka-key
+    instance_type: t3.medium
+    ami: ami-0abcdef1234567890   # Amazon Linux 2023 in your region
   tasks:
-    - name: Validate template
-      amazon.aws.cloudformation_info:
-      register: _   # no-op presence check; real validate below
-      ignore_errors: true
-
-    - name: Create / update the CloudFormation stack
-      amazon.aws.cloudformation:
-        stack_name: "{{ stack_name }}"
-        state: present
+    - name: Security group for Kafka
+      amazon.aws.ec2_security_group:
+        name: kafka-sg
+        description: Kafka self-managed
         region: "{{ region }}"
-        template: "{{ template }}"
-        capabilities: [ CAPABILITY_NAMED_IAM ]
-        on_create_failure: ROLLBACK
-      register: cfn
+        rules:
+          - { proto: tcp, ports: [22],          cidr_ip: 0.0.0.0/0 }   # SSH (lock down in prod)
+          - { proto: tcp, ports: [9092,9093],   cidr_ip: 10.0.0.0/16 } # client + controller
+      register: sg
 
-    - name: Show stack outputs
-      ansible.builtin.debug:
-        var: cfn.stack_outputs
-
-    - name: Fetch MSK bootstrap brokers
-      ansible.builtin.command: >
-        aws kafka get-bootstrap-brokers
-        --cluster-arn {{ cfn.stack_outputs.ClusterArn }}
-        --region {{ region }} --output json
-      register: brokers
-      changed_when: false
-
-    - name: Save broker string to a file for the client
-      ansible.builtin.copy:
-        dest: ../client/brokers.json
-        content: "{{ brokers.stdout }}"</pre></div>
-
-      <p class="text-sm mb-2 t-muted">Run it:</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>cd playbooks
-ansible-playbook deploy.yml</pre></div>
+    - name: Launch 3 broker instances
+      amazon.aws.ec2_instance:
+        name: "kafka-broker-{{ item }}"
+        region: "{{ region }}"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type }}"
+        image_id: "{{ ami }}"
+        security_group: "{{ sg.group_id }}"
+        network: { assign_public_ip: true }
+        tags: { role: kafka, broker_id: "{{ item }}" }
+        wait: true
+        count: 1
+      loop: [1, 2, 3]
+      register: ec2</pre></div>
+      <p class="text-sm mt-3 t-muted">In production you'd place these in private subnets behind a bastion; public IPs here keep the demo simple.</p>
     </section>
 
-    <!-- 6 DEPLOY -->
-    <section id="deploy" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Deploy</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">What happens on apply</h2>
-      <div id="deploy-flow" class="space-y-3"></div>
+    <section id="inventory" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Inventory</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Dynamic inventory from EC2 tags</h2>
+      <p class="text-sm mb-3 t-text">Save as <code>inventory/aws_ec2.yml</code>. Ansible discovers brokers by their <code>role: kafka</code> tag — no hand-editing IPs.</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>plugin: amazon.aws.aws_ec2
+regions: [ us-east-1 ]
+filters:
+  tag:role: kafka
+  instance-state-name: running
+keyed_groups:
+  - key: tags.role
+    prefix: ""
+    separator: ""
+hostnames: [ ip-address ]
+compose:
+  ansible_host: public_ip_address
+  broker_id: tags.broker_id</pre></div>
+      <p class="text-sm mt-3 mb-2 t-muted">Group vars — <code>inventory/group_vars/kafka.yml</code>:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>ansible_user: ec2-user
+ansible_ssh_private_key_file: ~/.ssh/kafka-key.pem
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+kafka_version: "3.7.0"
+kafka_scala: "2.13"</pre></div>
     </section>
 
-    <!-- 7 HEALTH -->
+    <section id="role" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">04 — Kafka Role</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">The reusable install role</h2>
+      <p class="text-sm mb-3 t-muted">Standard Ansible role layout under <code>roles/kafka/</code>:</p>
+      <div class="filetree mono ibm-card p-4 t-text mb-2">
+roles/kafka/<br>
+├── <span class="ibm-blue">tasks/</span>main.yml<br>
+├── <span class="ibm-blue">templates/</span>server.properties.j2<br>
+├── <span class="ibm-blue">templates/</span>kafka.service.j2<br>
+└── <span class="ibm-blue">handlers/</span>main.yml
+      </div>
+    </section>
+
+    <section id="install" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">04a — Install Tasks</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>roles/kafka/tasks/main.yml</code></h2>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: Install Java 17
+  ansible.builtin.dnf: { name: java-17-amazon-corretto-headless, state: present }
+  become: true
+
+- name: Create kafka system user
+  ansible.builtin.user: { name: kafka, system: true, shell: /sbin/nologin }
+  become: true
+
+- name: Download Kafka
+  ansible.builtin.get_url:
+    url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ kafka_scala }}-{{ kafka_version }}.tgz"
+    dest: /tmp/kafka.tgz
+  become: true
+
+- name: Unpack to /opt/kafka
+  ansible.builtin.unarchive:
+    src: /tmp/kafka.tgz
+    dest: /opt/
+    remote_src: true
+    creates: "/opt/kafka_{{ kafka_scala }}-{{ kafka_version }}"
+  become: true
+
+- name: Symlink /opt/kafka
+  ansible.builtin.file:
+    src: "/opt/kafka_{{ kafka_scala }}-{{ kafka_version }}"
+    dest: /opt/kafka
+    state: link
+  become: true
+
+- name: Create data + log dirs
+  ansible.builtin.file: { path: "{{ item }}", state: directory, owner: kafka, group: kafka }
+  loop: [ /var/lib/kafka, /var/log/kafka ]
+  become: true
+
+- name: Render server.properties
+  ansible.builtin.template:
+    src: server.properties.j2
+    dest: /opt/kafka/config/kraft/server.properties
+    owner: kafka
+  become: true
+  notify: restart kafka
+
+- name: Format KRaft storage (idempotent)
+  ansible.builtin.shell: |
+    if [ ! -f /var/lib/kafka/meta.properties ]; then
+      KAFKA_CLUSTER_ID=$(/opt/kafka/bin/kafka-storage.sh random-uuid)
+      /opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID \
+        -c /opt/kafka/config/kraft/server.properties
+    fi
+  args: { creates: /var/lib/kafka/meta.properties }
+  become: true
+
+- name: Install systemd unit
+  ansible.builtin.template: { src: kafka.service.j2, dest: /etc/systemd/system/kafka.service }
+  become: true
+  notify: restart kafka
+
+- name: Enable + start Kafka
+  ansible.builtin.systemd: { name: kafka, enabled: true, state: started, daemon_reload: true }
+  become: true</pre></div>
+    </section>
+
+    <section id="serverprops" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">04b — Broker Config</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>templates/server.properties.j2</code></h2>
+      <p class="text-sm mb-3 t-muted">Each broker gets a unique <code>node.id</code> and the full controller quorum list. Jinja2 fills these from inventory.</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># --- KRaft combined broker+controller ---
+process.roles=broker,controller
+node.id={{ broker_id }}
+
+# Quorum: every broker, built dynamically from the kafka group
+controller.quorum.voters={% for h in groups['kafka'] %}{{ hostvars[h].broker_id }}@{{ hostvars[h].ansible_host }}:9093{% if not loop.last %},{% endif %}{% endfor %}
+
+
+listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+advertised.listeners=PLAINTEXT://{{ ansible_host }}:9092
+controller.listener.names=CONTROLLER
+inter.broker.listener.name=PLAINTEXT
+
+log.dirs=/var/lib/kafka
+num.partitions=3
+default.replication.factor=3
+min.insync.replicas=2
+offsets.topic.replication.factor=3</pre></div>
+    </section>
+
+    <section id="systemd" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">04c — Service</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>templates/kafka.service.j2</code> + handler</h2>
+      <div class="code-block p-4 relative mb-4"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>[Unit]
+Description=Apache Kafka (KRaft)
+After=network.target
+
+[Service]
+Type=simple
+User=kafka
+ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
+ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+Restart=on-failure
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target</pre></div>
+      <p class="text-sm mb-2 t-muted"><code>roles/kafka/handlers/main.yml</code>:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: restart kafka
+  ansible.builtin.systemd: { name: kafka, state: restarted, daemon_reload: true }
+  become: true</pre></div>
+    </section>
+
+    <section id="playbook" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Site Playbook</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Tie it together — <code>site.yml</code></h2>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: Configure Kafka brokers
+  hosts: kafka
+  become: true
+  roles:
+    - kafka</pre></div>
+    </section>
+
+    <section id="run" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Run It</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Execute end to end</h2>
+      <div id="runSteps" class="space-y-3"></div>
+    </section>
+
     <section id="health" class="mb-14">
       <span class="text-xs mono uppercase tracking-wider ibm-blue">07 — Health Checks</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Verify the cluster is healthy</h2>
-      <p class="text-sm mb-3 t-text">Save as <code>playbooks/healthcheck.yml</code> — confirms ACTIVE state and broker count.</p>
-      <div class="code-block p-4 relative mb-6"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
-- name: Kafka cluster health checks
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  vars: { region: us-east-1, stack_name: kafka-stack }
-  tasks:
-    - name: Get cluster ARN from stack
-      ansible.builtin.shell: >
-        aws cloudformation describe-stacks --stack-name {{ stack_name }}
-        --query "Stacks[0].Outputs[?OutputKey=='ClusterArn'].OutputValue"
-        --output text --region {{ region }}
-      register: arn
-      changed_when: false
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Verify the cluster</h2>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># SSH to broker 1
+ssh -i ~/.ssh/kafka-key.pem ec2-user@&lt;broker1-ip&gt;
 
-    - name: Describe MSK cluster
-      ansible.builtin.shell: >
-        aws kafka describe-cluster --cluster-arn {{ arn.stdout }}
-        --region {{ region }} --output json
-      register: desc
-      changed_when: false
+# Is the service up?
+sudo systemctl status kafka --no-pager
 
-    - name: Assert cluster is ACTIVE
-      ansible.builtin.assert:
-        that: "(desc.stdout | from_json).ClusterInfo.State == 'ACTIVE'"
-        success_msg: "Cluster is ACTIVE ✓"
-        fail_msg: "Cluster not active — check the console"
+# Quorum status (KRaft)
+/opt/kafka/bin/kafka-metadata-quorum.sh \
+  --bootstrap-server localhost:9092 describe --status
 
-    - name: Report broker count
-      ansible.builtin.debug:
-        msg: "Brokers: {{ (desc.stdout | from_json).ClusterInfo.NumberOfBrokerNodes }}"</pre></div>
+# Create a test topic with 3 replicas
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  --create --topic demo-topic --partitions 3 --replication-factor 3
 
-      <p class="text-sm mb-2 t-muted">Manual one-liners for quick checks:</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># Cluster state
-aws kafka describe-cluster --cluster-arn $ARN \
-  --query 'ClusterInfo.State' --output text
-
-# List topics using Kafka CLI tools (run from inside the VPC)
-bin/kafka-topics.sh --bootstrap-server $BROKERS --list
-
-# TCP reachability to a broker
-nc -zv broker1.kafka.amazonaws.com 9094</pre></div>
+# Confirm it exists and is fully replicated
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  --describe --topic demo-topic</pre></div>
+      <div class="ibm-card p-4 mt-4 text-sm t-text" style="border-left-color:#24a148">
+        <strong class="ibm-blue">Healthy signs:</strong> <code>systemctl</code> shows <em>active (running)</em>,
+        the quorum lists 3 voters with a stable leader, and <code>--describe</code> shows ISR (in-sync replicas) = 3 for every partition.
+      </div>
     </section>
 
-    <!-- 8 PYTHON CLIENT -->
     <section id="client" class="mb-14">
       <span class="text-xs mono uppercase tracking-wider ibm-blue">08 — Python Client</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Send &amp; receive messages</h2>
-      <p class="text-sm mb-3 t-text">Round-trip test using <code>kafka-python</code> over TLS. Replace the broker string with your TLS endpoint (port 9094) from <code>brokers.json</code>.</p>
-
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Round-trip test</h2>
+      <p class="text-sm mb-3 t-text">PLAINTEXT on port 9092 (this demo). Point <code>BROKERS</code> at any broker's reachable IP.</p>
       <div class="flex gap-1 mb-3 border-b t-border">
         <button class="tab-btn px-4 py-2 text-sm mono active" data-tab="prod">producer.py</button>
         <button class="tab-btn px-4 py-2 text-sm mono t-muted" data-tab="cons">consumer.py</button>
       </div>
-
       <div id="tab-prod" class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>#!/usr/bin/env python3
-"""producer.py — publish messages to a TLS-secured MSK topic."""
 import json, time
 from kafka import KafkaProducer
 
-BROKERS = ["b-1.my-kafka.xxxx.kafka.us-east-1.amazonaws.com:9094"]
-TOPIC   = "demo-topic"
-
+BROKERS = ["&lt;broker1-ip&gt;:9092", "&lt;broker2-ip&gt;:9092", "&lt;broker3-ip&gt;:9092"]
 producer = KafkaProducer(
     bootstrap_servers=BROKERS,
-    security_protocol="SSL",                       # TLS in transit
-    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    acks="all",                                    # wait for all replicas
-    retries=3,
+    value_serializer=lambda v: json.dumps(v).encode(),
+    acks="all", retries=3,
 )
-
 for i in range(10):
-    msg = {"id": i, "ts": time.time(), "payload": f"hello-{i}"}
-    future = producer.send(TOPIC, value=msg)
-    record = future.get(timeout=10)                # block to confirm
-    print(f"sent id={i} -> partition {record.partition} offset {record.offset}")
-
-producer.flush()
-producer.close()
+    r = producer.send("demo-topic", {"id": i, "ts": time.time()}).get(timeout=10)
+    print(f"sent id={i} -> p{r.partition} offset {r.offset}")
+producer.flush(); producer.close()
 print("done.")</pre></div>
-
       <div id="tab-cons" class="code-block p-4 relative" style="display:none"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>#!/usr/bin/env python3
-"""consumer.py — subscribe and print messages from the topic."""
 import json
 from kafka import KafkaConsumer
 
-BROKERS = ["b-1.my-kafka.xxxx.kafka.us-east-1.amazonaws.com:9094"]
-TOPIC   = "demo-topic"
-
+BROKERS = ["&lt;broker1-ip&gt;:9092", "&lt;broker2-ip&gt;:9092", "&lt;broker3-ip&gt;:9092"]
 consumer = KafkaConsumer(
-    TOPIC,
+    "demo-topic",
     bootstrap_servers=BROKERS,
-    security_protocol="SSL",
-    auto_offset_reset="earliest",                  # read from start
+    auto_offset_reset="earliest",
     group_id="demo-group",
-    value_deserializer=lambda b: json.loads(b.decode("utf-8")),
-    consumer_timeout_ms=15000,                      # stop after 15s idle
+    value_deserializer=lambda b: json.loads(b.decode()),
+    consumer_timeout_ms=15000,
 )
-
 print("listening...")
-for record in consumer:
-    print(f"recv partition {record.partition} offset {record.offset}: {record.value}")
+for m in consumer:
+    print(f"recv p{m.partition} offset {m.offset}: {m.value}")
 consumer.close()</pre></div>
-
-      <p class="text-sm mt-4 mb-2 t-muted">Run both (consumer in one terminal, producer in another):</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># terminal 1
-python3 client/consumer.py
-# terminal 2
-python3 client/producer.py</pre></div>
-      <div class="ibm-card p-4 mt-4 text-sm t-text" style="border-left-color:#24a148">
-        <strong class="ibm-blue">Success looks like:</strong> the producer prints partition/offset confirmations and the
-        consumer prints all 10 JSON messages. That round-trip proves the cluster accepts writes, replicates, and serves reads.
-      </div>
-    </section>
-
-    <!-- PROPERTIES -->
-    <section id="properties" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">REF — Property Reference</span>
-      <h2 class="text-2xl font-light mt-2 mb-2 t-text">Configuration reference</h2>
-      <input id="propSearch" type="text" placeholder="Search properties…"
-        class="w-full md:w-80 mb-4 px-3 py-2 border text-sm mono focus:outline-none surface-elevated t-text t-border">
-      <div class="ibm-card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead><tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
-            <th class="px-4 py-3">Property</th><th class="px-4 py-3">Value</th><th class="px-4 py-3 hidden md:table-cell">Notes</th></tr></thead>
-          <tbody id="propTable" class="t-text"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ROLLBACK -->
-    <section id="rollback" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">REF — Rollback</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Tear down safely</h2>
-      <div class="ibm-card p-5" style="border-left-color:#da1e28">
-        <p class="text-sm mb-3 t-text">⚠ MSK bills hourly. One Ansible command removes everything.</p>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># via Ansible
-ansible localhost -m amazon.aws.cloudformation \
-  -a "stack_name=kafka-stack state=absent region=us-east-1"
-
-# or raw CLI
-aws cloudformation delete-stack --stack-name kafka-stack
-aws cloudformation wait stack-delete-complete --stack-name kafka-stack</pre></div>
-      </div>
+      <p class="text-sm mt-4 mb-2 t-muted">Run consumer first, then producer in a second terminal:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>python3 consumer.py   # terminal 1
+python3 producer.py   # terminal 2</pre></div>
     </section>
 
     <footer class="t-border border-t pt-6 mt-12 text-xs flex justify-between t-muted" style="border-top-width:1px">
-      <span>Kafka End-to-End Runbook · Internal Documentation</span>
-      <span class="mono">IBM Plex · Carbon palette</span>
+      <span>Self-Managed Kafka Runbook · Internal Documentation</span><span class="mono">IBM Plex · Carbon palette</span>
     </footer>
   </main>
 </div>
 
 <script>
-const properties=[
-  {p:"ClusterName",v:"my-kafka-cluster",n:"Unique per environment"},
-  {p:"KafkaVersion",v:"3.6.0",n:"Pin to a tested version"},
-  {p:"NumberOfBrokerNodes",v:"3",n:"Multiple of AZ count"},
-  {p:"InstanceType",v:"kafka.m5.large",n:"Use t3.small for dev"},
-  {p:"EBSVolumeSize",v:"100 GiB",n:"Per broker storage"},
-  {p:"ClientBroker",v:"TLS",n:"Port 9094 for SSL clients"},
-  {p:"InCluster",v:"true",n:"Broker-to-broker TLS"},
-  {p:"VPC CIDR",v:"10.0.0.0/16",n:"Private network range"},
-  {p:"Ingress Ports",v:"9092–9098",n:"Plaintext/TLS/IAM/SASL"},
-  {p:"consumer group_id",v:"demo-group",n:"Tracks read offsets"},
-  {p:"acks",v:"all",n:"Producer durability guarantee"},
+const diffRows=[
+  {a:"Who runs the brokers",s:"You (EC2 + Ansible)",m:"AWS managed service"},
+  {a:"OS / patching",s:"Your responsibility",m:"Handled by AWS"},
+  {a:"Setup effort",s:"Higher — full control",m:"Lower — API call"},
+  {a:"Cost model",s:"EC2 + EBS hourly",m:"MSK broker-hours (premium)"},
+  {a:"Coordination",s:"KRaft (this doc)",m:"AWS-managed"},
+  {a:"Best for",s:"Custom tuning, learning",m:"Hands-off production"},
 ];
-const tools=[
-  {t:"ansible",c:"ansible --version",n:"Orchestration engine"},
-  {t:"aws-cli v2",c:"aws --version",n:"AWS control plane"},
-  {t:"python3 + boto3",c:"python3 -c 'import boto3'",n:"AWS SDK for Ansible"},
-  {t:"kafka-python",c:"python3 -c 'import kafka'",n:"Producer/consumer client"},
-  {t:"java 17 JRE",c:"java -version",n:"Kafka CLI tools"},
-  {t:"VS Code",c:"code --version",n:"Editor + AWS Toolkit"},
-];
-const deployFlow=[
-  {t:"Ansible calls cloudformation module",d:"Submits the template; AWS begins provisioning the VPC and subnets first."},
-  {t:"MSK broker nodes launch across 3 AZs",d:"Each broker gets a 100 GiB EBS volume; this is the slow step (~20 min)."},
-  {t:"Encryption + networking finalize",d:"TLS listeners come up on port 9094; security group opens 9092–9098."},
-  {t:"Stack reaches CREATE_COMPLETE",d:"Ansible captures ClusterArn output and writes brokers.json for the client."},
+const runSteps=[
+  {t:"Provision the instances",c:"ansible-playbook playbooks/provision.yml"},
+  {t:"Confirm dynamic inventory sees them",c:"ansible-inventory -i inventory/aws_ec2.yml --graph"},
+  {t:"Install + configure + start Kafka",c:"ansible-playbook -i inventory/aws_ec2.yml site.yml"},
+  {t:"Re-run anytime — it's idempotent",c:"ansible-playbook -i inventory/aws_ec2.yml site.yml --check"},
 ];
 
-const propTable=document.getElementById('propTable');
-function renderProps(f=""){propTable.innerHTML="";properties.filter(r=>(r.p+r.v+r.n).toLowerCase().includes(f.toLowerCase())).forEach(r=>{const tr=document.createElement('tr');tr.className="prop-row";tr.style.borderTop="1px solid var(--border)";tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.p}</td><td class="px-4 py-3 mono">${r.v}</td><td class="px-4 py-3 hidden md:table-cell t-muted">${r.n}</td>`;propTable.appendChild(tr);});}
-renderProps();
-document.getElementById('propSearch').addEventListener('input',e=>renderProps(e.target.value));
+const diffTable=document.getElementById('diffTable');
+diffRows.forEach(r=>{const tr=document.createElement('tr');tr.className="prop-row";tr.style.borderTop="1px solid var(--border)";tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.a}</td><td class="px-4 py-3">${r.s}</td><td class="px-4 py-3 hidden md:table-cell t-muted">${r.m}</td>`;diffTable.appendChild(tr);});
 
-const toolTable=document.getElementById('toolTable');
-tools.forEach(r=>{const tr=document.createElement('tr');tr.className="prop-row";tr.style.borderTop="1px solid var(--border)";tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.t}</td><td class="px-4 py-3 mono">${r.c}</td><td class="px-4 py-3 hidden md:table-cell t-muted">${r.n}</td>`;toolTable.appendChild(tr);});
+const rs=document.getElementById('runSteps');
+runSteps.forEach((s,i)=>{const d=document.createElement('div');d.className="ibm-card p-4";d.innerHTML=`<div class="flex items-center gap-3 mb-2"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">${i+1}</span><h3 class="font-medium t-text">${s.t}</h3></div><div class="code-block p-3 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>${s.c}</pre></div>`;rs.appendChild(d);});
 
-const df=document.getElementById('deploy-flow');
-deployFlow.forEach((s,i)=>{const d=document.createElement('div');d.className="ibm-card p-4 flex gap-3";d.innerHTML=`<span class="step-num w-7 h-7 flex items-center justify-center text-sm flex-shrink-0">${i+1}</span><div><h3 class="font-medium t-text">${s.t}</h3><p class="text-sm t-muted mt-1">${s.d}</p></div>`;df.appendChild(d);});
+document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>{x.classList.remove('active');x.classList.add('t-muted');});b.classList.add('active');b.classList.remove('t-muted');document.getElementById('tab-prod').style.display=b.dataset.tab==='prod'?'block':'none';document.getElementById('tab-cons').style.display=b.dataset.tab==='cons'?'block':'none';}));
 
-// tabs
-document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('.tab-btn').forEach(x=>{x.classList.remove('active');x.classList.add('t-muted');});
-  b.classList.add('active');b.classList.remove('t-muted');
-  document.getElementById('tab-prod').style.display = b.dataset.tab==='prod'?'block':'none';
-  document.getElementById('tab-cons').style.display = b.dataset.tab==='cons'?'block':'none';
-}));
-
-// copy
 document.addEventListener('click',e=>{if(e.target.classList.contains('copy-btn')){const code=e.target.parentElement.querySelector('pre').innerText;navigator.clipboard.writeText(code).then(()=>{const o=e.target.innerText;e.target.innerText="copied ✓";setTimeout(()=>e.target.innerText=o,1200);});}});
 
-// scroll-spy
 const links=[...document.querySelectorAll('.nav-link')];
 const secs=links.map(l=>document.querySelector(l.getAttribute('href')));
 window.addEventListener('scroll',()=>{let idx=secs.length-1;for(let i=0;i<secs.length;i++){if(secs[i]&&secs[i].getBoundingClientRect().top>140){idx=i-1;break;}}links.forEach(l=>l.classList.remove('active'));if(idx>=0)links[idx].classList.add('active');});
 links.forEach(l=>l.addEventListener('click',e=>{e.preventDefault();document.querySelector(l.getAttribute('href')).scrollIntoView({behavior:'smooth'});}));
 
-// theme
 const root=document.documentElement,icon=document.getElementById('themeIcon'),label=document.getElementById('themeLabel');
 function applyTheme(t){root.setAttribute('data-theme',t);icon.textContent=t==='dark'?'◑':'◐';label.textContent=t==='dark'?'Light':'Dark';}
-let theme=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-applyTheme(theme);
+let theme=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';applyTheme(theme);
 document.getElementById('themeToggle').addEventListener('click',()=>{theme=root.getAttribute('data-theme')==='dark'?'light':'dark';applyTheme(theme);});
-
 document.getElementById('timestamp').innerText=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
+
+// add tab style
+const st=document.createElement('style');st.textContent='.tab-btn{transition:all .15s ease}.tab-btn.active{border-bottom:2px solid var(--accent);color:var(--accent-strong);font-weight:600}';document.head.appendChild(st);
 </script>
 </body>
 </html>
