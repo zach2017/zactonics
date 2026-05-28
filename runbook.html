@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka Cluster — Deployment Runbook</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Fixed IBM brand blues (same in both themes) */
+  :root{
+    --ibm-blue-70:#0043ce;
+    --ibm-blue-60:#0f62fe;   /* IBM signature blue */
+    --ibm-blue-40:#78a9ff;
+  }
+
+  /* ---------- LIGHT THEME (default) ---------- */
+  :root, [data-theme="light"]{
+    --bg:#ffffff;            /* white background */
+    --bg-elevated:#ffffff;
+    --header-bg:#ffffff;
+    --text:#161616;          /* near-black body */
+    --text-muted:#6f6f6f;
+    --border:#e0e0e0;
+    --accent:#0f62fe;        /* blue accent */
+    --accent-strong:#0043ce;
+    --accent-soft:#edf5ff;   /* pale blue hover */
+    --code-bg:#001141;       /* deep navy code panel */
+    --code-text:#e0e8ff;
+    --diagram-box:#f4f4f4;
+  }
+
+  /* ---------- DARK THEME (Carbon Gray 100) ---------- */
+  [data-theme="dark"]{
+    --bg:#161616;
+    --bg-elevated:#262626;
+    --header-bg:#161616;
+    --text:#f4f4f4;
+    --text-muted:#a8a8a8;
+    --border:#393939;
+    --accent:#78a9ff;        /* lighter blue reads better on dark */
+    --accent-strong:#a6c8ff;
+    --accent-soft:#1f2a44;
+    --code-bg:#000000;
+    --code-text:#c6d4ff;
+    --diagram-box:#262626;
+  }
+
+  /* Aliases: old hardcoded var names map onto theme tokens */
+  :root, [data-theme]{
+    --ibm-gray-100:var(--text);
+    --ibm-gray-50:var(--text-muted);
+    --ibm-gray-20:var(--border);
+    --ibm-blue-90:var(--code-bg);
+    --ibm-blue-80:var(--text);
+    --ibm-blue-10:var(--accent-soft);
+  }
+  body{
+    font-family:'IBM Plex Sans',sans-serif;
+    color:var(--text);
+    background:var(--bg);
+    transition:background .25s ease, color .25s ease;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .ibm-blue{color:var(--accent);}
+  .ibm-blue-bg{background:var(--ibm-blue-60);}
+  .surface{background:var(--bg);}
+  .surface-elevated{background:var(--bg-elevated);}
+  .t-text{color:var(--text);}
+  .t-muted{color:var(--text-muted);}
+  .t-border{border-color:var(--border)!important;}
+
+  /* IBM-style square accents, left border */
+  .ibm-card{
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-left:3px solid var(--accent);
+    transition:border-color .2s ease, box-shadow .2s ease, background .25s ease;
+  }
+  .ibm-card:hover{
+    border-left-color:var(--accent-strong);
+    box-shadow:0 0 0 1px var(--accent);
+  }
+  .code-block{
+    background:var(--code-bg);
+    color:var(--code-text);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:.82rem;
+    line-height:1.6;
+    transition:background .25s ease;
+  }
+  .nav-link{border-left:2px solid transparent;transition:all .15s ease;color:var(--text-muted);}
+  .nav-link:hover,.nav-link.active{border-left-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);}
+  .step-num{background:var(--ibm-blue-60);color:#fff;font-family:'IBM Plex Mono',monospace;}
+  .copy-btn{transition:all .15s ease;}
+  .copy-btn:hover{background:var(--ibm-blue-70);}
+  .fade-in{animation:fade .5s ease both;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  ::selection{background:var(--accent);color:var(--bg);}
+  .prop-row:hover{background:var(--accent-soft);}
+  .status-dot{width:8px;height:8px;border-radius:50%;}
+
+  /* Theme toggle button */
+  .theme-toggle{
+    border:1px solid var(--border);
+    color:var(--text);
+    transition:all .15s ease;
+  }
+  .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
+</style>
+</head>
+<body class="antialiased">
+
+<!-- Top banner -->
+<header class="t-border border-b surface sticky top-0 z-30" style="border-bottom-width:1px">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="ibm-blue-bg w-9 h-9 flex items-center justify-center">
+        <span class="text-white mono font-bold text-lg">K</span>
+      </div>
+      <div>
+        <h1 class="text-lg font-semibold t-text">Kafka Cluster Deployment Runbook</h1>
+        <p class="text-xs t-muted">Amazon MSK · CloudFormation · v1.4.0</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="hidden md:flex items-center gap-2 text-xs mono">
+        <span class="status-dot" style="background:#24a148"></span>
+        <span class="t-muted">PRODUCTION READY</span>
+      </div>
+      <button id="themeToggle" class="theme-toggle px-3 py-1.5 text-xs mono flex items-center gap-2" aria-label="Toggle theme">
+        <span id="themeIcon">◐</span><span id="themeLabel">Dark</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-6 flex gap-8">
+
+  <!-- Sidebar nav -->
+  <aside class="hidden lg:block w-56 flex-shrink-0 py-8 sticky top-20 self-start">
+    <p class="text-xs uppercase tracking-wider mb-3 font-semibold" style="color:var(--ibm-gray-50)">Contents</p>
+    <nav id="nav" class="space-y-1 text-sm">
+      <a href="#overview" class="nav-link active block px-3 py-2">Overview</a>
+      <a href="#prereqs" class="nav-link block px-3 py-2">Prerequisites</a>
+      <a href="#architecture" class="nav-link block px-3 py-2">Architecture</a>
+      <a href="#properties" class="nav-link block px-3 py-2">Cluster Properties</a>
+      <a href="#steps" class="nav-link block px-3 py-2">Deployment Steps</a>
+      <a href="#verify" class="nav-link block px-3 py-2">Verification</a>
+      <a href="#rollback" class="nav-link block px-3 py-2">Rollback</a>
+    </nav>
+    <div class="mt-6 ibm-card p-3 text-xs" style="color:var(--ibm-gray-50)">
+      <p class="font-semibold mb-1 ibm-blue">Last verified</p>
+      <p class="mono" id="timestamp">—</p>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 py-8 min-w-0">
+
+    <!-- Overview -->
+    <section id="overview" class="mb-12 fade-in">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Overview</span>
+      <h2 class="text-3xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Standing up a production Kafka cluster</h2>
+      <p class="leading-relaxed mb-4" style="color:var(--ibm-gray-100)">
+        This runbook documents the repeatable deployment of a 3-broker Amazon MSK cluster across three Availability Zones,
+        provisioned entirely through CloudFormation. Every property is version-controlled, every step is idempotent, and
+        the whole stack tears down with a single command.
+      </p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+        <div class="ibm-card p-4">
+          <p class="text-2xl font-light ibm-blue">3</p>
+          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Broker nodes</p>
+        </div>
+        <div class="ibm-card p-4">
+          <p class="text-2xl font-light ibm-blue">3</p>
+          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Availability Zones</p>
+        </div>
+        <div class="ibm-card p-4">
+          <p class="text-2xl font-light ibm-blue">TLS</p>
+          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">In-transit encryption</p>
+        </div>
+        <div class="ibm-card p-4">
+          <p class="text-2xl font-light ibm-blue">~25m</p>
+          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Provision time</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Prerequisites -->
+    <section id="prereqs" class="mb-12">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — Prerequisites</span>
+      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Before you begin</h2>
+      <ul class="space-y-2">
+        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">AWS CLI v2 configured with deploy permissions (<span class="mono text-sm ibm-blue">aws configure</span>)</span></li>
+        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">IAM role with MSK, EC2, and CloudFormation privileges</span></li>
+        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">VS Code with AWS Toolkit + YAML extensions installed</span></li>
+        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">Template file <span class="mono text-sm ibm-blue">kafka-cluster.yaml</span> in your working directory</span></li>
+      </ul>
+    </section>
+
+    <!-- Architecture -->
+    <section id="architecture" class="mb-12">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Architecture</span>
+      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Topology</h2>
+      <div class="ibm-card p-6">
+        <div class="flex flex-col items-center gap-4">
+          <div class="border-2 px-4 py-2 text-sm mono" style="border-color:var(--ibm-blue-40);color:var(--ibm-blue-70)">VPC 10.0.0.0/16</div>
+          <div class="text-xs" style="color:var(--ibm-gray-50)">↓</div>
+          <div class="grid grid-cols-3 gap-4 w-full">
+            <div class="text-center">
+              <div class="ibm-blue-bg text-white text-xs py-2 mono">AZ-a · Broker 1</div>
+              <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Subnet 10.0.1.0/24</p>
+            </div>
+            <div class="text-center">
+              <div class="ibm-blue-bg text-white text-xs py-2 mono">AZ-b · Broker 2</div>
+              <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Subnet 10.0.2.0/24</p>
+            </div>
+            <div class="text-center">
+              <div class="ibm-blue-bg text-white text-xs py-2 mono">AZ-c · Broker 3</div>
+              <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Subnet 10.0.3.0/24</p>
+            </div>
+          </div>
+          <div class="text-xs mt-2 px-3 py-1 border" style="border-color:var(--ibm-gray-20);color:var(--ibm-gray-50)">Security Group · ports 9092–9098 · TLS</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Properties Table -->
+    <section id="properties" class="mb-12">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">04 — Cluster Properties</span>
+      <h2 class="text-2xl font-light mt-2 mb-2" style="color:var(--ibm-gray-100)">Configuration reference</h2>
+      <p class="text-sm mb-4" style="color:var(--ibm-gray-50)">Filter by name to find any property quickly.</p>
+      <input id="propSearch" type="text" placeholder="Search properties…"
+        class="w-full md:w-80 mb-4 px-3 py-2 border text-sm mono focus:outline-none surface-elevated t-text t-border">
+      <div class="ibm-card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
+              <th class="px-4 py-3">Property</th>
+              <th class="px-4 py-3">Value</th>
+              <th class="px-4 py-3 hidden md:table-cell">Notes</th>
+            </tr>
+          </thead>
+          <tbody id="propTable" style="color:var(--ibm-gray-100)"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Deployment Steps -->
+    <section id="steps" class="mb-12">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Deployment Steps</span>
+      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Execute the deployment</h2>
+      <div id="steps-container" class="space-y-4"></div>
+    </section>
+
+    <!-- Verification -->
+    <section id="verify" class="mb-12">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Verification</span>
+      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Confirm the cluster is live</h2>
+      <div class="ibm-card p-5">
+        <p class="text-sm mb-3" style="color:var(--ibm-gray-100)">Stack status should read <span class="mono ibm-blue">CREATE_COMPLETE</span>. Retrieve broker endpoints:</p>
+        <div class="code-block p-4 relative group">
+          <button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button>
+<pre>aws kafka get-bootstrap-brokers --cluster-arn $ARN</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Rollback -->
+    <section id="rollback" class="mb-12">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">07 — Rollback</span>
+      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Tear down safely</h2>
+      <div class="ibm-card p-5" style="border-left-color:#da1e28">
+        <p class="text-sm mb-3" style="color:var(--ibm-gray-100)">⚠ MSK incurs hourly charges. Delete when finished testing.</p>
+        <div class="code-block p-4 relative">
+          <button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button>
+<pre>aws cloudformation delete-stack --stack-name kafka-stack
+aws cloudformation wait stack-delete-complete --stack-name kafka-stack</pre>
+        </div>
+      </div>
+    </section>
+
+    <footer class="t-border border-t pt-6 mt-12 text-xs flex justify-between t-muted" style="border-top-width:1px">
+      <span>Kafka Deployment Runbook · Internal Documentation</span>
+      <span class="mono">IBM Plex · Carbon palette</span>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+// ---------- Data ----------
+const properties = [
+  {p:"ClusterName", v:"my-kafka-cluster", n:"Unique per environment"},
+  {p:"KafkaVersion", v:"3.6.0", n:"Pin to a tested version"},
+  {p:"NumberOfBrokerNodes", v:"3", n:"Multiple of AZ count"},
+  {p:"InstanceType", v:"kafka.m5.large", n:"Use t3.small for dev"},
+  {p:"EBSVolumeSize", v:"100 GiB", n:"Per broker storage"},
+  {p:"ClientBroker", v:"TLS", n:"In-transit encryption"},
+  {p:"InCluster", v:"true", n:"Broker-to-broker TLS"},
+  {p:"VPC CIDR", v:"10.0.0.0/16", n:"Private network range"},
+  {p:"Ingress Ports", v:"9092–9098", n:"Plaintext/TLS/IAM/SASL"},
+  {p:"EnhancedMonitoring", v:"PER_TOPIC_PER_BROKER", n:"CloudWatch granularity"},
+];
+
+const steps = [
+  {t:"Validate the template", c:"aws cloudformation validate-template \\\n  --template-body file://kafka-cluster.yaml"},
+  {t:"Create the stack", c:"aws cloudformation create-stack \\\n  --stack-name kafka-stack \\\n  --template-body file://kafka-cluster.yaml \\\n  --capabilities CAPABILITY_NAMED_IAM"},
+  {t:"Wait for completion (~25 min)", c:"aws cloudformation wait stack-create-complete \\\n  --stack-name kafka-stack"},
+  {t:"Capture the cluster ARN", c:"ARN=$(aws cloudformation describe-stacks \\\n  --stack-name kafka-stack \\\n  --query \"Stacks[0].Outputs[?OutputKey=='ClusterArn'].OutputValue\" \\\n  --output text)"},
+];
+
+// ---------- Render properties ----------
+const propTable = document.getElementById('propTable');
+function renderProps(filter=""){
+  propTable.innerHTML = "";
+  properties
+    .filter(r => (r.p+r.v+r.n).toLowerCase().includes(filter.toLowerCase()))
+    .forEach(r=>{
+      const tr=document.createElement('tr');
+      tr.className="prop-row t-border";
+      tr.style.borderTop="1px solid var(--border)";
+      tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.p}</td>
+        <td class="px-4 py-3 mono">${r.v}</td>
+        <td class="px-4 py-3 hidden md:table-cell t-muted">${r.n}</td>`;
+      propTable.appendChild(tr);
+    });
+}
+renderProps();
+document.getElementById('propSearch').addEventListener('input', e=>renderProps(e.target.value));
+
+// ---------- Render steps ----------
+const sc = document.getElementById('steps-container');
+steps.forEach((s,i)=>{
+  const div=document.createElement('div');
+  div.className="ibm-card p-5";
+  div.innerHTML=`
+    <div class="flex items-center gap-3 mb-3">
+      <span class="step-num w-7 h-7 flex items-center justify-center text-sm">${i+1}</span>
+      <h3 class="font-medium" style="color:var(--ibm-gray-100)">${s.t}</h3>
+    </div>
+    <div class="code-block p-4 relative">
+      <button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button>
+      <pre>${s.c}</pre>
+    </div>`;
+  sc.appendChild(div);
+});
+
+// ---------- Copy buttons ----------
+document.addEventListener('click', e=>{
+  if(e.target.classList.contains('copy-btn')){
+    const code = e.target.parentElement.querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(()=>{
+      const orig=e.target.innerText;
+      e.target.innerText="copied ✓";
+      setTimeout(()=>e.target.innerText=orig,1200);
+    });
+  }
+});
+
+// ---------- Scroll-spy nav ----------
+const links=[...document.querySelectorAll('.nav-link')];
+const sections=links.map(l=>document.querySelector(l.getAttribute('href')));
+window.addEventListener('scroll',()=>{
+  let idx=sections.length-1;
+  for(let i=0;i<sections.length;i++){
+    if(sections[i].getBoundingClientRect().top>120){idx=i-1;break;}
+  }
+  links.forEach(l=>l.classList.remove('active'));
+  if(idx>=0) links[idx].classList.add('active');
+});
+links.forEach(l=>l.addEventListener('click',e=>{
+  e.preventDefault();
+  document.querySelector(l.getAttribute('href')).scrollIntoView({behavior:'smooth'});
+}));
+
+// ---------- Theme toggle (light default, dark optional) ----------
+const root=document.documentElement;
+const icon=document.getElementById('themeIcon');
+const label=document.getElementById('themeLabel');
+function applyTheme(t){
+  root.setAttribute('data-theme',t);
+  // button shows the theme you'd switch TO
+  icon.textContent = t==='dark' ? '◑' : '◐';
+  label.textContent = t==='dark' ? 'Light' : 'Dark';
+}
+// default to system preference, fall back to light
+let theme = window.matchMedia &&
+  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+applyTheme(theme);
+document.getElementById('themeToggle').addEventListener('click',()=>{
+  theme = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+  applyTheme(theme);
+});
+
+// ---------- Timestamp ----------
+document.getElementById('timestamp').innerText =
+  new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
+</script>
+</body>
+</html>
