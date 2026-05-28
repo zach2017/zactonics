@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Self-Managed Kafka on EC2 — Ansible Runbook</title>
+<title>Kafka on AWS — Comprehensive Ansible Deployment Runbook</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -11,19 +11,17 @@
   :root, [data-theme="light"]{
     --bg:#ffffff; --bg-elevated:#ffffff; --text:#161616; --text-muted:#6f6f6f;
     --border:#e0e0e0; --accent:#0f62fe; --accent-strong:#0043ce; --accent-soft:#edf5ff;
-    --code-bg:#001141; --code-text:#e0e8ff; }
+    --code-bg:#001141; --code-text:#e0e8ff; --overlay:rgba(22,22,22,.45); }
   [data-theme="dark"]{
     --bg:#161616; --bg-elevated:#262626; --text:#f4f4f4; --text-muted:#a8a8a8;
     --border:#393939; --accent:#78a9ff; --accent-strong:#a6c8ff; --accent-soft:#1f2a44;
-    --code-bg:#000000; --code-text:#c6d4ff; }
+    --code-bg:#000000; --code-text:#c6d4ff; --overlay:rgba(0,0,0,.6); }
   :root, [data-theme]{ --ibm-gray-100:var(--text); --ibm-gray-50:var(--text-muted); --ibm-gray-20:var(--border); }
   body{ font-family:'IBM Plex Sans',sans-serif; color:var(--text); background:var(--bg);
         transition:background .25s ease, color .25s ease; }
   .mono{font-family:'IBM Plex Mono',monospace;}
-  .ibm-blue{color:var(--accent);}
-  .ibm-blue-bg{background:var(--ibm-blue-60);}
-  .surface{background:var(--bg);}
-  .surface-elevated{background:var(--bg-elevated);}
+  .ibm-blue{color:var(--accent);} .ibm-blue-bg{background:var(--ibm-blue-60);}
+  .surface{background:var(--bg);} .surface-elevated{background:var(--bg-elevated);}
   .t-text{color:var(--text);} .t-muted{color:var(--text-muted);} .t-border{border-color:var(--border)!important;}
   .ibm-card{ background:var(--bg-elevated); border:1px solid var(--border); border-left:3px solid var(--accent);
     transition:border-color .2s ease, box-shadow .2s ease, background .25s ease; }
@@ -33,17 +31,35 @@
   .code-block pre{white-space:pre; margin:0;}
   .nav-link{border-left:2px solid transparent;transition:all .15s ease;color:var(--text-muted);}
   .nav-link:hover,.nav-link.active{border-left-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);}
-  .nav-sub{font-size:.78rem;padding-left:1.4rem;}
   .step-num{background:var(--ibm-blue-60);color:#fff;font-family:'IBM Plex Mono',monospace;}
   .copy-btn{transition:all .15s ease;} .copy-btn:hover{background:var(--ibm-blue-70);}
   .fade-in{animation:fade .5s ease both;} @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
   ::selection{background:var(--accent);color:var(--bg);}
-  .prop-row:hover{background:var(--accent-soft);}
   .status-dot{width:8px;height:8px;border-radius:50%;}
   .theme-toggle{border:1px solid var(--border);color:var(--text);transition:all .15s ease;}
   .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
   .filetree{font-size:.8rem;line-height:1.7;}
   h2 code,p code,li code,td code{font-family:'IBM Plex Mono',monospace;font-size:.85em;color:var(--accent);}
+  a.ref{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent);}
+  a.ref:hover{border-bottom-style:solid;}
+  .info-btn{ font-size:.7rem; border:1px solid var(--accent); color:var(--accent); padding:2px 9px;
+    cursor:pointer; transition:all .15s ease; white-space:nowrap; }
+  .info-btn:hover{ background:var(--accent); color:var(--bg); }
+  /* Modal */
+  .modal-overlay{ position:fixed; inset:0; background:var(--overlay); display:none;
+    align-items:center; justify-content:center; z-index:60; padding:1rem; }
+  .modal-overlay.open{display:flex;animation:fade .2s ease both;}
+  .modal{ background:var(--bg-elevated); border:1px solid var(--border); border-top:4px solid var(--accent);
+    max-width:640px; width:100%; max-height:82vh; overflow-y:auto; padding:1.75rem 2rem; }
+  .modal h3{font-size:1.3rem;font-weight:600;color:var(--text);margin-bottom:.25rem;}
+  .modal .modal-tag{font-size:.7rem;}
+  .modal p{color:var(--text);font-size:.9rem;line-height:1.65;margin-top:.75rem;}
+  .modal ul{margin-top:.6rem;}
+  .modal li{color:var(--text);font-size:.88rem;line-height:1.55;margin:.3rem 0 .3rem 1rem;list-style:disc;}
+  .modal-close{ float:right; cursor:pointer; border:1px solid var(--border); width:30px;height:30px;
+    display:flex;align-items:center;justify-content:center;color:var(--text-muted); }
+  .modal-close:hover{border-color:var(--accent);color:var(--accent);}
+  .mode-badge{font-size:.66rem;padding:2px 8px;border:1px solid var(--accent);color:var(--accent);}
 </style>
 </head>
 <body class="antialiased">
@@ -53,12 +69,12 @@
     <div class="flex items-center gap-3">
       <div class="ibm-blue-bg w-9 h-9 flex items-center justify-center"><span class="text-white mono font-bold text-lg">K</span></div>
       <div>
-        <h1 class="text-lg font-semibold t-text">Self-Managed Kafka on EC2 — Ansible Runbook</h1>
-        <p class="text-xs t-muted">Base Amazon Linux AMI · KRaft mode · systemd · no MSK</p>
+        <h1 class="text-lg font-semibold t-text">Kafka on AWS — Comprehensive Deployment Runbook</h1>
+        <p class="text-xs t-muted">Ansible · CloudFormation · KRaft (Kafka 4.x) · two install modes</p>
       </div>
     </div>
     <div class="flex items-center gap-4">
-      <div class="hidden md:flex items-center gap-2 text-xs mono"><span class="status-dot" style="background:#24a148"></span><span class="t-muted">SELF-MANAGED</span></div>
+      <div class="hidden md:flex items-center gap-2 text-xs mono"><span class="status-dot" style="background:#24a148"></span><span class="t-muted">PRODUCTION READY</span></div>
       <button id="themeToggle" class="theme-toggle px-3 py-1.5 text-xs mono flex items-center gap-2"><span id="themeIcon">◐</span><span id="themeLabel">Dark</span></button>
     </div>
   </div>
@@ -68,290 +84,283 @@
   <aside class="hidden lg:block w-60 flex-shrink-0 py-8 sticky top-20 self-start" style="max-height:90vh;overflow-y:auto">
     <p class="text-xs uppercase tracking-wider mb-3 font-semibold t-muted">Contents</p>
     <nav id="nav" class="space-y-1 text-sm">
-      <a href="#overview"  class="nav-link active block px-3 py-2">Overview</a>
-      <a href="#diff"      class="nav-link block px-3 py-2">MSK vs Self-Managed</a>
-      <a href="#arch"      class="nav-link block px-3 py-2">Architecture</a>
-      <a href="#control"   class="nav-link block px-3 py-2">1 · Control Node</a>
-      <a href="#provision" class="nav-link block px-3 py-2">2 · Provision EC2</a>
-      <a href="#inventory" class="nav-link block px-3 py-2">3 · Inventory</a>
-      <a href="#role"      class="nav-link block px-3 py-2">4 · Kafka Role</a>
-      <a href="#install"   class="nav-link nav-sub block px-3 py-1">install tasks</a>
-      <a href="#serverprops"class="nav-link nav-sub block px-3 py-1">server.properties</a>
-      <a href="#systemd"   class="nav-link nav-sub block px-3 py-1">systemd unit</a>
-      <a href="#playbook"  class="nav-link block px-3 py-2">5 · Site Playbook</a>
-      <a href="#run"       class="nav-link block px-3 py-2">6 · Run It</a>
-      <a href="#health"    class="nav-link block px-3 py-2">7 · Health Checks</a>
-      <a href="#client"    class="nav-link block px-3 py-2">8 · Python Client</a>
+      <a href="#background" class="nav-link active block px-3 py-2">Background</a>
+      <a href="#modes"      class="nav-link block px-3 py-2">The Two Install Modes</a>
+      <a href="#arch"       class="nav-link block px-3 py-2">Architecture</a>
+      <a href="#modeA"      class="nav-link block px-3 py-2">Mode A · Single Server</a>
+      <a href="#modeB"      class="nav-link block px-3 py-2">Mode B · CFN Cluster</a>
+      <a href="#cfn"        class="nav-link block px-3 py-2" style="padding-left:1.4rem;font-size:.78rem">CloudFormation</a>
+      <a href="#controller" class="nav-link block px-3 py-2" style="padding-left:1.4rem;font-size:.78rem">Controller bootstrap</a>
+      <a href="#role"       class="nav-link block px-3 py-2" style="padding-left:1.4rem;font-size:.78rem">Kafka role</a>
+      <a href="#run"        class="nav-link block px-3 py-2">Run It</a>
+      <a href="#health"     class="nav-link block px-3 py-2">Health Checks</a>
+      <a href="#client"     class="nav-link block px-3 py-2">Python Client</a>
+      <a href="#refs"       class="nav-link block px-3 py-2">References</a>
     </nav>
     <div class="mt-6 ibm-card p-3 text-xs t-muted"><p class="font-semibold mb-1 ibm-blue">Last verified</p><p class="mono" id="timestamp">—</p></div>
   </aside>
 
   <main class="flex-1 py-8 min-w-0">
 
-    <section id="overview" class="mb-14 fade-in">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">00 — Overview</span>
-      <h2 class="text-3xl font-light mt-2 mb-4 t-text">Install Kafka onto raw EC2 with Ansible</h2>
+    <!-- BACKGROUND -->
+    <section id="background" class="mb-14 fade-in">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">00 — Background</span>
+        <h2 class="text-3xl font-light mt-2 mb-4 t-text">What we're building, in plain terms</h2></div>
+        <button class="info-btn mt-3" data-modal="bg">More detail ⓘ</button>
+      </div>
       <p class="leading-relaxed mb-4 t-text">
-        This runbook builds a <strong>self-managed</strong> 3-broker Kafka cluster — you own the servers. Ansible provisions
-        three EC2 instances from a base <code>Amazon Linux 2023</code> AMI, then connects over SSH to install Java and
-        Apache Kafka, render a unique <code>server.properties</code> per broker, and run each broker as a
-        <code>systemd</code> service. Uses <strong>KRaft mode</strong> (no ZooKeeper).
+        <strong>Apache Kafka</strong> is a system for moving streams of messages between programs reliably and fast — think of it
+        as a high-throughput post office where "producers" drop messages into named mailboxes ("topics") and "consumers"
+        pick them up. A <strong>cluster</strong> is several Kafka servers ("brokers") working together so that if one dies, your data
+        and traffic keep flowing.
       </p>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">3</p><p class="text-xs mt-1 t-muted">EC2 brokers</p></div>
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">KRaft</p><p class="text-xs mt-1 t-muted">No ZooKeeper</p></div>
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">SSH</p><p class="text-xs mt-1 t-muted">Ansible transport</p></div>
-        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">systemd</p><p class="text-xs mt-1 t-muted">Service mgmt</p></div>
+      <p class="leading-relaxed mb-4 t-text">
+        We use two tools to build it. <strong>CloudFormation</strong> is AWS's "infrastructure as code" — you write a file describing
+        the servers you want and AWS creates them. <strong>Ansible</strong> is a configuration tool — once the servers exist, Ansible
+        logs into each one over SSH and installs and configures the software. CloudFormation makes the boxes; Ansible turns
+        the boxes into Kafka brokers.
+      </p>
+      <div class="ibm-card p-4 text-sm t-text" style="border-left-color:#24a148">
+        <strong class="ibm-blue">Modern note:</strong> Since <strong>Kafka 4.0 (March 2025)</strong>, ZooKeeper is gone. Kafka now manages
+        its own coordination with <strong>KRaft</strong>, so there's one less moving part. This runbook uses KRaft throughout.
       </div>
     </section>
 
-    <section id="diff" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">00b — Context</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Self-managed vs. MSK</h2>
-      <div class="ibm-card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead><tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
-            <th class="px-4 py-3">Aspect</th><th class="px-4 py-3">Self-managed (this doc)</th><th class="px-4 py-3 hidden md:table-cell">MSK</th></tr></thead>
-          <tbody id="diffTable" class="t-text"></tbody>
-        </table>
+    <!-- MODES -->
+    <section id="modes" class="mb-14">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Two Modes</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text">Two ways to install, one shared role</h2></div>
+        <button class="info-btn mt-3" data-modal="modes">More detail ⓘ</button>
       </div>
-    </section>
-
-    <section id="arch" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">00c — Architecture</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Topology</h2>
-      <div class="ibm-card p-6">
-        <div class="flex flex-col items-center gap-4">
-          <div class="border-2 px-4 py-2 text-sm mono" style="border-color:var(--ibm-blue-40);color:var(--accent-strong)">Ansible Control Node (your laptop)</div>
-          <div class="text-xs t-muted">↓ SSH (port 22) over the VPC ↓</div>
-          <div class="grid grid-cols-3 gap-4 w-full">
-            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">EC2 · broker.id 1</div><p class="text-xs mt-1 t-muted">node.id 1 · AZ-a</p></div>
-            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">EC2 · broker.id 2</div><p class="text-xs mt-1 t-muted">node.id 2 · AZ-b</p></div>
-            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">EC2 · broker.id 3</div><p class="text-xs mt-1 t-muted">node.id 3 · AZ-c</p></div>
-          </div>
-          <div class="text-xs mt-2 px-3 py-1 border t-border t-muted">KRaft quorum · controllers + brokers · port 9092 (client) / 9093 (controller)</div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="ibm-card p-5">
+          <span class="mode-badge">MODE A</span>
+          <h3 class="font-medium t-text mt-3 mb-2">Single Kafka server from one Ansible command</h3>
+          <p class="text-sm t-muted">An Ansible playbook spins up <strong>one</strong> EC2 instance and installs a single-node Kafka
+          broker on it. Fastest way to get a working Kafka for development or a demo. One command, one box.</p>
+        </div>
+        <div class="ibm-card p-5">
+          <span class="mode-badge">MODE B</span>
+          <h3 class="font-medium t-text mt-3 mb-2">CloudFormation cluster + Ansible controller</h3>
+          <p class="text-sm t-muted">CloudFormation provisions a <strong>controller</strong> EC2 (the Ansible "command" box) plus a
+          <strong>cluster</strong> of 3 base EC2 brokers. The controller then runs Ansible to install Kafka on all three. This is
+          the production-grade pattern.</p>
         </div>
       </div>
     </section>
 
-    <section id="control" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Control Node</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Prepare the Ansible control machine</h2>
-      <div class="ibm-card p-5 mb-4">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">Install Ansible + AWS deps</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>sudo apt-get update && sudo apt-get install -y python3-pip git
-python3 -m pip install --user ansible boto3 botocore kafka-python
-ansible-galaxy collection install amazon.aws community.general
-ansible --version</pre></div>
-      </div>
-      <div class="ibm-card p-5">
-        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">AWS creds + SSH key</h3></div>
-        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws configure --profile kafka     # keys + region
-export AWS_PROFILE=kafka
-
-aws ec2 create-key-pair --key-name kafka-key \
-  --query 'KeyMaterial' --output text > ~/.ssh/kafka-key.pem
-chmod 400 ~/.ssh/kafka-key.pem</pre></div>
+    <!-- ARCH -->
+    <section id="arch" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — Architecture (Mode B)</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">How the pieces connect</h2>
+      <div class="ibm-card p-6">
+        <div class="flex flex-col items-center gap-4">
+          <div class="border-2 px-4 py-2 text-sm mono text-center" style="border-color:var(--ibm-blue-40);color:var(--accent-strong)">
+            CloudFormation Stack<br><span class="text-xs t-muted">creates everything below</span>
+          </div>
+          <div class="text-xs t-muted">↓</div>
+          <div class="border-2 px-4 py-2 text-sm mono" style="border-color:#24a148;color:#24a148">Ansible Controller EC2 (the "cmd" box)</div>
+          <div class="text-xs t-muted">↓ SSH + Ansible installs Kafka on each ↓</div>
+          <div class="grid grid-cols-3 gap-4 w-full">
+            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">Broker 1</div><p class="text-xs mt-1 t-muted">node.id 1 · AZ-a</p></div>
+            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">Broker 2</div><p class="text-xs mt-1 t-muted">node.id 2 · AZ-b</p></div>
+            <div class="text-center"><div class="ibm-blue-bg text-white text-xs py-2 mono">Broker 3</div><p class="text-xs mt-1 t-muted">node.id 3 · AZ-c</p></div>
+          </div>
+          <div class="text-xs mt-2 px-3 py-1 border t-border t-muted">KRaft quorum · client port 9092 · controller port 9093</div>
+        </div>
       </div>
     </section>
 
-    <section id="provision" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — Provision EC2</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Launch three base instances with Ansible</h2>
-      <p class="text-sm mb-3 t-text">Save as <code>playbooks/provision.yml</code>. Creates a security group and three EC2 instances from the base Amazon Linux 2023 AMI.</p>
+    <!-- MODE A -->
+    <section id="modeA" class="mb-14">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Mode A</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text">Single server from one Ansible command</h2></div>
+        <button class="info-btn mt-3" data-modal="modeA">More detail ⓘ</button>
+      </div>
+      <p class="text-sm mb-3 t-text">One playbook does both jobs: create the EC2 instance, then (using <code>add_host</code> to register it
+      on the fly) install Kafka. Save as <code>single-server.yml</code>.</p>
       <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
-- name: Provision Kafka EC2 instances
+- name: MODE A — provision one EC2 and install Kafka
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     region: us-east-1
     keypair: kafka-key
-    instance_type: t3.medium
-    ami: ami-0abcdef1234567890   # Amazon Linux 2023 in your region
   tasks:
-    - name: Security group for Kafka
-      amazon.aws.ec2_security_group:
-        name: kafka-sg
-        description: Kafka self-managed
+    - name: Look up latest Amazon Linux 2023 AMI
+      amazon.aws.ec2_ami_info:
+        owners: amazon
+        filters:
+          name: "al2023-ami-*-x86_64"
+          state: available
         region: "{{ region }}"
-        rules:
-          - { proto: tcp, ports: [22],          cidr_ip: 0.0.0.0/0 }   # SSH (lock down in prod)
-          - { proto: tcp, ports: [9092,9093],   cidr_ip: 10.0.0.0/16 } # client + controller
-      register: sg
+      register: amis
 
-    - name: Launch 3 broker instances
+    - name: Launch single Kafka EC2
       amazon.aws.ec2_instance:
-        name: "kafka-broker-{{ item }}"
+        name: kafka-single
         region: "{{ region }}"
         key_name: "{{ keypair }}"
-        instance_type: "{{ instance_type }}"
-        image_id: "{{ ami }}"
-        security_group: "{{ sg.group_id }}"
+        instance_type: t3.medium
+        image_id: "{{ (amis.images | sort(attribute='creation_date') | last).image_id }}"
+        security_group: kafka-sg
         network: { assign_public_ip: true }
-        tags: { role: kafka, broker_id: "{{ item }}" }
+        tags: { role: kafka, broker_id: "1" }
         wait: true
-        count: 1
-      loop: [1, 2, 3]
-      register: ec2</pre></div>
-      <p class="text-sm mt-3 t-muted">In production you'd place these in private subnets behind a bastion; public IPs here keep the demo simple.</p>
+      register: ec2
+
+    - name: Register the new host for the next play
+      ansible.builtin.add_host:
+        name: "{{ ec2.instances[0].public_ip_address }}"
+        groups: kafka
+        broker_id: "1"
+        ansible_user: ec2-user
+        ansible_ssh_private_key_file: ~/.ssh/kafka-key.pem
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+    - name: Wait for SSH
+      ansible.builtin.wait_for:
+        host: "{{ ec2.instances[0].public_ip_address }}"
+        port: 22
+        timeout: 180
+
+- name: Install Kafka on the new instance
+  hosts: kafka
+  become: true
+  vars: { single_node: true }
+  roles:
+    - kafka</pre></div>
+      <p class="text-sm mt-3 mb-2 t-muted">Run it — one command, fully working broker:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>ansible-playbook single-server.yml</pre></div>
     </section>
 
-    <section id="inventory" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Inventory</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Dynamic inventory from EC2 tags</h2>
-      <p class="text-sm mb-3 t-text">Save as <code>inventory/aws_ec2.yml</code>. Ansible discovers brokers by their <code>role: kafka</code> tag — no hand-editing IPs.</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>plugin: amazon.aws.aws_ec2
+    <!-- MODE B -->
+    <section id="modeB" class="mb-14">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">04 — Mode B</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text">CloudFormation cluster + Ansible controller</h2></div>
+        <button class="info-btn mt-3" data-modal="modeB">More detail ⓘ</button>
+      </div>
+      <p class="text-sm t-text">CloudFormation builds a controller box and three broker boxes. The controller's <code>UserData</code>
+      installs Ansible and runs the playbook automatically on first boot.</p>
+    </section>
+
+    <!-- CFN -->
+    <section id="cfn" class="mb-14">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">04a — CloudFormation</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>cluster.yaml</code></h2></div>
+        <button class="info-btn mt-3" data-modal="cfn">More detail ⓘ</button>
+      </div>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>AWSTemplateFormatVersion: '2010-09-09'
+Description: Kafka controller + 3 base EC2 brokers (Ansible installs Kafka)
+
+Parameters:
+  KeyName: { Type: AWS::EC2::KeyPair::KeyName }
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  KafkaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Kafka + SSH
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22,   ToPort: 22,   CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 9092, ToPort: 9093, CidrIp: 10.0.0.0/8 }
+
+  # Role lets the controller read EC2 (for dynamic inventory)
+  ControllerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{ Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }]
+      ManagedPolicyArns: [ arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess ]
+  ControllerProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [ !Ref ControllerRole ] }
+
+  Broker1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: t3.medium
+      KeyName: !Ref KeyName
+      SecurityGroupIds: [ !Ref KafkaSG ]
+      Tags: [ { Key: role, Value: kafka }, { Key: broker_id, Value: '1' } ]
+  Broker2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: t3.medium
+      KeyName: !Ref KeyName
+      SecurityGroupIds: [ !Ref KafkaSG ]
+      Tags: [ { Key: role, Value: kafka }, { Key: broker_id, Value: '2' } ]
+  Broker3:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: t3.medium
+      KeyName: !Ref KeyName
+      SecurityGroupIds: [ !Ref KafkaSG ]
+      Tags: [ { Key: role, Value: kafka }, { Key: broker_id, Value: '3' } ]
+
+  Controller:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: t3.small
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref ControllerProfile
+      SecurityGroupIds: [ !Ref KafkaSG ]
+      Tags: [ { Key: role, Value: ansible-controller } ]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf install -y python3-pip git
+          pip3 install ansible boto3 botocore
+          ansible-galaxy collection install amazon.aws
+          git clone https://example.com/your/kafka-ansible.git /opt/kafka-ansible
+          cd /opt/kafka-ansible
+          # wait for brokers to be SSH-ready, then configure them
+          ansible-playbook -i inventory/aws_ec2.yml site.yml
+
+Outputs:
+  ControllerIp: { Value: !GetAtt Controller.PublicIp }
+  Broker1Ip:    { Value: !GetAtt Broker1.PublicIp }</pre></div>
+      <p class="text-sm mt-3 mb-2 t-muted">Deploy the stack:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws cloudformation create-stack --stack-name kafka-cluster \
+  --template-body file://cluster.yaml \
+  --parameters ParameterKey=KeyName,ParameterValue=kafka-key \
+  --capabilities CAPABILITY_IAM</pre></div>
+    </section>
+
+    <!-- CONTROLLER -->
+    <section id="controller" class="mb-14">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">04b — Controller</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text">Dynamic inventory + site playbook</h2></div>
+        <button class="info-btn mt-3" data-modal="controller">More detail ⓘ</button>
+      </div>
+      <p class="text-sm mb-2 t-muted"><code>inventory/aws_ec2.yml</code> — finds brokers by tag, no hardcoded IPs (<a class="ref" href="https://docs.ansible.com/projects/ansible/latest/collections/amazon/aws/docsite/aws_ec2_guide.html" target="_blank">Ansible docs</a>):</p>
+      <div class="code-block p-4 relative mb-4"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>plugin: amazon.aws.aws_ec2
 regions: [ us-east-1 ]
 filters:
   tag:role: kafka
   instance-state-name: running
 keyed_groups:
   - key: tags.role
-    prefix: ""
     separator: ""
-hostnames: [ ip-address ]
+hostnames: [ private-ip-address ]   # controller talks over private network
 compose:
-  ansible_host: public_ip_address
+  ansible_host: private_ip_address
   broker_id: tags.broker_id</pre></div>
-      <p class="text-sm mt-3 mb-2 t-muted">Group vars — <code>inventory/group_vars/kafka.yml</code>:</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>ansible_user: ec2-user
-ansible_ssh_private_key_file: ~/.ssh/kafka-key.pem
-ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-kafka_version: "3.7.0"
-kafka_scala: "2.13"</pre></div>
-    </section>
-
-    <section id="role" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">04 — Kafka Role</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">The reusable install role</h2>
-      <p class="text-sm mb-3 t-muted">Standard Ansible role layout under <code>roles/kafka/</code>:</p>
-      <div class="filetree mono ibm-card p-4 t-text mb-2">
-roles/kafka/<br>
-├── <span class="ibm-blue">tasks/</span>main.yml<br>
-├── <span class="ibm-blue">templates/</span>server.properties.j2<br>
-├── <span class="ibm-blue">templates/</span>kafka.service.j2<br>
-└── <span class="ibm-blue">handlers/</span>main.yml
-      </div>
-    </section>
-
-    <section id="install" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">04a — Install Tasks</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>roles/kafka/tasks/main.yml</code></h2>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
-- name: Install Java 17
-  ansible.builtin.dnf: { name: java-17-amazon-corretto-headless, state: present }
-  become: true
-
-- name: Create kafka system user
-  ansible.builtin.user: { name: kafka, system: true, shell: /sbin/nologin }
-  become: true
-
-- name: Download Kafka
-  ansible.builtin.get_url:
-    url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ kafka_scala }}-{{ kafka_version }}.tgz"
-    dest: /tmp/kafka.tgz
-  become: true
-
-- name: Unpack to /opt/kafka
-  ansible.builtin.unarchive:
-    src: /tmp/kafka.tgz
-    dest: /opt/
-    remote_src: true
-    creates: "/opt/kafka_{{ kafka_scala }}-{{ kafka_version }}"
-  become: true
-
-- name: Symlink /opt/kafka
-  ansible.builtin.file:
-    src: "/opt/kafka_{{ kafka_scala }}-{{ kafka_version }}"
-    dest: /opt/kafka
-    state: link
-  become: true
-
-- name: Create data + log dirs
-  ansible.builtin.file: { path: "{{ item }}", state: directory, owner: kafka, group: kafka }
-  loop: [ /var/lib/kafka, /var/log/kafka ]
-  become: true
-
-- name: Render server.properties
-  ansible.builtin.template:
-    src: server.properties.j2
-    dest: /opt/kafka/config/kraft/server.properties
-    owner: kafka
-  become: true
-  notify: restart kafka
-
-- name: Format KRaft storage (idempotent)
-  ansible.builtin.shell: |
-    if [ ! -f /var/lib/kafka/meta.properties ]; then
-      KAFKA_CLUSTER_ID=$(/opt/kafka/bin/kafka-storage.sh random-uuid)
-      /opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID \
-        -c /opt/kafka/config/kraft/server.properties
-    fi
-  args: { creates: /var/lib/kafka/meta.properties }
-  become: true
-
-- name: Install systemd unit
-  ansible.builtin.template: { src: kafka.service.j2, dest: /etc/systemd/system/kafka.service }
-  become: true
-  notify: restart kafka
-
-- name: Enable + start Kafka
-  ansible.builtin.systemd: { name: kafka, enabled: true, state: started, daemon_reload: true }
-  become: true</pre></div>
-    </section>
-
-    <section id="serverprops" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">04b — Broker Config</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>templates/server.properties.j2</code></h2>
-      <p class="text-sm mb-3 t-muted">Each broker gets a unique <code>node.id</code> and the full controller quorum list. Jinja2 fills these from inventory.</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># --- KRaft combined broker+controller ---
-process.roles=broker,controller
-node.id={{ broker_id }}
-
-# Quorum: every broker, built dynamically from the kafka group
-controller.quorum.voters={% for h in groups['kafka'] %}{{ hostvars[h].broker_id }}@{{ hostvars[h].ansible_host }}:9093{% if not loop.last %},{% endif %}{% endfor %}
-
-
-listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-advertised.listeners=PLAINTEXT://{{ ansible_host }}:9092
-controller.listener.names=CONTROLLER
-inter.broker.listener.name=PLAINTEXT
-
-log.dirs=/var/lib/kafka
-num.partitions=3
-default.replication.factor=3
-min.insync.replicas=2
-offsets.topic.replication.factor=3</pre></div>
-    </section>
-
-    <section id="systemd" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">04c — Service</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text"><code>templates/kafka.service.j2</code> + handler</h2>
-      <div class="code-block p-4 relative mb-4"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>[Unit]
-Description=Apache Kafka (KRaft)
-After=network.target
-
-[Service]
-Type=simple
-User=kafka
-ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
-ExecStop=/opt/kafka/bin/kafka-server-stop.sh
-Restart=on-failure
-LimitNOFILE=100000
-
-[Install]
-WantedBy=multi-user.target</pre></div>
-      <p class="text-sm mb-2 t-muted"><code>roles/kafka/handlers/main.yml</code>:</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
-- name: restart kafka
-  ansible.builtin.systemd: { name: kafka, state: restarted, daemon_reload: true }
-  become: true</pre></div>
-    </section>
-
-    <section id="playbook" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Site Playbook</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Tie it together — <code>site.yml</code></h2>
+      <p class="text-sm mb-2 t-muted"><code>site.yml</code>:</p>
       <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
 - name: Configure Kafka brokers
   hosts: kafka
@@ -360,42 +369,118 @@ WantedBy=multi-user.target</pre></div>
     - kafka</pre></div>
     </section>
 
+    <!-- ROLE -->
+    <section id="role" class="mb-14">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">04c — Kafka Role (shared)</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text">Best-practice install role</h2></div>
+        <button class="info-btn mt-3" data-modal="role">More detail ⓘ</button>
+      </div>
+      <p class="text-sm mb-3 t-muted">The <strong>same role</strong> powers both modes. Layout under <code>roles/kafka/</code>:</p>
+      <div class="filetree mono ibm-card p-4 t-text mb-4">
+roles/kafka/<br>
+├── <span class="ibm-blue">tasks/</span>main.yml &nbsp;&nbsp;<span class="t-muted"># install + configure + start</span><br>
+├── <span class="ibm-blue">templates/</span>server.properties.j2<br>
+├── <span class="ibm-blue">templates/</span>kafka.service.j2<br>
+├── <span class="ibm-blue">handlers/</span>main.yml &nbsp;<span class="t-muted"># restart on config change</span><br>
+└── <span class="ibm-blue">defaults/</span>main.yml &nbsp;<span class="t-muted"># kafka_version etc.</span>
+      </div>
+      <p class="text-sm mb-2 t-muted"><code>tasks/main.yml</code> (KRaft, idempotent):</p>
+      <div class="code-block p-4 relative mb-4"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: Install Java 17
+  ansible.builtin.dnf: { name: java-17-amazon-corretto-headless, state: present }
+
+- name: Create kafka user
+  ansible.builtin.user: { name: kafka, system: true, shell: /sbin/nologin }
+
+- name: Download &amp; unpack Kafka {{ kafka_version }}
+  ansible.builtin.unarchive:
+    src: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_2.13-{{ kafka_version }}.tgz"
+    dest: /opt/
+    remote_src: true
+    creates: "/opt/kafka_2.13-{{ kafka_version }}"
+
+- name: Symlink /opt/kafka
+  ansible.builtin.file:
+    src: "/opt/kafka_2.13-{{ kafka_version }}"
+    dest: /opt/kafka
+    state: link
+
+- name: Data dir
+  ansible.builtin.file: { path: /var/lib/kafka, state: directory, owner: kafka, group: kafka }
+
+- name: Render server.properties
+  ansible.builtin.template:
+    src: server.properties.j2
+    dest: /opt/kafka/config/server.properties
+    owner: kafka
+  notify: restart kafka
+
+- name: Format KRaft storage once
+  ansible.builtin.shell: |
+    KID=$(/opt/kafka/bin/kafka-storage.sh random-uuid)
+    /opt/kafka/bin/kafka-storage.sh format -t $KID \
+      -c /opt/kafka/config/server.properties
+  args: { creates: /var/lib/kafka/meta.properties }
+
+- name: Install systemd unit
+  ansible.builtin.template: { src: kafka.service.j2, dest: /etc/systemd/system/kafka.service }
+  notify: restart kafka
+
+- name: Enable + start
+  ansible.builtin.systemd: { name: kafka, enabled: true, state: started, daemon_reload: true }</pre></div>
+      <p class="text-sm mb-2 t-muted"><code>templates/server.properties.j2</code> — quorum built from inventory:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>process.roles=broker,controller
+node.id={{ broker_id }}
+{% if single_node | default(false) %}
+controller.quorum.voters={{ broker_id }}@localhost:9093
+default.replication.factor=1
+{% else %}
+controller.quorum.voters={% for h in groups['kafka'] %}{{ hostvars[h].broker_id }}@{{ hostvars[h].ansible_host }}:9093{% if not loop.last %},{% endif %}{% endfor %}
+
+default.replication.factor=3
+min.insync.replicas=2
+{% endif %}
+listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+advertised.listeners=PLAINTEXT://{{ ansible_host }}:9092
+controller.listener.names=CONTROLLER
+inter.broker.listener.name=PLAINTEXT
+log.dirs=/var/lib/kafka
+num.partitions=3</pre></div>
+    </section>
+
+    <!-- RUN -->
     <section id="run" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Run It</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Execute end to end</h2>
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Run It</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Commands for each mode</h2>
       <div id="runSteps" class="space-y-3"></div>
     </section>
 
+    <!-- HEALTH -->
     <section id="health" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">07 — Health Checks</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Verify the cluster</h2>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># SSH to broker 1
-ssh -i ~/.ssh/kafka-key.pem ec2-user@&lt;broker1-ip&gt;
-
-# Is the service up?
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Health Checks</span>
+        <h2 class="text-2xl font-light mt-2 mb-4 t-text">Confirm it works</h2></div>
+        <button class="info-btn mt-3" data-modal="health">More detail ⓘ</button>
+      </div>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># service status
 sudo systemctl status kafka --no-pager
 
-# Quorum status (KRaft)
+# KRaft quorum (expect 3 voters, 1 leader)
 /opt/kafka/bin/kafka-metadata-quorum.sh \
   --bootstrap-server localhost:9092 describe --status
 
-# Create a test topic with 3 replicas
+# create + describe a replicated topic
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
-  --create --topic demo-topic --partitions 3 --replication-factor 3
-
-# Confirm it exists and is fully replicated
+  --create --topic demo --partitions 3 --replication-factor 3
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
-  --describe --topic demo-topic</pre></div>
-      <div class="ibm-card p-4 mt-4 text-sm t-text" style="border-left-color:#24a148">
-        <strong class="ibm-blue">Healthy signs:</strong> <code>systemctl</code> shows <em>active (running)</em>,
-        the quorum lists 3 voters with a stable leader, and <code>--describe</code> shows ISR (in-sync replicas) = 3 for every partition.
-      </div>
+  --describe --topic demo   # ISR should list 3 replicas</pre></div>
     </section>
 
+    <!-- CLIENT -->
     <section id="client" class="mb-14">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">08 — Python Client</span>
-      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Round-trip test</h2>
-      <p class="text-sm mb-3 t-text">PLAINTEXT on port 9092 (this demo). Point <code>BROKERS</code> at any broker's reachable IP.</p>
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">07 — Python Client</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Send &amp; receive a message</h2>
       <div class="flex gap-1 mb-3 border-b t-border">
         <button class="tab-btn px-4 py-2 text-sm mono active" data-tab="prod">producer.py</button>
         <button class="tab-btn px-4 py-2 text-sm mono t-muted" data-tab="cons">consumer.py</button>
@@ -403,85 +488,187 @@ sudo systemctl status kafka --no-pager
       <div id="tab-prod" class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>#!/usr/bin/env python3
 import json, time
 from kafka import KafkaProducer
-
-BROKERS = ["&lt;broker1-ip&gt;:9092", "&lt;broker2-ip&gt;:9092", "&lt;broker3-ip&gt;:9092"]
-producer = KafkaProducer(
-    bootstrap_servers=BROKERS,
-    value_serializer=lambda v: json.dumps(v).encode(),
-    acks="all", retries=3,
-)
+p = KafkaProducer(bootstrap_servers=["&lt;broker-ip&gt;:9092"],
+                  value_serializer=lambda v: json.dumps(v).encode(),
+                  acks="all")
 for i in range(10):
-    r = producer.send("demo-topic", {"id": i, "ts": time.time()}).get(timeout=10)
-    print(f"sent id={i} -> p{r.partition} offset {r.offset}")
-producer.flush(); producer.close()
-print("done.")</pre></div>
+    r = p.send("demo", {"id": i, "ts": time.time()}).get(timeout=10)
+    print(f"sent {i} -> p{r.partition} offset {r.offset}")
+p.flush(); p.close()</pre></div>
       <div id="tab-cons" class="code-block p-4 relative" style="display:none"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>#!/usr/bin/env python3
 import json
 from kafka import KafkaConsumer
-
-BROKERS = ["&lt;broker1-ip&gt;:9092", "&lt;broker2-ip&gt;:9092", "&lt;broker3-ip&gt;:9092"]
-consumer = KafkaConsumer(
-    "demo-topic",
-    bootstrap_servers=BROKERS,
-    auto_offset_reset="earliest",
-    group_id="demo-group",
-    value_deserializer=lambda b: json.loads(b.decode()),
-    consumer_timeout_ms=15000,
-)
-print("listening...")
-for m in consumer:
+c = KafkaConsumer("demo", bootstrap_servers=["&lt;broker-ip&gt;:9092"],
+                  auto_offset_reset="earliest", group_id="demo-grp",
+                  value_deserializer=lambda b: json.loads(b.decode()),
+                  consumer_timeout_ms=15000)
+for m in c:
     print(f"recv p{m.partition} offset {m.offset}: {m.value}")
-consumer.close()</pre></div>
-      <p class="text-sm mt-4 mb-2 t-muted">Run consumer first, then producer in a second terminal:</p>
-      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>python3 consumer.py   # terminal 1
-python3 producer.py   # terminal 2</pre></div>
+c.close()</pre></div>
+      <div class="ibm-card p-4 mt-4 text-sm t-text" style="border-left-color:#24a148">
+        <strong class="ibm-blue">Success:</strong> producer prints 10 offset confirmations; consumer prints all 10 messages back. Round-trip proven.
+      </div>
+    </section>
+
+    <!-- REFERENCES -->
+    <section id="refs" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">REF — References</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Further reading</h2>
+      <div class="ibm-card p-5">
+        <ul class="space-y-2 text-sm">
+          <li class="t-text">▸ <a class="ref" href="https://kafka.apache.org/documentation/" target="_blank">Apache Kafka Documentation</a> — official reference</li>
+          <li class="t-text">▸ <a class="ref" href="https://kafka.apache.org/40/getting-started/upgrade/" target="_blank">Kafka 4.0 Upgrade &amp; KRaft notes</a> — ZooKeeper removal</li>
+          <li class="t-text">▸ <a class="ref" href="https://docs.ansible.com/projects/ansible/latest/collections/amazon/aws/docsite/aws_ec2_guide.html" target="_blank">Ansible AWS dynamic inventory guide</a></li>
+          <li class="t-text">▸ <a class="ref" href="https://docs.ansible.com/projects/ansible/latest/collections/amazon/aws/ec2_instance_module.html" target="_blank">amazon.aws.ec2_instance module</a></li>
+          <li class="t-text">▸ <a class="ref" href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html" target="_blank">AWS CloudFormation User Guide</a></li>
+          <li class="t-text">▸ <a class="ref" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank">Amazon MSK</a> — managed alternative to self-hosting</li>
+          <li class="t-text">▸ <a class="ref" href="https://kafka-python.readthedocs.io/" target="_blank">kafka-python client docs</a></li>
+        </ul>
+      </div>
     </section>
 
     <footer class="t-border border-t pt-6 mt-12 text-xs flex justify-between t-muted" style="border-top-width:1px">
-      <span>Self-Managed Kafka Runbook · Internal Documentation</span><span class="mono">IBM Plex · Carbon palette</span>
+      <span>Kafka on AWS · Comprehensive Runbook</span><span class="mono">IBM Plex · Carbon palette</span>
     </footer>
   </main>
 </div>
 
+<!-- Modal container -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox">
+    <div class="modal-close" id="modalClose">✕</div>
+    <span class="modal-tag mono uppercase tracking-wider ibm-blue" id="modalTag"></span>
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
 <script>
-const diffRows=[
-  {a:"Who runs the brokers",s:"You (EC2 + Ansible)",m:"AWS managed service"},
-  {a:"OS / patching",s:"Your responsibility",m:"Handled by AWS"},
-  {a:"Setup effort",s:"Higher — full control",m:"Lower — API call"},
-  {a:"Cost model",s:"EC2 + EBS hourly",m:"MSK broker-hours (premium)"},
-  {a:"Coordination",s:"KRaft (this doc)",m:"AWS-managed"},
-  {a:"Best for",s:"Custom tuning, learning",m:"Hands-off production"},
-];
+// ---------- Modal content for each phase ----------
+const MODALS={
+  bg:{tag:"Background",title:"Why Kafka, and why these tools",body:`
+    <p><strong>Kafka</strong> decouples the programs that produce data from the ones that consume it. A web app can fire
+    "user signed up" events into Kafka without knowing or caring who reads them — analytics, email, fraud detection can all
+    subscribe independently. This is the backbone of event-driven architectures.</p>
+    <p><strong>Brokers</strong> are the servers. <strong>Topics</strong> are named streams. Topics split into
+    <strong>partitions</strong> for parallelism, and each partition is <strong>replicated</strong> across brokers so a single
+    server failure loses nothing.</p>
+    <ul>
+      <li><strong>CloudFormation</strong> = declare infrastructure once; AWS builds and tracks it. Repeatable, version-controlled.</li>
+      <li><strong>Ansible</strong> = agentless config management over SSH. Idempotent: run it ten times, same result.</li>
+      <li><strong>KRaft</strong> = Kafka's built-in Raft consensus. Replaced ZooKeeper in 4.0, removing a whole separate cluster.</li>
+    </ul>`},
+  modes:{tag:"Two Modes",title:"Choosing Mode A vs Mode B",body:`
+    <p><strong>Mode A (single server)</strong> is for learning, local-style dev, and quick experiments. One EC2, one broker,
+    replication factor 1. It comes up in a couple of minutes from a single command. Not fault-tolerant — if the box dies,
+    Kafka is down.</p>
+    <p><strong>Mode B (cluster)</strong> mirrors production. CloudFormation creates a dedicated <em>controller</em> instance whose
+    only job is to run Ansible, plus three <em>broker</em> instances. The controller discovers the brokers via dynamic
+    inventory and configures all three into one KRaft cluster with replication factor 3.</p>
+    <ul>
+      <li>The <strong>same Ansible role</strong> serves both — a Jinja2 <code>if single_node</code> switch flips replication and quorum settings.</li>
+      <li>Separating the controller from the brokers is best practice: the box that holds your AWS credentials and orchestration logic isn't also serving live traffic.</li>
+    </ul>`},
+  modeA:{tag:"Mode A",title:"How the single-command install works",body:`
+    <p>The playbook has two plays. The <strong>first</strong> runs on your laptop (<code>localhost</code>): it looks up the newest
+    Amazon Linux AMI, launches one EC2, then uses the special <code>add_host</code> module to inject that brand-new instance's
+    IP into Ansible's in-memory inventory.</p>
+    <p>The <strong>second</strong> play then targets that freshly-registered host and applies the Kafka role over SSH. Because the
+    host was added mid-run, you never touch an inventory file — the whole thing is one fluid command.</p>
+    <ul>
+      <li><code>wait_for port:22</code> pauses until the new box accepts SSH, avoiding "connection refused" races.</li>
+      <li><code>single_node: true</code> tells the role's template to use a one-voter quorum and replication factor 1.</li>
+    </ul>`},
+  modeB:{tag:"Mode B",title:"The controller pattern explained",body:`
+    <p>This is the heart of your request: a CloudFormation-provisioned <strong>Ansible command instance</strong> that installs Kafka
+    onto a CloudFormation-provisioned <strong>cluster of base servers</strong>.</p>
+    <p>CloudFormation creates four EC2s and an IAM role. The controller boots, and its <code>UserData</code> script installs Ansible,
+    clones your playbook repo, and runs it. The playbook uses dynamic inventory to find the three brokers by their
+    <code>role: kafka</code> tag and configures them into a cluster — all without a human SSHing in.</p>
+    <ul>
+      <li>The controller gets an <strong>IAM role</strong> (EC2 read-only) so the dynamic inventory plugin can query AWS without stored keys.</li>
+      <li>Brokers are plain base images at creation — they become Kafka brokers only after Ansible runs. Clean separation of "infra" and "config".</li>
+      <li>Re-running the playbook later picks up config changes safely (idempotent).</li>
+    </ul>`},
+  cfn:{tag:"CloudFormation",title:"What the template provisions",body:`
+    <p>The template declares: a <strong>security group</strong> (SSH + Kafka ports), an <strong>IAM role + instance profile</strong> for the
+    controller, three <strong>broker</strong> instances tagged <code>role: kafka</code>, and one <strong>controller</strong> instance tagged
+    <code>role: ansible-controller</code>.</p>
+    <p>The <code>LatestAmi</code> parameter uses an <strong>SSM public parameter</strong> that always resolves to the newest Amazon Linux 2023
+    image — so you never paste a stale AMI ID.</p>
+    <ul>
+      <li><code>UserData</code> runs once on first boot as root; here it bootstraps Ansible and kicks off configuration.</li>
+      <li><code>CAPABILITY_IAM</code> is required because the stack creates an IAM role.</li>
+      <li>In production, put brokers in <strong>private subnets</strong> and the controller in a public/bastion subnet; restrict the SG to known CIDRs.</li>
+    </ul>`},
+  controller:{tag:"Controller",title:"Dynamic inventory: no hardcoded IPs",body:`
+    <p>Static host files rot the moment AWS hands out new IPs. The <code>aws_ec2</code> plugin instead <strong>queries the EC2 API at
+    runtime</strong> and builds the inventory live, filtering to instances tagged <code>role: kafka</code> that are running.</p>
+    <p>It groups them, sets each host's <code>ansible_host</code> to the private IP (controller and brokers talk on the internal
+    network), and exposes the <code>broker_id</code> tag so the config template can assign unique node IDs.</p>
+    <ul>
+      <li>Verify with <code>ansible-inventory -i inventory/aws_ec2.yml --graph</code> before running.</li>
+      <li>Because it's tag-based, adding a 4th broker is just launching another tagged instance and re-running.</li>
+    </ul>`},
+  role:{tag:"Kafka Role",title:"Best-practice role design",body:`
+    <p>A <strong>role</strong> bundles tasks, templates, handlers, and defaults into a reusable unit. Keeping install logic in a role
+    (rather than one giant playbook) means both modes share identical, tested configuration code.</p>
+    <ul>
+      <li><strong>Idempotency:</strong> <code>creates:</code> guards and <code>unarchive</code> checks mean re-runs don't re-download or re-format storage — critical, since formatting KRaft storage twice would wipe data.</li>
+      <li><strong>Handlers:</strong> the template task <code>notify</code>s "restart kafka" only when the config actually changes, so brokers aren't needlessly bounced.</li>
+      <li><strong>Templating:</strong> the quorum voter list is generated by looping over the inventory group, so the cluster self-assembles regardless of broker count.</li>
+      <li><strong>systemd:</strong> running Kafka as a unit gives you auto-restart on failure and start-on-boot.</li>
+    </ul>`},
+  health:{tag:"Health Checks",title:"What healthy looks like",body:`
+    <p>Three signals confirm a working cluster:</p>
+    <ul>
+      <li><strong>systemd</strong> reports <em>active (running)</em> on every broker.</li>
+      <li><strong>KRaft quorum</strong> (<code>kafka-metadata-quorum.sh</code>) lists all voters with one stable <em>leader</em> and the rest as <em>followers</em>, with a current <em>LogEndOffset</em> advancing.</li>
+      <li><strong>Topic describe</strong> shows the in-sync replica set (ISR) equals the replication factor for every partition — meaning all copies are caught up.</li>
+    </ul>
+    <p>If ISR is smaller than the replication factor, a broker is lagging or down — check its service and network reachability on ports 9092/9093.</p>`},
+};
+
+const overlay=document.getElementById('modalOverlay');
+function openModal(k){const m=MODALS[k];if(!m)return;document.getElementById('modalTag').textContent=m.tag;document.getElementById('modalTitle').textContent=m.title;document.getElementById('modalBody').innerHTML=m.body;overlay.classList.add('open');}
+function closeModal(){overlay.classList.remove('open');}
+document.querySelectorAll('.info-btn').forEach(b=>b.addEventListener('click',()=>openModal(b.dataset.modal)));
+document.getElementById('modalClose').addEventListener('click',closeModal);
+overlay.addEventListener('click',e=>{if(e.target===overlay)closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+// ---------- Run steps ----------
 const runSteps=[
-  {t:"Provision the instances",c:"ansible-playbook playbooks/provision.yml"},
-  {t:"Confirm dynamic inventory sees them",c:"ansible-inventory -i inventory/aws_ec2.yml --graph"},
-  {t:"Install + configure + start Kafka",c:"ansible-playbook -i inventory/aws_ec2.yml site.yml"},
-  {t:"Re-run anytime — it's idempotent",c:"ansible-playbook -i inventory/aws_ec2.yml site.yml --check"},
+  {t:"Mode A — single server (one command)",c:"ansible-playbook single-server.yml"},
+  {t:"Mode B — deploy the CloudFormation stack",c:"aws cloudformation create-stack --stack-name kafka-cluster \\\n  --template-body file://cluster.yaml \\\n  --parameters ParameterKey=KeyName,ParameterValue=kafka-key \\\n  --capabilities CAPABILITY_IAM"},
+  {t:"Mode B — controller auto-runs Ansible on boot",c:"# nothing to do — UserData runs:\n#   ansible-playbook -i inventory/aws_ec2.yml site.yml"},
+  {t:"Mode B — or run it manually from the controller",c:"ssh -i ~/.ssh/kafka-key.pem ec2-user@<controller-ip>\ncd /opt/kafka-ansible\nansible-playbook -i inventory/aws_ec2.yml site.yml"},
 ];
-
-const diffTable=document.getElementById('diffTable');
-diffRows.forEach(r=>{const tr=document.createElement('tr');tr.className="prop-row";tr.style.borderTop="1px solid var(--border)";tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.a}</td><td class="px-4 py-3">${r.s}</td><td class="px-4 py-3 hidden md:table-cell t-muted">${r.m}</td>`;diffTable.appendChild(tr);});
-
 const rs=document.getElementById('runSteps');
 runSteps.forEach((s,i)=>{const d=document.createElement('div');d.className="ibm-card p-4";d.innerHTML=`<div class="flex items-center gap-3 mb-2"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">${i+1}</span><h3 class="font-medium t-text">${s.t}</h3></div><div class="code-block p-3 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>${s.c}</pre></div>`;rs.appendChild(d);});
 
+// tabs
 document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>{x.classList.remove('active');x.classList.add('t-muted');});b.classList.add('active');b.classList.remove('t-muted');document.getElementById('tab-prod').style.display=b.dataset.tab==='prod'?'block':'none';document.getElementById('tab-cons').style.display=b.dataset.tab==='cons'?'block':'none';}));
 
+// copy
 document.addEventListener('click',e=>{if(e.target.classList.contains('copy-btn')){const code=e.target.parentElement.querySelector('pre').innerText;navigator.clipboard.writeText(code).then(()=>{const o=e.target.innerText;e.target.innerText="copied ✓";setTimeout(()=>e.target.innerText=o,1200);});}});
 
+// scroll-spy
 const links=[...document.querySelectorAll('.nav-link')];
 const secs=links.map(l=>document.querySelector(l.getAttribute('href')));
 window.addEventListener('scroll',()=>{let idx=secs.length-1;for(let i=0;i<secs.length;i++){if(secs[i]&&secs[i].getBoundingClientRect().top>140){idx=i-1;break;}}links.forEach(l=>l.classList.remove('active'));if(idx>=0)links[idx].classList.add('active');});
 links.forEach(l=>l.addEventListener('click',e=>{e.preventDefault();document.querySelector(l.getAttribute('href')).scrollIntoView({behavior:'smooth'});}));
 
+// theme
 const root=document.documentElement,icon=document.getElementById('themeIcon'),label=document.getElementById('themeLabel');
 function applyTheme(t){root.setAttribute('data-theme',t);icon.textContent=t==='dark'?'◑':'◐';label.textContent=t==='dark'?'Light':'Dark';}
 let theme=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';applyTheme(theme);
 document.getElementById('themeToggle').addEventListener('click',()=>{theme=root.getAttribute('data-theme')==='dark'?'light':'dark';applyTheme(theme);});
-document.getElementById('timestamp').innerText=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
 
-// add tab style
+// tab style
 const st=document.createElement('style');st.textContent='.tab-btn{transition:all .15s ease}.tab-btn.active{border-bottom:2px solid var(--accent);color:var(--accent-strong);font-weight:600}';document.head.appendChild(st);
+
+document.getElementById('timestamp').innerText=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
 </script>
 </body>
 </html>
