@@ -3,64 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kafka Cluster — Deployment Runbook</title>
+<title>Kafka Cluster — End-to-End Deployment Runbook</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  /* Fixed IBM brand blues (same in both themes) */
-  :root{
-    --ibm-blue-70:#0043ce;
-    --ibm-blue-60:#0f62fe;   /* IBM signature blue */
-    --ibm-blue-40:#78a9ff;
-  }
-
-  /* ---------- LIGHT THEME (default) ---------- */
+  :root{ --ibm-blue-70:#0043ce; --ibm-blue-60:#0f62fe; --ibm-blue-40:#78a9ff; }
   :root, [data-theme="light"]{
-    --bg:#ffffff;            /* white background */
-    --bg-elevated:#ffffff;
-    --header-bg:#ffffff;
-    --text:#161616;          /* near-black body */
-    --text-muted:#6f6f6f;
-    --border:#e0e0e0;
-    --accent:#0f62fe;        /* blue accent */
-    --accent-strong:#0043ce;
-    --accent-soft:#edf5ff;   /* pale blue hover */
-    --code-bg:#001141;       /* deep navy code panel */
-    --code-text:#e0e8ff;
-    --diagram-box:#f4f4f4;
+    --bg:#ffffff; --bg-elevated:#ffffff; --text:#161616; --text-muted:#6f6f6f;
+    --border:#e0e0e0; --accent:#0f62fe; --accent-strong:#0043ce; --accent-soft:#edf5ff;
+    --code-bg:#001141; --code-text:#e0e8ff; --diagram-box:#f4f4f4;
   }
-
-  /* ---------- DARK THEME (Carbon Gray 100) ---------- */
   [data-theme="dark"]{
-    --bg:#161616;
-    --bg-elevated:#262626;
-    --header-bg:#161616;
-    --text:#f4f4f4;
-    --text-muted:#a8a8a8;
-    --border:#393939;
-    --accent:#78a9ff;        /* lighter blue reads better on dark */
-    --accent-strong:#a6c8ff;
-    --accent-soft:#1f2a44;
-    --code-bg:#000000;
-    --code-text:#c6d4ff;
-    --diagram-box:#262626;
+    --bg:#161616; --bg-elevated:#262626; --text:#f4f4f4; --text-muted:#a8a8a8;
+    --border:#393939; --accent:#78a9ff; --accent-strong:#a6c8ff; --accent-soft:#1f2a44;
+    --code-bg:#000000; --code-text:#c6d4ff; --diagram-box:#262626;
   }
-
-  /* Aliases: old hardcoded var names map onto theme tokens */
   :root, [data-theme]{
-    --ibm-gray-100:var(--text);
-    --ibm-gray-50:var(--text-muted);
-    --ibm-gray-20:var(--border);
-    --ibm-blue-90:var(--code-bg);
-    --ibm-blue-80:var(--text);
-    --ibm-blue-10:var(--accent-soft);
+    --ibm-gray-100:var(--text); --ibm-gray-50:var(--text-muted); --ibm-gray-20:var(--border);
+    --ibm-blue-90:var(--code-bg); --ibm-blue-80:var(--text); --ibm-blue-10:var(--accent-soft);
   }
-  body{
-    font-family:'IBM Plex Sans',sans-serif;
-    color:var(--text);
-    background:var(--bg);
-    transition:background .25s ease, color .25s ease;
-  }
+  body{ font-family:'IBM Plex Sans',sans-serif; color:var(--text); background:var(--bg);
+        transition:background .25s ease, color .25s ease; }
   .mono{font-family:'IBM Plex Mono',monospace;}
   .ibm-blue{color:var(--accent);}
   .ibm-blue-bg{background:var(--ibm-blue-60);}
@@ -69,28 +32,17 @@
   .t-text{color:var(--text);}
   .t-muted{color:var(--text-muted);}
   .t-border{border-color:var(--border)!important;}
-
-  /* IBM-style square accents, left border */
-  .ibm-card{
-    background:var(--bg-elevated);
-    border:1px solid var(--border);
+  .ibm-card{ background:var(--bg-elevated); border:1px solid var(--border);
     border-left:3px solid var(--accent);
-    transition:border-color .2s ease, box-shadow .2s ease, background .25s ease;
-  }
-  .ibm-card:hover{
-    border-left-color:var(--accent-strong);
-    box-shadow:0 0 0 1px var(--accent);
-  }
-  .code-block{
-    background:var(--code-bg);
-    color:var(--code-text);
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.82rem;
-    line-height:1.6;
-    transition:background .25s ease;
-  }
+    transition:border-color .2s ease, box-shadow .2s ease, background .25s ease; }
+  .ibm-card:hover{ border-left-color:var(--accent-strong); box-shadow:0 0 0 1px var(--accent); }
+  .code-block{ background:var(--code-bg); color:var(--code-text);
+    font-family:'IBM Plex Mono',monospace; font-size:.8rem; line-height:1.65;
+    transition:background .25s ease; overflow-x:auto; }
+  .code-block pre{white-space:pre; margin:0;}
   .nav-link{border-left:2px solid transparent;transition:all .15s ease;color:var(--text-muted);}
   .nav-link:hover,.nav-link.active{border-left-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);}
+  .nav-sub{font-size:.78rem;padding-left:1.4rem;}
   .step-num{background:var(--ibm-blue-60);color:#fff;font-family:'IBM Plex Mono',monospace;}
   .copy-btn{transition:all .15s ease;}
   .copy-btn:hover{background:var(--ibm-blue-70);}
@@ -99,19 +51,17 @@
   ::selection{background:var(--accent);color:var(--bg);}
   .prop-row:hover{background:var(--accent-soft);}
   .status-dot{width:8px;height:8px;border-radius:50%;}
-
-  /* Theme toggle button */
-  .theme-toggle{
-    border:1px solid var(--border);
-    color:var(--text);
-    transition:all .15s ease;
-  }
+  .theme-toggle{border:1px solid var(--border);color:var(--text);transition:all .15s ease;}
   .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
+  .tab-btn{transition:all .15s ease;}
+  .tab-btn.active{border-bottom:2px solid var(--accent);color:var(--accent-strong);font-weight:600;}
+  .pill{font-size:.68rem;border:1px solid var(--border);padding:1px 7px;}
+  .filetree{font-size:.8rem;line-height:1.7;}
+  h2 code,p code,li code,td code{font-family:'IBM Plex Mono',monospace;font-size:.85em;color:var(--accent);}
 </style>
 </head>
 <body class="antialiased">
 
-<!-- Top banner -->
 <header class="t-border border-b surface sticky top-0 z-30" style="border-bottom-width:1px">
   <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
@@ -119,8 +69,8 @@
         <span class="text-white mono font-bold text-lg">K</span>
       </div>
       <div>
-        <h1 class="text-lg font-semibold t-text">Kafka Cluster Deployment Runbook</h1>
-        <p class="text-xs t-muted">Amazon MSK · CloudFormation · v1.4.0</p>
+        <h1 class="text-lg font-semibold t-text">Kafka Cluster — End-to-End Deployment Runbook</h1>
+        <p class="text-xs t-muted">Linux base image · Ansible · AWS · CloudFormation · MSK</p>
       </div>
     </div>
     <div class="flex items-center gap-4">
@@ -128,7 +78,7 @@
         <span class="status-dot" style="background:#24a148"></span>
         <span class="t-muted">PRODUCTION READY</span>
       </div>
-      <button id="themeToggle" class="theme-toggle px-3 py-1.5 text-xs mono flex items-center gap-2" aria-label="Toggle theme">
+      <button id="themeToggle" class="theme-toggle px-3 py-1.5 text-xs mono flex items-center gap-2">
         <span id="themeIcon">◐</span><span id="themeLabel">Dark</span>
       </button>
     </div>
@@ -137,266 +87,529 @@
 
 <div class="max-w-7xl mx-auto px-6 flex gap-8">
 
-  <!-- Sidebar nav -->
-  <aside class="hidden lg:block w-56 flex-shrink-0 py-8 sticky top-20 self-start">
-    <p class="text-xs uppercase tracking-wider mb-3 font-semibold" style="color:var(--ibm-gray-50)">Contents</p>
+  <aside class="hidden lg:block w-60 flex-shrink-0 py-8 sticky top-20 self-start" style="max-height:90vh;overflow-y:auto">
+    <p class="text-xs uppercase tracking-wider mb-3 font-semibold t-muted">Contents</p>
     <nav id="nav" class="space-y-1 text-sm">
-      <a href="#overview" class="nav-link active block px-3 py-2">Overview</a>
-      <a href="#prereqs" class="nav-link block px-3 py-2">Prerequisites</a>
-      <a href="#architecture" class="nav-link block px-3 py-2">Architecture</a>
-      <a href="#properties" class="nav-link block px-3 py-2">Cluster Properties</a>
-      <a href="#steps" class="nav-link block px-3 py-2">Deployment Steps</a>
-      <a href="#verify" class="nav-link block px-3 py-2">Verification</a>
-      <a href="#rollback" class="nav-link block px-3 py-2">Rollback</a>
+      <a href="#overview"   class="nav-link active block px-3 py-2">Overview</a>
+      <a href="#workstation"class="nav-link block px-3 py-2">1 · Workstation Setup</a>
+      <a href="#vscode"     class="nav-link nav-sub block px-3 py-1">VS Code &amp; extensions</a>
+      <a href="#tooling"    class="nav-link nav-sub block px-3 py-1">CLI tools</a>
+      <a href="#awsconfig"  class="nav-link block px-3 py-2">2 · AWS Configuration</a>
+      <a href="#layout"     class="nav-link block px-3 py-2">3 · Project Layout</a>
+      <a href="#cfn"        class="nav-link block px-3 py-2">4 · CloudFormation</a>
+      <a href="#ansible"    class="nav-link block px-3 py-2">5 · Ansible Automation</a>
+      <a href="#deploy"     class="nav-link block px-3 py-2">6 · Deploy</a>
+      <a href="#health"     class="nav-link block px-3 py-2">7 · Health Checks</a>
+      <a href="#client"     class="nav-link block px-3 py-2">8 · Python Client</a>
+      <a href="#properties" class="nav-link block px-3 py-2">Property Reference</a>
+      <a href="#rollback"   class="nav-link block px-3 py-2">Rollback</a>
     </nav>
-    <div class="mt-6 ibm-card p-3 text-xs" style="color:var(--ibm-gray-50)">
+    <div class="mt-6 ibm-card p-3 text-xs t-muted">
       <p class="font-semibold mb-1 ibm-blue">Last verified</p>
       <p class="mono" id="timestamp">—</p>
     </div>
   </aside>
 
-  <!-- Main -->
   <main class="flex-1 py-8 min-w-0">
 
-    <!-- Overview -->
-    <section id="overview" class="mb-12 fade-in">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Overview</span>
-      <h2 class="text-3xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Standing up a production Kafka cluster</h2>
-      <p class="leading-relaxed mb-4" style="color:var(--ibm-gray-100)">
-        This runbook documents the repeatable deployment of a 3-broker Amazon MSK cluster across three Availability Zones,
-        provisioned entirely through CloudFormation. Every property is version-controlled, every step is idempotent, and
-        the whole stack tears down with a single command.
+    <!-- OVERVIEW -->
+    <section id="overview" class="mb-14 fade-in">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">00 — Overview</span>
+      <h2 class="text-3xl font-light mt-2 mb-4 t-text">From a bare Linux box to a working Kafka cluster</h2>
+      <p class="leading-relaxed mb-4 t-text">
+        This runbook takes you from <strong>nothing</strong>—a freshly imaged Ubuntu 22.04 workstation—through installing
+        every tool, configuring AWS, authoring the CloudFormation template, driving the whole deployment with
+        <strong>Ansible</strong>, running health checks, and finally proving the cluster works with a Python
+        producer/consumer. Each block is copy-paste runnable.
       </p>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-        <div class="ibm-card p-4">
-          <p class="text-2xl font-light ibm-blue">3</p>
-          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Broker nodes</p>
-        </div>
-        <div class="ibm-card p-4">
-          <p class="text-2xl font-light ibm-blue">3</p>
-          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Availability Zones</p>
-        </div>
-        <div class="ibm-card p-4">
-          <p class="text-2xl font-light ibm-blue">TLS</p>
-          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">In-transit encryption</p>
-        </div>
-        <div class="ibm-card p-4">
-          <p class="text-2xl font-light ibm-blue">~25m</p>
-          <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Provision time</p>
-        </div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">8</p><p class="text-xs mt-1 t-muted">Phases</p></div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">3</p><p class="text-xs mt-1 t-muted">Brokers / AZs</p></div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">IaC</p><p class="text-xs mt-1 t-muted">Ansible + CFN</p></div>
+        <div class="ibm-card p-4"><p class="text-2xl font-light ibm-blue">~30m</p><p class="text-xs mt-1 t-muted">End to end</p></div>
+      </div>
+      <div class="ibm-card p-4 mt-6 text-sm t-text" style="border-left-color:#24a148">
+        <strong class="ibm-blue">Flow:</strong> Workstation tools → AWS creds → Project scaffold →
+        CloudFormation template → Ansible orchestrates validate/deploy/wait → Health checks → Python client round-trip.
       </div>
     </section>
 
-    <!-- Prerequisites -->
-    <section id="prereqs" class="mb-12">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — Prerequisites</span>
-      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Before you begin</h2>
-      <ul class="space-y-2">
-        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">AWS CLI v2 configured with deploy permissions (<span class="mono text-sm ibm-blue">aws configure</span>)</span></li>
-        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">IAM role with MSK, EC2, and CloudFormation privileges</span></li>
-        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">VS Code with AWS Toolkit + YAML extensions installed</span></li>
-        <li class="flex items-start gap-3 prop-row p-2"><span class="ibm-blue mono mt-0.5">▸</span><span style="color:var(--ibm-gray-100)">Template file <span class="mono text-sm ibm-blue">kafka-cluster.yaml</span> in your working directory</span></li>
-      </ul>
-    </section>
+    <!-- 1 WORKSTATION -->
+    <section id="workstation" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">01 — Workstation Setup</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Prepare the base Linux image</h2>
+      <p class="text-sm mb-4 t-text">Assumes a clean <code>Ubuntu 22.04 LTS</code> machine with sudo. Start by updating the OS and installing core build dependencies.</p>
 
-    <!-- Architecture -->
-    <section id="architecture" class="mb-12">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Architecture</span>
-      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Topology</h2>
-      <div class="ibm-card p-6">
-        <div class="flex flex-col items-center gap-4">
-          <div class="border-2 px-4 py-2 text-sm mono" style="border-color:var(--ibm-blue-40);color:var(--ibm-blue-70)">VPC 10.0.0.0/16</div>
-          <div class="text-xs" style="color:var(--ibm-gray-50)">↓</div>
-          <div class="grid grid-cols-3 gap-4 w-full">
-            <div class="text-center">
-              <div class="ibm-blue-bg text-white text-xs py-2 mono">AZ-a · Broker 1</div>
-              <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Subnet 10.0.1.0/24</p>
-            </div>
-            <div class="text-center">
-              <div class="ibm-blue-bg text-white text-xs py-2 mono">AZ-b · Broker 2</div>
-              <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Subnet 10.0.2.0/24</p>
-            </div>
-            <div class="text-center">
-              <div class="ibm-blue-bg text-white text-xs py-2 mono">AZ-c · Broker 3</div>
-              <p class="text-xs mt-1" style="color:var(--ibm-gray-50)">Subnet 10.0.3.0/24</p>
-            </div>
-          </div>
-          <div class="text-xs mt-2 px-3 py-1 border" style="border-color:var(--ibm-gray-20);color:var(--ibm-gray-50)">Security Group · ports 9092–9098 · TLS</div>
-        </div>
+      <div class="ibm-card p-5 mb-4">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">System update &amp; base packages</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install -y \
+  curl wget git unzip gnupg software-properties-common \
+  build-essential ca-certificates python3 python3-pip python3-venv</pre></div>
+      </div>
+
+      <div class="ibm-card p-5 mb-4">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">Install Python tooling &amp; Ansible</h3></div>
+        <p class="text-sm mb-2 t-muted">Ansible orchestrates the whole deploy. <code>boto3</code> lets Ansible talk to AWS.</p>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>python3 -m pip install --user --upgrade pip
+python3 -m pip install --user ansible boto3 botocore kafka-python
+
+# Add the Ansible AWS collection
+ansible-galaxy collection install amazon.aws community.aws
+
+# Verify
+ansible --version
+python3 -c "import boto3, kafka; print('python deps OK')"</pre></div>
+      </div>
+
+      <div class="ibm-card p-5 mb-4">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">3</span><h3 class="font-medium t-text">Install the AWS CLI v2</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version   # expect aws-cli/2.x</pre></div>
+      </div>
+
+      <div class="ibm-card p-5">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">4</span><h3 class="font-medium t-text">Install Java (Kafka CLI tools need a JRE)</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>sudo apt-get install -y openjdk-17-jre-headless
+java -version</pre></div>
       </div>
     </section>
 
-    <!-- Properties Table -->
-    <section id="properties" class="mb-12">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">04 — Cluster Properties</span>
-      <h2 class="text-2xl font-light mt-2 mb-2" style="color:var(--ibm-gray-100)">Configuration reference</h2>
-      <p class="text-sm mb-4" style="color:var(--ibm-gray-50)">Filter by name to find any property quickly.</p>
-      <input id="propSearch" type="text" placeholder="Search properties…"
-        class="w-full md:w-80 mb-4 px-3 py-2 border text-sm mono focus:outline-none surface-elevated t-text t-border">
+    <!-- VS CODE -->
+    <section id="vscode" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">01b — Editor</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Install &amp; configure VS Code</h2>
+      <div class="ibm-card p-5 mb-4">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">Install via the Microsoft apt repo</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
+  | gpg --dearmor > packages.microsoft.gpg
+sudo install -o root -g root -m 644 packages.microsoft.gpg /usr/share/keyrings/
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/packages.microsoft.gpg] \
+https://packages.microsoft.com/repos/code stable main" \
+  | sudo tee /etc/apt/sources.list.d/vscode.list
+sudo apt-get update && sudo apt-get install -y code
+code --version</pre></div>
+      </div>
+      <div class="ibm-card p-5">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">Install the required extensions (from terminal)</h3></div>
+        <p class="text-sm mb-2 t-muted">These give you YAML schema validation, AWS resource browsing, Ansible linting, and Python support.</p>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>code --install-extension amazonwebservices.aws-toolkit-vscode
+code --install-extension redhat.vscode-yaml
+code --install-extension redhat.ansible
+code --install-extension ms-python.python
+code --install-extension ms-azuretools.vscode-docker</pre></div>
+        <p class="text-sm mt-3 t-muted">Recommended <code>.vscode/settings.json</code> so the YAML extension validates CloudFormation:</p>
+        <div class="code-block p-4 relative mt-2"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>{
+  "yaml.customTags": [
+    "!Ref", "!Sub", "!GetAtt", "!GetAZs", "!Select",
+    "!Join sequence", "!Equals sequence", "!If sequence"
+  ],
+  "files.associations": { "*.yaml": "yaml" },
+  "ansible.python.interpreterPath": "/usr/bin/python3"
+}</pre></div>
+      </div>
+    </section>
+
+    <!-- TOOLING SUMMARY -->
+    <section id="tooling" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">01c — Toolchain</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">What you should now have</h2>
       <div class="ibm-card overflow-hidden">
         <table class="w-full text-sm">
-          <thead>
-            <tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
-              <th class="px-4 py-3">Property</th>
-              <th class="px-4 py-3">Value</th>
-              <th class="px-4 py-3 hidden md:table-cell">Notes</th>
-            </tr>
-          </thead>
-          <tbody id="propTable" style="color:var(--ibm-gray-100)"></tbody>
+          <thead><tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
+            <th class="px-4 py-3">Tool</th><th class="px-4 py-3">Verify</th><th class="px-4 py-3 hidden md:table-cell">Purpose</th></tr></thead>
+          <tbody id="toolTable" class="t-text"></tbody>
         </table>
       </div>
     </section>
 
-    <!-- Deployment Steps -->
-    <section id="steps" class="mb-12">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Deployment Steps</span>
-      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Execute the deployment</h2>
-      <div id="steps-container" class="space-y-4"></div>
+    <!-- 2 AWS CONFIG -->
+    <section id="awsconfig" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">02 — AWS Configuration</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Connect your credentials</h2>
+      <div class="ibm-card p-5 mb-4">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">1</span><h3 class="font-medium t-text">Configure a named profile</h3></div>
+        <p class="text-sm mb-2 t-muted">Use an IAM user/role with MSK, EC2, IAM, and CloudFormation permissions.</p>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws configure --profile kafka-deploy
+# AWS Access Key ID     : ********************
+# AWS Secret Access Key : ********************
+# Default region name   : us-east-1
+# Default output format  : json
+
+export AWS_PROFILE=kafka-deploy
+aws sts get-caller-identity     # confirms who you are</pre></div>
+      </div>
+      <div class="ibm-card p-5">
+        <div class="flex items-center gap-3 mb-3"><span class="step-num w-7 h-7 flex items-center justify-center text-sm">2</span><h3 class="font-medium t-text">Create an EC2 key pair (for bastion / SSH access)</h3></div>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>aws ec2 create-key-pair --key-name kafka-key \
+  --query 'KeyMaterial' --output text > ~/.ssh/kafka-key.pem
+chmod 400 ~/.ssh/kafka-key.pem</pre></div>
+      </div>
     </section>
 
-    <!-- Verification -->
-    <section id="verify" class="mb-12">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Verification</span>
-      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Confirm the cluster is live</h2>
-      <div class="ibm-card p-5">
-        <p class="text-sm mb-3" style="color:var(--ibm-gray-100)">Stack status should read <span class="mono ibm-blue">CREATE_COMPLETE</span>. Retrieve broker endpoints:</p>
-        <div class="code-block p-4 relative group">
-          <button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button>
-<pre>aws kafka get-bootstrap-brokers --cluster-arn $ARN</pre>
+    <!-- 3 LAYOUT -->
+    <section id="layout" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">03 — Project Layout</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Scaffold the repository</h2>
+      <div class="ibm-card p-5 mb-4">
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>mkdir -p kafka-iac/{cloudformation,playbooks,client} && cd kafka-iac
+code .   # open the whole project in VS Code</pre></div>
+        <p class="text-sm mt-4 mb-2 t-muted">Resulting structure:</p>
+        <div class="filetree mono ibm-card p-4 t-text" style="border-left-color:var(--accent)">
+kafka-iac/<br>
+├── <span class="ibm-blue">cloudformation/</span><br>
+│&nbsp;&nbsp;&nbsp;└── kafka-cluster.yaml<br>
+├── <span class="ibm-blue">playbooks/</span><br>
+│&nbsp;&nbsp;&nbsp;├── deploy.yml<br>
+│&nbsp;&nbsp;&nbsp;├── healthcheck.yml<br>
+│&nbsp;&nbsp;&nbsp;└── inventory.ini<br>
+├── <span class="ibm-blue">client/</span><br>
+│&nbsp;&nbsp;&nbsp;├── producer.py<br>
+│&nbsp;&nbsp;&nbsp;└── consumer.py<br>
+└── .vscode/settings.json
         </div>
       </div>
     </section>
 
-    <!-- Rollback -->
-    <section id="rollback" class="mb-12">
-      <span class="text-xs mono uppercase tracking-wider ibm-blue">07 — Rollback</span>
-      <h2 class="text-2xl font-light mt-2 mb-4" style="color:var(--ibm-gray-100)">Tear down safely</h2>
+    <!-- 4 CFN -->
+    <section id="cfn" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">04 — CloudFormation</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Author the cluster template</h2>
+      <p class="text-sm mb-3 t-muted">Save as <code>cloudformation/kafka-cluster.yaml</code>. Defines VPC, 3 subnets, security group, and the MSK cluster.</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon MSK Kafka Cluster (3 brokers / 3 AZ)
+
+Parameters:
+  ClusterName: { Type: String, Default: my-kafka-cluster }
+  KafkaVersion: { Type: String, Default: 3.6.0 }
+  InstanceType: { Type: String, Default: kafka.m5.large }
+
+Resources:
+  KafkaVPC:
+    Type: AWS::EC2::VPC
+    Properties: { CidrBlock: 10.0.0.0/16, EnableDnsSupport: true, EnableDnsHostnames: true }
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref KafkaVPC, CidrBlock: 10.0.1.0/24, AvailabilityZone: !Select [0, !GetAZs ''] }
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref KafkaVPC, CidrBlock: 10.0.2.0/24, AvailabilityZone: !Select [1, !GetAZs ''] }
+  Subnet3:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref KafkaVPC, CidrBlock: 10.0.3.0/24, AvailabilityZone: !Select [2, !GetAZs ''] }
+
+  KafkaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Kafka traffic
+      VpcId: !Ref KafkaVPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 9092, ToPort: 9098, CidrIp: 10.0.0.0/16 }
+
+  KafkaCluster:
+    Type: AWS::MSK::Cluster
+    Properties:
+      ClusterName: !Ref ClusterName
+      KafkaVersion: !Ref KafkaVersion
+      NumberOfBrokerNodes: 3
+      BrokerNodeGroupInfo:
+        InstanceType: !Ref InstanceType
+        ClientSubnets: [ !Ref Subnet1, !Ref Subnet2, !Ref Subnet3 ]
+        SecurityGroups: [ !Ref KafkaSecurityGroup ]
+        StorageInfo: { EBSStorageInfo: { VolumeSize: 100 } }
+      EncryptionInfo:
+        EncryptionInTransit: { ClientBroker: TLS, InCluster: true }
+
+Outputs:
+  ClusterArn: { Value: !Ref KafkaCluster }
+  VPCId: { Value: !Ref KafkaVPC }</pre></div>
+    </section>
+
+    <!-- 5 ANSIBLE -->
+    <section id="ansible" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">05 — Ansible Automation</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Orchestrate the deployment</h2>
+      <p class="text-sm mb-3 t-text">Ansible wraps CloudFormation so the whole stack is one idempotent command. Save as <code>playbooks/deploy.yml</code>.</p>
+      <div class="code-block p-4 relative mb-6"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: Deploy Kafka (MSK) via CloudFormation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    region: us-east-1
+    stack_name: kafka-stack
+    template: ../cloudformation/kafka-cluster.yaml
+  tasks:
+    - name: Validate template
+      amazon.aws.cloudformation_info:
+      register: _   # no-op presence check; real validate below
+      ignore_errors: true
+
+    - name: Create / update the CloudFormation stack
+      amazon.aws.cloudformation:
+        stack_name: "{{ stack_name }}"
+        state: present
+        region: "{{ region }}"
+        template: "{{ template }}"
+        capabilities: [ CAPABILITY_NAMED_IAM ]
+        on_create_failure: ROLLBACK
+      register: cfn
+
+    - name: Show stack outputs
+      ansible.builtin.debug:
+        var: cfn.stack_outputs
+
+    - name: Fetch MSK bootstrap brokers
+      ansible.builtin.command: >
+        aws kafka get-bootstrap-brokers
+        --cluster-arn {{ cfn.stack_outputs.ClusterArn }}
+        --region {{ region }} --output json
+      register: brokers
+      changed_when: false
+
+    - name: Save broker string to a file for the client
+      ansible.builtin.copy:
+        dest: ../client/brokers.json
+        content: "{{ brokers.stdout }}"</pre></div>
+
+      <p class="text-sm mb-2 t-muted">Run it:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>cd playbooks
+ansible-playbook deploy.yml</pre></div>
+    </section>
+
+    <!-- 6 DEPLOY -->
+    <section id="deploy" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">06 — Deploy</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">What happens on apply</h2>
+      <div id="deploy-flow" class="space-y-3"></div>
+    </section>
+
+    <!-- 7 HEALTH -->
+    <section id="health" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">07 — Health Checks</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Verify the cluster is healthy</h2>
+      <p class="text-sm mb-3 t-text">Save as <code>playbooks/healthcheck.yml</code> — confirms ACTIVE state and broker count.</p>
+      <div class="code-block p-4 relative mb-6"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>---
+- name: Kafka cluster health checks
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars: { region: us-east-1, stack_name: kafka-stack }
+  tasks:
+    - name: Get cluster ARN from stack
+      ansible.builtin.shell: >
+        aws cloudformation describe-stacks --stack-name {{ stack_name }}
+        --query "Stacks[0].Outputs[?OutputKey=='ClusterArn'].OutputValue"
+        --output text --region {{ region }}
+      register: arn
+      changed_when: false
+
+    - name: Describe MSK cluster
+      ansible.builtin.shell: >
+        aws kafka describe-cluster --cluster-arn {{ arn.stdout }}
+        --region {{ region }} --output json
+      register: desc
+      changed_when: false
+
+    - name: Assert cluster is ACTIVE
+      ansible.builtin.assert:
+        that: "(desc.stdout | from_json).ClusterInfo.State == 'ACTIVE'"
+        success_msg: "Cluster is ACTIVE ✓"
+        fail_msg: "Cluster not active — check the console"
+
+    - name: Report broker count
+      ansible.builtin.debug:
+        msg: "Brokers: {{ (desc.stdout | from_json).ClusterInfo.NumberOfBrokerNodes }}"</pre></div>
+
+      <p class="text-sm mb-2 t-muted">Manual one-liners for quick checks:</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># Cluster state
+aws kafka describe-cluster --cluster-arn $ARN \
+  --query 'ClusterInfo.State' --output text
+
+# List topics using Kafka CLI tools (run from inside the VPC)
+bin/kafka-topics.sh --bootstrap-server $BROKERS --list
+
+# TCP reachability to a broker
+nc -zv broker1.kafka.amazonaws.com 9094</pre></div>
+    </section>
+
+    <!-- 8 PYTHON CLIENT -->
+    <section id="client" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">08 — Python Client</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Send &amp; receive messages</h2>
+      <p class="text-sm mb-3 t-text">Round-trip test using <code>kafka-python</code> over TLS. Replace the broker string with your TLS endpoint (port 9094) from <code>brokers.json</code>.</p>
+
+      <div class="flex gap-1 mb-3 border-b t-border">
+        <button class="tab-btn px-4 py-2 text-sm mono active" data-tab="prod">producer.py</button>
+        <button class="tab-btn px-4 py-2 text-sm mono t-muted" data-tab="cons">consumer.py</button>
+      </div>
+
+      <div id="tab-prod" class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>#!/usr/bin/env python3
+"""producer.py — publish messages to a TLS-secured MSK topic."""
+import json, time
+from kafka import KafkaProducer
+
+BROKERS = ["b-1.my-kafka.xxxx.kafka.us-east-1.amazonaws.com:9094"]
+TOPIC   = "demo-topic"
+
+producer = KafkaProducer(
+    bootstrap_servers=BROKERS,
+    security_protocol="SSL",                       # TLS in transit
+    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    acks="all",                                    # wait for all replicas
+    retries=3,
+)
+
+for i in range(10):
+    msg = {"id": i, "ts": time.time(), "payload": f"hello-{i}"}
+    future = producer.send(TOPIC, value=msg)
+    record = future.get(timeout=10)                # block to confirm
+    print(f"sent id={i} -> partition {record.partition} offset {record.offset}")
+
+producer.flush()
+producer.close()
+print("done.")</pre></div>
+
+      <div id="tab-cons" class="code-block p-4 relative" style="display:none"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre>#!/usr/bin/env python3
+"""consumer.py — subscribe and print messages from the topic."""
+import json
+from kafka import KafkaConsumer
+
+BROKERS = ["b-1.my-kafka.xxxx.kafka.us-east-1.amazonaws.com:9094"]
+TOPIC   = "demo-topic"
+
+consumer = KafkaConsumer(
+    TOPIC,
+    bootstrap_servers=BROKERS,
+    security_protocol="SSL",
+    auto_offset_reset="earliest",                  # read from start
+    group_id="demo-group",
+    value_deserializer=lambda b: json.loads(b.decode("utf-8")),
+    consumer_timeout_ms=15000,                      # stop after 15s idle
+)
+
+print("listening...")
+for record in consumer:
+    print(f"recv partition {record.partition} offset {record.offset}: {record.value}")
+consumer.close()</pre></div>
+
+      <p class="text-sm mt-4 mb-2 t-muted">Run both (consumer in one terminal, producer in another):</p>
+      <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># terminal 1
+python3 client/consumer.py
+# terminal 2
+python3 client/producer.py</pre></div>
+      <div class="ibm-card p-4 mt-4 text-sm t-text" style="border-left-color:#24a148">
+        <strong class="ibm-blue">Success looks like:</strong> the producer prints partition/offset confirmations and the
+        consumer prints all 10 JSON messages. That round-trip proves the cluster accepts writes, replicates, and serves reads.
+      </div>
+    </section>
+
+    <!-- PROPERTIES -->
+    <section id="properties" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">REF — Property Reference</span>
+      <h2 class="text-2xl font-light mt-2 mb-2 t-text">Configuration reference</h2>
+      <input id="propSearch" type="text" placeholder="Search properties…"
+        class="w-full md:w-80 mb-4 px-3 py-2 border text-sm mono focus:outline-none surface-elevated t-text t-border">
+      <div class="ibm-card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr class="ibm-blue-bg text-white text-left text-xs uppercase tracking-wide">
+            <th class="px-4 py-3">Property</th><th class="px-4 py-3">Value</th><th class="px-4 py-3 hidden md:table-cell">Notes</th></tr></thead>
+          <tbody id="propTable" class="t-text"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ROLLBACK -->
+    <section id="rollback" class="mb-14">
+      <span class="text-xs mono uppercase tracking-wider ibm-blue">REF — Rollback</span>
+      <h2 class="text-2xl font-light mt-2 mb-4 t-text">Tear down safely</h2>
       <div class="ibm-card p-5" style="border-left-color:#da1e28">
-        <p class="text-sm mb-3" style="color:var(--ibm-gray-100)">⚠ MSK incurs hourly charges. Delete when finished testing.</p>
-        <div class="code-block p-4 relative">
-          <button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button>
-<pre>aws cloudformation delete-stack --stack-name kafka-stack
-aws cloudformation wait stack-delete-complete --stack-name kafka-stack</pre>
-        </div>
+        <p class="text-sm mb-3 t-text">⚠ MSK bills hourly. One Ansible command removes everything.</p>
+        <div class="code-block p-4 relative"><button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button><pre># via Ansible
+ansible localhost -m amazon.aws.cloudformation \
+  -a "stack_name=kafka-stack state=absent region=us-east-1"
+
+# or raw CLI
+aws cloudformation delete-stack --stack-name kafka-stack
+aws cloudformation wait stack-delete-complete --stack-name kafka-stack</pre></div>
       </div>
     </section>
 
     <footer class="t-border border-t pt-6 mt-12 text-xs flex justify-between t-muted" style="border-top-width:1px">
-      <span>Kafka Deployment Runbook · Internal Documentation</span>
+      <span>Kafka End-to-End Runbook · Internal Documentation</span>
       <span class="mono">IBM Plex · Carbon palette</span>
     </footer>
-
   </main>
 </div>
 
 <script>
-// ---------- Data ----------
-const properties = [
-  {p:"ClusterName", v:"my-kafka-cluster", n:"Unique per environment"},
-  {p:"KafkaVersion", v:"3.6.0", n:"Pin to a tested version"},
-  {p:"NumberOfBrokerNodes", v:"3", n:"Multiple of AZ count"},
-  {p:"InstanceType", v:"kafka.m5.large", n:"Use t3.small for dev"},
-  {p:"EBSVolumeSize", v:"100 GiB", n:"Per broker storage"},
-  {p:"ClientBroker", v:"TLS", n:"In-transit encryption"},
-  {p:"InCluster", v:"true", n:"Broker-to-broker TLS"},
-  {p:"VPC CIDR", v:"10.0.0.0/16", n:"Private network range"},
-  {p:"Ingress Ports", v:"9092–9098", n:"Plaintext/TLS/IAM/SASL"},
-  {p:"EnhancedMonitoring", v:"PER_TOPIC_PER_BROKER", n:"CloudWatch granularity"},
+const properties=[
+  {p:"ClusterName",v:"my-kafka-cluster",n:"Unique per environment"},
+  {p:"KafkaVersion",v:"3.6.0",n:"Pin to a tested version"},
+  {p:"NumberOfBrokerNodes",v:"3",n:"Multiple of AZ count"},
+  {p:"InstanceType",v:"kafka.m5.large",n:"Use t3.small for dev"},
+  {p:"EBSVolumeSize",v:"100 GiB",n:"Per broker storage"},
+  {p:"ClientBroker",v:"TLS",n:"Port 9094 for SSL clients"},
+  {p:"InCluster",v:"true",n:"Broker-to-broker TLS"},
+  {p:"VPC CIDR",v:"10.0.0.0/16",n:"Private network range"},
+  {p:"Ingress Ports",v:"9092–9098",n:"Plaintext/TLS/IAM/SASL"},
+  {p:"consumer group_id",v:"demo-group",n:"Tracks read offsets"},
+  {p:"acks",v:"all",n:"Producer durability guarantee"},
+];
+const tools=[
+  {t:"ansible",c:"ansible --version",n:"Orchestration engine"},
+  {t:"aws-cli v2",c:"aws --version",n:"AWS control plane"},
+  {t:"python3 + boto3",c:"python3 -c 'import boto3'",n:"AWS SDK for Ansible"},
+  {t:"kafka-python",c:"python3 -c 'import kafka'",n:"Producer/consumer client"},
+  {t:"java 17 JRE",c:"java -version",n:"Kafka CLI tools"},
+  {t:"VS Code",c:"code --version",n:"Editor + AWS Toolkit"},
+];
+const deployFlow=[
+  {t:"Ansible calls cloudformation module",d:"Submits the template; AWS begins provisioning the VPC and subnets first."},
+  {t:"MSK broker nodes launch across 3 AZs",d:"Each broker gets a 100 GiB EBS volume; this is the slow step (~20 min)."},
+  {t:"Encryption + networking finalize",d:"TLS listeners come up on port 9094; security group opens 9092–9098."},
+  {t:"Stack reaches CREATE_COMPLETE",d:"Ansible captures ClusterArn output and writes brokers.json for the client."},
 ];
 
-const steps = [
-  {t:"Validate the template", c:"aws cloudformation validate-template \\\n  --template-body file://kafka-cluster.yaml"},
-  {t:"Create the stack", c:"aws cloudformation create-stack \\\n  --stack-name kafka-stack \\\n  --template-body file://kafka-cluster.yaml \\\n  --capabilities CAPABILITY_NAMED_IAM"},
-  {t:"Wait for completion (~25 min)", c:"aws cloudformation wait stack-create-complete \\\n  --stack-name kafka-stack"},
-  {t:"Capture the cluster ARN", c:"ARN=$(aws cloudformation describe-stacks \\\n  --stack-name kafka-stack \\\n  --query \"Stacks[0].Outputs[?OutputKey=='ClusterArn'].OutputValue\" \\\n  --output text)"},
-];
-
-// ---------- Render properties ----------
-const propTable = document.getElementById('propTable');
-function renderProps(filter=""){
-  propTable.innerHTML = "";
-  properties
-    .filter(r => (r.p+r.v+r.n).toLowerCase().includes(filter.toLowerCase()))
-    .forEach(r=>{
-      const tr=document.createElement('tr');
-      tr.className="prop-row t-border";
-      tr.style.borderTop="1px solid var(--border)";
-      tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.p}</td>
-        <td class="px-4 py-3 mono">${r.v}</td>
-        <td class="px-4 py-3 hidden md:table-cell t-muted">${r.n}</td>`;
-      propTable.appendChild(tr);
-    });
-}
+const propTable=document.getElementById('propTable');
+function renderProps(f=""){propTable.innerHTML="";properties.filter(r=>(r.p+r.v+r.n).toLowerCase().includes(f.toLowerCase())).forEach(r=>{const tr=document.createElement('tr');tr.className="prop-row";tr.style.borderTop="1px solid var(--border)";tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.p}</td><td class="px-4 py-3 mono">${r.v}</td><td class="px-4 py-3 hidden md:table-cell t-muted">${r.n}</td>`;propTable.appendChild(tr);});}
 renderProps();
-document.getElementById('propSearch').addEventListener('input', e=>renderProps(e.target.value));
+document.getElementById('propSearch').addEventListener('input',e=>renderProps(e.target.value));
 
-// ---------- Render steps ----------
-const sc = document.getElementById('steps-container');
-steps.forEach((s,i)=>{
-  const div=document.createElement('div');
-  div.className="ibm-card p-5";
-  div.innerHTML=`
-    <div class="flex items-center gap-3 mb-3">
-      <span class="step-num w-7 h-7 flex items-center justify-center text-sm">${i+1}</span>
-      <h3 class="font-medium" style="color:var(--ibm-gray-100)">${s.t}</h3>
-    </div>
-    <div class="code-block p-4 relative">
-      <button class="copy-btn absolute top-2 right-2 ibm-blue-bg text-white text-xs px-2 py-1 mono">copy</button>
-      <pre>${s.c}</pre>
-    </div>`;
-  sc.appendChild(div);
-});
+const toolTable=document.getElementById('toolTable');
+tools.forEach(r=>{const tr=document.createElement('tr');tr.className="prop-row";tr.style.borderTop="1px solid var(--border)";tr.innerHTML=`<td class="px-4 py-3 mono ibm-blue">${r.t}</td><td class="px-4 py-3 mono">${r.c}</td><td class="px-4 py-3 hidden md:table-cell t-muted">${r.n}</td>`;toolTable.appendChild(tr);});
 
-// ---------- Copy buttons ----------
-document.addEventListener('click', e=>{
-  if(e.target.classList.contains('copy-btn')){
-    const code = e.target.parentElement.querySelector('pre').innerText;
-    navigator.clipboard.writeText(code).then(()=>{
-      const orig=e.target.innerText;
-      e.target.innerText="copied ✓";
-      setTimeout(()=>e.target.innerText=orig,1200);
-    });
-  }
-});
+const df=document.getElementById('deploy-flow');
+deployFlow.forEach((s,i)=>{const d=document.createElement('div');d.className="ibm-card p-4 flex gap-3";d.innerHTML=`<span class="step-num w-7 h-7 flex items-center justify-center text-sm flex-shrink-0">${i+1}</span><div><h3 class="font-medium t-text">${s.t}</h3><p class="text-sm t-muted mt-1">${s.d}</p></div>`;df.appendChild(d);});
 
-// ---------- Scroll-spy nav ----------
-const links=[...document.querySelectorAll('.nav-link')];
-const sections=links.map(l=>document.querySelector(l.getAttribute('href')));
-window.addEventListener('scroll',()=>{
-  let idx=sections.length-1;
-  for(let i=0;i<sections.length;i++){
-    if(sections[i].getBoundingClientRect().top>120){idx=i-1;break;}
-  }
-  links.forEach(l=>l.classList.remove('active'));
-  if(idx>=0) links[idx].classList.add('active');
-});
-links.forEach(l=>l.addEventListener('click',e=>{
-  e.preventDefault();
-  document.querySelector(l.getAttribute('href')).scrollIntoView({behavior:'smooth'});
+// tabs
+document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tab-btn').forEach(x=>{x.classList.remove('active');x.classList.add('t-muted');});
+  b.classList.add('active');b.classList.remove('t-muted');
+  document.getElementById('tab-prod').style.display = b.dataset.tab==='prod'?'block':'none';
+  document.getElementById('tab-cons').style.display = b.dataset.tab==='cons'?'block':'none';
 }));
 
-// ---------- Theme toggle (light default, dark optional) ----------
-const root=document.documentElement;
-const icon=document.getElementById('themeIcon');
-const label=document.getElementById('themeLabel');
-function applyTheme(t){
-  root.setAttribute('data-theme',t);
-  // button shows the theme you'd switch TO
-  icon.textContent = t==='dark' ? '◑' : '◐';
-  label.textContent = t==='dark' ? 'Light' : 'Dark';
-}
-// default to system preference, fall back to light
-let theme = window.matchMedia &&
-  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-applyTheme(theme);
-document.getElementById('themeToggle').addEventListener('click',()=>{
-  theme = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
-  applyTheme(theme);
-});
+// copy
+document.addEventListener('click',e=>{if(e.target.classList.contains('copy-btn')){const code=e.target.parentElement.querySelector('pre').innerText;navigator.clipboard.writeText(code).then(()=>{const o=e.target.innerText;e.target.innerText="copied ✓";setTimeout(()=>e.target.innerText=o,1200);});}});
 
-// ---------- Timestamp ----------
-document.getElementById('timestamp').innerText =
-  new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
+// scroll-spy
+const links=[...document.querySelectorAll('.nav-link')];
+const secs=links.map(l=>document.querySelector(l.getAttribute('href')));
+window.addEventListener('scroll',()=>{let idx=secs.length-1;for(let i=0;i<secs.length;i++){if(secs[i]&&secs[i].getBoundingClientRect().top>140){idx=i-1;break;}}links.forEach(l=>l.classList.remove('active'));if(idx>=0)links[idx].classList.add('active');});
+links.forEach(l=>l.addEventListener('click',e=>{e.preventDefault();document.querySelector(l.getAttribute('href')).scrollIntoView({behavior:'smooth'});}));
+
+// theme
+const root=document.documentElement,icon=document.getElementById('themeIcon'),label=document.getElementById('themeLabel');
+function applyTheme(t){root.setAttribute('data-theme',t);icon.textContent=t==='dark'?'◑':'◐';label.textContent=t==='dark'?'Light':'Dark';}
+let theme=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+applyTheme(theme);
+document.getElementById('themeToggle').addEventListener('click',()=>{theme=root.getAttribute('data-theme')==='dark'?'light':'dark';applyTheme(theme);});
+
+document.getElementById('timestamp').innerText=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
 </script>
 </body>
 </html>
