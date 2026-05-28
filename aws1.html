@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka on EC2 — Deployment Best Practices</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          // IBM Plex is the Carbon Design System typeface
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'monospace'],
+        },
+        colors: {
+          // IBM Carbon color tokens
+          ibmblue: { 60: '#0f62fe', 70: '#0043ce', 80: '#002d9c' },
+          gray: {
+            10: '#f4f4f4', 20: '#e0e0e0', 30: '#c6c6c6', 50: '#8d8d8d',
+            70: '#525252', 80: '#393939', 90: '#262626', 100: '#161616',
+          },
+        },
+      },
+    },
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  /* Carbon uses sharp corners (no border radius) and a 2px focus ring */
+  .carbon-focus:focus-visible { outline: 2px solid #0f62fe; outline-offset: 2px; }
+  body { -webkit-font-smoothing: antialiased; }
+  .fade-in { animation: fade .25s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body class="font-sans bg-white text-[#161616] dark:bg-[#161616] dark:text-[#f4f4f4] transition-colors duration-200">
+
+<!-- ============ HEADER (Carbon UI Shell) ============ -->
+<header class="sticky top-0 z-40 h-12 flex items-center justify-between px-4 bg-gray-100 text-white border-b border-gray-80">
+  <div class="flex items-center gap-3">
+    <span class="font-semibold tracking-tight">IBM&nbsp;<span class="font-light">Data Platform</span></span>
+    <span class="hidden sm:inline text-gray-30 text-sm">/ Kafka on EC2 Best Practices</span>
+  </div>
+  <button id="themeToggle" class="carbon-focus h-8 px-3 text-sm flex items-center gap-2 hover:bg-gray-80 transition-colors" aria-label="Toggle theme">
+    <span id="themeIcon">🌙</span><span id="themeLabel" class="hidden sm:inline">Dark</span>
+  </button>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="max-w-6xl mx-auto px-4 pt-16 pb-10">
+  <p class="text-ibmblue-60 dark:text-ibmblue-60 font-mono text-sm mb-3">// reference architecture</p>
+  <h1 class="text-4xl sm:text-5xl font-light leading-tight mb-4">
+    Deploying Apache Kafka<br>as a cluster on Amazon EC2
+  </h1>
+  <p class="max-w-2xl text-[#525252] dark:text-[#c6c6c6] font-light text-lg">
+    A production-grade, multi-AZ KRaft deployment with infrastructure-as-code across
+    Terraform, CloudFormation, Ansible, and CI/CD. Click any card for details and references.
+  </p>
+</section>
+
+<!-- ============ ARCHITECTURE IMAGE ============ -->
+<section class="max-w-6xl mx-auto px-4 pb-12">
+  <div class="border border-gray-20 dark:border-gray-80">
+    <img src="https://www.clouduggu.com/static/kafka/kafka_architecture.png"
+         alt="Apache Kafka cluster architecture"
+         class="w-full object-cover"
+         onerror="this.src='https://kafka.apache.org/images/kafka_diagram.png'">
+    <div class="px-4 py-2 text-xs font-mono text-gray-50 bg-[#f4f4f4] dark:bg-[#262626]">
+      Fig 1. Brokers, producers, consumers and the KRaft metadata quorum
+    </div>
+  </div>
+</section>
+
+<!-- ============ BEST PRACTICE CARDS ============ -->
+<section class="max-w-6xl mx-auto px-4 pb-20">
+  <h2 class="text-2xl font-light mb-6 border-l-4 border-ibmblue-60 pl-3">Best practices</h2>
+  <div id="cardGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-gray-20 dark:bg-gray-80"></div>
+</section>
+
+<!-- ============ DEPLOYMENT TOOLS ============ -->
+<section class="max-w-6xl mx-auto px-4 pb-24">
+  <h2 class="text-2xl font-light mb-6 border-l-4 border-ibmblue-60 pl-3">Deployment options</h2>
+  <div id="toolGrid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-gray-20 dark:bg-gray-80"></div>
+</section>
+
+<!-- ============ MODAL / POPUP ============ -->
+<div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-100/70 p-4">
+  <div class="fade-in bg-white dark:bg-[#262626] max-w-lg w-full border border-gray-20 dark:border-gray-80 shadow-2xl">
+    <div class="flex items-start justify-between px-6 py-4 border-b border-gray-20 dark:border-gray-80">
+      <h3 id="modalTitle" class="text-lg font-semibold pr-4"></h3>
+      <button onclick="closeModal()" class="carbon-focus text-gray-50 hover:text-gray-100 dark:hover:text-white text-xl leading-none">×</button>
+    </div>
+    <div class="px-6 py-5">
+      <p id="modalBody" class="text-[#525252] dark:text-[#c6c6c6] font-light leading-relaxed mb-5"></p>
+      <p class="text-xs font-mono text-gray-50 mb-2">REFERENCES</p>
+      <ul id="modalLinks" class="space-y-2"></ul>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-20 dark:border-gray-80 flex justify-end">
+      <button onclick="closeModal()" class="carbon-focus bg-ibmblue-60 hover:bg-ibmblue-70 text-white px-6 py-2 text-sm transition-colors">Close</button>
+    </div>
+  </div>
+</div>
+
+<footer class="bg-gray-100 text-gray-30 text-sm px-4 py-6">
+  <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between gap-2">
+    <span>Kafka on EC2 — IBM Carbon styled reference</span>
+    <span class="font-mono">v3.7.1 · KRaft mode · multi-AZ</span>
+  </div>
+</footer>
+
+<script>
+// ---------- Theme toggle (persists in-memory for the session) ----------
+const html = document.documentElement;
+const icon = document.getElementById('themeIcon');
+const label = document.getElementById('themeLabel');
+let dark = false;
+function applyTheme() {
+  html.classList.toggle('dark', dark);
+  icon.textContent = dark ? '☀️' : '🌙';
+  label.textContent = dark ? 'Light' : 'Dark';
+}
+document.getElementById('themeToggle').addEventListener('click', () => { dark = !dark; applyTheme(); });
+applyTheme();
+
+// ---------- Content data ----------
+const cards = [
+  { t: 'Multi-AZ topology', d: 'Spread an odd number of brokers (3/5/7) across three Availability Zones so a single AZ failure never costs you quorum. Use rack awareness so replicas land in different AZs.',
+    links: [['Kafka rack awareness','https://kafka.apache.org/documentation/#basic_ops_racks'],['AWS Multi-AZ','https://docs.aws.amazon.com/whitepapers/latest/aws-fault-isolation-boundaries/availability-zones.html']] },
+  { t: 'KRaft, not ZooKeeper', d: 'Kafka 3.7 runs in KRaft mode — the controller quorum replaces ZooKeeper, simplifying operations and improving recovery time. Use 3 controllers for production.',
+    links: [['KRaft overview','https://kafka.apache.org/documentation/#kraft'],['KIP-833','https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready']] },
+  { t: 'Dedicated EBS for logs', d: 'Put Kafka log dirs on a dedicated gp3 volume (provisioned IOPS + throughput), separate from the OS root. Leave most RAM free for the OS page cache.',
+    links: [['gp3 volumes','https://docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html'],['Kafka hardware','https://kafka.apache.org/documentation/#hwandos']] },
+  { t: 'JVM heap 6–8 GB', d: 'Kafka relies on the OS page cache, not the JVM heap, for throughput. Cap the heap around 6–8 GB with G1GC and give the rest of RAM to the kernel.',
+    links: [['JVM tuning','https://kafka.apache.org/documentation/#java']] },
+  { t: 'Replication & ISR', d: 'Set replication.factor=3 and min.insync.replicas=2 with acks=all, and disable unclean leader election to prevent data loss on failover.',
+    links: [['Replication','https://kafka.apache.org/documentation/#replication'],['Durability','https://docs.confluent.io/kafka/design/replication.html']] },
+  { t: 'Network Load Balancer', d: 'Kafka is a TCP protocol — always front brokers with an NLB (L4), never an ALB (L7). Use one listener per broker so advertised.listeners route clients to the right node.',
+    links: [['AWS NLB','https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html'],['Advertised listeners','https://www.confluent.io/blog/kafka-listeners-explained/']] },
+  { t: 'TLS + SASL/SCRAM', d: 'Enable SASL_SSL with SCRAM-SHA-512 and ACLs so traffic is encrypted in transit and every client is authenticated and authorized.',
+    links: [['Kafka security','https://kafka.apache.org/documentation/#security'],['SCRAM','https://kafka.apache.org/documentation/#security_sasl_scram']] },
+  { t: 'Observability', d: 'Export JMX metrics via the Prometheus JMX exporter and ship them to CloudWatch/Grafana. Alert on under-replicated partitions and offline partitions.',
+    links: [['JMX exporter','https://github.com/prometheus/jmx_exporter'],['Monitoring','https://kafka.apache.org/documentation/#monitoring']] },
+  { t: 'Single config file', d: 'Drive every tool — Terraform, CloudFormation, Ansible, scripts — from one cluster.yaml. One source of truth prevents drift between environments.',
+    links: [['12-factor config','https://12factor.net/config']] },
+];
+
+const tools = [
+  { t: 'Terraform', d: 'Declarative VPC, subnets, NLB, security groups and EC2 brokers. Uses yamldecode() to read the shared cluster.yaml and remote S3 state with locking.',
+    links: [['Terraform AWS provider','https://registry.terraform.io/providers/hashicorp/aws/latest/docs'],['Remote state','https://developer.hashicorp.com/terraform/language/state/remote']] },
+  { t: 'CloudFormation', d: 'Native AWS IaC. A parameterized stack provisions the ASG, launch template, NLB and target groups, with the config injected via parameters/SSM.',
+    links: [['CFN templates','https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-guide.html']] },
+  { t: 'Ansible', d: 'Post-provision configuration: installs the JDK + Kafka, templates server.properties from the Jinja2 template, lays down systemd units and starts brokers.',
+    links: [['Ansible AWS','https://docs.ansible.com/ansible/latest/collections/amazon/aws/index.html']] },
+  { t: 'AWS CLI', d: 'Imperative scripts for quick clusters or break-glass operations — run-instances, create-load-balancer, register-targets — all reading the same config.',
+    links: [['AWS CLI reference','https://docs.aws.amazon.com/cli/latest/reference/']] },
+  { t: 'GitLab CI', d: 'A .gitlab-ci.yml pipeline lints, plans and applies the IaC, runs the Ansible play, and gates production behind a manual approval stage.',
+    links: [['GitLab CI/CD','https://docs.gitlab.com/ee/ci/']] },
+  { t: 'Shell scripts', d: 'Bootstrap/user-data scripts format the EBS volume, mount it, tune sysctl and ulimits, then hand off to the configuration layer.',
+    links: [['EC2 user data','https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html']] },
+  { t: 'Python (boto3)', d: 'Programmatic orchestration and validation — discovers broker IPs, renders advertised.listeners, registers NLB targets and runs smoke tests.',
+    links: [['boto3','https://boto3.amazonaws.com/v1/documentation/api/latest/index.html']] },
+  { t: 'Templates', d: 'Jinja2 server.properties and systemd unit templates render per-broker from cluster.yaml, so broker IDs, listeners and replication settings stay consistent.',
+    links: [['Jinja2','https://jinja.palletsprojects.com/']] },
+];
+
+// ---------- Render ----------
+function cardHTML(c, accent) {
+  return `<button onclick='openModal(${JSON.stringify(JSON.stringify(c))})'
+    class="carbon-focus text-left bg-white dark:bg-[#262626] p-5 hover:bg-[#f4f4f4] dark:hover:bg-[#393939] transition-colors group">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-semibold ${accent}">${c.t}</h3>
+      <span class="text-gray-50 group-hover:text-ibmblue-60 transition-colors">→</span>
+    </div>
+    <p class="text-sm text-[#525252] dark:text-[#c6c6c6] font-light line-clamp-3">${c.d}</p>
+  </button>`;
+}
+document.getElementById('cardGrid').innerHTML = cards.map(c => cardHTML(c,'')).join('');
+document.getElementById('toolGrid').innerHTML = tools.map(c => cardHTML(c,'text-ibmblue-60')).join('');
+
+// ---------- Modal ----------
+const modal = document.getElementById('modal');
+function openModal(json) {
+  const c = JSON.parse(json);
+  document.getElementById('modalTitle').textContent = c.t;
+  document.getElementById('modalBody').textContent = c.d;
+  document.getElementById('modalLinks').innerHTML = c.links.map(
+    ([name,url]) => `<li><a href="${url}" target="_blank" rel="noopener"
+      class="carbon-focus text-ibmblue-60 hover:underline flex items-center gap-1 text-sm">
+      ${name} <span class="text-xs">↗</span></a></li>`).join('');
+  modal.classList.remove('hidden'); modal.classList.add('flex');
+}
+function closeModal() { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>
