@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apache Kafka 3.8 — Configuration & Tuning Guide</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.1/tailwind.min.js"></script>
+<script>
+tailwind.config = { darkMode: 'class' };
+</script>
+<style>
+  :root { --fs: 16px; }
+  body { font-size: var(--fs); font-family: 'IBM Plex Sans','Segoe UI',system-ui,sans-serif; }
+  code, pre, .mono { font-family: 'IBM Plex Mono','SF Mono',Menlo,monospace; }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  html { scroll-behavior: smooth; }
+  .ibm-blue { color:#0f62fe; }
+  .bg-ibm-blue { background:#0f62fe; }
+  .border-ibm-blue { border-color:#0f62fe; }
+  details > summary { list-style:none; cursor:pointer; }
+  details > summary::-webkit-details-marker { display:none; }
+  details[open] .chev { transform: rotate(90deg); }
+  .chev { transition: transform .2s ease; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#0f62fe; border-radius:4px; }
+  pre { overflow-x:auto; }
+  .anchor-offset { scroll-margin-top: 90px; }
+</style>
+</head>
+<body class="bg-white text-neutral-900 dark:bg-[#0a0a0a] dark:text-neutral-100 transition-colors duration-300">
+
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-40 backdrop-blur bg-white/90 dark:bg-[#0a0a0a]/90 border-b-2 border-ibm-blue">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 bg-ibm-blue flex items-center justify-center font-bold text-white">K</div>
+      <div>
+        <h1 class="font-bold leading-tight">Apache Kafka 3.8</h1>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400">Configuration &amp; Performance Tuning Guide</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center border border-neutral-300 dark:border-neutral-700 rounded">
+        <button onclick="adjustFont(-2)" class="px-3 py-1 font-bold hover:bg-ibm-blue hover:text-white transition" aria-label="Decrease font size">A−</button>
+        <span id="fsLabel" class="px-2 text-xs tabular-nums w-12 text-center">16pt</span>
+        <button onclick="adjustFont(2)" class="px-3 py-1 font-bold hover:bg-ibm-blue hover:text-white transition" aria-label="Increase font size">A+</button>
+      </div>
+      <button onclick="toggleTheme()" id="themeBtn" class="px-3 py-1 border border-neutral-300 dark:border-neutral-700 rounded font-medium hover:bg-ibm-blue hover:text-white transition">🌙 Dark</button>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-6xl mx-auto px-4 flex flex-col lg:flex-row gap-8 py-8">
+
+<!-- SIDEBAR NAV -->
+<nav class="lg:w-64 shrink-0 lg:sticky lg:top-24 lg:self-start">
+  <p class="text-xs uppercase tracking-wider text-neutral-500 mb-2 font-semibold">Contents</p>
+  <ul class="space-y-1 text-sm" id="toc"></ul>
+</nav>
+
+<main class="flex-1 min-w-0 space-y-12">
+
+<!-- INTRO -->
+<section id="intro" class="anchor-offset">
+  <span class="inline-block bg-ibm-blue text-white text-xs px-2 py-1 font-semibold mb-3">VERSION 3.8 · KRaft</span>
+  <h2 class="text-2xl font-bold mb-3">Overview</h2>
+  <p class="mb-3 leading-relaxed">This guide covers production configuration of Apache Kafka 3.8, organized by component (broker/controller, producer, consumer) and by use-case scenario. Kafka 3.8 runs on <strong>KRaft</strong> (the built-in Raft metadata quorum); ZooKeeper is deprecated and removed in 4.x, so all examples use KRaft. The metadata version for 3.8 is <code class="ibm-blue">3.8-IV0</code>.</p>
+  <div class="border-l-4 border-ibm-blue bg-blue-50 dark:bg-blue-950/30 p-4 text-sm">
+    <strong>How to read this guide:</strong> Each parameter lists its <em>default</em>, <em>what it does</em>, <em>pros/cons of changing it</em>, and a <em>recommendation</em>. Scenario sections give copy-paste config blocks tuned for a specific goal (throughput, latency, durability, etc.).
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="arch" class="anchor-offset">
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">1. Architecture & Roles</h2>
+  <p class="mb-4 leading-relaxed">In KRaft, each process plays one or more <code>process.roles</code>: <code>broker</code>, <code>controller</code>, or both. Controllers manage cluster metadata via a Raft quorum; brokers handle client produce/fetch traffic. For production, run an odd number (3 or 5) of dedicated controllers and separate brokers.</p>
+  <pre class="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 p-4 text-sm rounded mono"><code># Dedicated controller node
+process.roles=controller
+node.id=1
+controller.quorum.voters=1@c1:9093,2@c2:9093,3@c3:9093
+listeners=CONTROLLER://:9093
+
+# Dedicated broker node
+process.roles=broker
+node.id=11
+controller.quorum.voters=1@c1:9093,2@c2:9093,3@c3:9093
+listeners=PLAINTEXT://:9092
+inter.broker.listener.name=PLAINTEXT</code></pre>
+  <p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">Combined mode (<code>broker,controller</code>) is acceptable for dev or small clusters but not recommended for large production deployments where you want fault isolation.</p>
+</section>
+
+<div id="param-sections"></div>
+
+<!-- SCENARIOS -->
+<section id="scenarios" class="anchor-offset">
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">5. Scenario Configurations</h2>
+  <div id="scenario-cards" class="space-y-6"></div>
+</section>
+
+<!-- DECISION TABLE -->
+<section id="cheatsheet" class="anchor-offset">
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">6. Quick Tuning Cheat-Sheet</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm border-collapse">
+      <thead>
+        <tr class="bg-ibm-blue text-white text-left">
+          <th class="p-3">Goal</th><th class="p-3">Key levers</th><th class="p-3">Trade-off</th>
+        </tr>
+      </thead>
+      <tbody id="cheat-body"></tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="pt-8 border-t border-neutral-300 dark:border-neutral-700 text-sm text-neutral-500">
+  <p>Based on Apache Kafka 3.8 documentation. Always validate against your workload — defaults shown are Kafka 3.8 defaults. Test config changes in staging before production rollout.</p>
+</footer>
+
+</main>
+</div>
+
+<button onclick="window.scrollTo({top:0,behavior:'smooth'})" class="fixed bottom-5 right-5 bg-ibm-blue text-white w-11 h-11 rounded-full shadow-lg hover:scale-110 transition z-40" aria-label="Back to top">↑</button>
+
+<script>
+/* ---------- Font size 14–24pt ---------- */
+let fs = 16;
+function adjustFont(d){
+  fs = Math.min(24, Math.max(14, fs + d));
+  document.documentElement.style.setProperty('--fs', fs + 'px');
+  document.getElementById('fsLabel').textContent = fs + 'pt';
+}
+/* ---------- Theme ---------- */
+function toggleTheme(){
+  const root = document.documentElement;
+  const dark = root.classList.toggle('dark');
+  root.classList.toggle('light', !dark);
+  document.getElementById('themeBtn').textContent = dark ? '☀️ Light' : '🌙 Dark';
+}
+
+/* ---------- Data ---------- */
+const sections = [
+  {
+    id:'broker', num:'2', title:'Broker & Storage Configuration',
+    intro:'Core broker settings governing logs, replication, retention and durability. Many are dynamically updatable; replication and durability settings are the highest-impact for reliability.',
+    params:[
+      {name:'num.network.threads', def:'3', desc:'Threads handling network requests (accepting connections, reading/writing socket data) per listener.', pros:'Raising helps when many concurrent client connections saturate request handling.', cons:'Too many wastes CPU and context-switches; rarely the real bottleneck.', rec:'Start at 3; raise toward 8 only on high-connection-count brokers. Watch network-processor idle %.'},
+      {name:'num.io.threads', def:'8', desc:'Threads performing disk I/O for requests (reading/writing the log).', pros:'More threads parallelize disk operations, improving throughput on fast/multi-disk setups.', cons:'Beyond the number of disks/cores, returns diminish; can increase contention.', rec:'Set roughly to the number of data disks; 8–16 typical. Monitor request-handler idle %.'},
+      {name:'log.retention.hours', def:'168 (7 days)', desc:'How long to keep log segments before deletion (time-based retention). Also log.retention.minutes / .ms override it.', pros:'Longer retention enables replay/recovery and late consumers.', cons:'More disk usage; longer retention raises storage cost and recovery time.', rec:'Set per topic via topic config. Use short retention for high-volume transient streams, long for event-sourcing.'},
+      {name:'log.retention.bytes', def:'-1 (unlimited)', desc:'Max size per partition before old segments are deleted. Works together with time retention (whichever triggers first).', pros:'Caps disk usage predictably regardless of message rate.', cons:'A traffic spike can silently evict data sooner than expected.', rec:'Set a size cap on high-throughput topics to protect disks; combine with time retention.'},
+      {name:'log.segment.bytes', def:'1073741824 (1 GB)', desc:'Size at which a log segment file is rolled. Retention/compaction operate at segment granularity.', pros:'Larger segments reduce file count and open-handle overhead.', cons:'Smaller segments let retention/compaction reclaim space faster but create more files.', rec:'Keep 1 GB default for most; reduce (e.g. 256 MB) on topics needing fine-grained retention.'},
+      {name:'min.insync.replicas', def:'1', desc:'With acks=all, the minimum replicas that must acknowledge a write or the producer gets NotEnoughReplicas.', pros:'Setting 2 guarantees a write survives the loss of one broker — core durability lever.', cons:'If too many replicas are down, producers are blocked (availability trade-off).', rec:'Use 2 with replication.factor=3. This is the single most important durability setting.'},
+      {name:'default.replication.factor', def:'1', desc:'Replication factor for auto-created topics.', pros:'3 tolerates one broker loss with no data loss (paired with min.insync.replicas=2).', cons:'Higher factor multiplies storage and network replication cost.', rec:'Always 3 in production. Never run RF=1 for data you cannot lose.'},
+      {name:'unclean.leader.election.enable', def:'false', desc:'Whether an out-of-sync replica may become leader when no in-sync replica is available.', pros:'Enabling restores availability faster after total ISR loss.', cons:'Promoting an out-of-sync replica causes silent data loss.', rec:'Keep false for durability. Enable only for low-value streams where availability beats consistency.'},
+      {name:'num.recovery.threads.per.data.dir', def:'1', desc:'Threads used for log recovery at startup and flushing at shutdown, per data directory.', pros:'More threads speed up restart recovery on large/many-partition brokers.', cons:'Higher transient CPU/disk load during startup only.', rec:'Raise to 2–4 on brokers with many partitions to shorten restart time.'},
+      {name:'log.flush.interval.messages', def:'9223372036854775807 (∞)', desc:'Forces an fsync after N messages. By default Kafka relies on OS page cache flushing, not explicit fsync.', pros:'Explicit flushing bounds data-at-risk in OS cache on power loss.', cons:'Frequent fsync devastates throughput; replication is the preferred durability mechanism.', rec:'Leave default. Rely on replication (RF=3, min ISR=2), not disk flush, for durability.'},
+    ]
+  },
+  {
+    id:'producer', num:'3', title:'Producer Configuration',
+    intro:'Producer configs trade off throughput, latency and durability. The big three are acks, batching (batch.size + linger.ms), and compression.',
+    params:[
+      {name:'acks', def:'all (clients ≥3.0)', desc:'Acknowledgements required before a send is considered complete: 0 (none), 1 (leader only), all (all in-sync replicas).', pros:'all gives strongest durability with min.insync.replicas; 1/0 cut latency.', cons:'acks=0 can lose data on any failure; acks=1 loses data if leader dies before replication.', rec:'Use acks=all for important data. Only drop to 1/0 for metrics/logs where loss is tolerable.'},
+      {name:'enable.idempotence', def:'true', desc:'Guarantees exactly-once, in-order delivery per partition by deduplicating producer retries.', pros:'Prevents duplicates from retries; required for transactions. Near-zero overhead.', cons:'Requires acks=all, retries>0, max.in.flight≤5 — usually fine.', rec:'Keep enabled. Disable only if you have a hard reason and accept possible duplicates.'},
+      {name:'batch.size', def:'16384 (16 KB)', desc:'Max bytes batched per partition before sending. Producer groups records into batches.', pros:'Larger batches improve throughput and compression ratio.', cons:'Memory per partition rises; batches only help if records arrive fast enough to fill them.', rec:'Raise to 64–256 KB for high-throughput pipelines; pair with linger.ms.'},
+      {name:'linger.ms', def:'0', desc:'Time the producer waits to accumulate records before sending a batch.', pros:'Small values (5–100 ms) dramatically boost batching and throughput.', cons:'Adds that much artificial latency to each send.', rec:'Set 5–50 ms for throughput workloads; keep 0 for ultra-low-latency.'},
+      {name:'compression.type', def:'none', desc:'Compression codec: none, gzip, snappy, lz4, zstd. Applied per batch.', pros:'lz4/zstd cut network and disk use substantially with modest CPU.', cons:'gzip is CPU-heavy; compression helps little on tiny/already-compressed payloads.', rec:'Use lz4 for balanced, zstd for best ratio. Big win for text/JSON.'},
+      {name:'max.in.flight.requests.per.connection', def:'5', desc:'Unacknowledged requests allowed per connection.', pros:'Higher improves throughput; ≤5 still preserves ordering with idempotence on.', cons:'Without idempotence, >1 can reorder on retry.', rec:'Keep at 5 with idempotence enabled.'},
+      {name:'delivery.timeout.ms', def:'120000 (2 min)', desc:'Upper bound on time from send() to success/failure, covering retries.', pros:'Bounds how long a record may be retried before failing.', cons:'Too low fails records during transient broker hiccups.', rec:'Keep default; raise if your brokers have longer failover windows.'},
+    ]
+  },
+  {
+    id:'consumer', num:'4', title:'Consumer Configuration',
+    intro:'Consumer configs control fetch batching, offset commit safety and group rebalance behavior. Match poll loop timing to max.poll settings to avoid surprise rebalances.',
+    params:[
+      {name:'fetch.min.bytes', def:'1', desc:'Minimum data the broker accumulates before answering a fetch.', pros:'Raising it batches fetches, cutting request overhead and broker CPU.', cons:'Adds latency up to fetch.max.wait.ms while data accumulates.', rec:'Raise to ~64 KB+ for throughput; keep 1 for lowest latency.'},
+      {name:'fetch.max.wait.ms', def:'500', desc:'Max time broker waits to satisfy fetch.min.bytes before responding.', pros:'Bounds latency added by fetch.min.bytes.', cons:'Lower reduces batching efficiency.', rec:'Tune alongside fetch.min.bytes to balance latency vs efficiency.'},
+      {name:'max.poll.records', def:'500', desc:'Max records returned by a single poll() call.', pros:'Lowering keeps per-poll processing under max.poll.interval.ms.', cons:'Too low increases poll overhead; too high risks exceeding processing budget.', rec:'Lower if per-record processing is slow/heavy to avoid rebalances.'},
+      {name:'max.poll.interval.ms', def:'300000 (5 min)', desc:'Max delay between poll() calls before the consumer is considered dead and removed from the group.', pros:'Raising tolerates long per-batch processing.', cons:'Too high delays detection of genuinely stuck consumers.', rec:'Set above your worst-case batch processing time; reduce max.poll.records instead when possible.'},
+      {name:'enable.auto.commit', def:'true', desc:'Whether offsets commit automatically on a timer.', pros:'Simple; no manual commit code.', cons:'Can commit before processing finishes → message loss on crash (at-most-once risk).', rec:'Disable and commit manually after processing for at-least-once semantics.'},
+      {name:'auto.offset.reset', def:'latest', desc:'Where to start when no committed offset exists: earliest, latest, none.', pros:'earliest replays all history; latest reads only new data.', cons:'Wrong choice silently skips or reprocesses large volumes.', rec:'earliest for reprocessing/ETL pipelines; latest for live dashboards.'},
+      {name:'isolation.level', def:'read_uncommitted', desc:'read_committed hides records from aborted/in-flight transactions.', pros:'read_committed is required for correct exactly-once consumption.', cons:'Slightly higher latency; reads only up to last stable offset.', rec:'Use read_committed when consuming transactional/EOS topics.'},
+    ]
+  }
+];
+
+const scenarios = [
+  {title:'A. Maximum Throughput (log/event ingestion)', color:'#0f62fe',
+   notes:'Optimize for bytes/sec. Big batches, compression, relaxed latency. Suitable for clickstream, metrics, IoT firehoses.',
+   code:`# Producer
+acks=1
+batch.size=262144
+linger.ms=50
+compression.type=lz4
+buffer.memory=67108864
+
+# Broker
+num.io.threads=16
+num.network.threads=8
+log.segment.bytes=1073741824
+
+# Consumer
+fetch.min.bytes=1048576
+fetch.max.wait.ms=500
+max.poll.records=2000`},
+  {title:'B. Lowest Latency (real-time / trading / alerting)', color:'#161616',
+   notes:'Optimize for end-to-end delay. Disable batching wait, lightweight compression, fast fetch.',
+   code:`# Producer
+acks=1
+linger.ms=0
+batch.size=16384
+compression.type=lz4
+max.in.flight.requests.per.connection=5
+
+# Consumer
+fetch.min.bytes=1
+fetch.max.wait.ms=10
+max.poll.records=100`},
+  {title:'C. Maximum Durability (financial / orders / EOS)', color:'#0f62fe',
+   notes:'Zero tolerance for data loss. Full replication, in-sync guarantees, idempotent/transactional producer.',
+   code:`# Broker / topic
+default.replication.factor=3
+min.insync.replicas=2
+unclean.leader.election.enable=false
+
+# Producer (exactly-once)
+acks=all
+enable.idempotence=true
+transactional.id=orders-tx-1
+max.in.flight.requests.per.connection=5
+delivery.timeout.ms=120000
+
+# Consumer
+isolation.level=read_committed
+enable.auto.commit=false`},
+  {title:'D. Cost-Optimized Retention (high volume, short-lived)', color:'#161616',
+   notes:'Cap disk usage aggressively while keeping replication safe.',
+   code:`# Topic config
+retention.ms=86400000          # 1 day
+retention.bytes=53687091200    # 50 GB / partition cap
+segment.bytes=268435456        # 256 MB segments
+cleanup.policy=delete
+compression.type=zstd`},
+  {title:'E. Changelog / Compacted State (CDC, KTable, config topics)', color:'#0f62fe',
+   notes:'Keep the latest value per key forever via log compaction.',
+   code:`# Topic config
+cleanup.policy=compact
+min.cleanable.dirty.ratio=0.5
+segment.ms=604800000
+delete.retention.ms=86400000
+min.insync.replicas=2`}
+];
+
+const cheat = [
+  ['↑ Throughput','batch.size↑, linger.ms↑, compression=lz4/zstd, fetch.min.bytes↑','+latency'],
+  ['↓ Latency','linger.ms=0, fetch.min.bytes=1, fetch.max.wait.ms↓','−batching efficiency, +CPU/network'],
+  ['↑ Durability','acks=all, RF=3, min.insync.replicas=2, unclean=false','−availability if replicas down'],
+  ['Exactly-once','enable.idempotence=true, transactional.id, isolation.level=read_committed','slight latency cost'],
+  ['↓ Disk cost','retention.bytes/ms↓, segment.bytes↓, compression=zstd','less replay history'],
+  ['Avoid rebalances','max.poll.records↓ or max.poll.interval.ms↑','tune to processing time'],
+];
+
+/* ---------- Render ---------- */
+function chip(t){return `<span class="text-xs px-2 py-0.5 rounded mono bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">${t}</span>`;}
+
+const ps = document.getElementById('param-sections');
+sections.forEach(sec=>{
+  let html = `<section id="${sec.id}" class="anchor-offset">
+    <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">${sec.num}. ${sec.title}</h2>
+    <p class="mb-4 leading-relaxed text-neutral-700 dark:text-neutral-300">${sec.intro}</p>
+    <div class="space-y-3">`;
+  sec.params.forEach(p=>{
+    html += `<details class="border border-neutral-300 dark:border-neutral-700 rounded overflow-hidden">
+      <summary class="flex items-center gap-2 p-3 bg-neutral-50 dark:bg-neutral-900 hover:bg-blue-50 dark:hover:bg-blue-950/30">
+        <span class="chev ibm-blue font-bold">›</span>
+        <code class="ibm-blue font-semibold">${p.name}</code>
+        <span class="ml-auto text-xs text-neutral-500 mono">default: ${p.def}</span>
+      </summary>
+      <div class="p-4 space-y-2 text-sm leading-relaxed border-t border-neutral-200 dark:border-neutral-800">
+        <p>${p.desc}</p>
+        <p><span class="font-semibold text-green-700 dark:text-green-400">Pros:</span> ${p.pros}</p>
+        <p><span class="font-semibold text-red-700 dark:text-red-400">Cons:</span> ${p.cons}</p>
+        <p class="border-l-4 border-ibm-blue pl-3 bg-blue-50 dark:bg-blue-950/30 py-2"><span class="font-semibold">Recommendation:</span> ${p.rec}</p>
+      </div>
+    </details>`;
+  });
+  html += `</div></section>`;
+  ps.insertAdjacentHTML('beforeend', html);
+});
+
+const sc = document.getElementById('scenario-cards');
+scenarios.forEach(s=>{
+  sc.insertAdjacentHTML('beforeend', `
+    <div class="border border-neutral-300 dark:border-neutral-700 rounded overflow-hidden">
+      <div class="p-3 text-white font-semibold" style="background:${s.color}">${s.title}</div>
+      <div class="p-4">
+        <p class="text-sm mb-3 text-neutral-700 dark:text-neutral-300">${s.notes}</p>
+        <pre class="bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-3 text-xs rounded mono"><code>${s.code}</code></pre>
+      </div>
+    </div>`);
+});
+
+const cb = document.getElementById('cheat-body');
+cheat.forEach((r,i)=>{
+  cb.insertAdjacentHTML('beforeend', `<tr class="${i%2?'bg-neutral-50 dark:bg-neutral-900':''}">
+    <td class="p-3 font-semibold">${r[0]}</td>
+    <td class="p-3 mono text-xs">${r[1]}</td>
+    <td class="p-3 text-neutral-600 dark:text-neutral-400">${r[2]}</td></tr>`);
+});
+
+/* ---------- TOC ---------- */
+const toc = [
+  ['intro','Overview'],['arch','1. Architecture'],['broker','2. Broker & Storage'],
+  ['producer','3. Producer'],['consumer','4. Consumer'],['scenarios','5. Scenarios'],
+  ['cheatsheet','6. Cheat-Sheet']
+];
+const tocEl = document.getElementById('toc');
+toc.forEach(([id,label])=>{
+  tocEl.insertAdjacentHTML('beforeend',
+    `<li><a href="#${id}" class="block px-2 py-1 rounded hover:bg-ibm-blue hover:text-white transition border-l-2 border-transparent hover:border-ibm-blue">${label}</a></li>`);
+});
+</script>
+</body>
+</html>
