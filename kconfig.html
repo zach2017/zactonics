@@ -64,18 +64,35 @@ tailwind.config = { darkMode: 'class' };
 
 <!-- INTRO -->
 <section id="intro" class="anchor-offset">
-  <span class="inline-block bg-ibm-blue text-white text-xs px-2 py-1 font-semibold mb-3">VERSION 3.8 · KRaft</span>
+  <span class="inline-block bg-ibm-blue text-white text-xs px-2 py-1 font-semibold mb-3">VERSION 3.8 &amp; 4.x · KRaft</span>
   <h2 class="text-2xl font-bold mb-3">Overview</h2>
-  <p class="mb-3 leading-relaxed">This guide covers production configuration of Apache Kafka 3.8, organized by component (broker/controller, producer, consumer) and by use-case scenario. Kafka 3.8 runs on <strong>KRaft</strong> (the built-in Raft metadata quorum); ZooKeeper is deprecated and removed in 4.x, so all examples use KRaft. The metadata version for 3.8 is <code class="ibm-blue">3.8-IV0</code>.</p>
+  <p class="mb-3 leading-relaxed">This guide covers production configuration of Apache Kafka across the <strong>3.8</strong> and <strong>4.x</strong> lines, organized by component (broker/controller, producer, consumer) and by use-case scenario. Both run on <strong>KRaft</strong> (the built-in Raft metadata quorum). In 3.8, ZooKeeper is deprecated but still selectable; the metadata version is <code class="ibm-blue">3.8-IV0</code>. In <strong>4.0+</strong>, ZooKeeper is <strong>completely removed</strong> — KRaft is the only mode. Parameters that differ between versions are tagged inline with a <span class="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 mono">version</span> badge.</p>
   <div class="border-l-4 border-ibm-blue bg-blue-50 dark:bg-blue-950/30 p-4 text-sm">
     <strong>How to read this guide:</strong> Each parameter lists its <em>default</em>, <em>what it does</em>, <em>pros/cons of changing it</em>, and a <em>recommendation</em>. Scenario sections give copy-paste config blocks tuned for a specific goal (throughput, latency, durability, etc.).
   </div>
 </section>
 
+<!-- VERSION DIFFERENCES -->
+<section id="versions" class="anchor-offset">
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">1. Version Landscape: 3.8 → 4.x</h2>
+  <p class="mb-4 leading-relaxed text-neutral-700 dark:text-neutral-300">Kafka 4.0 (released March 18, 2025) is the first major release to run <strong>without ZooKeeper</strong>. Kafka 4.1 (Sept 2025) is the latest stable line. There is no direct ZooKeeper → 4.x upgrade: you must migrate to KRaft on a 3.x build (3.9 is the recommended bridge), finalize, then roll to 4.x.</p>
+  <div class="overflow-x-auto mb-4">
+    <table class="w-full text-sm border-collapse">
+      <thead><tr class="bg-ibm-blue text-white text-left">
+        <th class="p-3">Area</th><th class="p-3">Kafka 3.8</th><th class="p-3">Kafka 4.0 / 4.1+</th>
+      </tr></thead>
+      <tbody id="ver-body"></tbody>
+    </table>
+  </div>
+  <div class="border-l-4 border-ibm-blue bg-blue-50 dark:bg-blue-950/30 p-4 text-sm">
+    <strong>Upgrade path:</strong> ZooKeeper cluster → migrate to KRaft on 3.7+/3.9 (dual-write phase, rollback possible) → finalize metadata with <code>kafka-features.sh</code> → rolling upgrade brokers to 4.x → finalize with <code>--release-version 4.0</code>. After consumer groups adopt the new (KIP-848) protocol, the cluster can only be downgraded to 3.4.1+.
+  </div>
+</section>
+
 <!-- ARCHITECTURE -->
 <section id="arch" class="anchor-offset">
-  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">1. Architecture & Roles</h2>
-  <p class="mb-4 leading-relaxed">In KRaft, each process plays one or more <code>process.roles</code>: <code>broker</code>, <code>controller</code>, or both. Controllers manage cluster metadata via a Raft quorum; brokers handle client produce/fetch traffic. For production, run an odd number (3 or 5) of dedicated controllers and separate brokers.</p>
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">2. Architecture &amp; Roles</h2>
+  <p class="mb-4 leading-relaxed">In KRaft, each process plays one or more <code>process.roles</code>: <code>broker</code>, <code>controller</code>, or both. Controllers manage cluster metadata via a Raft quorum (stored in the internal <code>__cluster_metadata</code> topic); brokers handle client produce/fetch traffic. For production, run an odd number (3 or 5) of dedicated controllers and separate brokers. This layout is identical in 3.8 and 4.x — the difference is that 4.x has no ZooKeeper fallback at all.</p>
   <pre class="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 p-4 text-sm rounded mono"><code># Dedicated controller node
 process.roles=controller
 node.id=1
@@ -95,13 +112,13 @@ inter.broker.listener.name=PLAINTEXT</code></pre>
 
 <!-- SCENARIOS -->
 <section id="scenarios" class="anchor-offset">
-  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">5. Scenario Configurations</h2>
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">6. Scenario Configurations</h2>
   <div id="scenario-cards" class="space-y-6"></div>
 </section>
 
 <!-- DECISION TABLE -->
 <section id="cheatsheet" class="anchor-offset">
-  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">6. Quick Tuning Cheat-Sheet</h2>
+  <h2 class="text-2xl font-bold mb-3 pb-2 border-b-2 border-ibm-blue">7. Quick Tuning Cheat-Sheet</h2>
   <div class="overflow-x-auto">
     <table class="w-full text-sm border-collapse">
       <thead>
@@ -142,7 +159,7 @@ function toggleTheme(){
 /* ---------- Data ---------- */
 const sections = [
   {
-    id:'broker', num:'2', title:'Broker & Storage Configuration',
+    id:'broker', num:'3', title:'Broker & Storage Configuration',
     intro:'Core broker settings governing logs, replication, retention and durability. Many are dynamically updatable; replication and durability settings are the highest-impact for reliability.',
     params:[
       {name:'num.network.threads', def:'3', desc:'Threads handling network requests (accepting connections, reading/writing socket data) per listener.', pros:'Raising helps when many concurrent client connections saturate request handling.', cons:'Too many wastes CPU and context-switches; rarely the real bottleneck.', rec:'Start at 3; raise toward 8 only on high-connection-count brokers. Watch network-processor idle %.'},
@@ -158,11 +175,11 @@ const sections = [
     ]
   },
   {
-    id:'producer', num:'3', title:'Producer Configuration',
+    id:'producer', num:'4', title:'Producer Configuration',
     intro:'Producer configs trade off throughput, latency and durability. The big three are acks, batching (batch.size + linger.ms), and compression.',
     params:[
       {name:'acks', def:'all (clients ≥3.0)', desc:'Acknowledgements required before a send is considered complete: 0 (none), 1 (leader only), all (all in-sync replicas).', pros:'all gives strongest durability with min.insync.replicas; 1/0 cut latency.', cons:'acks=0 can lose data on any failure; acks=1 loses data if leader dies before replication.', rec:'Use acks=all for important data. Only drop to 1/0 for metrics/logs where loss is tolerable.'},
-      {name:'enable.idempotence', def:'true', desc:'Guarantees exactly-once, in-order delivery per partition by deduplicating producer retries.', pros:'Prevents duplicates from retries; required for transactions. Near-zero overhead.', cons:'Requires acks=all, retries>0, max.in.flight≤5 — usually fine.', rec:'Keep enabled. Disable only if you have a hard reason and accept possible duplicates.'},
+      {name:'enable.idempotence', def:'true', ver:'both', desc:'Guarantees exactly-once, in-order delivery per partition by deduplicating producer retries. In 4.0, KIP-890 phase 2 hardens the server-side transaction protocol, further reducing "zombie transaction" risk for transactional producers.', pros:'Prevents duplicates from retries; required for transactions. Near-zero overhead. Stronger guarantees on 4.x.', cons:'Requires acks=all, retries>0, max.in.flight≤5 — usually fine.', rec:'Keep enabled on both 3.8 and 4.x. Disable only with a hard reason and accepting possible duplicates.'},
       {name:'batch.size', def:'16384 (16 KB)', desc:'Max bytes batched per partition before sending. Producer groups records into batches.', pros:'Larger batches improve throughput and compression ratio.', cons:'Memory per partition rises; batches only help if records arrive fast enough to fill them.', rec:'Raise to 64–256 KB for high-throughput pipelines; pair with linger.ms.'},
       {name:'linger.ms', def:'0', desc:'Time the producer waits to accumulate records before sending a batch.', pros:'Small values (5–100 ms) dramatically boost batching and throughput.', cons:'Adds that much artificial latency to each send.', rec:'Set 5–50 ms for throughput workloads; keep 0 for ultra-low-latency.'},
       {name:'compression.type', def:'none', desc:'Compression codec: none, gzip, snappy, lz4, zstd. Applied per batch.', pros:'lz4/zstd cut network and disk use substantially with modest CPU.', cons:'gzip is CPU-heavy; compression helps little on tiny/already-compressed payloads.', rec:'Use lz4 for balanced, zstd for best ratio. Big win for text/JSON.'},
@@ -171,7 +188,7 @@ const sections = [
     ]
   },
   {
-    id:'consumer', num:'4', title:'Consumer Configuration',
+    id:'consumer', num:'5', title:'Consumer Configuration',
     intro:'Consumer configs control fetch batching, offset commit safety and group rebalance behavior. Match poll loop timing to max.poll settings to avoid surprise rebalances.',
     params:[
       {name:'fetch.min.bytes', def:'1', desc:'Minimum data the broker accumulates before answering a fetch.', pros:'Raising it batches fetches, cutting request overhead and broker CPU.', cons:'Adds latency up to fetch.max.wait.ms while data accumulates.', rec:'Raise to ~64 KB+ for throughput; keep 1 for lowest latency.'},
@@ -181,6 +198,7 @@ const sections = [
       {name:'enable.auto.commit', def:'true', desc:'Whether offsets commit automatically on a timer.', pros:'Simple; no manual commit code.', cons:'Can commit before processing finishes → message loss on crash (at-most-once risk).', rec:'Disable and commit manually after processing for at-least-once semantics.'},
       {name:'auto.offset.reset', def:'latest', desc:'Where to start when no committed offset exists: earliest, latest, none.', pros:'earliest replays all history; latest reads only new data.', cons:'Wrong choice silently skips or reprocesses large volumes.', rec:'earliest for reprocessing/ETL pipelines; latest for live dashboards.'},
       {name:'isolation.level', def:'read_uncommitted', desc:'read_committed hides records from aborted/in-flight transactions.', pros:'read_committed is required for correct exactly-once consumption.', cons:'Slightly higher latency; reads only up to last stable offset.', rec:'Use read_committed when consuming transactional/EOS topics.'},
+      {name:'group.protocol', def:'classic (3.8) / classic, opt-in consumer (4.x)', ver:'4.0+', desc:'Selects the consumer group rebalance protocol: "classic" (legacy, client-side, stop-the-world) or "consumer" (KIP-848, broker-coordinated, incremental). KIP-848 is GA in 4.0; the server enables it by default but consumers must opt in with this setting.', pros:'group.protocol=consumer eliminates stop-the-world rebalances, gives durable member IDs and incremental assignment — far faster, more stable rebalances at scale.', cons:'Not available in 3.8 (preview only earlier). Once groups use it, the cluster can only be downgraded to 3.4.1+. Some older client features differ.', rec:'On 4.x, set group.protocol=consumer for large or frequently-rebalancing consumer groups. On 3.8, leave as classic.'},
     ]
   }
 ];
@@ -249,7 +267,30 @@ cleanup.policy=compact
 min.cleanable.dirty.ratio=0.5
 segment.ms=604800000
 delete.retention.ms=86400000
-min.insync.replicas=2`}
+min.insync.replicas=2`},
+  {title:'F. New Consumer Rebalance Protocol — KIP-848 (Kafka 4.x)', color:'#161616',
+   notes:'4.0+ only. Broker-coordinated, incremental rebalances that avoid stop-the-world pauses. Best for large consumer groups or groups that scale up/down often. Server-side enabled by default after the 4.0 upgrade is finalized; clients opt in.',
+   code:`# Consumer (Kafka 4.x client)
+group.protocol=consumer        # opt into KIP-848
+group.id=orders-processors
+enable.auto.commit=false
+isolation.level=read_committed
+
+# Broker side (4.x) — group coordinator tunables
+group.coordinator.rebalance.protocols=classic,consumer
+# Note: once groups use 'consumer', cluster downgrade
+# is limited to 3.4.1+`},
+  {title:'G. Queues / Share Groups — KIP-932 (Kafka 4.x, preview)', color:'#0f62fe',
+   notes:'4.1 = preview, production-ready in 4.2. Share groups allow MORE consumers than partitions, cooperatively consuming records (point-to-point queue semantics) without the 1 partition→1 consumer limit. Use for work-queue patterns, slow consumers, or peak fan-out where strict per-partition ordering is not required.',
+   code:`# Enable share groups on the broker (4.x)
+group.coordinator.rebalance.protocols=classic,consumer,share
+share.coordinator.state.topic.replication.factor=3
+share.coordinator.state.topic.min.isr=2
+
+# Share-group consumer
+group.protocol=share
+group.id=email-workers
+# Consumers > partitions is allowed here`}
 ];
 
 const cheat = [
@@ -258,7 +299,18 @@ const cheat = [
   ['↑ Durability','acks=all, RF=3, min.insync.replicas=2, unclean=false','−availability if replicas down'],
   ['Exactly-once','enable.idempotence=true, transactional.id, isolation.level=read_committed','slight latency cost'],
   ['↓ Disk cost','retention.bytes/ms↓, segment.bytes↓, compression=zstd','less replay history'],
-  ['Avoid rebalances','max.poll.records↓ or max.poll.interval.ms↑','tune to processing time'],
+  ['Avoid rebalances','max.poll.records↓ or max.poll.interval.ms↑; on 4.x set group.protocol=consumer','tune to processing time'],
+  ['Queue / work-pool (4.x)','share groups: group.protocol=share, consumers > partitions','no strict per-partition ordering'],
+];
+
+const verRows = [
+  ['Metadata mode','KRaft or ZooKeeper (ZK deprecated)','KRaft only — ZooKeeper removed'],
+  ['Metadata version','3.8-IV0','4.0-IV3 / 4.1 line (finalize via kafka-features.sh)'],
+  ['Consumer rebalance','Classic (client-side, stop-the-world)','KIP-848 GA; group.protocol=consumer (incremental)'],
+  ['Queues / share groups','Not available','KIP-932: preview in 4.1, production-ready in 4.2'],
+  ['Transactions','Idempotent + transactional','KIP-890 phase 2 — hardened, fewer zombie txns'],
+  ['Client compatibility','Broad','Java clients require brokers ≥ 2.1; msg format v0/v1 dropped'],
+  ['Upgrade note','—','Migrate ZK→KRaft on 3.9 bridge first, then roll to 4.x'],
 ];
 
 /* ---------- Render ---------- */
@@ -271,10 +323,12 @@ sections.forEach(sec=>{
     <p class="mb-4 leading-relaxed text-neutral-700 dark:text-neutral-300">${sec.intro}</p>
     <div class="space-y-3">`;
   sec.params.forEach(p=>{
+    const verBadge = p.ver ? `<span class="text-[10px] px-1.5 py-0.5 rounded mono bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 shrink-0">${p.ver}</span>` : '';
     html += `<details class="border border-neutral-300 dark:border-neutral-700 rounded overflow-hidden">
       <summary class="flex items-center gap-2 p-3 bg-neutral-50 dark:bg-neutral-900 hover:bg-blue-50 dark:hover:bg-blue-950/30">
         <span class="chev ibm-blue font-bold">›</span>
         <code class="ibm-blue font-semibold">${p.name}</code>
+        ${verBadge}
         <span class="ml-auto text-xs text-neutral-500 mono">default: ${p.def}</span>
       </summary>
       <div class="p-4 space-y-2 text-sm leading-relaxed border-t border-neutral-200 dark:border-neutral-800">
@@ -309,11 +363,19 @@ cheat.forEach((r,i)=>{
     <td class="p-3 text-neutral-600 dark:text-neutral-400">${r[2]}</td></tr>`);
 });
 
+const vb = document.getElementById('ver-body');
+verRows.forEach((r,i)=>{
+  vb.insertAdjacentHTML('beforeend', `<tr class="${i%2?'bg-neutral-50 dark:bg-neutral-900':''}">
+    <td class="p-3 font-semibold">${r[0]}</td>
+    <td class="p-3 text-neutral-700 dark:text-neutral-300">${r[1]}</td>
+    <td class="p-3 text-neutral-700 dark:text-neutral-300">${r[2]}</td></tr>`);
+});
+
 /* ---------- TOC ---------- */
 const toc = [
-  ['intro','Overview'],['arch','1. Architecture'],['broker','2. Broker & Storage'],
-  ['producer','3. Producer'],['consumer','4. Consumer'],['scenarios','5. Scenarios'],
-  ['cheatsheet','6. Cheat-Sheet']
+  ['intro','Overview'],['versions','1. Version 3.8 → 4.x'],['arch','2. Architecture'],
+  ['broker','3. Broker & Storage'],['producer','4. Producer'],['consumer','5. Consumer'],
+  ['scenarios','6. Scenarios'],['cheatsheet','7. Cheat-Sheet']
 ];
 const tocEl = document.getElementById('toc');
 toc.forEach(([id,label])=>{
