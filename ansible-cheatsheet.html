@@ -109,6 +109,8 @@ tailwind.config = { darkMode: 'class' };
       </div>
       <div class="examples">
         <div class="ex complete" style="grid-column:1/-1">
+          <div class="explain"><span class="eh">Line by line — full play skeleton</span><ol><li><code>- name:</code> / <code>hosts: web</code> — start one play targeting the <code>web</code> inventory group.</li><li><code>become: true</code> — run tasks with privilege escalation (sudo) for the whole play.</li><li><code>gather_facts: true</code> — run the <code>setup</code> module first so <code>ansible_facts.*</code> are available.</li><li><code>vars:</code> — static play-scoped variables (<code>app_version</code>, <code>listen_port</code>).</li><li><code>vars_files:</code> — load extra vars from files; the second path is <em>templated</em> with <code>{{ env }}</code> so it resolves per-environment.</li><li><code>pre_tasks:</code> — runs before roles; here it updates the dnf cache and drains the host from the LB. Their notified handlers flush before roles begin.</li><li><code>changed_when: false</code> — the drain command reports nothing as 'changed' (it's an action, not a state change).</li><li><code>roles:</code> — runs after pre_tasks; <code>webapp</code> receives a role-scoped var <code>webapp_port</code> built from <code>listen_port</code>.</li><li><code>tasks:</code> — runs after roles; templating the config and <code>notify</code>-ing a handler when it changes.</li><li><code>post_tasks:</code> — runs last; smoke-tests the health endpoint (with retries) then re-adds the host to the LB.</li><li><code>handlers:</code> — only run when notified; flush at the end of each section. <code>restart app</code> bounces the unit.</li></ol></div>
+          
           <span class="tag-c">🟡 Full play skeleton</span>
           <pre><code>- name: Deploy web tier
   hosts: web
@@ -189,6 +191,8 @@ tailwind.config = { darkMode: 'class' };
     msg: "Installing as {{ app_user }}"</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — variable sources & precedence</span><ol><li><code>group_vars/prod.yml</code> — vars auto-loaded for every host in group <code>prod</code>; here a nested dict <code>feature_flags</code>.</li><li><code>vars_files:</code> with <code>{{ env | default('dev') }}</code> — Jinja substitution + the <code>default</code> filter, so a missing <code>env</code> falls back to <code>dev</code>.</li><li><code>set_fact:</code> — computes <code>api_endpoint</code> at runtime from a fact (<code>ansible_facts.fqdn</code>) and a play var; set facts sit near the top of precedence.</li><li>The commented <code>-e</code> line — extra-vars passed on the CLI override <em>every</em> other source, so reserve them for true runtime overrides.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code># group_vars/prod.yml
 db_pool: 50
@@ -205,6 +209,100 @@ feature_flags: { beta: false }
 
 # override at launch (wins over all):
 # ansible-playbook site.yml -e "app_version=2.5.0 env=prod"</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- var substitution reference -->
+    <article class="card" data-module="varsubst">
+      <div class="card-head">
+        <h3>Variable substitution — keywords &amp; syntax</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="varsubst">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html#using-variables-with-jinja2">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Ansible substitutes variables with <strong>Jinja2</strong>. Reference for the operators, filters, tests, and magic variables you'll use constantly.</p>
+      <div class="pop" data-pop-for="varsubst">
+        <strong>Context:</strong> <code>{{ }}</code> = print/expression, <code>{% %}</code> = statement (if/for), <code>{# #}</code> = comment. A value that <em>starts</em> with <code>{{</code> must be quoted in YAML (<code>key: "{{ x }}"</code>) or YAML treats it as a dict. Never nest braces (<code>{{ a_{{b}} }}</code> is invalid) — use the <code>vars</code>/<code>lookup('vars', ...)</code> indirection instead. Undefined vars raise errors unless you pipe through <code>| default(...)</code>.
+      </div>
+      <div class="examples">
+        <div class="ex simple" style="grid-column:1/-1">
+          <span class="tag-s">🟢 Core syntax</span>
+          <pre><code>{{ var }}                 # substitute a variable
+{{ dict.key }}  {{ dict['key'] }}   # dict access (dot or bracket)
+{{ list[0] }}             # index a list
+{{ a }}-{{ b }}           # concatenate by adjacency
+"{{ x }}"                 # MUST quote if value starts with {{
+{# this is a Jinja comment #}
+{% if env == 'prod' %}...{% endif %}   # statement block
+{% for h in groups['web'] %}{{ h }} {% endfor %}</code></pre>
+        </div>
+
+        <div class="ex complete">
+          <span class="explain"><span class="eh">Filters (| transforms the value)</span><ol>
+            <li><code>| default('dev')</code> — fallback if undefined.</li>
+            <li><code>| default(omit)</code> — drop the param entirely if unset.</li>
+            <li><code>| mandatory</code> — fail if undefined.</li>
+            <li><code>| upper | lower | trim | capitalize</code> — string ops.</li>
+            <li><code>| int | float | bool | string</code> — type casts.</li>
+            <li><code>| round(1)</code> — numeric rounding.</li>
+            <li><code>| length | min | max | sum</code> — aggregates.</li>
+            <li><code>| join(',') | split(',')</code> — list ⇄ string.</li>
+            <li><code>| unique | sort | reverse | flatten</code> — list ops.</li>
+            <li><code>| map('upper') | select | reject</code> — iterate/filter.</li>
+            <li><code>| to_json | from_json | to_nice_yaml</code> — serialize.</li>
+            <li><code>| regex_replace('a','b')</code> — regex substitution.</li>
+            <li><code>| b64encode | b64decode</code> — base64.</li>
+            <li><code>| password_hash('sha512')</code> — hash a secret.</li>
+            <li><code>| combine(other)</code> — merge two dicts.</li>
+            <li><code>| ansible.builtin.basename | dirname</code> — path parts.</li>
+          </ol></span>
+          <span class="tag-c">🟡 Filters &amp; tests</span>
+          <pre><code>name: "{{ raw_name | trim | lower }}"
+pool: "{{ db_pool | default(5) | int }}"
+opts: "{{ extra | default(omit) }}"
+csv:  "{{ items | join(',') }}"
+big:  "{{ nums | max }}"
+merged: "{{ base_cfg | combine(env_cfg) }}"
+
+# tests use 'is' / 'is not'
+when: myvar is defined
+when: result is succeeded
+when: path is exists
+when: item is not none
+when: version is version('2.0','&gt;=')</code></pre>
+        </div>
+
+        <div class="ex complete">
+          <span class="explain"><span class="eh">Magic vars, lookups &amp; conditionals</span><ol>
+            <li><code>{{ inventory_hostname }}</code> — current host's inventory name.</li>
+            <li><code>{{ hostvars['db1'].ansible_host }}</code> — read another host's vars.</li>
+            <li><code>{{ groups['web'] }}</code> — list of hosts in a group.</li>
+            <li><code>{{ group_names }}</code> — groups the current host belongs to.</li>
+            <li><code>{{ ansible_facts.* }}</code> — gathered facts (e.g. <code>os_family</code>).</li>
+            <li><code>{{ item }}</code> / <code>{{ ansible_loop.index }}</code> — loop value / counter.</li>
+            <li><code>{{ lookup('env','HOME') }}</code> — controller env var.</li>
+            <li><code>{{ lookup('file','/p/x') }}</code> — file contents.</li>
+            <li><code>{{ lookup('vars', dyn_name) }}</code> — indirect (dynamic) var name.</li>
+            <li><code>{{ query('items', a, b) }}</code> — lookup returning a list (for loops).</li>
+            <li><code>{{ 50 if env=='prod' else 5 }}</code> — inline ternary.</li>
+            <li><code>{{ a ~ b }}</code> — explicit string concatenation operator.</li>
+          </ol></span>
+          <span class="tag-c">🟡 Magic vars &amp; lookups</span>
+          <pre><code>url: "https://{{ inventory_hostname }}:{{ port }}"
+peer: "{{ hostvars['db1']['ansible_default_ipv4']['address'] }}"
+home: "{{ lookup('env','HOME') }}"
+key:  "{{ lookup('file', pubkey_path) }}"
+dyn:  "{{ lookup('vars', 'cfg_' ~ env) }}"  # cfg_prod / cfg_dev
+tier: "{{ 'big' if ansible_facts.memtotal_mb &gt; 8000 else 'small' }}"
+
+# loop with index + label
+- ansible.builtin.debug:
+    msg: "#{{ ansible_loop.index }} = {{ item }}"
+  loop: "{{ groups['web'] }}"
+  loop_control:
+    extended: true        # enables ansible_loop.*</code></pre>
         </div>
       </div>
     </article>
@@ -233,6 +331,8 @@ feature_flags: { beta: false }
 # .processor_vcpus, .memtotal_mb, .fqdn</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — scoped & on-demand fact gathering</span><ol><li><code>gather_subset:</code> with <code>'!all'</code> then <code>network</code>/<code>hardware</code> — collect only those subsets to cut gathering time on large fleets.</li><li><code>ansible.builtin.setup:</code> — explicitly re-run fact gathering mid-play (e.g. after a NIC appears).</li><li><code>filter: "ansible_eth*"</code> — return only facts matching the glob, keeping output small.</li><li><code>when: ansible_facts.os_family == "RedHat"</code> — branch logic off a gathered fact.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code># speed up: gather only what you need
 - hosts: all
@@ -287,6 +387,8 @@ feature_flags: { beta: false }
       test.yml          # role smoke test</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — dependencies, includes & tests</span><ol><li><code>meta/main.yml</code> <code>dependencies:</code> — declare that <code>common</code> runs before this role, passing it a var.</li><li><code>roles:</code> static entry — <code>import_role</code>-style; <code>webapp</code> gets a role-scoped var and a <code>tags</code> list for selective runs (<code>--tags web</code>).</li><li><code>include_role:</code> — dynamic include, required because it's inside a <code>loop</code> and guarded by <code>when</code>; <code>tenant_id</code> changes per iteration.</li><li><code>loop: "{{ active_tenants }}"</code> — iterate the list var; <code>{{ item }}</code> is the current element.</li><li><code>tests/test.yml</code> — a tiny standalone play that hits the health endpoint to verify the role post-deploy.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete — usage &amp; deps</span>
           <pre><code># meta/main.yml  (run 'common' before this role)
 dependencies:
@@ -348,6 +450,8 @@ dependencies:
     msg: "Hello from {{ inventory_hostname }}"</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>var: ansible_facts.network_interfaces</code> — dump a variable by name (no <code>{{ }}</code> needed with <code>var:</code>).</li><li><code>verbosity: 2</code> — only print when run with <code>-vv</code> or higher, keeping normal output clean.</li><li><code>msg: >-</code> — YAML folded block scalar; newlines become spaces, the <code>-</code> strips the trailing newline.</li><li><code>{{ ... | round(1) }}</code> — Jinja expression doing math (MB→GB) piped through the <code>round</code> filter.</li><li><code>when: ... is defined</code> — only run if the fact exists, avoiding undefined-variable errors.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Dump structured facts only when very verbose
   ansible.builtin.debug:
@@ -385,6 +489,8 @@ dependencies:
   ansible.builtin.command: cat /etc/os-release</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>cmd:</code> — the executable and args (run directly, no shell).</li><li><code>chdir:</code> — change into this directory before running.</li><li><code>creates:</code> — idempotency guard: skip the task entirely if this path already exists.</li><li><code>register: migrate_out</code> — capture rc/stdout/stderr into a variable for later use.</li><li><code>changed_when:</code> — define 'changed' yourself: only when stdout contains <code>applied</code>.</li><li><code>failed_when:</code> — treat rc 0 and 2 as success; anything else fails the task.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Run migration once (idempotent guard)
   ansible.builtin.command:
@@ -420,6 +526,8 @@ dependencies:
     dest: /etc/app/app.conf</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>src</code>/<code>dest</code> — source file (controller) → destination path (remote).</li><li><code>owner</code>/<code>group</code>/<code>mode: "0640"</code> — set ownership and octal perms (quote octal to keep leading zero).</li><li><code>backup: true</code> — save a timestamped copy of the old file before overwriting.</li><li><code>validate: "nginx -t -c %s"</code> — run a check on the temp file first; <code>%s</code> is the temp path. Task fails if invalid, so a bad config never lands.</li><li><code>notify: reload nginx</code> — trigger the handler only if the file actually changed.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Deploy secured config with backup &amp; validation
   ansible.builtin.copy:
@@ -466,6 +574,8 @@ dependencies:
     state: directory</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li>First task — <code>state: directory</code> with <code>recurse: true</code> applies owner/group/mode down the whole tree.</li><li><code>owner: appuser</code> / <code>group: appgrp</code> — set ownership of the created path(s).</li><li>Second task — <code>state: link</code> creates a symlink at <code>dest</code> pointing to <code>src</code>.</li><li><code>force: true</code> — replace an existing file/link at <code>dest</code> if needed (common for blue/green 'current' switches).</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Create owned tree + symlink
   ansible.builtin.file:
@@ -508,6 +618,8 @@ dependencies:
     state: present</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>name:</code> as a list — install several packages in one task.</li><li><code>state: latest</code> — ensure newest available (use pinned versions in prod instead).</li><li><code>register: pkg</code> + <code>retries</code>/<code>delay</code>/<code>until</code> — retry up to 3 times, 5s apart, until the task succeeds (resilient to transient mirror failures).</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Install a tool set across distros
   ansible.builtin.package:
@@ -547,6 +659,8 @@ dependencies:
     enabled: true</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — handler form</span><ol><li>Defined in <code>handlers/main.yml</code> so it only runs when <code>notify</code>-ed.</li><li><code>systemd_service</code> — used instead of <code>service</code> because we need systemd features.</li><li><code>state: reloaded</code> — graceful reload (no dropped connections) rather than a full restart.</li><li><code>daemon_reload: true</code> — re-read unit files first, in case the unit changed.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code># handlers/main.yml
 - name: reload nginx
@@ -590,6 +704,8 @@ dependencies:
     enabled: true</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li>First task — <code>template</code> drops a unit file into <code>/etc/systemd/system</code> and notifies a reload handler.</li><li>Second task — <code>state: started</code> + <code>enabled: true</code> ensures it runs now and at boot.</li><li><code>daemon_reload: true</code> — mandatory after adding/editing a <code>.service</code> file so systemd sees it.</li><li>Third task — <code>masked: true</code> fully disables a unit (symlinks it to /dev/null) so it can't be started.</li><li>Handler — <code>state: reloaded</code> for a graceful config reload of <code>myapp</code>.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Install a custom unit file
   ansible.builtin.template:
@@ -645,6 +761,8 @@ dependencies:
     update_cache: true</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>rpm_key</code> — import the vendor's GPG key into the RPM keyring so signed packages are trusted.</li><li><code>yum_repository</code> — define the repo; <code>$releasever</code> is a dnf variable, <code>gpgcheck: true</code> enforces signature checks.</li><li><code>name: "vendor-agent-3.2.*"</code> — version-pinned glob for deterministic installs.</li><li><code>enablerepo: vendor</code> + <code>disablerepo: "*"</code> — install <em>only</em> from that repo.</li><li><code>install_weak_deps: false</code> — skip optional recommended packages.</li><li><code>name: "@Development Tools"</code> — the <code>@</code> prefix installs a package group.</li><li><code>security: true</code> with <code>state: latest</code> — apply security errata only; <code>register: patched</code> captures whether anything changed.</li><li>Final task — <code>reboot</code> conditionally, only if patches landed and the flag allows it.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Trust a vendor repo GPG key
   ansible.builtin.rpm_key:
@@ -717,6 +835,8 @@ dependencies:
     dest: /etc/app/app.conf</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>src: "app.{{ env }}.conf.j2"</code> — the template filename itself is built via substitution, selecting an env-specific template.</li><li><code>mode</code>/<code>backup</code> — secure perms and keep the previous version.</li><li><code>validate:</code> — run <code>appctl check</code> on the rendered temp file before installing.</li><li><code>vars:</code> with <code>{{ 50 if env == 'prod' else 5 }}</code> — Jinja inline conditional (ternary) sets a bigger pool in prod.</li><li><code>notify: restart app</code> — only restart when the rendered file changes.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Render env-specific config
   ansible.builtin.template:
@@ -753,6 +873,8 @@ dependencies:
     app_url: "https://{{ inventory_hostname }}:8443"</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>loop: "{{ team_members }}"</code> — iterate a list of dicts; each element is <code>item</code>.</li><li><code>item.name</code> / <code>item.groups</code> — dot-access dict keys inside the loop.</li><li><code>loop_control: label: "{{ item.name }}"</code> — show just the name in output instead of the whole dict.</li><li><code>when: item.active | default(true)</code> — skip inactive members; <code>default</code> filter handles a missing key.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Create users from a list
   ansible.builtin.user:
@@ -789,6 +911,8 @@ dependencies:
     status_code: 200</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>method: POST</code> with <code>headers:</code> — send an auth bearer token built via <code>{{ api_token }}</code>.</li><li><code>body_format: json</code> + <code>body:</code> — Ansible serializes the dict to a JSON request body.</li><li><code>return_content: true</code> — capture the response body so <code>job.json</code> is parsed.</li><li><code>status_code: [200,201,202]</code> — accept any of these as success.</li><li><code>retries</code>/<code>delay</code>/<code>until: job.json.status == "completed"</code> — poll the API every 6s up to 10 times until the job finishes.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: POST JSON and poll until ready
   ansible.builtin.uri:
@@ -831,6 +955,8 @@ dependencies:
       </div>
       <div class="examples">
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — try / catch / finally</span><ol><li><code>block:</code> — the 'try': deploy, then health-check.</li><li><code>rescue:</code> — runs only if a block task fails: log it, then run rollback.</li><li><code>always:</code> — runs no matter what: send a notification.</li><li><code>{{ ansible_failed_result | default('ok') }}</code> — the failure object if there was one, else the literal <code>ok</code> via the <code>default</code> filter.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Safe deploy with rollback
   block:
@@ -862,6 +988,8 @@ dependencies:
       </div>
       <div class="examples">
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — fire-and-forget + reap</span><ol><li><code>async: 3600</code> + <code>poll: 0</code> — start the job, allow up to 1h, don't wait (returns immediately).</li><li><code>register: batch</code> — keep the job handle (<code>batch.ansible_job_id</code>).</li><li><code>wait_for:</code> — block until port 9000 opens (or 300s timeout) — a readiness gate.</li><li><code>async_status: jid: "{{ batch.ansible_job_id }}"</code> — check the background job.</li><li><code>until: r.finished</code> + <code>retries: 60</code>/<code>delay: 30</code> — poll every 30s up to 30 min until done.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Kick off long ETL batch (fire and forget)
   ansible.builtin.command: /opt/etl/run_batch.sh
@@ -926,6 +1054,8 @@ dependencies:
     mode: put</code></pre>
           </div>
           <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li>First task — <code>ec2_instance</code> in a <code>loop</code> over <code>range(1, worker_count+1)</code> creating numbered workers.</li><li><code>tags: { role: etl, env: prod }</code> — inline-dict tags for cost tracking/filtering.</li><li><code>wait: true</code> — block until each instance reaches running state.</li><li><code>register: workers</code> — capture details of all created instances.</li><li>Second task — <code>s3_object</code> with <code>mode: put</code> uploads each output part; the object key is templated with <code>{{ run_id }}</code> and <code>{{ item }}</code>.</li><li><code>encrypt: true</code> — server-side encryption on the uploaded object.</li></ol></div>
+          
             <span class="tag-c">🟡 Complete</span>
             <pre><code>- name: Launch EC2 worker + land data in S3
   amazon.aws.ec2_instance:
@@ -965,6 +1095,8 @@ dependencies:
         </div>
         <div class="examples">
           <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>id: dw-prod</code> — the RDS instance identifier (idempotent key).</li><li><code>engine</code>/<code>db_instance_class</code>/<code>allocated_storage</code> — engine, size class, and disk.</li><li><code>master_user_password: "{{ vault_dw_password }}"</code> — secret pulled from Ansible Vault, never inline.</li><li><code>tags:</code> — ownership metadata.</li><li><code>wait: true</code> — block until the DB is available before the play continues.</li></ol></div>
+          
             <span class="tag-c">🟡 Complete</span>
             <pre><code>- name: Provision PostgreSQL warehouse
   amazon.aws.rds_instance:
@@ -1008,6 +1140,8 @@ dependencies:
     src: /tmp/events.json</code></pre>
           </div>
           <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>resource_group</code>/<code>storage_account_name</code>/<code>container</code> — the Azure storage hierarchy the blob lands in.</li><li><code>blob: "{{ run_id }}/part-{{ item }}.parquet"</code> — blob name built from substitution + the loop index.</li><li><code>src:</code> — local file uploaded as that blob.</li><li><code>content_type:</code> — sets the MIME type stored with the blob.</li><li><code>loop</code> + <code>loop_control: label:</code> — iterate partitions and keep output readable.</li></ol></div>
+          
             <span class="tag-c">🟡 Complete</span>
             <pre><code>- name: Ensure container then push processed files
   azure.azcollection.azure_rm_storageblob:
@@ -1038,6 +1172,8 @@ dependencies:
         </div>
         <div class="examples">
           <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>name: "etl-worker-{{ item }}"</code> — VM name built from the loop index.</li><li><code>vm_size:</code> — Azure SKU sizing.</li><li><code>ssh_password_enabled: false</code> + <code>ssh_public_keys:</code> — key-only auth; <code>key_data</code> comes from <code>{{ ssh_pub_key }}</code>.</li><li><code>image:</code> — publisher/offer/sku/version selecting the OS image.</li><li><code>tags:</code> — cost/ownership labels.</li><li><code>loop: "{{ range(1, worker_count+1) | list }}"</code> — create N workers.</li></ol></div>
+          
             <span class="tag-c">🟡 Complete</span>
             <pre><code>- name: Provision ETL worker VM
   azure.azcollection.azure_rm_virtualmachine:
@@ -1084,6 +1220,8 @@ dependencies:
       </div>
       <div class="examples">
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — Extract → Transform → Load</span><ol><li><code>set_fact: run_id</code> — stamp a unique id from <code>ansible_date_time.iso8601_basic_short</code> used in every artifact path for traceability.</li><li>EXTRACT — <code>get_url</code> downloads the source; <code>checksum: "sha256:{{ expected_sha }}"</code> verifies integrity.</li><li>TRANSFORM — <code>command</code> runs the transform; <code>creates:</code> makes it idempotent and <code>changed_when: tf.rc == 0</code> reports change only on success.</li><li>LOAD — <code>s3_object mode: put</code> with <code>encrypt: true</code> ships the result; the key uses <code>{{ run_id }}</code>.</li><li>VALIDATE — <code>uri POST</code> tells the warehouse to refresh, sending <code>run_id</code> in a JSON body, expecting <code>202</code>.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Stamp run id
   ansible.builtin.set_fact:
@@ -1157,6 +1295,8 @@ dependencies:
     line: 'log_level=info'</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line</span><ol><li><code>blockinfile</code> — manage a multi-line section; <code>marker: "# {mark} ANSIBLE MANAGED ..."</code> wraps it with BEGIN/END markers so reruns edit in place.</li><li><code>create: true</code> — create the file if missing; <code>block: |</code> is a literal multi-line scalar.</li><li><code>lineinfile</code> audit record — <code>insertafter: EOF</code> appends; the line is templated with the timestamp and <code>lookup('env','USER')</code>.</li><li><code>lookup('env','USER')</code> — a lookup plugin reading a controller-side env var at runtime.</li><li>Capture block — <code>register: ci</code> + <code>changed_when: false</code> grabs output without reporting change, then <code>copy: content:</code> writes stdout (plus rc) to a per-run log file.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete</span>
           <pre><code>- name: Configure rsyslog forwarding block
   ansible.builtin.blockinfile:
@@ -1210,6 +1350,8 @@ dependencies:
       </div>
       <div class="examples">
         <div class="ex complete" style="grid-column:1/-1">
+          <div class="explain"><span class="eh">Line by line — cross-distro CA trust</span><ol><li>RedHat task — copy the CA into <code>/etc/pki/ca-trust/source/anchors/</code>, guarded by <code>when: os_family == "RedHat"</code>.</li><li>Debian task — copy into <code>/usr/local/share/ca-certificates/</code>; the file <em>must</em> end in <code>.crt</code> for Debian's tooling.</li><li><code>mode: "0644"</code> — CA public certs are world-readable (never put private keys here).</li><li><code>notify:</code> — each branch triggers its own handler.</li><li>Handlers — <code>update-ca-trust extract</code> (RedHat) / <code>update-ca-certificates</code> (Debian) rebuild the system trust bundle once.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete — cross-distro</span>
           <pre><code>- name: Install internal root CA (RedHat)
   ansible.builtin.copy:
@@ -1264,6 +1406,8 @@ dependencies:
     provider: selfsigned</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — key + CSR + CA-signed cert</span><ol><li><code>openssl_privatekey</code> — 4096-bit key owned by the app user, <code>mode: "0600"</code>, task marked <code>no_log: true</code> so key material never hits logs.</li><li><code>openssl_csr</code> — CSR referencing that key; <code>common_name</code> + <code>subject_alt_name</code> list the names the cert is valid for.</li><li><code>x509_certificate provider: ownca</code> — sign the CSR with your internal CA.</li><li><code>ownca_path</code>/<code>ownca_privatekey_path</code> — the CA cert and key doing the signing.</li><li><code>ownca_not_after: "+365d"</code> — validity of one year.</li><li><code>notify: reload nginx</code> — reload the server when the cert changes. All modules here are idempotent — they regenerate only when inputs change.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete — key + CSR + signed cert</span>
           <pre><code>- name: Private key (secured)
   community.crypto.openssl_privatekey:
@@ -1322,6 +1466,8 @@ dependencies:
   no_log: true</code></pre>
         </div>
         <div class="ex complete">
+          <div class="explain"><span class="eh">Line by line — JKS + truststore import</span><ol><li><code>java_keystore</code> — build a keystore from PEM cert+key loaded via <code>lookup('file', ...)</code>.</li><li><code>keystore_type: pkcs12</code> — modern default (preferred over legacy JKS).</li><li><code>password: "{{ vault_keystore_pass }}"</code> + <code>no_log: true</code> — secret from Vault, kept out of logs; file locked to the app user at <code>0600</code>.</li><li><code>java_cert</code> — import the internal CA into the JVM truststore (<code>cacerts</code>) so the JVM trusts internal services.</li><li><code>state: present</code> — idempotent import keyed on <code>cert_alias</code>.</li><li><code>notify: restart app</code> — bounce the app to pick up new trust material.</li></ol></div>
+          
           <span class="tag-c">🟡 Complete — JKS + trust a CA</span>
           <pre><code>- name: Build app keystore from PEM
   community.general.java_keystore:
@@ -1455,6 +1601,14 @@ dependencies:
   .lnk{color:#1d4ed8;font-weight:500;text-decoration:none}
   .lnk:hover{text-decoration:underline}
   .dark .lnk{color:#93c5fd}
+  .explain{grid-column:1/-1;border-radius:.5rem;border:1px solid #c7d2fe;border-left:4px solid #2563eb;background:rgba(239,246,255,.7);padding:.75rem .9rem;font-size:.8rem;line-height:1.55;color:#0f172a}
+  .dark .explain{border-color:#334155;border-left-color:#3b82f6;background:rgba(30,41,59,.5);color:#e2e8f0}
+  .explain .eh{display:block;font-weight:700;color:#1d4ed8;margin-bottom:.35rem;font-size:.78rem;letter-spacing:.02em}
+  .dark .explain .eh{color:#60a5fa}
+  .explain ol{margin:0;padding-left:1.1rem;list-style:decimal}
+  .explain li{margin:.18rem 0}
+  .explain code{padding:0 .25rem;border-radius:.25rem;background:#dbeafe;color:#1e3a8a;font-size:.92em}
+  .dark .explain code{background:#1e293b;color:#93c5fd}
 </style>
 
 <script>
