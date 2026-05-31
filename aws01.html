@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Admin Guide · Budgets, Users, EC2s, Images &amp; Networking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff; --bg-soft:#f4f4f4; --bg-card:#ffffff; --bg-elev:#f9f9f9;
+    --border:#dde1e6; --border-strong:#c1c7cd;
+    --text:#161616; --text-soft:#525252; --text-faint:#8d8d8d;
+    --blue:#0f62fe; --blue-deep:#0043ce; --blue-soft:#edf3ff;
+    --screen-bar:#262626; --code-bg:#f2f4f8; --code-border:#0f62fe;
+    --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg:0 10px 30px rgba(0,0,0,.18);
+    --ok:#198038; --warn-bg:#fff8e1; --warn-bd:#f1c21b; --info-bg:#edf3ff;
+  }
+  [data-theme="dark"]{
+    --bg:#0b0d12; --bg-soft:#11141b; --bg-card:#161a22; --bg-elev:#1b202a;
+    --border:#2a3038; --border-strong:#3a414c;
+    --text:#f2f4f8; --text-soft:#a8b0bd; --text-faint:#6d7585;
+    --blue:#4589ff; --blue-deep:#78a9ff; --blue-soft:#16243f;
+    --screen-bar:#05070b; --code-bg:#0e1117; --code-border:#4589ff;
+    --shadow:0 1px 3px rgba(0,0,0,.5);
+    --shadow-lg:0 18px 40px rgba(0,0,0,.6);
+    --ok:#42be65; --warn-bg:#2a2410; --warn-bd:#d2a106; --info-bg:#16243f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'IBM Plex Sans',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.6;
+    transition:background .25s ease,color .25s ease;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{letter-spacing:-.015em;line-height:1.2}
+  a{color:var(--blue-deep);text-decoration:none}
+  code{font-family:'IBM Plex Mono',monospace;font-size:.86em;background:var(--code-bg);
+    border:1px solid var(--border);padding:1px 6px;border-radius:4px;color:var(--blue-deep)}
+  pre{margin:14px 0}
+  pre code{display:block;border:none;border-left:3px solid var(--code-border);
+    background:var(--code-bg);color:var(--text);padding:14px 16px;line-height:1.6;
+    overflow-x:auto;border-radius:0 6px 6px 0;font-size:.82rem;white-space:pre}
+  .wrap{max-width:880px;margin:0 auto;padding:0 20px}
+  header{position:sticky;top:0;z-index:50;background:var(--bg);
+    border-bottom:1px solid var(--border);backdrop-filter:blur(8px)}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0}
+  .brand .kicker{font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--text-faint)}
+  .brand h1{font-size:1.1rem;color:var(--blue-deep);font-weight:700}
+  @media(min-width:680px){.brand h1{font-size:1.35rem}}
+  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--border-strong);
+    background:var(--bg-card);color:var(--text);padding:8px 12px;border-radius:30px;font-size:.8rem;
+    font-weight:500;transition:.2s;white-space:nowrap;flex-shrink:0}
+  .toggle:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .toggle svg{width:16px;height:16px}
+  .intro{margin:32px 0}
+  .panel{background:var(--bg-elev);border:1px solid var(--border);
+    border-left:4px solid var(--blue);border-radius:10px;padding:20px 22px}
+  .panel h2{font-size:1.15rem;margin-bottom:8px}
+  .panel p{color:var(--text-soft);font-size:.95rem}
+  .toc{display:grid;gap:10px;margin-top:24px}
+  @media(min-width:680px){.toc{grid-template-columns:1fr 1fr}}
+  .toc a{display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid var(--border);
+    border-radius:9px;background:var(--bg-card);color:var(--text);font-size:.9rem;font-weight:500;
+    transition:.18s;box-shadow:var(--shadow)}
+  .toc a:hover{border-color:var(--blue);transform:translateY(-2px)}
+  .chip{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;
+    display:grid;place-items:center;font-size:.78rem;font-weight:700}
+  section.step{margin:0 0 56px;scroll-margin-top:90px}
+  .step-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .step-head .chip{width:38px;height:38px;font-size:1rem;box-shadow:var(--shadow)}
+  .step-head h2{font-size:1.35rem;color:var(--blue-deep)}
+  @media(min-width:680px){.step-head h2{font-size:1.55rem}}
+  ul.bul{list-style:none;display:flex;flex-direction:column;gap:10px;margin:6px 0}
+  ul.bul li{position:relative;padding-left:22px;color:var(--text-soft);font-size:.95rem}
+  ul.bul li::before{content:"";position:absolute;left:2px;top:9px;width:7px;height:7px;
+    border-radius:2px;background:var(--blue)}
+  ul.bul li strong{color:var(--text)}
+  .note{border-radius:8px;padding:13px 16px;font-size:.9rem;margin:14px 0;color:var(--text-soft)}
+  .note.warn{background:var(--warn-bg);border-left:4px solid var(--warn-bd)}
+  .note.info{background:var(--info-bg);border-left:4px solid var(--blue)}
+  .note strong{color:var(--text)}
+  .screen{border:1px solid var(--border-strong);border-radius:10px;overflow:hidden;margin-top:16px;
+    box-shadow:var(--shadow);background:var(--bg-card)}
+  .screen-bar{background:var(--screen-bar);padding:9px 14px;display:flex;align-items:center;gap:7px}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .screen-bar .url{margin-left:12px;font-size:.72rem;color:#9aa3b0;font-family:'IBM Plex Mono',monospace;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .screen-body{padding:20px;font-size:.85rem}
+  .field-label{font-size:.72rem;color:var(--text-faint);margin-bottom:4px}
+  .field{border:1px solid var(--border-strong);background:var(--bg);color:var(--text);
+    padding:9px 12px;border-radius:6px;margin-bottom:14px}
+  .field.muted{color:var(--text-faint)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:140px}
+  .opt{border:1px solid var(--border);border-radius:7px;overflow:hidden;margin-bottom:12px}
+  .opt .line{padding:10px 12px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border)}
+  .opt .line:last-child{border-bottom:none}
+  .opt .line.sel{background:var(--blue-soft)}
+  .opt .line .tag{font-size:.68rem;color:var(--ok);margin-left:auto}
+  .opt .line.dim{color:var(--text-faint)}
+  .caption{font-size:.72rem;color:var(--text-faint);margin-top:8px;font-style:italic}
+  .btn{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-family:inherit;
+    font-weight:600;border-radius:7px;transition:.16s;font-size:.82rem;padding:9px 16px;line-height:1}
+  .btn-primary{background:var(--blue);color:#fff}
+  .btn-primary:hover{background:var(--blue-deep)}
+  .btn-sm{padding:7px 13px;font-size:.78rem}
+  .btn-block{width:100%;justify-content:center;padding:11px}
+  .actions{text-align:right;margin-top:8px}
+  .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);
+    background:var(--bg-card);color:var(--text-soft);padding:7px 13px;border-radius:30px;
+    font-size:.8rem;font-weight:500;cursor:pointer;transition:.16s;text-decoration:none}
+  .pill:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .pill.info-pill{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-soft)}
+  .card{background:var(--bg-elev);border:1px solid var(--border);border-radius:10px;padding:22px;margin-top:24px}
+  .card h3{font-size:1.1rem;color:var(--blue-deep);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .card ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .card.check ul li{position:relative;padding-left:28px;font-size:.9rem;color:var(--text-soft)}
+  .card.check ul li::before{content:"\2713";position:absolute;left:0;top:0;color:var(--ok);font-weight:700}
+  .card.check ul li strong{color:var(--text)}
+  .reflist li{position:relative;padding-left:20px;font-size:.9rem;margin-bottom:7px}
+  .reflist li::before{content:"\2192";position:absolute;left:0;color:var(--blue)}
+  .qr{width:118px;height:118px;background:#fff;border:1px solid var(--border-strong);
+    display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:1px;padding:6px;border-radius:6px}
+  .qr i{display:block}
+  .mfa-wrap{display:flex;gap:22px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .mfa-code{letter-spacing:.22em;font-family:'IBM Plex Mono',monospace}
+  .alert-tbl{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:4px}
+  .alert-tbl th,.alert-tbl td{border:1px solid var(--border);padding:7px 10px;text-align:left}
+  .alert-tbl th{background:var(--bg-soft);color:var(--text-soft);font-weight:600;font-size:.72rem}
+  .alert-tbl td{color:var(--text)}
+  #progress{position:fixed;top:0;left:0;height:3px;background:var(--blue);width:0;z-index:60;transition:width .1s}
+  .overlay{position:fixed;inset:0;background:rgba(8,10,15,.6);z-index:70;display:none;
+    align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}
+  .overlay.show{display:flex;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{background:var(--bg-card);border:1px solid var(--border);border-top:4px solid var(--blue);
+    border-radius:12px;max-width:540px;width:100%;box-shadow:var(--shadow-lg);max-height:85vh;
+    display:flex;flex-direction:column;animation:pop .2s ease}
+  @keyframes pop{from{transform:translateY(12px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .modal-head h3{font-size:1.05rem;color:var(--blue-deep)}
+  .modal-close{background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:1.5rem;line-height:1;padding:0 4px}
+  .modal-close:hover{color:var(--text)}
+  .modal-body{padding:18px 20px;overflow-y:auto;font-size:.9rem;color:var(--text-soft)}
+  .modal-body p{margin-bottom:10px}.modal-body p:last-child{margin-bottom:0}
+  .modal-body b{color:var(--text)}
+  footer{border-top:1px solid var(--border);padding:26px 0;text-align:center;
+    font-size:.76rem;color:var(--text-faint)}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<header>
+  <div class="wrap hrow">
+    <div class="brand">
+      <div class="kicker">Amazon Web Services &middot; Admin Console</div>
+      <h1>Budgets, Users, EC2s, Custom Images &amp; Networking</h1>
+    </div>
+    <button class="toggle" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle theme">
+      <span id="themeIcon"></span><span id="themeLabel">Dark</span>
+    </button>
+  </div>
+</header>
+<div class="wrap">
+  <section class="intro">
+    <div class="panel">
+      <h2>Think of AWS like a big school building &#127979;</h2>
+      <p>Before anything else we set a <strong>spending limit</strong> so the bill can never surprise you.
+      Then: the <strong>root account</strong> is the principal who owns every key. A <strong>user</strong> is a
+      student with a hall pass. <strong>Permissions</strong> decide which rooms it opens. <strong>EC2s</strong>
+      are computers you rent. A <strong>custom image</strong> is a saved snapshot of a computer. A
+      <strong>security group</strong> is the door guard that decides which computers may talk. This guide walks
+      through all of it, one click at a time.</p>
+    </div>
+    <nav class="toc" id="toc"></nav>
+  </section>
+</div>
+<main class="wrap" id="main"></main>
+<footer class="wrap">
+  Educational walkthrough &middot; Screen mock-ups illustrate typical AWS Console layouts, not live pages &middot;
+  Always confirm details against the official AWS documentation linked in each step.
+</footer>
+<div class="overlay" id="overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <h3 id="modalTitle"></h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+<script>
+const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>';
+const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>';
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('themeIcon').innerHTML=t==='dark'?SUN:MOON;
+  document.getElementById('themeLabel').textContent=t==='dark'?'Light':'Dark';}
+function toggleTheme(){const c=document.documentElement.getAttribute('data-theme');applyTheme(c==='dark'?'light':'dark');}
+applyTheme(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+window.addEventListener('scroll',()=>{const h=document.documentElement;
+  document.getElementById('progress').style.width=(h.scrollTop)/(h.scrollHeight-h.clientHeight)*100+'%';});
+function qr(){let c='';for(let i=0;i<49;i++)c+='<i style="background:'+(Math.random()>.5?'#161616':'#fff')+'"></i>';return c;}
+
+const steps=[
+{n:0,t:"Set a spending budget of $25",
+ noteWarn:'<strong>Do this first.</strong> A budget is your safety net. We set a hard ceiling of <strong>$25/month</strong> and warnings on the way up so a forgotten EC2 can never run up a scary bill.',
+ bul:[
+  'Sign in as <strong>Root user</strong>, open the <strong>Billing and Cost Management</strong> console (search <code>Billing</code> in the top bar).',
+  'Left menu &rarr; <strong>Budgets</strong> &rarr; <strong>Create budget</strong>.',
+  'Choose <strong>Customize (advanced)</strong> &rarr; budget type <strong>Cost budget</strong> &rarr; <strong>Next</strong>.',
+  'Name it <code>Monthly-Limit-25</code>, period <strong>Monthly</strong>, renewal <strong>Recurring</strong>.',
+  'Set <strong>Budgeted amount = 25</strong> (USD). This is your target ceiling.'
+ ],
+ screen:{url:'Billing &rsaquo; Budgets &rsaquo; Create budget', body:`
+   <div class="field-label">Budget name</div><div class="field">Monthly-Limit-25</div>
+   <div class="row">
+     <div><div class="field-label">Period</div><div class="field" style="margin:0">Monthly</div></div>
+     <div><div class="field-label">Budgeted amount (USD)</div><div class="field" style="margin:0">25.00</div></div>
+   </div>
+   <div class="actions" style="margin-top:14px"><button class="btn btn-primary btn-sm">Next</button></div>`},
+ caption:'Cost budget set to a $25 monthly ceiling (layout illustration).',
+ links:[{m:'mB',t:'\u2139\uFE0F What is an AWS Budget?'},{u:'https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-create.html',t:'\uD83D\uDCC4 Official: Create a budget'}]},
+
+{n:1,t:"Add warnings at $5, $10, $15 &amp; $20",
+ bul:[
+  'On the <strong>Configure alerts</strong> step, click <strong>Add alert threshold</strong> for each warning.',
+  'For each one set <strong>Threshold = Absolute value</strong> (a dollar amount, not a percent) and trigger <strong>Actual</strong>.',
+  'Create four alerts: <strong>$5, $10, $15, and $20</strong>. AWS emails you each time real spend crosses one.',
+  'Enter your <strong>email address</strong> as the recipient for every threshold.',
+  'Tip: $20 is your "almost there" early warning &mdash; $25 is the hard line where we stop EC2s in the next step.'
+ ],
+ screen:{url:'Budget &rsaquo; Configure alerts', body:`
+   <table class="alert-tbl">
+     <tr><th>Alert</th><th>Type</th><th>Threshold</th><th>Trigger</th></tr>
+     <tr><td>#1</td><td>Absolute ($)</td><td>5.00</td><td>Actual</td></tr>
+     <tr><td>#2</td><td>Absolute ($)</td><td>10.00</td><td>Actual</td></tr>
+     <tr><td>#3</td><td>Absolute ($)</td><td>15.00</td><td>Actual</td></tr>
+     <tr><td>#4</td><td>Absolute ($)</td><td>20.00</td><td>Actual</td></tr>
+   </table>
+   <div class="actions" style="margin-top:14px"><button class="btn btn-primary btn-sm">Add alert threshold</button></div>`},
+ caption:'Four dollar-based warnings at $5 / $10 / $15 / $20.',
+ links:[{m:'mB2',t:'\u2139\uFE0F Actual vs. forecasted'},{u:'https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-create.html',t:'\uD83D\uDCC4 Official: Budget alerts'}]},
+
+{n:2,t:"Auto-stop EC2s when $25 is reached",
+ noteInfo:'A <strong>budget action</strong> lets AWS act for you when spend hits the limit. We tell it: at <strong>$25, stop all running EC2 instances</strong> so nothing keeps charging.',
+ bul:[
+  'Still in the budget setup, go to <strong>Attach actions</strong> (or edit the budget later &rarr; <strong>Add action</strong>).',
+  'Add a <strong>5th threshold at $25</strong> (Absolute, Actual) &mdash; this one carries the action.',
+  '<strong>Action type:</strong> choose <strong>EC2 instances (stop)</strong>.',
+  'Pick the EC2s/region to target (or all in the account).',
+  '<strong>IAM role:</strong> select/create one with the managed policy <code>AWSBudgetsActions_RolePolicyForResourceAdministrationWithSSM</code> so Budgets is allowed to stop instances.',
+  'Set <strong>Automatically run this action</strong> = Yes &rarr; <strong>Create budget</strong>.',
+  '<strong>Note:</strong> stopping an EC2 halts compute charges, but storage/networking can still cost a little, so $25 is a soft ceiling with a small cushion.'
+ ],
+ screen:{url:'Budget &rsaquo; Attach actions', body:`
+   <div class="field-label">Threshold that triggers action</div><div class="field">$25.00 \u00b7 Actual</div>
+   <div class="opt">
+     <div class="line sel"><input type="radio" checked> &#128721; <span style="font-weight:500">EC2 instances (stop)</span></div>
+     <div class="line dim">Apply IAM policy &middot; Apply SCP &middot; Target SSM</div>
+   </div>
+   <div class="field-label">IAM role for Budgets</div><div class="field muted" style="margin:0">Budgets-Action-Role</div>
+   <div class="actions" style="margin-top:14px"><button class="btn btn-primary btn-sm">Create budget</button></div>`},
+ caption:'A budget action that stops EC2 instances at the $25 limit.',
+ links:[{m:'mB3',t:'\u2139\uFE0F How budget actions work'},{m:'mB4',t:'\uD83D\uDD12 IAM role for the action'},{u:'https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-controls.html',t:'\uD83D\uDCC4 Official: Budget actions'}]},
+
+{n:3,t:"Sign in &amp; protect the root account",
+ bul:[
+  'You are already signed in as <strong>Root user</strong> from the budget steps.',
+  'The root account is extremely powerful, so <strong>turn on MFA for root first</strong> (same idea as Step 8).',
+  '<strong>Golden rule:</strong> after setup, never do daily work as root. Create a normal user instead &mdash; that\u2019s what this guide builds next.'
+ ],
+ screen:{url:'console.aws.amazon.com \u2014 Sign in', body:`
+   <div style="text-align:center"><div style="font-weight:600;margin-bottom:16px">Sign in</div>
+   <div style="max-width:280px;margin:0 auto;text-align:left">
+     <div class="field-label">\u25CF Root user (account owner)</div>
+     <div class="field muted">you@email.com</div>
+     <div class="field-label">\u25CB IAM user</div>
+     <button class="btn btn-primary btn-block">Next</button>
+   </div></div>`},
+ caption:'Typical AWS sign-in screen (layout illustration).',
+ links:[{m:'m0',t:'\u2139\uFE0F What is the root account?'},{u:'https://docs.aws.amazon.com/signin/latest/userguide/console-sign-in-tutorials.html',t:'\uD83D\uDCC4 Official: Signing in'}]},
+
+{n:4,t:"Open the IAM service",
+ bul:[
+  '<strong>IAM</strong> = Identity and Access Management \u2014 it controls <em>who</em> can do <em>what</em>.',
+  'In the top search bar type <code>IAM</code> and click the IAM result.',
+  'You land on the IAM <strong>Dashboard</strong>. The left menu holds <strong>User groups</strong>, <strong>Users</strong>, <strong>Roles</strong>, and <strong>Policies</strong>.'
+ ],
+ screen:{url:'AWS Console \u2014 search', body:`
+   <div class="field">\uD83D\uDD0D IAM</div>
+   <div class="opt">
+     <div class="line sel"><span style="color:var(--blue-deep);font-weight:600">IAM</span><span style="color:var(--text-faint);font-size:.72rem">Manage access to AWS resources</span></div>
+     <div class="line dim">IAM Identity Center \u00b7 Resource Access Manager</div>
+   </div>`},
+ links:[{u:'https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html',t:'\uD83D\uDCC4 Official: What is IAM?'}]},
+
+{n:5,t:"Create a user group",
+ bul:[
+  'A <strong>group</strong> is a folder for users. Give permissions to the group once and every member inherits them \u2014 the recommended approach.',
+  'Left menu &rarr; <strong>User groups</strong> &rarr; <strong>Create group</strong>.',
+  'Name it clearly, e.g. <code>EC2-Builders</code>.',
+  'Leave policies blank for now (added in Step 6) &rarr; <strong>Create user group</strong>.'
+ ],
+ screen:{url:'IAM &rsaquo; User groups &rsaquo; Create', body:`
+   <div class="field-label">User group name</div>
+   <div class="field">EC2-Builders</div>
+   <div class="actions"><button class="btn btn-primary btn-sm">Create user group</button></div>`},
+ links:[{m:'m2',t:'\u2139\uFE0F Why groups instead of users?'},{u:'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_groups_create.html',t:'\uD83D\uDCC4 Official: Create groups'}]},
+
+{n:6,t:"Add EC2 permissions to the group",
+ bul:[
+  'Open <code>EC2-Builders</code> &rarr; <strong>Permissions</strong> tab &rarr; <strong>Add permissions</strong> &rarr; <strong>Attach policies</strong>.',
+  'Search <code>AmazonEC2FullAccess</code> and tick it. This lets members create EC2s, build custom images, and manage security groups.',
+  'Click <strong>Add permissions</strong>.',
+  '<strong>Least-privilege tip:</strong> FullAccess is fine for learning; in production you\u2019d craft a smaller custom policy.'
+ ],
+ screen:{url:'IAM &rsaquo; Groups &rsaquo; EC2-Builders &rsaquo; Attach policies', body:`
+   <div class="field">\uD83D\uDD0D AmazonEC2FullAccess</div>
+   <div class="opt">
+     <div class="line sel"><input type="checkbox" checked> <span style="font-weight:500">AmazonEC2FullAccess</span><span class="tag" style="color:var(--text-faint)">AWS managed</span></div>
+     <div class="line dim"><input type="checkbox"> AmazonEC2ReadOnlyAccess</div>
+   </div>
+   <div class="actions"><button class="btn btn-primary btn-sm">Add permissions</button></div>`},
+ links:[{m:'m3',t:'\u2139\uFE0F What\u2019s in EC2FullAccess?'},{m:'m3b',t:'\uD83D\uDD12 Least-privilege JSON'},{u:'https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html',t:'\uD83D\uDCC4 Official: Managed policies'}]},
+
+{n:7,t:"Create the new user",
+ bul:[
+  'Left menu &rarr; <strong>Users</strong> &rarr; <strong>Create user</strong>.',
+  'Type a username, e.g. <code>jordan-dev</code>.',
+  'Check <strong>Provide user access to the AWS Management Console</strong> for web login.',
+  'Set a password and check <strong>Users must create a new password at next sign-in</strong>.',
+  'Next page &rarr; <strong>Add user to group</strong> &rarr; tick <code>EC2-Builders</code>. This grants the EC2 powers.',
+  'Review &rarr; <strong>Create user</strong>. <strong>Save the sign-in URL, username, and password securely</strong> \u2014 never email them.'
+ ],
+ screen:{url:'IAM &rsaquo; Users &rsaquo; Create user', body:`
+   <div class="field-label">User name</div><div class="field">jordan-dev</div>
+   <label style="display:flex;gap:8px;margin-bottom:8px"><input type="checkbox" checked> Provide console access</label>
+   <label style="display:flex;gap:8px;margin-bottom:14px;color:var(--text-soft)"><input type="checkbox" checked> Must create new password at next sign-in</label>
+   <div class="field-label">Add user to group</div>
+   <label style="display:flex;gap:8px;margin-bottom:12px"><input type="checkbox" checked> EC2-Builders</label>
+   <div class="actions"><button class="btn btn-primary btn-sm">Create user</button></div>`},
+ links:[{m:'m4',t:'\u2139\uFE0F Where do users sign in?'},{u:'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html',t:'\uD83D\uDCC4 Official: Create an IAM user'}]},
+
+{n:8,t:"Turn on MFA (multi-factor authentication)",
+ noteWarn:'<strong>MFA = a second lock.</strong> Even if a password is stolen, no one gets in without the 6-digit code from your phone app. AWS recommends it for every user.',
+ bul:[
+  '<strong>Users</strong> &rarr; click <code>jordan-dev</code> &rarr; <strong>Security credentials</strong> tab.',
+  'Under <strong>Multi-factor authentication (MFA)</strong> &rarr; <strong>Assign MFA device</strong>.',
+  'Name the device, choose <strong>Authenticator app</strong> &rarr; <strong>Next</strong>.',
+  'Open an authenticator app (Google Authenticator, Authy, Microsoft Authenticator) and <strong>scan the QR code</strong>.',
+  'Enter two codes in a row (code 1, wait ~30s, code 2) &rarr; <strong>Add MFA</strong>.',
+  '<strong>Even stronger:</strong> AWS now recommends a passkey or hardware security key, but an app is great to start.'
+ ],
+ screen:{url:'IAM &rsaquo; Users &rsaquo; jordan-dev &rsaquo; Set up MFA', body:`
+   <div class="mfa-wrap">
+     <div class="qr">${qr()}</div>
+     <div style="display:flex;flex-direction:column;gap:10px">
+       <div><div class="field-label">MFA code 1</div><div class="field mfa-code" style="margin:0">482915</div></div>
+       <div><div class="field-label">MFA code 2</div><div class="field mfa-code" style="margin:0">730164</div></div>
+       <button class="btn btn-primary btn-sm">Add MFA</button>
+     </div>
+   </div>`},
+ links:[{m:'m5',t:'\u2139\uFE0F How does a 6-digit code work?'},{u:'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html',t:'\uD83D\uDCC4 Official: Assign MFA device'}]},
+
+{n:9,t:"Create an IAM role for EC2 (smart, optional)",
+ bul:[
+  'A <strong>role</strong> is a costume an EC2 wears for temporary powers \u2014 <em>no passwords stored on the machine</em>.',
+  'IAM &rarr; <strong>Roles</strong> &rarr; <strong>Create role</strong> &rarr; Trusted entity <strong>AWS service</strong> &rarr; <strong>EC2</strong>.',
+  'Attach a small policy (e.g. <code>AmazonSSMManagedInstanceCore</code> to connect without a key, or S3 read access).',
+  'Name it <code>EC2-Image-Role</code> &rarr; <strong>Create role</strong>. You\u2019ll attach it in Step 10.'
+ ],
+ screen:{url:'IAM &rsaquo; Roles &rsaquo; Create role', body:`
+   <label style="display:flex;gap:8px;margin-bottom:6px"><input type="radio" checked> AWS service</label>
+   <div style="margin:0 0 12px 26px;color:var(--text-soft)">Use case: <strong>EC2</strong></div>
+   <div class="field-label">Role name</div><div class="field">EC2-Image-Role</div>`},
+ links:[{m:'m6',t:'\u2139\uFE0F Role vs. User?'},{u:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html',t:'\uD83D\uDCC4 Official: IAM roles for EC2'}]},
+
+{n:10,t:"Launch an Amazon Linux EC2",
+ noteInfo:'Sign in as <code>jordan-dev</code> (the new user) to do this part.',
+ bul:[
+  'Top search &rarr; <code>EC2</code> &rarr; <strong>Launch instance</strong>.',
+  '<strong>Name:</strong> <code>web-1</code>.',
+  '<strong>AMI (base image):</strong> choose <strong>Amazon Linux 2023</strong> \u2014 free, official Linux.',
+  '<strong>Instance type:</strong> <code>t2.micro</code> / <code>t3.micro</code> (free-tier friendly \u2014 also keeps you under budget).',
+  '<strong>Key pair:</strong> create one, download the <code>.pem</code>, and keep it safe \u2014 no re-downloads.',
+  '<strong>Network settings:</strong> note the <strong>security group</strong> name; we edit it in Step 12.',
+  '<strong>Advanced &rarr; IAM instance profile:</strong> pick <code>EC2-Image-Role</code>.',
+  'Click <strong>Launch instance</strong>. Repeat for a second one named <code>web-2</code>.'
+ ],
+ screen:{url:'EC2 &rsaquo; Launch an instance', body:`
+   <div class="field-label">Name</div><div class="field">web-1</div>
+   <div class="opt">
+     <div class="line sel"><input type="radio" checked> \uD83D\uDC27 <span style="font-weight:500">Amazon Linux 2023 AMI</span><span class="tag">Free tier</span></div>
+     <div class="line dim">\uD83E\uDE9F Windows \u00b7 \uD83D\uDC27 Ubuntu \u00b7 \uD83C\uDFA9 Red Hat</div>
+   </div>
+   <div class="row">
+     <div><div class="field-label">Instance type</div><div class="field" style="margin:0">t3.micro</div></div>
+     <div><div class="field-label">Key pair</div><div class="field muted" style="margin:0">my-key</div></div>
+   </div>
+   <div class="actions" style="margin-top:14px"><button class="btn btn-primary btn-sm">Launch instance</button></div>`},
+ links:[{m:'m7',t:'\u2139\uFE0F What is an AMI?'},{m:'m7b',t:'\uD83D\uDD11 Key-pair safety'},{u:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html',t:'\uD83D\uDCC4 Official: Launch an instance'}]},
+
+{n:11,t:"Make a custom image (your own AMI)",
+ bul:[
+  'Set up <code>web-1</code> exactly how you want (software, files). This is your "master copy."',
+  'EC2 &rarr; <strong>Instances</strong> &rarr; select <code>web-1</code> &rarr; <strong>Actions</strong> &rarr; <strong>Image and templates</strong> &rarr; <strong>Create image</strong>.',
+  'Name it <code>my-web-image-v1</code>, add a description &rarr; <strong>Create image</strong>.',
+  'Find it under EC2 &rarr; <strong>AMIs</strong>. Launch unlimited copies from <strong>My AMIs</strong> in Step 10.',
+  '<strong>Remember:</strong> a saved image is frozen in time \u2014 make a new version (v2, v3\u2026) as things change.'
+ ],
+ screen:{url:'EC2 &rsaquo; Instances &rsaquo; Actions &rsaquo; Create image', body:`
+   <div style="color:var(--text-faint);font-size:.72rem;margin-bottom:10px">Selected: web-1 (i-0a1b2c3d4e)</div>
+   <div class="field-label">Image name</div><div class="field">my-web-image-v1</div>
+   <div class="field-label">Description</div><div class="field muted">Base Amazon Linux + my setup</div>
+   <div class="actions"><button class="btn btn-primary btn-sm">Create image</button></div>`},
+ links:[{m:'m8',t:'\u2139\uFE0F Why custom images?'},{u:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html',t:'\uD83D\uDCC4 Official: Create a custom AMI'}]},
+
+{n:12,t:"Let two (or more) EC2s talk to each other",
+ noteInfo:'A <strong>security group</strong> is a firewall \u2014 the door guard. By default it blocks instance-to-instance traffic. Allow it by telling one group to accept traffic <strong>from the other group</strong> (cleaner than typing IPs).',
+ bul:[
+  'EC2 &rarr; <strong>Security Groups</strong> &rarr; select your instances\u2019 group &rarr; <strong>Inbound rules</strong> &rarr; <strong>Edit inbound rules</strong>.',
+  '<strong>Add rule.</strong> Choose the type \u2014 e.g. <strong>All ICMP - IPv4</strong> to test ping, or <strong>HTTP 80</strong> for web traffic.',
+  'In <strong>Source</strong>, type <code>sg-</code> and select the <strong>other security group</strong> \u2014 meaning "allow that EC2 in."',
+  '<strong>Save rules.</strong> The instances can now reach each other on that port.',
+  '<strong>Key idea:</strong> instances in the same <strong>VPC</strong> use private IPs to talk; the security group decides if it\u2019s allowed.'
+ ],
+ screen:{url:'EC2 &rsaquo; Security Groups &rsaquo; Edit inbound rules', body:`
+   <div style="display:grid;grid-template-columns:1.2fr 1.2fr 1.6fr;gap:8px;font-size:.72rem;font-weight:600;color:var(--text-soft);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px">
+     <div>Type</div><div>Protocol/Port</div><div>Source</div></div>
+   <div style="display:grid;grid-template-columns:1.2fr 1.2fr 1.6fr;gap:8px;margin-bottom:8px">
+     <div class="field" style="margin:0;font-size:.78rem">All ICMP-IPv4</div>
+     <div class="field" style="margin:0;font-size:.78rem">ICMP / All</div>
+     <div class="field" style="margin:0;font-size:.78rem;border-color:var(--blue);color:var(--blue-deep)">sg-0web2\u2026 (web-2)</div>
+   </div>
+   <div style="display:grid;grid-template-columns:1.2fr 1.2fr 1.6fr;gap:8px">
+     <div class="field" style="margin:0;font-size:.78rem">HTTP</div>
+     <div class="field" style="margin:0;font-size:.78rem">TCP / 80</div>
+     <div class="field" style="margin:0;font-size:.78rem;border-color:var(--blue);color:var(--blue-deep)">sg-0web2\u2026 (web-2)</div>
+   </div>
+   <div class="actions" style="margin-top:14px"><button class="btn btn-primary btn-sm">Save rules</button></div>`},
+ links:[{m:'m9',t:'\u2139\uFE0F Security group vs. VPC'},{m:'m9b',t:'\uD83C\uDF10 Self-referencing SG trick'},{u:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-rules.html',t:'\uD83D\uDCC4 Official: Security group rules'}]},
+
+{n:13,t:"Test it &amp; final checklist",
+ bul:[
+  'Connect to <code>web-1</code> (use <strong>EC2 Instance Connect</strong> in the console, or SSH with your key).',
+  'Find <code>web-2</code>\u2019s <strong>private IPv4 address</strong> on the Instances page.',
+  'From <code>web-1</code> run <code>ping &lt;web-2-private-ip&gt;</code>. Replies = your rule works! \uD83C\uDF89',
+  'Web test: run a small server on <code>web-2</code>, then from <code>web-1</code> run <code>curl http://&lt;web-2-private-ip&gt;</code>.',
+  'Finally, check <strong>Billing &rarr; Budgets</strong> to confirm <code>Monthly-Limit-25</code> shows your alerts and the stop action.'
+ ],
+ pre:`[ec2-user@web-1 ~]$ ping 10.0.1.42
+64 bytes from 10.0.1.42: icmp_seq=1 ttl=64 time=0.42 ms
+64 bytes from 10.0.1.42: icmp_seq=2 ttl=64 time=0.39 ms`,
+ final:true}
+];
+
+const tocTitles=["Set a $25 budget","Warnings at $5/$10/$15/$20","Auto-stop EC2s at $25","Sign in & protect root","Open IAM","Create a user group","Add EC2 permissions","Create the new user","Turn on MFA","Create an EC2 role","Launch Amazon Linux EC2","Make a custom image","Connect two EC2s","Test & checklist"];
+const toc=document.getElementById('toc'),main=document.getElementById('main');
+steps.forEach((s,i)=>{
+  const a=document.createElement('a');a.href='#s'+s.n;
+  a.innerHTML='<span class="chip">'+s.n+'</span><span>'+tocTitles[i]+'</span>';toc.appendChild(a);
+  let h='<section class="step" id="s'+s.n+'"><div class="step-head"><span class="chip">'+s.n+'</span><h2>'+s.t+'</h2></div>';
+  if(s.noteWarn)h+='<div class="note warn">'+s.noteWarn+'</div>';
+  if(s.noteInfo)h+='<div class="note info">'+s.noteInfo+'</div>';
+  h+='<ul class="bul">'+s.bul.map(b=>'<li>'+b+'</li>').join('')+'</ul>';
+  if(s.screen){h+='<div class="screen"><div class="screen-bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="url">'+s.screen.url+'</span></div><div class="screen-body">'+s.screen.body+'</div></div>';
+    if(s.caption)h+='<div class="caption">\u2191 '+s.caption+'</div>';}
+  if(s.pre)h+='<pre><code>'+s.pre+'</code></pre>';
+  if(s.links)h+='<div class="links">'+s.links.map(l=>l.m?'<span class="pill info-pill" onclick="openModal(\''+l.m+'\')">'+l.t+'</span>':'<a class="pill" href="'+l.u+'" target="_blank" rel="noopener">'+l.t+'</a>').join('')+'</div>';
+  if(s.final){h+='<div class="card check"><h3>\u2705 Key Things to Remember</h3><ul>'
+    +'<li><strong>Set the budget first</strong> \u2014 $25 ceiling with alerts at $5/$10/$15/$20 and auto-stop at $25.</li>'
+    +'<li><strong>Stopping an EC2 halts compute charges</strong>, but storage/networking may still cost a little.</li>'
+    +'<li><strong>Never use root for daily work</strong> \u2014 only setup and emergencies.</li>'
+    +'<li><strong>Turn on MFA</strong> for root and every human user.</li>'
+    +'<li><strong>Use groups for permissions</strong>, not one-by-one on users.</li>'
+    +'<li><strong>Least privilege:</strong> grant only what\u2019s actually needed.</li>'
+    +'<li><strong>Use roles for EC2</strong> instead of storing keys on the machine.</li>'
+    +'<li><strong>Save your key pair (.pem)</strong> \u2014 it can\u2019t be re-downloaded.</li>'
+    +'<li><strong>Security groups are allow-only</strong> \u2014 reference another group to connect instances.</li>'
+    +'<li><strong>Custom images are frozen snapshots</strong> \u2014 version them as you update.</li>'
+    +'<li><strong>Stop or terminate</strong> instances you\u2019re done with to avoid charges.</li>'
+    +'<li><strong>Enable CloudTrail</strong> to log who did what.</li></ul></div>'
+    +'<div class="card"><h3>\uD83D\uDCDA Official References</h3><ul class="reflist">'
+    +'<li><a href="https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html" target="_blank" rel="noopener">Managing costs with AWS Budgets</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-controls.html" target="_blank" rel="noopener">Budget actions (auto-stop)</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html" target="_blank" rel="noopener">IAM security best practices</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html" target="_blank" rel="noopener">Creating IAM users</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa.html" target="_blank" rel="noopener">Using MFA in AWS</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html" target="_blank" rel="noopener">Amazon EC2 concepts</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html" target="_blank" rel="noopener">Amazon Machine Images (AMIs)</a></li>'
+    +'<li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html" target="_blank" rel="noopener">Security groups for your VPC</a></li>'
+    +'</ul></div>';}
+  h+='</section>';
+  main.insertAdjacentHTML('beforeend',h);
+});
+
+const content={
+  mB:["What is an AWS Budget?","<p>An <b>AWS Budget</b> watches your spending and warns you (or acts) when costs cross lines you set. It does <b>not</b> physically cap charges by itself \u2014 it monitors and notifies.</p><p>Budget data refreshes a few times a day, so alerts may lag real spend by several hours. That\u2019s why we add a cushion and an auto-stop action.</p>"],
+  mB2:["Actual vs. forecasted alerts","<p><b>Actual</b> alerts fire on money already spent this month. <b>Forecasted</b> alerts fire when AWS predicts you\u2019ll cross the line by month-end.</p><p>For a hard safety net like ours, use <b>Actual</b> with absolute dollar amounts ($5, $10, $15, $20) so you\u2019re warned on real, accumulated spend.</p>"],
+  mB3:["How budget actions work","<p>A <b>budget action</b> is something AWS does automatically when a threshold is crossed \u2014 here, <b>stopping EC2 instances</b> at $25.</p><p>Stopping (not terminating) keeps your disks and data; it just halts the per-hour compute charge. You can start the instances again next month.</p><p>Because budget data updates only a few times daily, treat $25 as a soft ceiling with a small cushion, not an instant cutoff.</p>"],
+  mB4:["IAM role for the budget action","<p>To stop EC2s on your behalf, AWS Budgets needs permission via an <b>IAM role</b>.</p><p>Attach the managed policy <code>AWSBudgetsActions_RolePolicyForResourceAdministrationWithSSM</code>, which grants exactly the actions Budgets needs to manage resources \u2014 nothing more. The console can create this role for you during setup.</p>"],
+  m0:["What is the root account?","<p>The root account is the original login created when the AWS account was opened, using an email address. It can do <b>literally anything</b> \u2014 including closing the account and changing billing.</p><p>Because it\u2019s so powerful, lock it down with MFA and never use it for everyday tasks. Create IAM users with only the permissions they need.</p>"],
+  m2:["Why groups instead of single users?","<p>Imagine 10 students all needing the same hall pass. You could write 10 by hand, or make one rule for the whole class.</p><p>Groups are that class rule: attach <code>AmazonEC2FullAccess</code> once and every member gets it. Add or remove people and permissions update automatically. It scales and prevents mistakes.</p>"],
+  m3:["What\u2019s inside AmazonEC2FullAccess?","<p>It\u2019s an <b>AWS-managed policy</b> (AWS maintains it) allowing you to create, start, stop, and terminate EC2 instances, build custom images (AMIs), and manage security groups and key pairs.</p><p>It also grants read access to related services so the EC2 console works fully.</p>"],
+  m3b:["Least-privilege custom policy","<p>For production, replace FullAccess with a tighter custom policy. Example JSON:</p><pre><code>{\n  \"Version\": \"2012-10-17\",\n  \"Statement\": [{\n    \"Effect\": \"Allow\",\n    \"Action\": [\n      \"ec2:RunInstances\",\n      \"ec2:CreateImage\",\n      \"ec2:Describe*\",\n      \"ec2:CreateSecurityGroup\",\n      \"ec2:AuthorizeSecurityGroupIngress\",\n      \"ec2:CreateTags\"\n    ],\n    \"Resource\": \"*\"\n  }]\n}</code></pre><p>Paste in IAM \u2192 Policies \u2192 Create policy \u2192 JSON tab.</p>"],
+  m4:["Where do users sign in?","<p>IAM users don\u2019t use the root email login. They use a special URL with your account ID:</p><pre><code>https://&lt;account-id&gt;.signin.aws.amazon.com/console</code></pre><p>They sign in with three things: account ID (or alias), username, and password \u2014 plus the MFA code once enabled.</p>"],
+  m5:["How does a 6-digit code work?","<p>Scanning the QR code shares a secret between your phone and AWS. Both run the same math on the current time to produce a 6-digit number that changes every ~30 seconds (a standard called TOTP).</p><p>Because the code constantly changes and only your phone holds the secret, a stolen password alone is useless.</p>"],
+  m6:["Role vs. User \u2014 the difference","<p>A <b>user</b> is a permanent identity with a password \u2014 meant for a person.</p><p>A <b>role</b> has no password. It\u2019s a set of permissions a service (like an EC2) or person temporarily \u2018wears.\u2019 AWS hands out short-lived credentials that auto-expire and rotate.</p><p>Roles are safer for machines: no long-term keys sitting around to steal.</p>"],
+  m7:["What is an AMI?","<p>AMI = <b>Amazon Machine Image</b> \u2014 the template an EC2 boots from: the operating system plus pre-installed software.</p><p>\u2018Amazon Linux 2023\u2019 is a base AMI. Customize an instance, save it (Step 11), and <b>you</b> create your own AMI to clone identical machines instantly.</p>"],
+  m7b:["Keep your key pair safe","<p>A key pair is two matching keys. AWS keeps the public one; you download the private <code>.pem</code> file <b>once</b>.</p><p>It proves who you are over SSH. Lose it and AWS can\u2019t return it \u2014 you\u2019d make a new key. Never share it or commit it to GitHub.</p>"],
+  m8:["Why make custom images?","<p>Setting up a server by hand takes time. A custom AMI captures that work so you can launch 1 or 100 identical, ready-to-go servers in minutes.</p><p>Great for scaling websites, recovering from failures, and keeping every machine consistent.</p>"],
+  m9:["Security group vs. VPC vs. subnet","<p><b>VPC</b> = your private network neighborhood in AWS.</p><p><b>Subnet</b> = a street inside that neighborhood.</p><p><b>Security group</b> = the door guard on each computer, deciding what traffic is allowed.</p><p>For two EC2s to talk, they should share a VPC and a security group must allow the connection.</p>"],
+  m9b:["Self-referencing security group","<p>Put all your instances in <b>one</b> security group, then add a rule whose <b>source is that same group</b>.</p><p>This means \u2018any member may talk to any other member\u2019 \u2014 perfect for a cluster of servers, without listing individual IPs.</p>"]
+};
+function openModal(id){const d=content[id];document.getElementById('modalTitle').innerHTML=d[0];
+  document.getElementById('modalBody').innerHTML=d[1];
+  document.getElementById('overlay').classList.add('show');document.body.style.overflow='hidden';}
+function closeModal(){document.getElementById('overlay').classList.remove('show');document.body.style.overflow='';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+</script>
+</body>
+</html>
