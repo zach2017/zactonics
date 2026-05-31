@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Team Best Practices — Kafka, Infrastructure & Platform Operations</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'monospace'],
+      },
+      colors: {
+        ibm: {
+          blue: '#0f62fe',
+          dark: '#161616',
+          gray: '#525252',
+          light: '#f4f4f4',
+          border: '#e0e0e0',
+        }
+      }
+    }
+  }
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html { font-family: 'IBM Plex Sans', sans-serif; }
+  .ibm-line { background: linear-gradient(90deg, #0f62fe 0%, #0f62fe 100%); }
+  ::selection { background: #0f62fe; color: #fff; }
+  .modal-backdrop { backdrop-filter: blur(4px); }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c6c6c6; }
+  .dark ::-webkit-scrollbar-thumb { background: #393939; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(90deg); }
+</style>
+</head>
+<body class="bg-white dark:bg-ibm-dark text-ibm-dark dark:text-ibm-light transition-colors duration-200">
+
+<!-- ============ TOP NAV ============ -->
+<header class="sticky top-0 z-40 bg-white/90 dark:bg-ibm-dark/90 backdrop-blur border-b border-ibm-border dark:border-neutral-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+    <div class="flex items-center gap-3">
+      <div class="w-2 h-8 bg-ibm-blue"></div>
+      <div>
+        <div class="text-sm sm:text-base font-semibold tracking-tight">Cloud Platform Operations</div>
+        <div class="text-[11px] text-ibm-gray dark:text-neutral-400 -mt-0.5">Kafka · Infra · Best Practices Guide</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="document.getElementById('mobileNav').classList.toggle('hidden')" class="md:hidden p-2 border border-ibm-border dark:border-neutral-700" aria-label="Menu">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <button id="themeToggle" onclick="toggleTheme()" class="p-2 border border-ibm-border dark:border-neutral-700 hover:border-ibm-blue transition" aria-label="Toggle theme">
+        <svg id="sunIcon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.36 6.36l-.71-.71M6.34 6.34l-.7-.7m12.72 0l-.71.7M6.34 17.66l-.7.71M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg id="moonIcon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </div>
+  <!-- Mobile nav -->
+  <nav id="mobileNav" class="hidden md:hidden border-t border-ibm-border dark:border-neutral-800 bg-white dark:bg-ibm-dark px-4 py-3 space-y-1 text-sm">
+    <a href="#overview" class="block py-1.5 hover:text-ibm-blue">Overview</a>
+    <a href="#ami" class="block py-1.5 hover:text-ibm-blue">AMI / Packer</a>
+    <a href="#ansible" class="block py-1.5 hover:text-ibm-blue">Config / Ansible / GitLab</a>
+    <a href="#kafka" class="block py-1.5 hover:text-ibm-blue">Kafka & Zookeeper</a>
+    <a href="#clusters" class="block py-1.5 hover:text-ibm-blue">Clusters & Scaling</a>
+    <a href="#migration" class="block py-1.5 hover:text-ibm-blue">EC2 → EKS Migration</a>
+    <a href="#observability" class="block py-1.5 hover:text-ibm-blue">Logging & Grafana</a>
+    <a href="#support" class="block py-1.5 hover:text-ibm-blue">Support & Performance</a>
+  </nav>
+</header>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:flex lg:gap-8">
+
+  <!-- ============ SIDEBAR (desktop) ============ -->
+  <aside class="hidden lg:block w-60 flex-shrink-0 py-10">
+    <div class="sticky top-24 space-y-0.5 text-sm">
+      <div class="text-[11px] font-semibold uppercase tracking-widest text-ibm-gray dark:text-neutral-500 mb-3">Contents</div>
+      <a href="#overview" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">01 · Overview of Tasks</a>
+      <a href="#ami" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">02 · AMI Hardening & Packer</a>
+      <a href="#ansible" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">03 · Config: Ansible + GitLab</a>
+      <a href="#kafka" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">04 · Kafka & Zookeeper</a>
+      <a href="#clusters" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">05 · Cluster Build & Scaling</a>
+      <a href="#migration" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">06 · EC2 → EKS Migration</a>
+      <a href="#observability" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">07 · Logging & Grafana</a>
+      <a href="#support" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">08 · Support & Performance</a>
+      <a href="#tools" class="nav-link block py-2 pl-3 border-l-2 border-ibm-border dark:border-neutral-700 hover:border-ibm-blue hover:text-ibm-blue transition">09 · Tooling Reference</a>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="flex-1 py-10 min-w-0">
+
+    <!-- HERO -->
+    <section class="mb-16">
+      <div class="w-12 h-1 bg-ibm-blue mb-6"></div>
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-light tracking-tight leading-tight mb-4">
+        Best Practices for Operating<br><span class="font-semibold">Kafka & Platform Infrastructure</span>
+      </h1>
+      <p class="text-base sm:text-lg text-ibm-gray dark:text-neutral-400 max-w-3xl leading-relaxed">
+        A comprehensive operational guide for a cloud team responsible for messaging platforms,
+        immutable infrastructure, configuration automation, container migration, and observability.
+        Click any <span class="text-ibm-blue font-medium">"Details"</span> button to open an in-depth explanation with rationale, alternatives, and references.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-2 text-xs font-mono">
+        <span class="px-2.5 py-1 bg-ibm-light dark:bg-neutral-800 border border-ibm-border dark:border-neutral-700">Packer</span>
+        <span class="px-2.5 py-1 bg-ibm-light dark:bg-neutral-800 border border-ibm-border dark:border-neutral-700">Ansible</span>
+        <span class="px-2.5 py-1 bg-ibm-light dark:bg-neutral-800 border border-ibm-border dark:border-neutral-700">GitLab CI</span>
+        <span class="px-2.5 py-1 bg-ibm-light dark:bg-neutral-800 border border-ibm-border dark:border-neutral-700">Apache Kafka</span>
+        <span class="px-2.5 py-1 bg-ibm-light dark:bg-neutral-800 border border-ibm-border dark:border-neutral-700">EKS</span>
+        <span class="px-2.5 py-1 bg-ibm-light dark:bg-neutral-800 border border-ibm-border dark:border-neutral-700">Grafana</span>
+      </div>
+    </section>
+
+    <!-- ============ 01 OVERVIEW ============ -->
+    <section id="overview" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">01</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Overview of Expected Tasks</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-8 max-w-3xl leading-relaxed">
+        The cloud team owns the full lifecycle of the messaging platform and its underlying compute. At a high level,
+        the recurring responsibilities fall into eight domains. Each is expanded in the sections below.
+      </p>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <!-- task card -->
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition group">
+          <div class="flex items-start justify-between">
+            <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN A</div>
+          </div>
+          <h3 class="font-semibold mb-1">Immutable Base Images</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Build hardened, patched golden AMIs with Packer on a regular cadence; rotate for CVE remediation.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN B</div>
+          <h3 class="font-semibold mb-1">Configuration Management</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Convert base AMIs to role-specific nodes using Ansible, version-controlled in GitLab with CI gates.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN C</div>
+          <h3 class="font-semibold mb-1">Kafka / Zookeeper Operations</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Provision, tune, secure, upgrade, and reliably scale brokers and the metadata quorum.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN D</div>
+          <h3 class="font-semibold mb-1">Cluster Lifecycle & Scaling</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Capacity planning, partition rebalancing, rolling upgrades, and disaster recovery drills.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN E</div>
+          <h3 class="font-semibold mb-1">EC2 → EKS Migration</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Evaluate workloads for containerization; migrate where cost and operability improve.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN F</div>
+          <h3 class="font-semibold mb-1">Logging & Observability</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Centralize logs and metrics, ship to Grafana/Loki/Prometheus, and build actionable dashboards.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN G</div>
+          <h3 class="font-semibold mb-1">User Support & Onboarding</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Self-service topic provisioning, quotas, SLAs, runbooks, and a clear support model.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5 hover:border-ibm-blue transition">
+          <div class="text-ibm-blue font-mono text-xs mb-2">DOMAIN H</div>
+          <h3 class="font-semibold mb-1">Performance Management</h3>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Continuous benchmarking, lag monitoring, SLO tracking, and proactive tuning.</p>
+        </div>
+      </div>
+
+      <div class="mt-8 bg-ibm-light dark:bg-neutral-900 border-l-4 border-ibm-blue p-5">
+        <p class="text-sm"><span class="font-semibold">Guiding principle:</span> Favor <em>immutable, declarative, and automated</em> approaches over manual, mutable ones. Every change should be reproducible from version control, observable in dashboards, and reversible via a documented rollback.</p>
+      </div>
+    </section>
+
+    <!-- ============ 02 AMI / PACKER ============ -->
+    <section id="ami" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">02</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Bare-Bone AMI Updates & Security with Packer</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        The foundation of secure infrastructure is a <strong>golden image</strong> pipeline. Rather than patching live servers,
+        you bake a known-good, hardened image and replace instances. This is the immutable infrastructure pattern.
+      </p>
+
+      <h3 class="font-semibold text-lg mb-3">What & Why</h3>
+      <p class="text-sm text-ibm-gray dark:text-neutral-400 mb-4 max-w-3xl leading-relaxed">
+        Packer produces machine images from a single source template. On a regular cadence (e.g. monthly, or on critical CVE),
+        you start from an upstream base (Amazon Linux 2023, Ubuntu LTS), apply OS patches, run a CIS hardening baseline,
+        install a baseline agent set (CloudWatch/SSM/log shipper), and publish a versioned, tagged AMI. Downstream automation
+        then references the latest approved AMI ID.
+      </p>
+
+      <div class="bg-ibm-dark dark:bg-black text-neutral-200 font-mono text-xs sm:text-sm p-4 sm:p-5 overflow-x-auto mb-6 border border-neutral-800">
+<pre>// packer/kafka-base.pkr.hcl  (HCL2)
+source "amazon-ebs" "base" {
+  ami_name      = "platform-base-{{timestamp}}"
+  instance_type = "t3.medium"
+  region        = "us-east-1"
+  source_ami_filter {
+    filters = { name = "al2023-ami-*-x86_64" }
+    owners  = ["amazon"]
+    most_recent = true
+  }
+  ssh_username = "ec2-user"
+  tags = {
+    Baseline = "CIS-Level1"
+    BuildBy  = "gitlab-ci"
+    Patched  = "{{timestamp}}"
+  }
+}
+
+build {
+  sources = ["source.amazon-ebs.base"]
+  provisioner "ansible" {           // hand off to Ansible for hardening
+    playbook_file = "ansible/harden.yml"
+  }
+  provisioner "shell" {
+    inline = ["sudo dnf upgrade -y --security"]
+  }
+}</pre>
+      </div>
+
+      <button onclick="openModal('ami-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: options, pros & cons
+      </button>
+    </section>
+
+    <!-- ============ 03 ANSIBLE / GITLAB ============ -->
+    <section id="ansible" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">03</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Configuring New AMIs from Base — Ansible, GitLab & Shell</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        The base image is generic. To turn it into a Kafka broker, a Zookeeper node, or a Connect worker, you layer
+        role-specific configuration. Ansible is the configuration engine; GitLab is the source of truth and CI runner;
+        shell scripts handle small glue tasks.
+      </p>
+
+      <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2 text-ibm-blue">Ansible</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Declarative, agentless roles for users, JVM, Kafka config, sysctl tuning. Idempotent and reusable.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2 text-ibm-blue">GitLab CI</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Lints, tests with Molecule, builds AMIs, gates merges, and stores artifacts/inventory.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2 text-ibm-blue">Shell Scripts</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Thin glue only — bootstrap, health probes, one-off ops. Kept minimal and idempotent.</p>
+        </div>
+      </div>
+
+      <div class="bg-ibm-dark dark:bg-black text-neutral-200 font-mono text-xs sm:text-sm p-4 sm:p-5 overflow-x-auto mb-6 border border-neutral-800">
+<pre>// .gitlab-ci.yml
+stages: [lint, test, bake, deploy]
+
+ansible-lint:
+  stage: lint
+  script: ["ansible-lint roles/"]
+
+molecule-test:
+  stage: test
+  script: ["molecule test -s kafka-broker"]   // converge + idempotence
+
+bake-ami:
+  stage: bake
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]
+  script:
+    - packer init .
+    - packer build -var "role=kafka-broker" kafka.pkr.hcl
+  artifacts: { paths: ["manifest.json"] }      // emits AMI id</pre>
+      </div>
+
+      <button onclick="openModal('ansible-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: options, pros & cons
+      </button>
+    </section>
+
+    <!-- ============ 04 KAFKA ============ -->
+    <section id="kafka" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">04</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Kafka & Zookeeper Operations</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        Kafka is the durable, partitioned commit log at the center of the platform. Zookeeper historically stored cluster
+        metadata, but modern Kafka (3.x+) moves to <strong>KRaft</strong> mode, removing the Zookeeper dependency. A key
+        strategic decision is whether to keep Zookeeper, adopt KRaft, or move to managed Amazon MSK.
+      </p>
+
+      <div class="overflow-x-auto mb-6 border border-ibm-border dark:border-neutral-800">
+        <table class="w-full text-sm">
+          <thead class="bg-ibm-light dark:bg-neutral-900 text-left">
+            <tr>
+              <th class="p-3 font-semibold">Concern</th>
+              <th class="p-3 font-semibold">Best Practice</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ibm-border dark:divide-neutral-800">
+            <tr><td class="p-3 font-medium">Replication</td><td class="p-3 text-ibm-gray dark:text-neutral-400">RF=3, min.insync.replicas=2, acks=all for durability.</td></tr>
+            <tr><td class="p-3 font-medium">Rack awareness</td><td class="p-3 text-ibm-gray dark:text-neutral-400">Map broker.rack to AZ so replicas span availability zones.</td></tr>
+            <tr><td class="p-3 font-medium">Metadata</td><td class="p-3 text-ibm-gray dark:text-neutral-400">Prefer KRaft for new clusters; keep ZK quorum at 3 or 5 (odd) if retained.</td></tr>
+            <tr><td class="p-3 font-medium">Storage</td><td class="p-3 text-ibm-gray dark:text-neutral-400">gp3 EBS with provisioned IOPS; separate volume for logs.dirs.</td></tr>
+            <tr><td class="p-3 font-medium">Security</td><td class="p-3 text-ibm-gray dark:text-neutral-400">TLS in transit, SASL/SCRAM or mTLS auth, ACLs per topic.</td></tr>
+            <tr><td class="p-3 font-medium">Upgrades</td><td class="p-3 text-ibm-gray dark:text-neutral-400">Rolling, one broker at a time, watch under-replicated partitions = 0.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button onclick="openModal('kafka-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: KRaft vs ZK vs MSK
+      </button>
+    </section>
+
+    <!-- ============ 05 CLUSTERS ============ -->
+    <section id="clusters" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">05</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Building & Managing Clusters, Scaling</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        Cluster management covers provisioning new clusters, capacity planning, partition reassignment, broker
+        add/remove, and disaster recovery. Treat the cluster topology as code (Terraform) and partition layout as a
+        reviewed, automated operation rather than an ad-hoc CLI run.
+      </p>
+
+      <div class="grid sm:grid-cols-2 gap-4 mb-6">
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Scaling out</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Add brokers, then rebalance partitions with Cruise Control or kafka-reassign-partitions with a throttle to protect client throughput.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Capacity planning</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Size on peak write throughput × RF × retention, plus 30–40% headroom. Watch disk, network, and partition count per broker.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Disaster recovery</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">MirrorMaker 2 or managed replication to a second region; document RPO/RTO and rehearse failover quarterly.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Infrastructure as Code</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Terraform for VPC, ASGs/node groups, security groups; state in S3 with locking. No console drift.</p>
+        </div>
+      </div>
+
+      <button onclick="openModal('clusters-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: rebalancing & DR options
+      </button>
+    </section>
+
+    <!-- ============ 06 MIGRATION ============ -->
+    <section id="migration" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">06</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Migration from EC2 to EKS (Where Cost-Effective)</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        Not everything belongs in Kubernetes. The team's job is to evaluate each workload and migrate
+        <strong>only where EKS clearly improves cost, density, or operability</strong>. Stateless services
+        (Connect workers, REST proxies, consumers) are strong candidates; stateful Kafka brokers themselves are a more
+        nuanced decision.
+      </p>
+
+      <div class="bg-ibm-light dark:bg-neutral-900 border border-ibm-border dark:border-neutral-800 p-5 mb-6">
+        <h4 class="font-semibold mb-3">Decision heuristic</h4>
+        <ul class="space-y-2 text-sm text-ibm-gray dark:text-neutral-400">
+          <li class="flex gap-2"><span class="text-green-600 font-bold">✓</span> Many small, stateless, bursty services with low utilization → EKS bin-packing saves money.</li>
+          <li class="flex gap-2"><span class="text-green-600 font-bold">✓</span> Team already runs other K8s workloads → consolidate operational surface.</li>
+          <li class="flex gap-2"><span class="text-amber-500 font-bold">~</span> Stateful Kafka brokers → only with Strimzi operator, EBS-backed StatefulSets, mature K8s expertise.</li>
+          <li class="flex gap-2"><span class="text-red-500 font-bold">✗</span> A few large, steady, well-tuned EC2 instances → EKS overhead may cost more, not less.</li>
+        </ul>
+      </div>
+
+      <button onclick="openModal('migration-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: EKS vs EC2 vs Fargate vs MSK
+      </button>
+    </section>
+
+    <!-- ============ 07 OBSERVABILITY ============ -->
+    <section id="observability" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">07</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Logging & Sending Logs to Grafana</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        Observability has three pillars: <strong>logs, metrics, and traces</strong>. The Grafana ecosystem unifies them:
+        Loki for logs, Prometheus/Mimir for metrics, Tempo for traces, all visualized in Grafana with a single alerting
+        layer. The collection agent (Alloy / Promtail / OTel Collector) runs on every node.
+      </p>
+
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 text-sm">
+        <div class="border border-ibm-border dark:border-neutral-800 p-4"><div class="font-mono text-xs text-ibm-blue mb-1">COLLECT</div>Grafana Alloy / OTel Collector / Promtail on each host or as a DaemonSet.</div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-4"><div class="font-mono text-xs text-ibm-blue mb-1">STORE</div>Loki (logs), Prometheus/Mimir (metrics), Tempo (traces).</div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-4"><div class="font-mono text-xs text-ibm-blue mb-1">VISUALIZE</div>Grafana dashboards per service, with templating and drill-down.</div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-4"><div class="font-mono text-xs text-ibm-blue mb-1">ALERT</div>Grafana Alerting / Alertmanager → PagerDuty / Slack, tied to SLOs.</div>
+      </div>
+
+      <div class="bg-ibm-dark dark:bg-black text-neutral-200 font-mono text-xs sm:text-sm p-4 sm:p-5 overflow-x-auto mb-6 border border-neutral-800">
+<pre># Kafka exposes JMX → scrape with the JMX Prometheus exporter
+# key broker metrics to watch:
+kafka_server_ReplicaManager_UnderReplicatedPartitions   # must be 0
+kafka_controller_OfflinePartitionsCount                 # must be 0
+kafka_server_BrokerTopicMetrics_BytesInPerSec
+kafka_consumergroup_lag                                 # consumer health</pre>
+      </div>
+
+      <button onclick="openModal('obs-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: Loki vs ELK vs CloudWatch
+      </button>
+    </section>
+
+    <!-- ============ 08 SUPPORT ============ -->
+    <section id="support" class="mb-20 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">08</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">User Support & Performance Management</h2>
+      </div>
+      <p class="text-ibm-gray dark:text-neutral-400 mb-6 max-w-3xl leading-relaxed">
+        The platform exists to serve users — application teams producing and consuming from Kafka. A mature team offers
+        self-service, clear SLAs, runbooks, and proactive performance management so that issues are caught before users feel them.
+      </p>
+
+      <div class="grid sm:grid-cols-2 gap-4 mb-6">
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Self-service onboarding</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Topic + ACL requests via GitOps merge request or a portal; enforce naming conventions, quotas, and RF policy automatically.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">SLOs & error budgets</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Define availability and latency SLOs; track consumer lag and produce/consume p99 against budget.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Runbooks & on-call</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Documented playbooks for broker failure, disk-full, rebalancing storms; rotation with clear escalation.</p>
+        </div>
+        <div class="border border-ibm-border dark:border-neutral-800 p-5">
+          <h4 class="font-semibold mb-2">Performance tuning</h4>
+          <p class="text-sm text-ibm-gray dark:text-neutral-400">Right-size partitions, batch/linger settings, compression (lz4/zstd), and JVM/GC; benchmark regularly.</p>
+        </div>
+      </div>
+
+      <button onclick="openModal('support-modal')" class="inline-flex items-center gap-2 px-4 py-2 bg-ibm-blue text-white text-sm font-medium hover:bg-blue-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Details: support model & tuning playbook
+      </button>
+    </section>
+
+    <!-- ============ 09 TOOLS ============ -->
+    <section id="tools" class="mb-16 scroll-mt-24">
+      <div class="flex items-baseline gap-3 mb-6">
+        <span class="font-mono text-ibm-blue text-sm">09</span>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Tooling Reference & Official Docs</h2>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <a href="https://developer.hashicorp.com/packer/docs" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Packer Docs</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://docs.ansible.com/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Ansible Docs</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://docs.gitlab.com/ee/ci/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>GitLab CI/CD</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Apache Kafka</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://docs.aws.amazon.com/msk/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Amazon MSK</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://docs.aws.amazon.com/eks/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Amazon EKS</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://strimzi.io/documentation/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Strimzi (Kafka on K8s)</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://grafana.com/docs/" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Grafana / Loki</span><span class="text-ibm-blue">↗</span></a>
+        <a href="https://github.com/linkedin/cruise-control" target="_blank" rel="noopener" class="border border-ibm-border dark:border-neutral-800 p-4 hover:border-ibm-blue hover:text-ibm-blue transition flex items-center justify-between"><span>Cruise Control</span><span class="text-ibm-blue">↗</span></a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer class="border-t border-ibm-border dark:border-neutral-800 mt-8">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row justify-between gap-4 text-xs text-ibm-gray dark:text-neutral-500">
+    <div class="flex items-center gap-2"><div class="w-2 h-5 bg-ibm-blue"></div> Cloud Platform Operations — Best Practices Guide</div>
+    <div>Click any "Details" button for in-depth explanations. Verify all configs against current official docs before production use.</div>
+  </div>
+</footer>
+
+<!-- ============ MODALS ============ -->
+<div id="modalRoot"></div>
+
+<script>
+/* ---------- Theme ---------- */
+function toggleTheme(){
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+}
+(function(){
+  const saved = localStorage.getItem('theme');
+  if(saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)){
+    document.documentElement.classList.add('dark');
+  }
+})();
+
+/* ---------- Modal content ---------- */
+const MODALS = {
+  'ami-modal': {
+    title: 'AMI Hardening & Packer — Deep Dive',
+    body: `
+      <p class="mb-4">Packer turns a single template into a versioned, hardened machine image. This shifts patching "left" — into a build pipeline — instead of mutating running production hosts.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Why this is the best option</h4>
+      <ul class="list-disc pl-5 space-y-1 mb-4">
+        <li><b>Immutable:</b> instances are replaced, never patched in place — eliminates configuration drift.</li>
+        <li><b>Auditable:</b> every image is tagged with patch date, baseline, and the Git commit that built it.</li>
+        <li><b>Fast recovery:</b> a known-good image can be redeployed in minutes.</li>
+        <li><b>Security-first:</b> CIS/STIG hardening, CVE scanning, and minimal packages baked in.</li>
+      </ul>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Alternative options (and why they're not preferred)</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>EC2 Image Builder (AWS-native)</b><br><span class="text-green-600">Pro:</span> managed pipelines, scheduled builds, integrated scanning. <br><span class="text-red-500">Con:</span> AWS-only, less flexible than Packer's multi-cloud HCL; harder to test locally.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Patch running instances (SSM Patch Manager)</b><br><span class="text-green-600">Pro:</span> simple for a few hosts. <br><span class="text-red-500">Con:</span> mutable, drift-prone, no clean rollback, scales poorly.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Manual AMI from a "blessed" instance</b><br><span class="text-red-500">Con:</span> not reproducible, undocumented, snowflake images — avoid entirely.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Best-practice checklist</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Pin upstream base by owner + filter, not a hardcoded AMI ID.</li>
+        <li>Run a CVE scanner (Trivy/Inspector) in the pipeline; fail on critical findings.</li>
+        <li>Tag immutably; publish the AMI ID to SSM Parameter Store for downstream consumption.</li>
+        <li>Rebuild on a schedule (monthly) and on-demand for zero-day CVEs.</li>
+      </ul>`,
+    refs: [['Packer Documentation','https://developer.hashicorp.com/packer/docs'],['EC2 Image Builder','https://docs.aws.amazon.com/imagebuilder/'],['CIS Benchmarks','https://www.cisecurity.org/cis-benchmarks']]
+  },
+  'ansible-modal': {
+    title: 'Ansible + GitLab + Shell — Deep Dive',
+    body: `
+      <p class="mb-4">Ansible converts a generic base AMI into a role-specific node. GitLab provides version control, CI gates, and artifact storage. Shell scripts stay thin.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Why Ansible is the best fit here</h4>
+      <ul class="list-disc pl-5 space-y-1 mb-4">
+        <li><b>Agentless:</b> works over SSH, ideal during a Packer build before any agent exists.</li>
+        <li><b>Idempotent & declarative:</b> re-running converges to the same state.</li>
+        <li><b>Readable roles:</b> kafka-broker, zookeeper, connect-worker become reusable, testable units.</li>
+        <li><b>Molecule testing:</b> verify roles in containers in CI before baking.</li>
+      </ul>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Alternatives</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Chef / Puppet</b><br><span class="text-green-600">Pro:</span> powerful, mature. <br><span class="text-red-500">Con:</span> agent-based, steeper learning curve, heavier footprint for image baking.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Pure shell scripts</b><br><span class="text-green-600">Pro:</span> zero dependencies. <br><span class="text-red-500">Con:</span> not idempotent by default, hard to test, becomes unmaintainable at scale. Use only as glue.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>cloud-init only</b><br><span class="text-green-600">Pro:</span> good for tiny bootstrap. <br><span class="text-red-500">Con:</span> not designed for complex, ordered config; pair it with Ansible.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">GitLab CI best practices</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Stages: lint → test (Molecule) → bake (Packer) → deploy. Gate <code>main</code>.</li>
+        <li>Store secrets in CI variables / Vault, never in the repo.</li>
+        <li>Use protected branches + MR approvals for any infra change.</li>
+        <li>Keep shell to bootstrap/health-probe glue; everything stateful goes in Ansible roles.</li>
+      </ul>`,
+    refs: [['Ansible Best Practices','https://docs.ansible.com/ansible/latest/tips_tricks/index.html'],['Molecule Testing','https://ansible.readthedocs.io/projects/molecule/'],['GitLab CI/CD','https://docs.gitlab.com/ee/ci/']]
+  },
+  'kafka-modal': {
+    title: 'Kafka & Zookeeper — Deep Dive',
+    body: `
+      <p class="mb-4">The biggest architectural choice is how cluster metadata is managed and whether you self-manage at all.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">KRaft vs Zookeeper vs Managed (MSK)</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-green-500 pl-3"><b>KRaft (recommended for new self-managed clusters)</b><br><span class="text-green-600">Pro:</span> no separate ZK to operate, faster recovery, simpler ops, the future of Kafka. <br><span class="text-red-500">Con:</span> newer; ensure your version is GA-stable for KRaft and migration tooling is mature.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Zookeeper (legacy)</b><br><span class="text-green-600">Pro:</span> battle-tested, well understood. <br><span class="text-red-500">Con:</span> a second distributed system to secure, monitor, and upgrade; being deprecated.</div>
+        <div class="border-l-2 border-green-500 pl-3"><b>Amazon MSK / MSK Serverless (recommended if you value ops offload)</b><br><span class="text-green-600">Pro:</span> AWS manages brokers, patching, ZK/KRaft; integrates with IAM. <br><span class="text-red-500">Con:</span> higher per-unit cost, less low-level control, some config locked down.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Durability & reliability defaults</h4>
+      <ul class="list-disc pl-5 space-y-1 mb-4">
+        <li>replication.factor = 3, min.insync.replicas = 2, producer acks = all.</li>
+        <li>Set broker.rack per AZ for rack-aware replica placement.</li>
+        <li>unclean.leader.election.enable = false (never elect an out-of-sync replica).</li>
+        <li>Separate data disk (gp3) for log.dirs; never co-locate with OS volume.</li>
+      </ul>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Upgrades</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Rolling, one broker at a time; wait for UnderReplicatedPartitions to return to 0 between brokers.</li>
+        <li>Bump inter.broker.protocol.version only after all brokers run the new binary.</li>
+        <li>Take a config + metadata backup before any upgrade.</li>
+      </ul>`,
+    refs: [['Kafka Documentation','https://kafka.apache.org/documentation/'],['KRaft Overview','https://kafka.apache.org/documentation/#kraft'],['Amazon MSK','https://docs.aws.amazon.com/msk/']]
+  },
+  'clusters-modal': {
+    title: 'Cluster Build, Scaling & DR — Deep Dive',
+    body: `
+      <p class="mb-4">Cluster topology should be code; partition rebalancing should be a controlled, throttled, observable operation.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Rebalancing options</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-green-500 pl-3"><b>LinkedIn Cruise Control (recommended at scale)</b><br><span class="text-green-600">Pro:</span> continuous, goal-based auto-balancing, anomaly detection, self-healing. <br><span class="text-red-500">Con:</span> another component to run and tune.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>kafka-reassign-partitions (built-in)</b><br><span class="text-green-600">Pro:</span> no extra software, fine for occasional moves. <br><span class="text-red-500">Con:</span> manual JSON plans, easy to overload the cluster without a throttle.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Strimzi Cruise Control (on K8s)</b><br><span class="text-green-600">Pro:</span> declarative KafkaRebalance CRDs. <br><span class="text-red-500">Con:</span> requires the Kubernetes/Strimzi stack.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Capacity planning inputs</h4>
+      <ul class="list-disc pl-5 space-y-1 mb-4">
+        <li>Required disk ≈ peak write MB/s × retention seconds × replication factor × 1.4 headroom.</li>
+        <li>Keep partitions-per-broker within tested limits; too many hurts recovery and controller load.</li>
+        <li>Network is often the real bottleneck — size instances on throughput, not just CPU.</li>
+      </ul>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Disaster recovery</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>MirrorMaker 2 (or MSK Replicator) to a second region; decide active-active vs active-passive.</li>
+        <li>Document RPO/RTO; rehearse a region failover at least quarterly.</li>
+        <li>Back up topic configs, ACLs, and schema registry; these are easy to forget and hard to recreate.</li>
+      </ul>`,
+    refs: [['Cruise Control','https://github.com/linkedin/cruise-control'],['MirrorMaker 2','https://kafka.apache.org/documentation/#georeplication'],['Terraform AWS','https://registry.terraform.io/providers/hashicorp/aws/latest/docs']]
+  },
+  'migration-modal': {
+    title: 'EC2 → EKS Migration — Deep Dive',
+    body: `
+      <p class="mb-4">Migrate based on evidence, not fashion. The goal is lower cost and better operability, not Kubernetes for its own sake.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Compute options compared</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-green-500 pl-3"><b>EKS with managed node groups (best for many stateless services)</b><br><span class="text-green-600">Pro:</span> bin-packing density, autoscaling (Karpenter), unified deploy model, spot-friendly. <br><span class="text-red-500">Con:</span> control-plane cost, K8s expertise required, networking/IAM complexity.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>EC2 + Auto Scaling Groups (best for a few large, steady, tuned hosts)</b><br><span class="text-green-600">Pro:</span> simplest mental model, full control, no orchestration overhead. <br><span class="text-red-500">Con:</span> lower density, more per-service ops, slower deploys.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>EKS Fargate (serverless pods)</b><br><span class="text-green-600">Pro:</span> no node management, good for spiky low-volume jobs. <br><span class="text-red-500">Con:</span> pricier per vCPU at steady load, no DaemonSets, not ideal for Kafka brokers.</div>
+        <div class="border-l-2 border-green-500 pl-3"><b>Strimzi on EKS (for Kafka brokers themselves)</b><br><span class="text-green-600">Pro:</span> declarative operator, rolling upgrades, rebalancing CRDs. <br><span class="text-red-500">Con:</span> stateful K8s is hard — EBS/StatefulSets, pod anti-affinity, careful storage tuning.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Amazon MSK (skip self-management)</b><br><span class="text-green-600">Pro:</span> removes broker ops entirely. <br><span class="text-red-500">Con:</span> cost and reduced control.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Migration approach</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Start with stateless workloads (Connect, REST proxy, consumers) to build team K8s muscle.</li>
+        <li>Containerize, add health/readiness probes, set resource requests/limits from observed usage.</li>
+        <li>Use Karpenter + Spot for cost; run a cost comparison (EC2 reserved vs EKS+Spot) before committing.</li>
+        <li>Keep Kafka brokers on EC2/MSK until the team is confident running stateful K8s.</li>
+      </ul>`,
+    refs: [['Amazon EKS','https://docs.aws.amazon.com/eks/'],['Karpenter','https://karpenter.sh/'],['Strimzi','https://strimzi.io/documentation/'],['AWS Pricing Calculator','https://calculator.aws/']]
+  },
+  'obs-modal': {
+    title: 'Logging, Metrics & Grafana — Deep Dive',
+    body: `
+      <p class="mb-4">Unify logs, metrics, and traces under Grafana so on-call engineers correlate across signals in one place.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Logging backend options</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-green-500 pl-3"><b>Grafana Loki (recommended)</b><br><span class="text-green-600">Pro:</span> indexes labels not full text → cheap storage, native Grafana integration, S3-backed. <br><span class="text-red-500">Con:</span> full-text search is weaker than Elasticsearch; design good labels.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>ELK / OpenSearch</b><br><span class="text-green-600">Pro:</span> powerful full-text search and analytics. <br><span class="text-red-500">Con:</span> heavy to operate, storage-hungry, more expensive at scale.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>CloudWatch Logs</b><br><span class="text-green-600">Pro:</span> zero-ops, AWS-native. <br><span class="text-red-500">Con:</span> query cost, weaker dashboards, vendor lock-in — often used as a feeder into Grafana.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Collection agents</h4>
+      <ul class="list-disc pl-5 space-y-1 mb-4">
+        <li><b>Grafana Alloy</b> (OTel-based, recommended new default) or <b>Promtail</b> for Loki-only.</li>
+        <li><b>OpenTelemetry Collector</b> when you want vendor-neutral pipelines for logs+metrics+traces.</li>
+        <li>Run as a DaemonSet on EKS, or as a systemd service baked into the AMI on EC2.</li>
+      </ul>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Kafka-specific signals</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>JMX → JMX Prometheus Exporter for broker metrics; scrape with Prometheus/Mimir.</li>
+        <li>Alert on UnderReplicatedPartitions &gt; 0, OfflinePartitions &gt; 0, and rising consumer lag.</li>
+        <li>Use kafka-lag-exporter or Cruise Control metrics for per-group lag dashboards.</li>
+        <li>Tie alerts to SLOs and route to PagerDuty/Slack with clear severity.</li>
+      </ul>`,
+    refs: [['Grafana Loki','https://grafana.com/docs/loki/latest/'],['Grafana Alloy','https://grafana.com/docs/alloy/latest/'],['JMX Exporter','https://github.com/prometheus/jmx_exporter'],['OpenTelemetry','https://opentelemetry.io/docs/']]
+  },
+  'support-modal': {
+    title: 'User Support & Performance — Deep Dive',
+    body: `
+      <p class="mb-4">A platform team's product is reliability and ease of use for application teams. Invest in self-service and proactive performance work.</p>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Support model options</h4>
+      <div class="space-y-3 mb-4">
+        <div class="border-l-2 border-green-500 pl-3"><b>GitOps self-service (recommended)</b><br><span class="text-green-600">Pro:</span> topic/ACL/quota requests as merge requests → reviewed, audited, automated apply. Scales without bottlenecking the team. <br><span class="text-red-500">Con:</span> initial tooling investment (CI to apply changes safely).</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Ticket-based provisioning</b><br><span class="text-green-600">Pro:</span> simple to start. <br><span class="text-red-500">Con:</span> manual, slow, the team becomes a bottleneck and toil grows.</div>
+        <div class="border-l-2 border-ibm-border dark:border-neutral-700 pl-3"><b>Fully managed control plane (e.g. Confluent)</b><br><span class="text-green-600">Pro:</span> rich self-service UI. <br><span class="text-red-500">Con:</span> licensing cost, less control.</div>
+      </div>
+      <h4 class="font-semibold mb-2 text-ibm-blue">Performance tuning playbook</h4>
+      <ul class="list-disc pl-5 space-y-1 mb-4">
+        <li><b>Producers:</b> tune batch.size + linger.ms for throughput; compression zstd/lz4; acks=all for safety.</li>
+        <li><b>Consumers:</b> right-size max.poll.records and fetch sizes; monitor rebalance frequency.</li>
+        <li><b>Partitions:</b> enough for parallelism but not so many that recovery/controller load suffers.</li>
+        <li><b>JVM:</b> G1GC, heap typically 6–8 GB (leave RAM for page cache, which Kafka relies on heavily).</li>
+        <li><b>OS:</b> raise file-descriptor limits, tune vm.swappiness low, use XFS for log dirs.</li>
+      </ul>
+      <h4 class="font-semibold mb-2 text-ibm-blue">SLOs & on-call</h4>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Define availability and produce/consume latency SLOs; track against an error budget.</li>
+        <li>Maintain runbooks: broker down, disk full, ISR shrink, controller failover, lag spike.</li>
+        <li>Blameless postmortems; feed every incident back into automation and dashboards.</li>
+      </ul>`,
+    refs: [['Kafka Operations','https://kafka.apache.org/documentation/#operations'],['Google SRE Book','https://sre.google/sre-book/table-of-contents/'],['Confluent Best Practices','https://docs.confluent.io/']]
+  }
+};
+
+/* ---------- Modal engine ---------- */
+function openModal(id){
+  const m = MODALS[id];
+  if(!m) return;
+  const refsHtml = m.refs.map(r => `<a href="${r[1]}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-ibm-blue hover:underline text-sm mr-4 mb-2">${r[0]} <span>↗</span></a>`).join('');
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 modal-backdrop bg-black/40" onclick="if(event.target===this)closeModal()">
+      <div class="bg-white dark:bg-neutral-900 w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto border border-ibm-border dark:border-neutral-700 shadow-2xl">
+        <div class="sticky top-0 bg-white dark:bg-neutral-900 border-b border-ibm-border dark:border-neutral-700 px-5 py-4 flex items-start justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-1.5 h-7 bg-ibm-blue"></div>
+            <h3 class="font-semibold text-lg leading-tight">${m.title}</h3>
+          </div>
+          <button onclick="closeModal()" class="p-1.5 hover:bg-ibm-light dark:hover:bg-neutral-800 transition" aria-label="Close">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="px-5 py-5 text-sm text-ibm-gray dark:text-neutral-300 leading-relaxed">${m.body}</div>
+        <div class="border-t border-ibm-border dark:border-neutral-700 px-5 py-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-ibm-gray dark:text-neutral-500 mb-2">Official References</div>
+          ${refsHtml}
+        </div>
+      </div>
+    </div>`;
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(){
+  document.getElementById('modalRoot').innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+/* ---------- Close mobile nav on click ---------- */
+document.querySelectorAll('#mobileNav a').forEach(a => a.addEventListener('click', () => document.getElementById('mobileNav').classList.add('hidden')));
+</script>
+</body>
+</html>

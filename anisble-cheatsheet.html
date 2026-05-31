@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ansible Builtins Cheat Sheet — Progressive Learning</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { darkMode: 'class' };
+</script>
+<style>
+  :root { --fs: 16px; }
+  body { font-size: var(--fs); transition: background-color .25s, color .25s; }
+  pre code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .code-block { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  /* progressive level rail */
+  .rail::before {
+    content:''; position:absolute; left:18px; top:0; bottom:0; width:2px;
+    background:linear-gradient(to bottom,#3b82f6,#1e3a8a);
+  }
+  .popover-panel { animation: pop .15s ease-out; }
+  @keyframes pop { from {opacity:0; transform:translateY(4px);} to {opacity:1; transform:translateY(0);} }
+  ::selection { background:#3b82f6; color:#fff; }
+  html { scroll-behavior:smooth; }
+  .tab-active { border-color:#3b82f6; color:#3b82f6; font-weight:600; }
+</style>
+</head>
+<body class="bg-white text-black dark:bg-slate-950 dark:text-slate-100">
+
+<!-- ===== TOP BAR ===== -->
+<header class="sticky top-0 z-40 backdrop-blur bg-white/85 dark:bg-slate-950/85 border-b border-blue-200 dark:border-slate-800">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+    <div class="flex items-center gap-2 mr-auto">
+      <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold">A</span>
+      <div>
+        <h1 class="text-blue-700 dark:text-blue-400 font-bold leading-tight">Ansible Builtins Cheat Sheet</h1>
+        <p class="text-xs text-black/60 dark:text-slate-400 leading-tight">Progressive learning · ETL · DevOps · AWS &amp; Azure</p>
+      </div>
+    </div>
+
+    <!-- font size controls -->
+    <div class="flex items-center gap-1 rounded-lg border border-blue-300 dark:border-slate-700 px-2 py-1">
+      <button onclick="changeFont(-1)" class="px-2 font-bold text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded" aria-label="Decrease font">A−</button>
+      <span id="fsLabel" class="text-xs tabular-nums w-9 text-center text-black/60 dark:text-slate-400">16px</span>
+      <button onclick="changeFont(1)" class="px-2 font-bold text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded" aria-label="Increase font">A+</button>
+    </div>
+
+    <!-- theme toggle -->
+    <button onclick="toggleTheme()" class="rounded-lg border border-blue-300 dark:border-slate-700 px-3 py-1.5 text-sm font-medium hover:bg-blue-50 dark:hover:bg-slate-800">
+      <span class="dark:hidden">🌙 Dark</span>
+      <span class="hidden dark:inline">☀️ Light</span>
+    </button>
+  </div>
+
+  <!-- nav -->
+  <nav class="max-w-6xl mx-auto px-4 pb-2 flex gap-4 overflow-x-auto text-sm">
+    <a href="#basics" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">① Basics</a>
+    <a href="#files" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">② Files</a>
+    <a href="#control" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">③ Control Flow</a>
+    <a href="#advanced" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">④ Advanced</a>
+    <a href="#cloud" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">⑤ AWS &amp; Azure</a>
+    <a href="#etl" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">⑥ ETL</a>
+    <a href="#logging" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">⑦ Logging/DevOps</a>
+    <a href="#best" class="whitespace-nowrap text-blue-700 dark:text-blue-400 hover:underline">⑧ Best Practices</a>
+  </nav>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+
+  <!-- intro -->
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold text-blue-700 dark:text-blue-400">Learn Ansible builtins, level by level</h2>
+    <p class="mt-2 max-w-3xl text-black/80 dark:text-slate-300">
+      Every module here belongs to the <code class="text-blue-700 dark:text-blue-400">ansible.builtin</code> collection (bundled with Ansible core). Start at Level 1 and climb.
+      Tap the <span class="inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-xs align-middle">i</span> buttons for extra context, gotchas, and tips.
+    </p>
+    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+      <span class="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">🟢 Simple</span>
+      <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">🟡 Complete</span>
+      <span class="px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">🔗 Official docs</span>
+    </div>
+  </section>
+
+  <div class="relative rail pl-12 space-y-14">
+
+  <!-- ============ LEVEL 1 ============ -->
+  <section id="basics">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">1</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 1 — The Basics</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">The five modules you'll use every single day.</p>
+    </div>
+
+    <!-- debug -->
+    <article class="card" data-module="debug">
+      <div class="card-head">
+        <h3>ansible.builtin.debug</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="debug">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/debug_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Print messages or variable values during a run — your <code>print()</code> for playbooks.</p>
+      <div class="pop" data-pop-for="debug">
+        <strong>Context:</strong> Controlled by <code>-v</code> verbosity via the <code>verbosity</code> param. Use <code>var:</code> to dump a variable (no Jinja braces) and <code>msg:</code> for formatted strings. Never put secrets in debug output — it lands in logs.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Say hello
+  ansible.builtin.debug:
+    msg: "Hello from {{ inventory_hostname }}"</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Dump structured facts only when very verbose
+  ansible.builtin.debug:
+    var: ansible_facts.network_interfaces
+    verbosity: 2          # shows only with -vv
+
+- name: Conditional formatted message
+  ansible.builtin.debug:
+    msg: >-
+      Host {{ inventory_hostname }} has
+      {{ ansible_facts.processor_vcpus }} vCPUs and
+      {{ (ansible_facts.memtotal_mb / 1024) | round(1) }} GB RAM
+  when: ansible_facts.memtotal_mb is defined</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- command -->
+    <article class="card" data-module="command">
+      <div class="card-head">
+        <h3>ansible.builtin.command</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="command">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/command_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Run a binary directly (no shell). Safer than <code>shell</code> — no pipes, redirects, or env expansion.</p>
+      <div class="pop" data-pop-for="command">
+        <strong>Context:</strong> Not idempotent by itself — guard it with <code>creates:</code>/<code>removes:</code> or <code>when:</code>. If you need <code>|</code>, <code>></code>, <code>&amp;&amp;</code> or <code>$VARS</code>, use <code>ansible.builtin.shell</code> instead.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Check version
+  ansible.builtin.command: cat /etc/os-release</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Run migration once (idempotent guard)
+  ansible.builtin.command:
+    cmd: /opt/app/bin/migrate --apply
+    chdir: /opt/app
+    creates: /opt/app/.migrated      # skips if file exists
+  register: migrate_out
+  changed_when: "'applied' in migrate_out.stdout"
+  failed_when: migrate_out.rc not in [0, 2]</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- copy -->
+    <article class="card" data-module="copy">
+      <div class="card-head">
+        <h3>ansible.builtin.copy</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="copy">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/copy_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Copy files to remote hosts, set ownership/permissions, optionally back up.</p>
+      <div class="pop" data-pop-for="copy">
+        <strong>Context:</strong> For dynamic content use <code>template</code>. Use <code>content:</code> to write inline strings. <code>backup: true</code> keeps a timestamped copy before overwriting — great for configs.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Drop a config file
+  ansible.builtin.copy:
+    src: app.conf
+    dest: /etc/app/app.conf</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Deploy secured config with backup &amp; validation
+  ansible.builtin.copy:
+    src: nginx.conf
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+    validate: "nginx -t -c %s"   # %s = temp path, fails task if invalid
+  notify: reload nginx</code></pre>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ LEVEL 2 ============ -->
+  <section id="files">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">2</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 2 — Files, Packages &amp; Services</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">Configuration management core.</p>
+    </div>
+
+    <!-- file -->
+    <article class="card" data-module="file">
+      <div class="card-head">
+        <h3>ansible.builtin.file</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="file">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/file_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Manage paths: create dirs, symlinks, set perms, or delete with <code>state: absent</code>.</p>
+      <div class="pop" data-pop-for="file">
+        <strong>Context:</strong> <code>state</code> options: <code>file</code>, <code>directory</code>, <code>link</code>, <code>hard</code>, <code>touch</code>, <code>absent</code>. To create parent dirs recursively, use <code>state: directory</code> + <code>recurse: true</code> for perms.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Ensure log dir exists
+  ansible.builtin.file:
+    path: /var/log/app
+    state: directory</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Create owned tree + symlink
+  ansible.builtin.file:
+    path: /opt/app/releases
+    state: directory
+    owner: appuser
+    group: appgrp
+    mode: "0755"
+    recurse: true
+
+- name: Point 'current' at latest release
+  ansible.builtin.file:
+    src: /opt/app/releases/v2.4.1
+    dest: /opt/app/current
+    state: link
+    force: true</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- package -->
+    <article class="card" data-module="package">
+      <div class="card-head">
+        <h3>ansible.builtin.package</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="package">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/package_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">OS-agnostic package install — auto-picks apt/yum/dnf/zypper.</p>
+      <div class="pop" data-pop-for="package">
+        <strong>Context:</strong> Great for cross-distro roles. When you need distro-specific options (e.g. apt's <code>update_cache</code>), use <code>ansible.builtin.apt</code>/<code>dnf</code> directly.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Install git
+  ansible.builtin.package:
+    name: git
+    state: present</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Install a tool set across distros
+  ansible.builtin.package:
+    name:
+      - curl
+      - jq
+      - python3-pip
+    state: latest
+  register: pkg
+  retries: 3
+  delay: 5
+  until: pkg is succeeded</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- service / systemd -->
+    <article class="card" data-module="service">
+      <div class="card-head">
+        <h3>ansible.builtin.service</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="service">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/service_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Start/stop/enable services across init systems.</p>
+      <div class="pop" data-pop-for="service">
+        <strong>Context:</strong> For systemd-only features (daemon-reload, masking) prefer <code>ansible.builtin.systemd_service</code>. Pair with handlers so restarts only fire on change.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Ensure nginx running
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code># handlers/main.yml
+- name: reload nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+    daemon_reload: true</code></pre>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ LEVEL 3 ============ -->
+  <section id="control">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">3</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 3 — Control Flow &amp; Templates</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">Loops, conditionals, dynamic content.</p>
+    </div>
+
+    <!-- template -->
+    <article class="card" data-module="template">
+      <div class="card-head">
+        <h3>ansible.builtin.template</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="template">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/template_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Render a Jinja2 <code>.j2</code> file with variables and copy it to the host.</p>
+      <div class="pop" data-pop-for="template">
+        <strong>Context:</strong> Templates run on the controller. Add <code>validate:</code> for config safety and <code>{{ ansible_managed }}</code> headers so humans know not to hand-edit.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Render config
+  ansible.builtin.template:
+    src: app.conf.j2
+    dest: /etc/app/app.conf</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Render env-specific config
+  ansible.builtin.template:
+    src: "app.{{ env }}.conf.j2"
+    dest: /etc/app/app.conf
+    mode: "0640"
+    backup: true
+    validate: "/usr/bin/appctl check %s"
+  vars:
+    db_pool: "{{ 50 if env == 'prod' else 5 }}"
+  notify: restart app</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- set_fact + loops -->
+    <article class="card" data-module="setfact">
+      <div class="card-head">
+        <h3>ansible.builtin.set_fact + loops</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="setfact">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/set_fact_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Compute and store variables mid-play; iterate with <code>loop</code>.</p>
+      <div class="pop" data-pop-for="setfact">
+        <strong>Context:</strong> <code>set_fact</code> values persist for the host across the play. Prefer <code>loop:</code> over the legacy <code>with_*</code>. Use <code>loop_control: label:</code> to keep output readable.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Build a fact
+  ansible.builtin.set_fact:
+    app_url: "https://{{ inventory_hostname }}:8443"</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Create users from a list
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: "{{ item.groups }}"
+    state: present
+  loop: "{{ team_members }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.active | default(true)</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <!-- uri -->
+    <article class="card" data-module="uri">
+      <div class="card-head">
+        <h3>ansible.builtin.uri</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="uri">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/uri_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Call HTTP/REST APIs — health checks, webhooks, ETL ingestion.</p>
+      <div class="pop" data-pop-for="uri">
+        <strong>Context:</strong> Set <code>return_content: true</code> to capture the body, and combine with <code>retries/until</code> for polling. <code>status_code:</code> can be a list of acceptable codes.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Health check
+  ansible.builtin.uri:
+    url: https://app.local/healthz
+    status_code: 200</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: POST JSON and poll until ready
+  ansible.builtin.uri:
+    url: https://api.local/v1/jobs
+    method: POST
+    headers:
+      Authorization: "Bearer {{ api_token }}"
+    body_format: json
+    body: { type: "etl", source: "s3://bucket/raw" }
+    return_content: true
+    status_code: [200, 201, 202]
+  register: job
+  retries: 10
+  delay: 6
+  until: job.json.status == "completed"</code></pre>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ LEVEL 4 ============ -->
+  <section id="advanced">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">4</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 4 — Advanced Orchestration</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">Blocks, async, error handling, delegation.</p>
+    </div>
+
+    <article class="card" data-module="block">
+      <div class="card-head">
+        <h3>block / rescue / always</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="block">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_blocks.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Group tasks with try/catch/finally semantics.</p>
+      <div class="pop" data-pop-for="block">
+        <strong>Context:</strong> <code>rescue</code> runs on failure, <code>always</code> runs regardless — perfect for cleanup, rollbacks, and notifications in ETL/DevOps pipelines.
+      </div>
+      <div class="examples">
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Safe deploy with rollback
+  block:
+    - ansible.builtin.command: /opt/app/deploy.sh {{ version }}
+    - ansible.builtin.uri:
+        url: https://app.local/healthz
+        status_code: 200
+  rescue:
+    - ansible.builtin.debug:
+        msg: "Deploy failed — rolling back"
+    - ansible.builtin.command: /opt/app/rollback.sh
+  always:
+    - ansible.builtin.command: /opt/app/notify.sh "{{ ansible_failed_result | default('ok') }}"</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-module="async">
+      <div class="card-head">
+        <h3>async / poll + wait_for</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="async">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_async.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Run long jobs without blocking; wait for ports/files.</p>
+      <div class="pop" data-pop-for="async">
+        <strong>Context:</strong> <code>poll: 0</code> fires-and-forgets; check later with <code>async_status</code>. <code>wait_for</code> is ideal for "service is up on port X" gates.
+      </div>
+      <div class="examples">
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Kick off long ETL batch (fire and forget)
+  ansible.builtin.command: /opt/etl/run_batch.sh
+  async: 3600
+  poll: 0
+  register: batch
+
+- name: Wait for results port to open
+  ansible.builtin.wait_for:
+    host: "{{ inventory_hostname }}"
+    port: 9000
+    timeout: 300
+
+- name: Reap the async job
+  ansible.builtin.async_status:
+    jid: "{{ batch.ansible_job_id }}"
+  register: r
+  until: r.finished
+  retries: 60
+  delay: 30</code></pre>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ LEVEL 5 — CLOUD ============ -->
+  <section id="cloud">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">5</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 5 — AWS &amp; Azure</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">Cloud modules live in <code>amazon.aws</code> &amp; <code>azure.azcollection</code>, driven by builtin control flow.</p>
+    </div>
+
+    <!-- tabs -->
+    <div class="mb-3 flex gap-4 border-b border-blue-200 dark:border-slate-800 text-sm">
+      <button class="cloud-tab tab-active pb-2 border-b-2 border-transparent" data-cloud="aws">☁️ AWS</button>
+      <button class="cloud-tab pb-2 border-b-2 border-transparent text-black/60 dark:text-slate-400" data-cloud="azure">🔷 Azure</button>
+    </div>
+
+    <!-- AWS -->
+    <div class="cloud-pane" data-pane="aws">
+      <article class="card" data-module="aws-s3">
+        <div class="card-head">
+          <h3>amazon.aws.s3_object</h3>
+          <div class="card-actions">
+            <button class="info-btn" data-pop="awss3">i</button>
+            <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/amazon/aws/s3_object_module.html">docs ↗</a>
+          </div>
+        </div>
+        <p class="card-desc">Upload/download/list S3 objects — the backbone of ETL ingest/landing zones.</p>
+        <div class="pop" data-pop-for="awss3">
+          <strong>Context:</strong> Install with <code>ansible-galaxy collection install amazon.aws</code> and <code>pip install boto3 botocore</code>. Prefer IAM roles / env creds over hard-coded keys.
+        </div>
+        <div class="examples">
+          <div class="ex simple">
+            <span class="tag-s">🟢 Simple</span>
+            <pre><code>- name: Upload a file to S3
+  amazon.aws.s3_object:
+    bucket: my-data-lake
+    object: /raw/events.json
+    src: /tmp/events.json
+    mode: put</code></pre>
+          </div>
+          <div class="ex complete">
+            <span class="tag-c">🟡 Complete</span>
+            <pre><code>- name: Launch EC2 worker + land data in S3
+  amazon.aws.ec2_instance:
+    name: "etl-worker-{{ item }}"
+    instance_type: t3.large
+    image_id: "{{ ami_id }}"
+    region: us-east-1
+    security_groups: [etl-sg]
+    tags: { role: etl, env: prod }
+    wait: true
+  loop: "{{ range(1, worker_count + 1) | list }}"
+  register: workers
+
+- name: Sync processed output to S3
+  amazon.aws.s3_object:
+    bucket: my-data-lake
+    object: "/processed/{{ run_id }}/part-{{ item }}.parquet"
+    src: "/data/out/part-{{ item }}.parquet"
+    mode: put
+    encrypt: true
+  loop: "{{ range(0, partitions) | list }}"</code></pre>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" data-module="aws-rds">
+        <div class="card-head">
+          <h3>amazon.aws.rds_instance</h3>
+          <div class="card-actions">
+            <button class="info-btn" data-pop="awsrds">i</button>
+            <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/amazon/aws/rds_instance_module.html">docs ↗</a>
+          </div>
+        </div>
+        <p class="card-desc">Provision managed databases for ETL targets/warehouses.</p>
+        <div class="pop" data-pop-for="awsrds">
+          <strong>Context:</strong> Pull the password from a vault/secret, never inline. Pair with <code>community.aws.rds_instance_info</code> to wait for availability.
+        </div>
+        <div class="examples">
+          <div class="ex complete">
+            <span class="tag-c">🟡 Complete</span>
+            <pre><code>- name: Provision PostgreSQL warehouse
+  amazon.aws.rds_instance:
+    id: dw-prod
+    engine: postgres
+    db_instance_class: db.r6g.xlarge
+    allocated_storage: 200
+    master_username: dw_admin
+    master_user_password: "{{ vault_dw_password }}"
+    region: us-east-1
+    tags: { team: data, tier: warehouse }
+    wait: true</code></pre>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <!-- Azure -->
+    <div class="cloud-pane hidden" data-pane="azure">
+      <article class="card" data-module="az-blob">
+        <div class="card-head">
+          <h3>azure.azcollection.azure_rm_storageblob</h3>
+          <div class="card-actions">
+            <button class="info-btn" data-pop="azblob">i</button>
+            <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/azure/azcollection/azure_rm_storageblob_module.html">docs ↗</a>
+          </div>
+        </div>
+        <p class="card-desc">Upload/download blobs in Azure Storage — Azure's ETL landing zone.</p>
+        <div class="pop" data-pop-for="azblob">
+          <strong>Context:</strong> Install with <code>ansible-galaxy collection install azure.azcollection</code> and its requirements. Authenticate via <code>az login</code>, service principal env vars, or managed identity.
+        </div>
+        <div class="examples">
+          <div class="ex simple">
+            <span class="tag-s">🟢 Simple</span>
+            <pre><code>- name: Upload a blob
+  azure.azcollection.azure_rm_storageblob:
+    resource_group: data-rg
+    storage_account_name: mydatalake
+    container: raw
+    blob: events.json
+    src: /tmp/events.json</code></pre>
+          </div>
+          <div class="ex complete">
+            <span class="tag-c">🟡 Complete</span>
+            <pre><code>- name: Ensure container then push processed files
+  azure.azcollection.azure_rm_storageblob:
+    resource_group: data-rg
+    storage_account_name: mydatalake
+    container: processed
+    blob: "{{ run_id }}/part-{{ item }}.parquet"
+    src: "/data/out/part-{{ item }}.parquet"
+    content_type: application/octet-stream
+  loop: "{{ range(0, partitions) | list }}"
+  loop_control:
+    label: "part-{{ item }}"</code></pre>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" data-module="az-vm">
+        <div class="card-head">
+          <h3>azure.azcollection.azure_rm_virtualmachine</h3>
+          <div class="card-actions">
+            <button class="info-btn" data-pop="azvm">i</button>
+            <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/azure/azcollection/azure_rm_virtualmachine_module.html">docs ↗</a>
+          </div>
+        </div>
+        <p class="card-desc">Create VMs to run pipelines or services.</p>
+        <div class="pop" data-pop-for="azvm">
+          <strong>Context:</strong> Use SSH keys not passwords; tag for cost tracking; combine with <code>azure_rm_postgresqlflexibleserver</code> for managed DB targets.
+        </div>
+        <div class="examples">
+          <div class="ex complete">
+            <span class="tag-c">🟡 Complete</span>
+            <pre><code>- name: Provision ETL worker VM
+  azure.azcollection.azure_rm_virtualmachine:
+    resource_group: data-rg
+    name: "etl-worker-{{ item }}"
+    vm_size: Standard_D4s_v5
+    admin_username: azureuser
+    ssh_password_enabled: false
+    ssh_public_keys:
+      - path: /home/azureuser/.ssh/authorized_keys
+        key_data: "{{ ssh_pub_key }}"
+    image:
+      offer: 0001-com-ubuntu-server-jammy
+      publisher: Canonical
+      sku: 22_04-lts
+      version: latest
+    tags: { role: etl, env: prod }
+  loop: "{{ range(1, worker_count + 1) | list }}"</code></pre>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ LEVEL 6 — ETL ============ -->
+  <section id="etl">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">6</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 6 — Data ETL Apps &amp; Services</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">Builtins gluing Extract → Transform → Load.</p>
+    </div>
+
+    <article class="card" data-module="etl-pipeline">
+      <div class="card-head">
+        <h3>End-to-end ETL with builtins</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="etl">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/get_url_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Extract via <code>get_url</code>/<code>uri</code>, transform via <code>command</code>, load via cloud modules — with idempotent guards.</p>
+      <div class="pop" data-pop-for="etl">
+        <strong>Context:</strong> Keep each stage idempotent. Use <code>register</code> + <code>changed_when</code> so reruns are safe. Stamp a <code>run_id</code> with <code>set_fact</code> for traceable artifact paths.
+      </div>
+      <div class="examples">
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Stamp run id
+  ansible.builtin.set_fact:
+    run_id: "{{ ansible_date_time.iso8601_basic_short }}"
+
+# EXTRACT
+- name: Pull source dataset
+  ansible.builtin.get_url:
+    url: "https://feeds.example.com/{{ dataset }}.csv"
+    dest: "/data/raw/{{ run_id }}.csv"
+    mode: "0644"
+    checksum: "sha256:{{ expected_sha }}"
+
+# TRANSFORM
+- name: Run transform job
+  ansible.builtin.command:
+    cmd: "python3 transform.py /data/raw/{{ run_id }}.csv /data/out/{{ run_id }}.parquet"
+    creates: "/data/out/{{ run_id }}.parquet"
+  register: tf
+  changed_when: tf.rc == 0
+
+# LOAD (AWS)
+- name: Load to data lake
+  amazon.aws.s3_object:
+    bucket: my-data-lake
+    object: "/curated/{{ run_id }}.parquet"
+    src: "/data/out/{{ run_id }}.parquet"
+    mode: put
+    encrypt: true
+
+# VALIDATE
+- name: Notify warehouse to refresh
+  ansible.builtin.uri:
+    url: https://warehouse.local/v1/refresh
+    method: POST
+    body_format: json
+    body: { run_id: "{{ run_id }}" }
+    status_code: 202</code></pre>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ LEVEL 7 — LOGGING / DEVOPS ============ -->
+  <section id="logging">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">7</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Level 7 — Logging &amp; DevOps</h2>
+      <p class="text-sm text-black/70 dark:text-slate-400">Observability, CI/CD glue, audit trails.</p>
+    </div>
+
+    <article class="card" data-module="logging">
+      <div class="card-head">
+        <h3>lineinfile · blockinfile · log capture</h3>
+        <div class="card-actions">
+          <button class="info-btn" data-pop="log">i</button>
+          <a class="doc-link" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/lineinfile_module.html">docs ↗</a>
+        </div>
+      </div>
+      <p class="card-desc">Manage log config, ship run output, append audit records idempotently.</p>
+      <div class="pop" data-pop-for="log">
+        <strong>Context:</strong> Use <code>blockinfile</code>'s managed markers for editable config sections; <code>lineinfile</code> for single directives. For full files always prefer <code>template</code>.
+      </div>
+      <div class="examples">
+        <div class="ex simple">
+          <span class="tag-s">🟢 Simple</span>
+          <pre><code>- name: Ensure log level
+  ansible.builtin.lineinfile:
+    path: /etc/app/app.conf
+    regexp: '^log_level='
+    line: 'log_level=info'</code></pre>
+        </div>
+        <div class="ex complete">
+          <span class="tag-c">🟡 Complete</span>
+          <pre><code>- name: Configure rsyslog forwarding block
+  ansible.builtin.blockinfile:
+    path: /etc/rsyslog.d/50-forward.conf
+    create: true
+    marker: "# {mark} ANSIBLE MANAGED — log shipping"
+    block: |
+      *.* action(type="omfwd"
+        target="logs.internal" port="514" protocol="tcp")
+  notify: restart rsyslog
+
+- name: Append deploy audit record
+  ansible.builtin.lineinfile:
+    path: /var/log/deploys.log
+    create: true
+    line: "{{ ansible_date_time.iso8601 }} {{ version }} by {{ lookup('env','USER') }}"
+    insertafter: EOF
+
+- name: Capture &amp; archive command output
+  ansible.builtin.command: /opt/ci/run_tests.sh
+  register: ci
+  changed_when: false
+- ansible.builtin.copy:
+    content: "{{ ci.stdout }}\n--- rc={{ ci.rc }} ---"
+    dest: "/var/log/ci/{{ run_id | default('latest') }}.log"</code></pre>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ BEST PRACTICES ============ -->
+  <section id="best">
+    <div class="relative">
+      <span class="absolute -left-[42px] top-1 h-6 w-6 rounded-full bg-blue-700 text-white text-xs font-bold flex items-center justify-center ring-4 ring-white dark:ring-slate-950">★</span>
+      <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400">Best Practices for Builtins</h2>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4 mt-4">
+      <div class="bp"><h4>1. Always FQCN</h4><p>Use <code>ansible.builtin.copy</code>, not <code>copy</code>. Prevents collection collisions and is lint-clean.</p></div>
+      <div class="bp"><h4>2. Idempotency first</h4><p>Guard <code>command</code>/<code>shell</code> with <code>creates</code>, <code>removes</code>, <code>when</code>, or <code>changed_when</code>. Reruns must be no-ops.</p></div>
+      <div class="bp"><h4>3. command &gt; shell</h4><p>Only use <code>shell</code> when you truly need pipes/redirects/expansion. <code>command</code> avoids injection risk.</p></div>
+      <div class="bp"><h4>4. Name every task</h4><p>Readable output and audit logs. Names double as documentation.</p></div>
+      <div class="bp"><h4>5. Handlers for restarts</h4><p><code>notify</code> + handlers means services restart only when config actually changes.</p></div>
+      <div class="bp"><h4>6. Secrets in Vault</h4><p>Never inline keys/passwords. Use <code>ansible-vault</code> or cloud secret stores; pass via vars.</p></div>
+      <div class="bp"><h4>7. loop, not with_*</h4><p>Modern <code>loop:</code> + <code>loop_control: label:</code> keeps logs clean and behavior predictable.</p></div>
+      <div class="bp"><h4>8. Validate before apply</h4><p>Use <code>validate:</code> on <code>copy</code>/<code>template</code> to fail safely on bad config.</p></div>
+      <div class="bp"><h4>9. check_mode &amp; --diff</h4><p>Dry-run with <code>--check --diff</code> in CI before real applies; mark read-only tasks <code>check_mode: false</code> where needed.</p></div>
+      <div class="bp"><h4>10. Retry transient ops</h4><p>Network/cloud calls: <code>retries</code> + <code>delay</code> + <code>until</code> for resilience.</p></div>
+      <div class="bp"><h4>11. block/rescue for safety</h4><p>Wrap risky deploys with rollback in <code>rescue</code> and cleanup in <code>always</code>.</p></div>
+      <div class="bp"><h4>12. Don't log secrets</h4><p>Add <code>no_log: true</code> on tasks handling sensitive data.</p></div>
+    </div>
+
+    <div class="mt-6 rounded-lg border border-blue-200 dark:border-slate-800 p-4 bg-blue-50/50 dark:bg-slate-900/50">
+      <h4 class="font-bold text-blue-700 dark:text-blue-400">📚 Official references</h4>
+      <ul class="mt-2 space-y-1 text-sm">
+        <li>→ <a class="lnk" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html">ansible.builtin module index</a></li>
+        <li>→ <a class="lnk" target="_blank" href="https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html">Best practices &amp; tips</a></li>
+        <li>→ <a class="lnk" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/amazon/aws/index.html">amazon.aws collection</a></li>
+        <li>→ <a class="lnk" target="_blank" href="https://docs.ansible.com/ansible/latest/collections/azure/azcollection/index.html">azure.azcollection</a></li>
+        <li>→ <a class="lnk" target="_blank" href="https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html">Playbook guide</a></li>
+      </ul>
+    </div>
+  </section>
+
+  </div><!-- /rail -->
+
+  <footer class="mt-16 pt-6 border-t border-blue-200 dark:border-slate-800 text-xs text-black/50 dark:text-slate-500">
+    Built for learning Ansible <code>ansible.builtin</code> modules. Verify module options against the linked official docs for your Ansible version. Cloud examples require their respective collections + SDKs installed.
+  </footer>
+</main>
+
+<!-- floating info popover (mobile-friendly modal) -->
+<div id="popModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4" onclick="closePop(event)">
+  <div class="popover-panel max-w-md w-full rounded-xl bg-white dark:bg-slate-900 border border-blue-300 dark:border-slate-700 p-5 shadow-2xl">
+    <div class="flex items-start justify-between gap-3">
+      <h4 class="font-bold text-blue-700 dark:text-blue-400">More context</h4>
+      <button onclick="document.getElementById('popModal').classList.add('hidden');document.getElementById('popModal').classList.remove('flex')" class="text-black/50 dark:text-slate-400 hover:text-black dark:hover:text-white text-xl leading-none">×</button>
+    </div>
+    <div id="popBody" class="mt-3 text-sm text-black/80 dark:text-slate-300 leading-relaxed"></div>
+  </div>
+</div>
+
+<style>
+  .card{margin-top:1.25rem;border-radius:.75rem;border:1px solid #bfdbfe;background:#fff;padding:1rem;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .dark .card{border-color:#1e293b;background:rgba(15,23,42,.6)}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+  .card-head h3{font-weight:700;color:#000;word-break:break-word}
+  .dark .card-head h3{color:#f1f5f9}
+  .card-actions{display:flex;align-items:center;gap:.5rem}
+  .info-btn{height:1.5rem;width:1.5rem;border-radius:9999px;background:#2563eb;color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;border:0;cursor:pointer}
+  .info-btn:hover{background:#1d4ed8}
+  .doc-link{font-size:.75rem;font-weight:500;color:#1d4ed8;white-space:nowrap;text-decoration:none}
+  .doc-link:hover{text-decoration:underline}
+  .dark .doc-link{color:#60a5fa}
+  .card-desc{margin-top:.25rem;font-size:.875rem;color:rgba(0,0,0,.7)}
+  .dark .card-desc{color:#94a3b8}
+  .card code,.card-desc code,.pop code{padding:0 .25rem;border-radius:.25rem;background:#eff6ff;color:#1d4ed8}
+  .dark .card code,.dark .card-desc code,.dark .pop code{background:#1e293b;color:#93c5fd}
+  .examples{margin-top:.75rem;display:grid;gap:.75rem}
+  @media(min-width:1024px){.examples{grid-template-columns:1fr 1fr}}
+  .ex{border-radius:.5rem;border:1px solid #dbeafe;overflow:hidden}
+  .dark .ex{border-color:#1e293b}
+  .ex.simple{background:rgba(240,253,244,.4)}
+  .dark .ex.simple{background:rgba(5,46,22,.2)}
+  .ex.complete{background:rgba(255,251,235,.3)}
+  .dark .ex.complete{background:rgba(69,26,3,.15)}
+  .tag-s{display:block;padding:.25rem .75rem;font-size:.75rem;font-weight:600;color:#166534;background:rgba(220,252,231,.7)}
+  .dark .tag-s{color:#86efac;background:rgba(20,83,45,.3)}
+  .tag-c{display:block;padding:.25rem .75rem;font-size:.75rem;font-weight:600;color:#92400e;background:rgba(254,243,199,.7)}
+  .dark .tag-c{color:#fcd34d;background:rgba(120,53,15,.3)}
+  .ex pre{overflow-x:auto;padding:.75rem;font-size:.75rem;line-height:1.6;margin:0}
+  .ex code{color:#000;white-space:pre}
+  .dark .ex code{color:#e2e8f0}
+  .pop{display:none}
+  .bp{border-radius:.5rem;border:1px solid #bfdbfe;padding:.75rem;background:#fff}
+  .dark .bp{border-color:#1e293b;background:rgba(15,23,42,.6)}
+  .bp h4{font-weight:700;color:#1d4ed8;font-size:.875rem}
+  .dark .bp h4{color:#60a5fa}
+  .bp p{margin-top:.25rem;font-size:.875rem;color:rgba(0,0,0,.7)}
+  .dark .bp p{color:#94a3b8}
+  .bp code{color:#1d4ed8}
+  .dark .bp code{color:#93c5fd}
+  .lnk{color:#1d4ed8;font-weight:500;text-decoration:none}
+  .lnk:hover{text-decoration:underline}
+  .dark .lnk{color:#93c5fd}
+</style>
+
+<script>
+// ---- theme ----
+function toggleTheme(){
+  document.documentElement.classList.toggle('dark');
+  document.documentElement.classList.toggle('light');
+}
+// respect system pref on first load
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){
+  document.documentElement.classList.add('dark');
+  document.documentElement.classList.remove('light');
+}
+
+// ---- font size (12 → 24) ----
+let fs = 16;
+function applyFont(){
+  fs = Math.max(12, Math.min(24, fs));
+  document.documentElement.style.setProperty('--fs', fs + 'px');
+  document.getElementById('fsLabel').textContent = fs + 'px';
+}
+function changeFont(d){ fs += (d*2); applyFont(); }
+applyFont();
+
+// ---- info popovers (modal, mobile friendly) ----
+const modal = document.getElementById('popModal');
+const body  = document.getElementById('popBody');
+document.querySelectorAll('.info-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const key = btn.getAttribute('data-pop');
+    const src = document.querySelector(`[data-pop-for="${key}"]`);
+    body.innerHTML = src ? src.innerHTML : 'No additional context.';
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+  });
+});
+function closePop(e){ if(e.target.id==='popModal'){ modal.classList.add('hidden'); modal.classList.remove('flex'); } }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ modal.classList.add('hidden'); modal.classList.remove('flex'); }});
+
+// ---- AWS / Azure tabs ----
+document.querySelectorAll('.cloud-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    const c = tab.getAttribute('data-cloud');
+    document.querySelectorAll('.cloud-tab').forEach(t=>{
+      t.classList.toggle('tab-active', t===tab);
+      t.classList.toggle('text-black/60', t!==tab);
+      t.classList.toggle('dark:text-slate-400', t!==tab);
+    });
+    document.querySelectorAll('.cloud-pane').forEach(p=>{
+      p.classList.toggle('hidden', p.getAttribute('data-pane')!==c);
+    });
+  });
+});
+</script>
+</body>
+</html>
