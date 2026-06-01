@@ -3,379 +3,192 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AWS AMI Factory · Packer, Terraform &amp; CLI</title>
+<title>AWS AMI Factory · Complete Build, Automate &amp; Operate Guide</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-  /* IBM Carbon design tokens */
   :root {
-    --c-bg:        #ffffff;
-    --c-bg-soft:   #f4f4f4;
-    --c-bg-mute:   #fafafa;
-    --c-border:    #e0e0e0;
-    --c-border-strong: #c6c6c6;
-    --c-text:      #161616;
-    --c-text-2:    #525252;
-    --c-text-3:    #6f6f6f;
-    --c-blue:      #0f62fe;
-    --c-blue-dark: #002d9c;
-    --c-blue-soft: #edf5ff;
-    --c-blue-hover:#0353e9;
-    --c-green:     #198038;
-    --c-red:       #da1e28;
-    --c-code-bg:   #161616;
-    --c-code-fg:   #f4f4f4;
-    --base-font:   16px;
+    --c-bg:#ffffff; --c-bg-soft:#f4f4f4; --c-bg-mute:#fafafa;
+    --c-border:#e0e0e0; --c-border-strong:#c6c6c6;
+    --c-text:#161616; --c-text-2:#525252; --c-text-3:#6f6f6f;
+    --c-blue:#0f62fe; --c-blue-dark:#002d9c; --c-blue-soft:#edf5ff; --c-blue-hover:#0353e9;
+    --c-green:#198038; --c-green-soft:#defbe6;
+    --c-red:#da1e28; --c-red-soft:#fff1f1;
+    --c-amber:#f1c21b; --c-amber-soft:#fcf4d6;
+    --c-code-bg:#161616; --c-code-fg:#f4f4f4;
+    --base-font:16px;
   }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;scroll-padding-top:80px;}
+  body{font-family:'IBM Plex Sans',sans-serif;background:var(--c-bg);color:var(--c-text);font-size:var(--base-font);line-height:1.55;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;}
+  h1,h2,h3,h4{color:var(--c-text);font-weight:600;letter-spacing:-0.01em;}
+  h1{font-weight:300;letter-spacing:-0.02em;}
+  .mono,code,pre,kbd{font-family:'IBM Plex Mono',monospace;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--c-text-2);}
 
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
-  body {
-    font-family: 'IBM Plex Sans', sans-serif;
-    background: var(--c-bg);
-    color: var(--c-text);
-    font-size: var(--base-font);
-    line-height: 1.55;
-    -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
-  }
+  /* Top bar */
+  .topbar{position:sticky;top:0;z-index:50;background:var(--c-text);color:#fff;border-bottom:1px solid #393939;}
+  .topbar-inner{max-width:1320px;margin:0 auto;padding:0 1rem;display:flex;align-items:center;justify-content:space-between;height:48px;}
+  .brand{font-weight:600;font-size:0.875rem;}
+  .brand-pipe{color:#6f6f6f;margin:0 0.5rem;}
+  .brand-sub{color:#c6c6c6;font-weight:400;font-size:0.8125rem;}
+  .fctrl{display:flex;align-items:center;gap:0.25rem;}
+  .fctrl-label{font-size:0.75rem;color:#c6c6c6;margin-right:0.5rem;}
+  @media (max-width:640px){.fctrl-label{display:none;}.brand-sub{display:none;}}
+  .fctrl-btn{width:36px;height:32px;background:transparent;color:#fff;border:1px solid #525252;font-family:'IBM Plex Mono',monospace;font-size:0.875rem;cursor:pointer;transition:background 0.15s,border-color 0.15s;}
+  .fctrl-btn:hover{background:#393939;border-color:#6f6f6f;}
+  .fctrl-display{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:#c6c6c6;min-width:44px;text-align:center;}
 
-  /* Typography */
-  h1, h2, h3, h4 { color: var(--c-text); font-weight: 600; letter-spacing: -0.01em; }
-  h1 { font-weight: 300; letter-spacing: -0.02em; }
-  .mono, code, pre, kbd { font-family: 'IBM Plex Mono', monospace; }
-  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-text-2); }
+  .container{max-width:1320px;margin:0 auto;padding:0 1.5rem;}
+  @media (max-width:640px){.container{padding:0 1rem;}}
 
-  /* Top navigation bar */
-  .topbar {
-    position: sticky; top: 0; z-index: 50;
-    background: var(--c-text); color: #fff;
-    border-bottom: 1px solid #393939;
-  }
-  .topbar-inner { max-width: 1280px; margin: 0 auto; padding: 0 1rem; display: flex; align-items: center; justify-content: space-between; height: 48px; }
-  .brand { font-weight: 600; font-size: 0.875rem; letter-spacing: 0.01em; }
-  .brand-pipe { color: #6f6f6f; margin: 0 0.5rem; }
-  .brand-sub { color: #c6c6c6; font-weight: 400; font-size: 0.8125rem; }
+  .layout{display:grid;grid-template-columns:260px 1fr;gap:3rem;}
+  @media (max-width:900px){.layout{grid-template-columns:1fr;gap:0;}.toc-side{display:none;}}
 
-  /* Font controls */
-  .fctrl { display: flex; align-items: center; gap: 0.25rem; }
-  .fctrl-label { font-size: 0.75rem; color: #c6c6c6; margin-right: 0.5rem; }
-  @media (max-width: 640px) { .fctrl-label { display: none; } }
-  .fctrl-btn {
-    width: 36px; height: 32px;
-    background: transparent;
-    color: #fff;
-    border: 1px solid #525252;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .fctrl-btn:hover { background: #393939; border-color: #6f6f6f; }
-  .fctrl-display { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: #c6c6c6; min-width: 44px; text-align: center; }
-
-  /* Layout */
-  .container { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
-  @media (max-width: 640px) { .container { padding: 0 1rem; } }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    gap: 3rem;
-  }
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; gap: 0; }
-    .toc-side { display: none; }
-  }
-
-  /* Side TOC */
-  .toc-side {
-    position: sticky; top: 64px;
-    align-self: start;
-    padding-top: 3rem;
-    max-height: calc(100vh - 80px);
-    overflow-y: auto;
-  }
-  .toc-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-text-3); padding: 0 0 0.75rem 1rem; border-bottom: 1px solid var(--c-border); }
-  .toc-link {
-    display: block;
-    padding: 0.5rem 1rem;
-    color: var(--c-text-2);
-    text-decoration: none;
-    font-size: 0.875rem;
-    border-left: 2px solid transparent;
-    transition: all 0.15s;
-  }
-  .toc-link:hover { color: var(--c-blue); background: var(--c-blue-soft); }
-  .toc-link.active { color: var(--c-blue); border-left-color: var(--c-blue); background: var(--c-blue-soft); font-weight: 500; }
+  .toc-side{position:sticky;top:64px;align-self:start;padding-top:3rem;max-height:calc(100vh - 80px);overflow-y:auto;}
+  .toc-title{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--c-text-3);padding:0 0 0.75rem 1rem;border-bottom:1px solid var(--c-border);}
+  .toc-link{display:block;padding:0.5rem 1rem;color:var(--c-text-2);text-decoration:none;font-size:0.875rem;border-left:2px solid transparent;transition:all 0.15s;}
+  .toc-link:hover{color:var(--c-blue);background:var(--c-blue-soft);}
+  .toc-link.active{color:var(--c-blue);border-left-color:var(--c-blue);background:var(--c-blue-soft);font-weight:500;}
+  .toc-num{display:inline-block;width:1.75rem;font-family:'IBM Plex Mono',monospace;color:var(--c-text-3);font-size:0.75rem;}
+  .toc-link.active .toc-num{color:var(--c-blue);}
 
   /* Hero */
-  .hero { padding: 4rem 0 3rem; border-bottom: 1px solid var(--c-border); }
-  .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.1; margin: 0.75rem 0 1.5rem; }
-  .hero p { font-size: clamp(1rem, 1.6vw, 1.125rem); color: var(--c-text-2); max-width: 56rem; line-height: 1.55; }
-  .hero-tags { display: flex; flex-wrap: wrap; gap: 0; margin-top: 2rem; }
-  .hero-tag {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--c-text);
-    padding: 0.375rem 0.875rem;
-    border: 1px solid var(--c-border);
-    border-right: none;
-    background: #fff;
-  }
-  .hero-tag:last-child { border-right: 1px solid var(--c-border); }
+  .hero{padding:4rem 0 3rem;border-bottom:1px solid var(--c-border);}
+  .hero h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.1;margin:0.75rem 0 1.5rem;}
+  .hero p{font-size:clamp(1rem,1.6vw,1.125rem);color:var(--c-text-2);max-width:56rem;line-height:1.55;}
+  .hero-tags{display:flex;flex-wrap:wrap;gap:0;margin-top:2rem;}
+  .hero-tag{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--c-text);padding:0.375rem 0.875rem;border:1px solid var(--c-border);border-right:none;background:#fff;}
+  .hero-tag:last-child{border-right:1px solid var(--c-border);}
 
   /* Section */
-  section { padding: 3.5rem 0; border-bottom: 1px solid var(--c-border); }
-  section:last-of-type { border-bottom: none; }
-  section h2 { font-size: clamp(1.5rem, 2.8vw, 2rem); margin: 0.5rem 0 1.25rem; font-weight: 400; }
-  section p.lead { color: var(--c-text-2); max-width: 52rem; margin-bottom: 1.75rem; }
+  section{padding:3.5rem 0;border-bottom:1px solid var(--c-border);}
+  section:last-of-type{border-bottom:none;}
+  section h2{font-size:clamp(1.5rem,2.8vw,2rem);margin:0.5rem 0 1.25rem;font-weight:400;}
+  section p.lead{color:var(--c-text-2);max-width:52rem;margin-bottom:1.75rem;}
 
   /* Cards */
-  .card {
-    background: #fff;
-    border: 1px solid var(--c-border);
-    padding: 1.5rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  .card-mute { background: var(--c-bg-mute); }
-  .card:hover { border-color: var(--c-border-strong); }
+  .card{background:#fff;border:1px solid var(--c-border);padding:1.5rem;transition:border-color 0.2s;}
+  .card-mute{background:var(--c-bg-mute);}
+  .card:hover{border-color:var(--c-border-strong);}
 
   /* Step list */
-  .steps { list-style: none; padding: 0; margin: 0; }
-  .step {
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 1.25rem;
-    padding: 1.5rem;
-    border-top: 1px solid var(--c-border);
-    transition: background 0.15s;
-  }
-  .step:hover { background: var(--c-bg-mute); }
-  .step:last-child { border-bottom: 1px solid var(--c-border); }
-  .step-num {
-    width: 40px; height: 40px;
-    background: var(--c-text);
-    color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 600;
-    font-size: 0.9375rem;
-  }
-  .step h3 { font-size: 1.0625rem; margin: 0 0 0.375rem; font-weight: 600; }
-  .step p { color: var(--c-text-2); margin: 0; font-size: 0.9375rem; }
+  .steps{list-style:none;padding:0;margin:0;}
+  .step{display:grid;grid-template-columns:56px 1fr;gap:1.25rem;padding:1.5rem;border-top:1px solid var(--c-border);transition:background 0.15s;}
+  .step:hover{background:var(--c-bg-mute);}
+  .step:last-child{border-bottom:1px solid var(--c-border);}
+  .step-num{width:40px;height:40px;background:var(--c-text);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.9375rem;}
+  .step h3{font-size:1.0625rem;margin:0 0 0.375rem;font-weight:600;}
+  .step p{color:var(--c-text-2);margin:0;font-size:0.9375rem;}
 
   /* Info chip */
-  .info-chip {
-    display: inline-flex; align-items: center; gap: 0.375rem;
-    background: transparent;
-    color: var(--c-blue);
-    border: none;
-    padding: 0.25rem 0; margin-top: 0.625rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-  .info-chip:hover { color: var(--c-blue-hover); text-decoration: underline; }
-  .info-chip::before { content: ""; width: 14px; height: 14px; border: 1.5px solid currentColor; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; line-height: 1; }
-  .info-chip::after { content: "i"; font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; font-weight: 700; color: currentColor; margin-left: -0.875rem; margin-right: 0.5rem; }
+  .info-chip{display:inline-flex;align-items:center;background:transparent;color:var(--c-blue);border:none;padding:0.25rem 0;margin-top:0.625rem;font-size:0.8125rem;font-weight:500;cursor:pointer;transition:color 0.15s;}
+  .info-chip:hover{color:var(--c-blue-hover);text-decoration:underline;}
+  .info-chip::before{content:"i";display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid currentColor;border-radius:50%;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;font-weight:700;line-height:1;margin-right:0.5rem;}
 
   /* Code blocks */
-  .code-wrap {
-    background: var(--c-code-bg);
-    margin: 1rem 0 1.5rem;
-    position: relative;
-  }
-  .code-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.625rem 1rem;
-    background: #262626;
-    color: #c6c6c6;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    border-bottom: 1px solid #393939;
-  }
-  .code-lang { color: #78a9ff; }
-  .copy-btn {
-    background: transparent;
-    color: #c6c6c6;
-    border: 1px solid #525252;
-    padding: 0.25rem 0.625rem;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .copy-btn:hover { background: #393939; color: #fff; }
-  .copy-btn.copied { color: var(--c-green); border-color: var(--c-green); }
-  pre {
-    margin: 0;
-    padding: 1.25rem 1rem;
-    overflow-x: auto;
-    font-size: 0.8125rem;
-    line-height: 1.6;
-    color: var(--c-code-fg);
-  }
-  pre code { color: inherit; background: transparent; padding: 0; font-size: inherit; }
-  .cmt { color: #8d8d8d; font-style: italic; }
-  .key { color: #78a9ff; }
-  .str { color: #ff8389; }
-  .num { color: #ffb784; }
-  .fn  { color: #d4bbff; }
+  .code-wrap{background:var(--c-code-bg);margin:1rem 0 1.5rem;}
+  .code-head{display:flex;align-items:center;justify-content:space-between;padding:0.625rem 1rem;background:#262626;color:#c6c6c6;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;border-bottom:1px solid #393939;}
+  .code-lang{color:#78a9ff;}
+  .copy-btn{background:transparent;color:#c6c6c6;border:1px solid #525252;padding:0.25rem 0.625rem;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;cursor:pointer;transition:all 0.15s;}
+  .copy-btn:hover{background:#393939;color:#fff;}
+  .copy-btn.copied{color:var(--c-green);border-color:var(--c-green);}
+  pre{margin:0;padding:1.25rem 1rem;overflow-x:auto;font-size:0.8125rem;line-height:1.6;color:var(--c-code-fg);}
+  pre code{color:inherit;background:transparent;padding:0;font-size:inherit;}
+  .cmt{color:#8d8d8d;font-style:italic;}
+  .key{color:#78a9ff;}
+  .str{color:#ff8389;}
+  .num{color:#ffb784;}
+  .fn{color:#d4bbff;}
 
-  /* Inline code */
-  p code, li code, .step code {
-    background: var(--c-bg-soft);
-    color: var(--c-blue-dark);
-    padding: 0.125rem 0.375rem;
-    font-size: 0.85em;
-    border-radius: 2px;
-  }
+  p code,li code,dt code,.step code,.modal-body code{background:var(--c-bg-soft);color:var(--c-blue-dark);padding:0.125rem 0.375rem;font-size:0.85em;border-radius:2px;}
 
   /* Tabs */
-  .tabs {
-    display: flex;
-    border-bottom: 1px solid var(--c-border);
-    overflow-x: auto;
-    margin-bottom: 2rem;
-    -webkit-overflow-scrolling: touch;
-  }
-  .tab-btn {
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    padding: 0.875rem 1.25rem;
-    color: var(--c-text-2);
-    font-family: inherit;
-    font-size: 0.9375rem;
-    font-weight: 400;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s;
-    margin-bottom: -1px;
-  }
-  .tab-btn:hover { color: var(--c-text); background: var(--c-bg-mute); }
-  .tab-btn.active { color: var(--c-text); border-bottom-color: var(--c-blue); font-weight: 600; }
-  .tab-pane { display: none; }
-  .tab-pane.active { display: block; }
+  .tabs{display:flex;border-bottom:1px solid var(--c-border);overflow-x:auto;margin-bottom:2rem;-webkit-overflow-scrolling:touch;}
+  .tab-btn{background:none;border:none;border-bottom:3px solid transparent;padding:0.875rem 1.25rem;color:var(--c-text-2);font-family:inherit;font-size:0.9375rem;font-weight:400;cursor:pointer;white-space:nowrap;transition:all 0.15s;margin-bottom:-1px;}
+  .tab-btn:hover{color:var(--c-text);background:var(--c-bg-mute);}
+  .tab-btn.active{color:var(--c-text);border-bottom-color:var(--c-blue);font-weight:600;}
+  .tab-pane{display:none;}
+  .tab-pane.active{display:block;}
 
-  /* Subsection header */
-  .subhead {
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    margin: 2rem 0 0.75rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--c-border);
-  }
-  .subhead-num {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--c-blue);
-    font-weight: 600;
-    letter-spacing: 0.05em;
-  }
-  .subhead h4 { font-size: 1.0625rem; margin: 0; font-weight: 600; }
+  .subhead{display:flex;align-items:baseline;gap:0.75rem;margin:2rem 0 0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--c-border);}
+  .subhead-num{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--c-blue);font-weight:600;letter-spacing:0.05em;}
+  .subhead h4{font-size:1.0625rem;margin:0;font-weight:600;}
 
-  /* References grid */
-  .refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0; border: 1px solid var(--c-border); }
-  .ref-link {
-    display: flex; flex-direction: column; gap: 0.25rem;
-    padding: 1.25rem;
-    color: var(--c-text);
-    text-decoration: none;
-    border-right: 1px solid var(--c-border);
-    border-bottom: 1px solid var(--c-border);
-    transition: background 0.15s;
-  }
-  .ref-link:hover { background: var(--c-blue-soft); }
-  .ref-link .eyebrow { color: var(--c-text-3); font-size: 0.7rem; }
-  .ref-link .ref-title { font-size: 0.9375rem; font-weight: 500; color: var(--c-text); }
-  .ref-link .ref-arrow { color: var(--c-blue); font-size: 0.875rem; margin-top: 0.25rem; }
+  /* References */
+  .refs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0;border:1px solid var(--c-border);}
+  .ref-link{display:flex;flex-direction:column;gap:0.25rem;padding:1.25rem;color:var(--c-text);text-decoration:none;border-right:1px solid var(--c-border);border-bottom:1px solid var(--c-border);transition:background 0.15s;}
+  .ref-link:hover{background:var(--c-blue-soft);}
+  .ref-link .eyebrow{color:var(--c-text-3);font-size:0.7rem;}
+  .ref-link .ref-title{font-size:0.9375rem;font-weight:500;color:var(--c-text);}
+  .ref-link .ref-arrow{color:var(--c-blue);font-size:0.875rem;margin-top:0.25rem;}
 
   /* Modal */
-  .modal-bg {
-    position: fixed; inset: 0;
-    background: rgba(22, 22, 22, 0.65);
-    display: none;
-    align-items: center; justify-content: center;
-    z-index: 100;
-    padding: 1rem;
-    animation: fadeIn 0.15s ease;
-  }
-  .modal-bg.open { display: flex; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .modal-box {
-    background: #fff;
-    max-width: 600px; width: 100%;
-    max-height: 85vh; overflow-y: auto;
-    border-top: 3px solid var(--c-blue);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-    display: none;
-  }
-  .modal-box.show { display: block; }
-  .modal-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 1.25rem 1.5rem 0.75rem;
-    border-bottom: 1px solid var(--c-border);
-  }
-  .modal-head h3 { font-size: 1.125rem; margin: 0; font-weight: 600; }
-  .modal-close {
-    background: none; border: none;
-    width: 32px; height: 32px;
-    font-size: 1.25rem;
-    color: var(--c-text-2);
-    cursor: pointer;
-  }
-  .modal-close:hover { color: var(--c-text); background: var(--c-bg-soft); }
-  .modal-body { padding: 1.25rem 1.5rem 1.5rem; font-size: 0.9375rem; color: var(--c-text); }
-  .modal-body p { margin: 0 0 0.875rem; }
-  .modal-body p:last-child { margin-bottom: 0; }
-  .modal-body ul { margin: 0 0 1rem; padding-left: 1.25rem; }
-  .modal-body li { margin-bottom: 0.5rem; }
-  .modal-body a { color: var(--c-blue); text-decoration: none; font-weight: 500; }
-  .modal-body a:hover { text-decoration: underline; }
-  .modal-body pre { font-size: 0.8125rem; padding: 0.875rem; margin: 0.5rem 0; }
+  .modal-bg{position:fixed;inset:0;background:rgba(22,22,22,0.65);display:none;align-items:center;justify-content:center;z-index:100;padding:1rem;animation:fadeIn 0.15s ease;}
+  .modal-bg.open{display:flex;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  .modal-box{background:#fff;max-width:640px;width:100%;max-height:85vh;overflow-y:auto;border-top:3px solid var(--c-blue);box-shadow:0 8px 32px rgba(0,0,0,0.2);display:none;}
+  .modal-box.show{display:block;}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem 0.75rem;border-bottom:1px solid var(--c-border);}
+  .modal-head h3{font-size:1.125rem;margin:0;font-weight:600;}
+  .modal-close{background:none;border:none;width:32px;height:32px;font-size:1.25rem;color:var(--c-text-2);cursor:pointer;}
+  .modal-close:hover{color:var(--c-text);background:var(--c-bg-soft);}
+  .modal-body{padding:1.25rem 1.5rem 1.5rem;font-size:0.9375rem;color:var(--c-text);}
+  .modal-body p{margin:0 0 0.875rem;}
+  .modal-body p:last-child{margin-bottom:0;}
+  .modal-body ul{margin:0 0 1rem;padding-left:1.25rem;}
+  .modal-body li{margin-bottom:0.5rem;}
+  .modal-body a{color:var(--c-blue);text-decoration:none;font-weight:500;}
+  .modal-body a:hover{text-decoration:underline;}
+  .modal-body pre{font-size:0.8125rem;padding:0.875rem;margin:0.5rem 0;}
 
-  /* SVG container */
-  .diagram-wrap {
-    background: #fff;
-    border: 1px solid var(--c-border);
-    padding: 1.5rem;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .diagram-wrap svg { display: block; min-width: 720px; }
-  .diagram-caption { margin-top: 0.875rem; font-size: 0.875rem; color: var(--c-text-3); display: flex; flex-wrap: wrap; gap: 1.25rem; }
-  .legend-dot { display: inline-block; width: 10px; height: 10px; margin-right: 0.375rem; vertical-align: middle; }
+  /* Diagram */
+  .diagram-wrap{background:#fff;border:1px solid var(--c-border);padding:1.5rem;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .diagram-wrap svg{display:block;min-width:720px;}
+  .diagram-caption{margin-top:0.875rem;font-size:0.875rem;color:var(--c-text-3);display:flex;flex-wrap:wrap;gap:1.25rem;}
+  .legend-dot{display:inline-block;width:10px;height:10px;margin-right:0.375rem;vertical-align:middle;}
 
-  /* Callout */
-  .callout {
-    background: var(--c-blue-soft);
-    border-left: 3px solid var(--c-blue);
-    padding: 1rem 1.25rem;
-    margin: 1.5rem 0;
-    font-size: 0.9375rem;
-  }
-  .callout strong { color: var(--c-blue-dark); }
+  /* Callouts */
+  .callout{background:var(--c-blue-soft);border-left:3px solid var(--c-blue);padding:1rem 1.25rem;margin:1.5rem 0;font-size:0.9375rem;}
+  .callout strong{color:var(--c-blue-dark);}
+  .callout-warn{background:var(--c-amber-soft);border-left-color:var(--c-amber);}
+  .callout-warn strong{color:#7a5a00;}
+  .callout-tip{background:var(--c-green-soft);border-left-color:var(--c-green);}
+  .callout-tip strong{color:#0e4429;}
+  .callout-danger{background:var(--c-red-soft);border-left-color:var(--c-red);}
+  .callout-danger strong{color:#a2191f;}
 
-  /* Footer */
-  footer {
-    background: var(--c-bg-mute);
-    padding: 2.5rem 0;
-    border-top: 1px solid var(--c-border);
-    font-size: 0.8125rem;
-    color: var(--c-text-3);
-  }
+  /* Checklist */
+  .checklist{list-style:none;padding:0;margin:1rem 0 1.5rem;}
+  .checklist li{display:grid;grid-template-columns:24px 1fr;gap:0.75rem;padding:0.625rem 0;border-bottom:1px solid var(--c-border);font-size:0.9375rem;}
+  .checklist li::before{content:"";width:16px;height:16px;border:1.5px solid var(--c-border-strong);margin-top:0.2rem;}
+  .checklist li strong{color:var(--c-text);font-weight:600;}
 
-  /* Utilities */
-  .mt-section { margin-top: 2.5rem; }
-  .badges-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
-  .badge { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; padding: 0.25rem 0.625rem; background: var(--c-bg-soft); color: var(--c-text-2); border-radius: 0; }
+  /* Definition list (troubleshooting) */
+  .deflist{margin:1rem 0 1.5rem;border-top:1px solid var(--c-border);}
+  .deflist dt{padding:0.875rem 1rem 0.375rem;font-family:'IBM Plex Mono',monospace;font-size:0.8125rem;color:var(--c-red);font-weight:600;background:var(--c-bg-mute);border-left:3px solid var(--c-red);}
+  .deflist dd{margin:0;padding:0.625rem 1rem 1rem;border-bottom:1px solid var(--c-border);font-size:0.9375rem;color:var(--c-text-2);}
+  .deflist dd strong{color:var(--c-text);}
 
-  ::selection { background: var(--c-blue-soft); color: var(--c-text); }
+  /* Best practices numbered */
+  .bplist{list-style:none;counter-reset:bp;padding:0;margin:1rem 0;}
+  .bplist > li{counter-increment:bp;display:grid;grid-template-columns:48px 1fr;gap:1rem;padding:1.25rem 0;border-bottom:1px solid var(--c-border);}
+  .bplist > li::before{content:counter(bp,decimal-leading-zero);font-family:'IBM Plex Mono',monospace;font-size:1rem;color:var(--c-blue);font-weight:600;}
+  .bplist > li h4{margin:0 0 0.375rem;font-size:1rem;font-weight:600;}
+  .bplist > li p{margin:0;font-size:0.9375rem;color:var(--c-text-2);}
+
+  /* Role matrix */
+  .role-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin:1rem 0 1.5rem;}
+  .role-card{background:#fff;border:1px solid var(--c-border);padding:1.25rem;}
+  .role-card h4{font-size:0.9375rem;margin:0 0 0.5rem;color:var(--c-blue-dark);font-weight:600;}
+  .role-card .role-arn{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--c-text-3);margin-bottom:0.5rem;word-break:break-all;}
+  .role-card p{font-size:0.875rem;color:var(--c-text-2);margin:0 0 0.5rem;}
+  .role-card .perms{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--c-text);background:var(--c-bg-soft);padding:0.5rem 0.625rem;display:block;margin-top:0.5rem;line-height:1.5;}
+
+  footer{background:var(--c-bg-mute);padding:2.5rem 0;border-top:1px solid var(--c-border);font-size:0.8125rem;color:var(--c-text-3);}
+
+  ::selection{background:var(--c-blue-soft);color:var(--c-text);}
 </style>
 </head>
 <body>
@@ -383,9 +196,7 @@
 <!-- TOP BAR -->
 <nav class="topbar">
   <div class="topbar-inner">
-    <div class="brand">
-      AWS<span class="brand-pipe">/</span><span class="brand-sub">AMI Factory Tutorial</span>
-    </div>
+    <div class="brand">AWS<span class="brand-pipe">/</span><span class="brand-sub">AMI Factory · Complete Guide</span></div>
     <div class="fctrl">
       <span class="fctrl-label">Text size</span>
       <button class="fctrl-btn" onclick="changeFont(-2)" aria-label="Decrease font">A−</button>
@@ -398,15 +209,17 @@
 <!-- HERO -->
 <header class="hero">
   <div class="container">
-    <div class="eyebrow">Solution Architect Tutorial · Updated 2026</div>
+    <div class="eyebrow">Solution Architect Tutorial · End-to-end</div>
     <h1>Building an AWS AMI&nbsp;Factory</h1>
-    <p>An automated pipeline that bakes a custom Amazon Machine Image every time AWS publishes a new Amazon Linux base. The image ships with Java 21 and Python pre-installed, runs validation tests, and fans out a notification through SNS and SQS so downstream teams can rebuild their applications.</p>
+    <p>An automated pipeline that bakes a custom Amazon Machine Image every time AWS publishes a new Amazon Linux base. From IAM setup to GitLab CI/CD and Ansible/SSM alternatives &mdash; with best practices and troubleshooting at every stage.</p>
     <div class="hero-tags">
       <span class="hero-tag">Packer</span>
       <span class="hero-tag">Terraform</span>
-      <span class="hero-tag">AWS&nbsp;CLI</span>
-      <span class="hero-tag">EventBridge</span>
-      <span class="hero-tag">SNS&nbsp;&middot;&nbsp;SQS</span>
+      <span class="hero-tag">Ansible</span>
+      <span class="hero-tag">AWS CLI</span>
+      <span class="hero-tag">GitLab CI</span>
+      <span class="hero-tag">SSM Automation</span>
+      <span class="hero-tag">SNS &middot; SQS</span>
     </div>
   </div>
 </header>
@@ -418,19 +231,351 @@
   <aside class="toc-side">
     <div class="toc-title">On this page</div>
     <nav>
-      <a class="toc-link" href="#background">Background</a>
-      <a class="toc-link" href="#plan">The plan</a>
-      <a class="toc-link" href="#workflow">Workflow diagram</a>
-      <a class="toc-link" href="#tools">Pick your tool</a>
-      <a class="toc-link" href="#downstream">Downstream consumers</a>
-      <a class="toc-link" href="#references">References</a>
+      <a class="toc-link" href="#prereqs"><span class="toc-num">00</span>Prerequisites &amp; roles</a>
+      <a class="toc-link" href="#background"><span class="toc-num">01</span>Background</a>
+      <a class="toc-link" href="#plan"><span class="toc-num">02</span>The plan</a>
+      <a class="toc-link" href="#workflow"><span class="toc-num">03</span>Workflow diagram</a>
+      <a class="toc-link" href="#tools"><span class="toc-num">04</span>Implementation</a>
+      <a class="toc-link" href="#downstream"><span class="toc-num">05</span>Downstream consumers</a>
+      <a class="toc-link" href="#gitlab"><span class="toc-num">06</span>GitLab CI/CD pipeline</a>
+      <a class="toc-link" href="#automation"><span class="toc-num">07</span>Ansible &amp; SSM options</a>
+      <a class="toc-link" href="#best-practices"><span class="toc-num">08</span>Best practices</a>
+      <a class="toc-link" href="#troubleshooting"><span class="toc-num">09</span>Troubleshooting</a>
+      <a class="toc-link" href="#references"><span class="toc-num">10</span>References</a>
     </nav>
   </aside>
 
-  <!-- MAIN CONTENT -->
   <main>
 
-  <!-- BACKGROUND -->
+  <!-- =================================================== -->
+  <!-- 00 · PREREQUISITES & ROLES -->
+  <!-- =================================================== -->
+  <section id="prereqs">
+    <div class="eyebrow">00 · Prerequisites &amp; setup</div>
+    <h2>Before you begin: tools, roles, network, gotchas</h2>
+    <p class="lead">Don&rsquo;t skip this section. Most failed AMI builds trace back to a missing IAM permission, the wrong subnet, or a security group that won&rsquo;t accept SSH. Walk this list end to end before running anything.</p>
+
+    <div class="callout callout-warn">
+      <strong>Heads up:</strong> Every code sample uses the placeholder account ID <code>111122223333</code> and region <code>us-east-1</code>. Replace both with your real values before running. ARNs are region- and account-specific.
+    </div>
+
+    <!-- 00.1 Tools -->
+    <div class="subhead"><span class="subhead-num">00.1</span><h4>Tools to install on your workstation</h4></div>
+    <p>You don&rsquo;t need all of these for every path, but install whichever match the implementation you plan to use.</p>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">bash · macOS / Linux</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt"># 1. AWS CLI v2 — required for every path</span>
+<span class="cmt">#    macOS:</span>
+brew install awscli
+<span class="cmt">#    Amazon Linux / RHEL:</span>
+curl <span class="str">"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"</span> -o awscliv2.zip
+unzip awscliv2.zip &amp;&amp; sudo ./aws/install
+
+<span class="cmt"># 2. Packer — for the recommended path</span>
+brew install packer
+<span class="cmt"># OR via repo on Amazon Linux:</span>
+sudo dnf install -y dnf-plugins-core
+sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+sudo dnf install -y packer
+
+<span class="cmt"># 3. Terraform — for the infrastructure-as-code path</span>
+brew install terraform   <span class="cmt"># or use the same hashicorp.repo above</span>
+
+<span class="cmt"># 4. Ansible — only if you use the Ansible provisioner path</span>
+pip3 install ansible boto3
+
+<span class="cmt"># 5. jq — small JSON parser, used everywhere</span>
+brew install jq          <span class="cmt"># or: sudo dnf install -y jq</span>
+
+<span class="cmt"># Verify everything</span>
+aws --version
+packer version
+terraform version
+ansible --version
+jq --version</code></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <strong>Tip — pin versions in production.</strong> Mismatched Packer plugins or Terraform provider versions cause silent diffs. Pin them in <code>required_version</code> blocks and check binaries into your CI image rather than installing latest at runtime.
+    </div>
+
+    <!-- 00.2 AWS account -->
+    <div class="subhead"><span class="subhead-num">00.2</span><h4>AWS account &amp; CLI configuration</h4></div>
+
+    <ul class="checklist">
+      <li><div><strong>An AWS account</strong> with billing active and at least one IAM user or SSO identity you can sign in as. Root user is never used for daily work.</div></li>
+      <li><div><strong>Multi-factor authentication (MFA)</strong> enabled on every IAM identity. Required for production credentials.</div></li>
+      <li><div><strong>A default region picked</strong> (we use <code>us-east-1</code>). All resources in this tutorial must live in the same region unless you explicitly copy AMIs across regions.</div></li>
+      <li><div><strong>Local AWS credentials configured.</strong> Run <code>aws configure</code> or set up <code>~/.aws/config</code> with an SSO profile.</div></li>
+      <li><div><strong>Sufficient service quotas</strong> &mdash; specifically EC2 instance count, EBS snapshots, and AMIs per region. Default quotas are usually fine for one factory, but check Service Quotas console in regulated environments.</div></li>
+    </ul>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">bash · verify CLI works</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>aws sts get-caller-identity
+<span class="cmt"># expected output:
+# {
+#   "UserId": "AIDAEXAMPLE",
+#   "Account": "111122223333",
+#   "Arn": "arn:aws:iam::111122223333:user/your-name"
+# }</span></code></pre>
+    </div>
+
+    <!-- 00.3 IAM roles -->
+    <div class="subhead"><span class="subhead-num">00.3</span><h4>The four IAM roles you need</h4></div>
+    <p>This pipeline involves several principals, each needing the minimum permissions for its job. Don&rsquo;t reuse one mega-role across all of them &mdash; that violates least privilege and makes audits painful.</p>
+
+    <div class="role-grid">
+      <div class="role-card">
+        <h4>① PackerBuildRole</h4>
+        <div class="role-arn">arn:aws:iam::111122223333:role/PackerBuildRole</div>
+        <p>Assumed by whoever runs <code>packer build</code> (CI runner, Lambda, your laptop). Allows Packer to launch a temporary EC2 instance, snapshot it, and tag the AMI.</p>
+        <span class="perms">ec2:RunInstances · ec2:TerminateInstances<br>ec2:CreateImage · ec2:DescribeImages<br>ec2:CreateTags · ec2:CreateKeyPair<br>iam:PassRole (for the instance profile)</span>
+      </div>
+
+      <div class="role-card">
+        <h4>② PackerInstanceProfile</h4>
+        <div class="role-arn">arn:aws:iam::111122223333:instance-profile/PackerInstanceProfile</div>
+        <p>Attached to the temporary build instance itself. Lets the in-progress build pull from S3, write CloudWatch logs, or connect via SSM Session Manager (so you don&rsquo;t need SSH).</p>
+        <span class="perms">AmazonSSMManagedInstanceCore<br>s3:GetObject (artifact bucket only)<br>logs:CreateLogStream · logs:PutLogEvents</span>
+      </div>
+
+      <div class="role-card">
+        <h4>③ AmiPublishRole</h4>
+        <div class="role-arn">arn:aws:iam::111122223333:role/AmiPublishRole</div>
+        <p>Used by the step that publishes the new AMI ID to SNS. Separate from the build role so the build can fail without ever holding publish credentials.</p>
+        <span class="perms">sns:Publish (specific topic ARN only)<br>ssm:PutParameter (latest-ami pointer)</span>
+      </div>
+
+      <div class="role-card">
+        <h4>④ GitLabOidcRole</h4>
+        <div class="role-arn">arn:aws:iam::111122223333:role/GitLabOidcRole</div>
+        <p>Federated role your GitLab pipeline assumes through OIDC. No long-lived AWS keys ever leave the platform. Trust policy locked to a specific project &amp; branch.</p>
+        <span class="perms">sts:AssumeRole into ① and ③<br>Trust policy: gitlab.com OIDC provider</span>
+      </div>
+    </div>
+
+    <div class="subhead"><span class="subhead-num">00.4</span><h4>Provision the roles with Terraform</h4></div>
+    <p>Copy this into <code>iam.tf</code>. It creates all four roles with least-privilege policies attached.</p>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">terraform · iam.tf</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>variable <span class="str">"account_id"</span> { default = <span class="str">"111122223333"</span> }
+variable <span class="str">"region"</span>     { default = <span class="str">"us-east-1"</span> }
+variable <span class="str">"sns_topic_name"</span> { default = <span class="str">"new-base-ami"</span> }
+
+<span class="cmt"># ---------- ① PackerBuildRole ----------</span>
+data <span class="str">"aws_iam_policy_document"</span> <span class="str">"packer_trust"</span> {
+  statement {
+    actions = [<span class="str">"sts:AssumeRole"</span>]
+    principals {
+      type        = <span class="str">"AWS"</span>
+      identifiers = [<span class="str">"arn:aws:iam::${var.account_id}:role/GitLabOidcRole"</span>]
+    }
+  }
+}
+
+resource <span class="str">"aws_iam_role"</span> <span class="str">"packer_build"</span> {
+  name               = <span class="str">"PackerBuildRole"</span>
+  assume_role_policy = data.aws_iam_policy_document.packer_trust.json
+}
+
+data <span class="str">"aws_iam_policy_document"</span> <span class="str">"packer_build"</span> {
+  statement {
+    actions = [
+      <span class="str">"ec2:AttachVolume"</span>, <span class="str">"ec2:AuthorizeSecurityGroupIngress"</span>,
+      <span class="str">"ec2:CopyImage"</span>, <span class="str">"ec2:CreateImage"</span>, <span class="str">"ec2:CreateKeypair"</span>,
+      <span class="str">"ec2:CreateSecurityGroup"</span>, <span class="str">"ec2:CreateSnapshot"</span>, <span class="str">"ec2:CreateTags"</span>,
+      <span class="str">"ec2:CreateVolume"</span>, <span class="str">"ec2:DeleteKeyPair"</span>, <span class="str">"ec2:DeleteSecurityGroup"</span>,
+      <span class="str">"ec2:DeleteSnapshot"</span>, <span class="str">"ec2:DeleteVolume"</span>, <span class="str">"ec2:DeregisterImage"</span>,
+      <span class="str">"ec2:DescribeImageAttribute"</span>, <span class="str">"ec2:DescribeImages"</span>,
+      <span class="str">"ec2:DescribeInstances"</span>, <span class="str">"ec2:DescribeInstanceStatus"</span>,
+      <span class="str">"ec2:DescribeRegions"</span>, <span class="str">"ec2:DescribeSecurityGroups"</span>,
+      <span class="str">"ec2:DescribeSnapshots"</span>, <span class="str">"ec2:DescribeSubnets"</span>,
+      <span class="str">"ec2:DescribeTags"</span>, <span class="str">"ec2:DescribeVolumes"</span>,
+      <span class="str">"ec2:DetachVolume"</span>, <span class="str">"ec2:GetPasswordData"</span>,
+      <span class="str">"ec2:ModifyImageAttribute"</span>, <span class="str">"ec2:ModifyInstanceAttribute"</span>,
+      <span class="str">"ec2:ModifySnapshotAttribute"</span>, <span class="str">"ec2:RegisterImage"</span>,
+      <span class="str">"ec2:RunInstances"</span>, <span class="str">"ec2:StopInstances"</span>,
+      <span class="str">"ec2:TerminateInstances"</span>
+    ]
+    resources = [<span class="str">"*"</span>]
+  }
+  statement {
+    actions   = [<span class="str">"iam:PassRole"</span>, <span class="str">"iam:GetInstanceProfile"</span>]
+    resources = [aws_iam_role.packer_instance.arn,
+                 aws_iam_instance_profile.packer_instance.arn]
+  }
+}
+
+resource <span class="str">"aws_iam_role_policy"</span> <span class="str">"packer_build"</span> {
+  role   = aws_iam_role.packer_build.id
+  policy = data.aws_iam_policy_document.packer_build.json
+}
+
+<span class="cmt"># ---------- ② PackerInstanceProfile ----------</span>
+resource <span class="str">"aws_iam_role"</span> <span class="str">"packer_instance"</span> {
+  name = <span class="str">"PackerInstanceRole"</span>
+  assume_role_policy = jsonencode({
+    Version = <span class="str">"2012-10-17"</span>,
+    Statement = [{
+      Effect    = <span class="str">"Allow"</span>,
+      Action    = <span class="str">"sts:AssumeRole"</span>,
+      Principal = { Service = <span class="str">"ec2.amazonaws.com"</span> }
+    }]
+  })
+}
+
+resource <span class="str">"aws_iam_role_policy_attachment"</span> <span class="str">"ssm_core"</span> {
+  role       = aws_iam_role.packer_instance.name
+  policy_arn = <span class="str">"arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"</span>
+}
+
+resource <span class="str">"aws_iam_instance_profile"</span> <span class="str">"packer_instance"</span> {
+  name = <span class="str">"PackerInstanceProfile"</span>
+  role = aws_iam_role.packer_instance.name
+}
+
+<span class="cmt"># ---------- ③ AmiPublishRole ----------</span>
+resource <span class="str">"aws_iam_role"</span> <span class="str">"ami_publish"</span> {
+  name = <span class="str">"AmiPublishRole"</span>
+  assume_role_policy = jsonencode({
+    Version = <span class="str">"2012-10-17"</span>,
+    Statement = [{
+      Effect    = <span class="str">"Allow"</span>,
+      Action    = <span class="str">"sts:AssumeRole"</span>,
+      Principal = { AWS = <span class="str">"arn:aws:iam::${var.account_id}:role/GitLabOidcRole"</span> }
+    }]
+  })
+}
+
+resource <span class="str">"aws_iam_role_policy"</span> <span class="str">"ami_publish"</span> {
+  role = aws_iam_role.ami_publish.id
+  policy = jsonencode({
+    Version = <span class="str">"2012-10-17"</span>,
+    Statement = [{
+      Effect   = <span class="str">"Allow"</span>,
+      Action   = [<span class="str">"sns:Publish"</span>],
+      Resource = <span class="str">"arn:aws:sns:${var.region}:${var.account_id}:${var.sns_topic_name}"</span>
+    }]
+  })
+}
+
+<span class="cmt"># ---------- ④ GitLabOidcRole — see GitLab section below ----------</span></code></pre>
+    </div>
+
+    <!-- 00.5 Network -->
+    <div class="subhead"><span class="subhead-num">00.5</span><h4>Network: VPC, subnet, security group</h4></div>
+    <p>Packer needs to talk to the temporary build instance over SSH (or SSM). The instance also needs internet access to install packages from <code>dnf</code> repos. Three components are required:</p>
+
+    <ul class="checklist">
+      <li><div><strong>A VPC</strong> &mdash; the default VPC is fine for tutorials, but production should use a dedicated VPC with no inbound rules from the internet.</div></li>
+      <li><div><strong>A subnet with outbound internet access</strong> &mdash; either a public subnet with an Internet Gateway, or a private subnet routed through a NAT Gateway. Without this, <code>dnf install</code> hangs forever.</div></li>
+      <li><div><strong>A security group</strong> allowing SSH from your runner. Best practice: use SSM Session Manager (covered below) and require zero inbound rules.</div></li>
+    </ul>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">terraform · network.tf</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt"># A minimal security group: allow SSH from the runner's known CIDR only</span>
+resource <span class="str">"aws_security_group"</span> <span class="str">"packer_build"</span> {
+  name        = <span class="str">"packer-build"</span>
+  description = <span class="str">"Allow SSH inbound from CI runners only"</span>
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = <span class="str">"SSH from runners"</span>
+    from_port   = <span class="num">22</span>
+    to_port     = <span class="num">22</span>
+    protocol    = <span class="str">"tcp"</span>
+    cidr_blocks = [var.runner_cidr]   <span class="cmt"># NEVER 0.0.0.0/0</span>
+  }
+
+  egress {
+    description = <span class="str">"All outbound (to reach dnf repos)"</span>
+    from_port   = <span class="num">0</span>
+    to_port     = <span class="num">0</span>
+    protocol    = <span class="str">"-1"</span>
+    cidr_blocks = [<span class="str">"0.0.0.0/0"</span>]
+  }
+}</code></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <strong>Better:</strong> skip SSH entirely. Set Packer&rsquo;s <code>ssh_interface = "session_manager"</code> and remove the inbound rule. Builds become 100% private and there&rsquo;s nothing to scan from the internet.
+    </div>
+
+    <!-- 00.6 S3 + state -->
+    <div class="subhead"><span class="subhead-num">00.6</span><h4>S3 bucket for artifacts &amp; Terraform state</h4></div>
+    <p>You&rsquo;ll need a private, versioned S3 bucket to store Packer manifests, build logs, and Terraform state. Don&rsquo;t commit state files to git.</p>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">terraform · backend.tf</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>resource <span class="str">"aws_s3_bucket"</span> <span class="str">"factory"</span> {
+  bucket = <span class="str">"ami-factory-${var.account_id}"</span>
+}
+
+resource <span class="str">"aws_s3_bucket_versioning"</span> <span class="str">"factory"</span> {
+  bucket = aws_s3_bucket.factory.id
+  versioning_configuration { status = <span class="str">"Enabled"</span> }
+}
+
+resource <span class="str">"aws_s3_bucket_server_side_encryption_configuration"</span> <span class="str">"factory"</span> {
+  bucket = aws_s3_bucket.factory.id
+  rule { apply_server_side_encryption_by_default { sse_algorithm = <span class="str">"AES256"</span> } }
+}
+
+resource <span class="str">"aws_s3_bucket_public_access_block"</span> <span class="str">"factory"</span> {
+  bucket                  = aws_s3_bucket.factory.id
+  block_public_acls       = <span class="key">true</span>
+  block_public_policy     = <span class="key">true</span>
+  ignore_public_acls      = <span class="key">true</span>
+  restrict_public_buckets = <span class="key">true</span>
+}
+
+<span class="cmt"># Use the same bucket as the Terraform backend</span>
+terraform {
+  backend <span class="str">"s3"</span> {
+    bucket = <span class="str">"ami-factory-111122223333"</span>
+    key    = <span class="str">"factory/terraform.tfstate"</span>
+    region = <span class="str">"us-east-1"</span>
+    encrypt = <span class="key">true</span>
+  }
+}</code></pre>
+    </div>
+
+    <!-- 00.7 Pre-build gotchas -->
+    <div class="subhead"><span class="subhead-num">00.7</span><h4>Gotchas you&rsquo;ll hit if you don&rsquo;t read this</h4></div>
+    <p>These are the failures we&rsquo;ve seen most often. Knowing them up front saves hours of debugging.</p>
+
+    <div class="callout callout-danger">
+      <strong>Gotcha 1 — <code>iam:PassRole</code> denied.</strong> When Packer launches the build instance, it must <em>pass</em> the instance profile role to EC2. If <code>PackerBuildRole</code> lacks <code>iam:PassRole</code> on the instance profile ARN, you get a cryptic <code>UnauthorizedOperation</code>. The Terraform above includes it &mdash; don&rsquo;t remove it.
+    </div>
+
+    <div class="callout callout-danger">
+      <strong>Gotcha 2 — wrong AMI owner.</strong> <code>owners = ["amazon"]</code> is right for Amazon Linux. For Ubuntu it&rsquo;s <code>099720109477</code>; for RHEL it&rsquo;s <code>309956199498</code>. Empty filter results are the #1 cause of <em>&ldquo;Packer just hangs.&rdquo;</em>
+    </div>
+
+    <div class="callout callout-danger">
+      <strong>Gotcha 3 — region drift.</strong> Your local <code>AWS_REGION</code>, the Packer template region, the Terraform provider region, and the SNS topic ARN region <em>must all match</em>. AMIs are region-scoped; an AMI built in <code>us-east-1</code> is not visible in <code>us-west-2</code> until you copy it.
+    </div>
+
+    <div class="callout callout-danger">
+      <strong>Gotcha 4 — SSH timeout.</strong> If the build hangs at &ldquo;Waiting for SSH to become available,&rdquo; check (in order): security group allows inbound 22 from the runner, subnet route table has <code>0.0.0.0/0 → IGW</code> or NAT, the instance has a public IP if you&rsquo;re using IGW, and your key pair name matches.
+    </div>
+
+    <div class="callout callout-danger">
+      <strong>Gotcha 5 — KMS denied on EBS.</strong> If your org uses a customer-managed KMS key for EBS encryption, the Packer role needs <code>kms:Encrypt</code>, <code>kms:Decrypt</code>, <code>kms:ReEncrypt*</code>, <code>kms:GenerateDataKey*</code> on that key. Default AWS-managed keys don&rsquo;t need this.
+    </div>
+
+    <div class="callout callout-danger">
+      <strong>Gotcha 6 — dnf hanging on update.</strong> If <code>dnf update -y</code> takes more than a few minutes, the build instance has no outbound internet. Check route table and NAT gateway.
+    </div>
+  </section>
+
+  <!-- =================================================== -->
+  <!-- 01 · BACKGROUND -->
+  <!-- =================================================== -->
   <section id="background">
     <div class="eyebrow">01 · Background</div>
     <h2>What we&rsquo;re building, and why</h2>
@@ -448,202 +593,105 @@
     </div>
   </section>
 
-  <!-- PLAN -->
+  <!-- =================================================== -->
+  <!-- 02 · PLAN -->
+  <!-- =================================================== -->
   <section id="plan">
     <div class="eyebrow">02 · The plan</div>
     <h2>Seven steps, in order</h2>
-    <p class="lead">The entire workflow before any code. Each step here maps directly to a code block below.</p>
+    <p class="lead">The entire workflow before any code. Each step maps directly to a code block below.</p>
 
     <ol class="steps">
-      <li class="step">
-        <span class="step-num">01</span>
-        <div>
-          <h3>A trigger fires when a new Amazon Linux AMI is published</h3>
-          <p>AWS releases new base AMIs regularly with security patches. We listen for that event so our build runs automatically. Two trigger styles are common: an SNS notification from AWS&rsquo;s public AMI topic, or an EventBridge rule watching SSM Parameter Store.</p>
-          <button class="info-chip" onclick="openModal('m-trigger')">How the trigger works</button>
-        </div>
-      </li>
-      <li class="step">
-        <span class="step-num">02</span>
-        <div>
-          <h3>Look up the latest Amazon Linux AMI ID</h3>
-          <p>The trigger tells us &ldquo;something changed.&rdquo; We then query <strong>SSM Parameter Store</strong> for the exact newest AMI ID. AWS publishes these as public parameters.</p>
-        </div>
-      </li>
-      <li class="step">
-        <span class="step-num">03</span>
-        <div>
-          <h3>Launch a temporary build instance from that base</h3>
-          <p>Packer (or our shell script) spins up a disposable EC2 instance from the latest base image. This is where we install software.</p>
-        </div>
-      </li>
-      <li class="step">
-        <span class="step-num">04</span>
-        <div>
-          <h3>Install Java&nbsp;21 + Python and configure them</h3>
-          <p>A provisioning script runs on the temp instance: install <code>java-21-amazon-corretto</code> and <code>python3</code>, set <code>JAVA_HOME</code>, update packages.</p>
-          <button class="info-chip" onclick="openModal('m-corretto')">What is Corretto?</button>
-        </div>
-      </li>
-      <li class="step">
-        <span class="step-num">05</span>
-        <div>
-          <h3>Run validation tests</h3>
-          <p>Before saving anything, verify: does <code>java --version</code> report 21? Does <code>python3 --version</code> succeed? If any test fails the build halts and no AMI is published.</p>
-        </div>
-      </li>
-      <li class="step">
-        <span class="step-num">06</span>
-        <div>
-          <h3>Bake the new AMI</h3>
-          <p>Tests passed. Packer snapshots the instance into a new AMI and tags it with build date, source AMI ID, Java version, and a build identifier.</p>
-        </div>
-      </li>
-      <li class="step">
-        <span class="step-num">07</span>
-        <div>
-          <h3>Publish a notification to SNS&nbsp;&rarr;&nbsp;SQS</h3>
-          <p>The new AMI ID goes to an <strong>SNS topic</strong>. The topic fans the message out to an <strong>SQS queue</strong> that downstream teams poll. They read it and rebuild their application images on top of the new base.</p>
-          <button class="info-chip" onclick="openModal('m-snssqs')">SNS vs SQS</button>
-        </div>
-      </li>
+      <li class="step"><span class="step-num">01</span><div><h3>A trigger fires when a new Amazon Linux AMI is published</h3><p>AWS releases new base AMIs regularly with security patches. Two trigger styles are common: an SNS notification from AWS&rsquo;s public AMI topic, or an EventBridge rule watching SSM Parameter Store.</p><button class="info-chip" onclick="openModal('m-trigger')">How the trigger works</button></div></li>
+      <li class="step"><span class="step-num">02</span><div><h3>Look up the latest Amazon Linux AMI ID</h3><p>The trigger says &ldquo;something changed.&rdquo; We then query <strong>SSM Parameter Store</strong> for the exact newest AMI ID.</p></div></li>
+      <li class="step"><span class="step-num">03</span><div><h3>Launch a temporary build instance from that base</h3><p>Packer (or our shell script) spins up a disposable EC2 instance. This is where we install software.</p></div></li>
+      <li class="step"><span class="step-num">04</span><div><h3>Install Java&nbsp;21 + Python and configure them</h3><p>A provisioning script runs on the temp instance: install <code>java-21-amazon-corretto</code> and <code>python3</code>, set <code>JAVA_HOME</code>, update packages.</p><button class="info-chip" onclick="openModal('m-corretto')">What is Corretto?</button></div></li>
+      <li class="step"><span class="step-num">05</span><div><h3>Run validation tests</h3><p>Verify: does <code>java --version</code> report 21? Does <code>python3 --version</code> succeed? If any test fails the build halts and no AMI is published.</p></div></li>
+      <li class="step"><span class="step-num">06</span><div><h3>Bake the new AMI</h3><p>Packer snapshots the instance into a new AMI and tags it with build date, source AMI ID, Java version, and a build identifier.</p></div></li>
+      <li class="step"><span class="step-num">07</span><div><h3>Publish a notification to SNS&nbsp;&rarr;&nbsp;SQS</h3><p>The new AMI ID goes to an <strong>SNS topic</strong>. The topic fans out to an <strong>SQS queue</strong> that downstream teams poll. They read it and rebuild their application images on top of the new base.</p><button class="info-chip" onclick="openModal('m-snssqs')">SNS vs SQS</button></div></li>
     </ol>
   </section>
 
-  <!-- WORKFLOW -->
+  <!-- =================================================== -->
+  <!-- 03 · WORKFLOW -->
+  <!-- =================================================== -->
   <section id="workflow">
     <div class="eyebrow">03 · Workflow</div>
     <h2>The full pipeline at a glance</h2>
-    <p class="lead">A visual map of every step, including the failure branch. Pan horizontally on mobile.</p>
+    <p class="lead">A visual map of every step including the failure branch. Pan horizontally on mobile.</p>
 
     <div class="diagram-wrap">
       <svg viewBox="0 0 880 540" width="100%" role="img" aria-label="AMI factory workflow diagram" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-            <path d="M0,0 L7,3 L0,6 Z" fill="#161616"/>
-          </marker>
-          <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-            <path d="M0,0 L7,3 L0,6 Z" fill="#0f62fe"/>
-          </marker>
-          <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-            <path d="M0,0 L7,3 L0,6 Z" fill="#198038"/>
-          </marker>
-          <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-            <path d="M0,0 L7,3 L0,6 Z" fill="#da1e28"/>
-          </marker>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#161616"/></marker>
+          <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#0f62fe"/></marker>
+          <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#198038"/></marker>
+          <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#da1e28"/></marker>
           <style>
-            .nbox { fill:#ffffff; stroke:#161616; stroke-width:1.5; }
-            .nbox-accent { fill:#edf5ff; stroke:#0f62fe; stroke-width:1.5; }
-            .nbox-dark { fill:#161616; stroke:#161616; }
-            .nbox-fail { fill:#ffffff; stroke:#da1e28; stroke-width:1.5; }
-            .nlbl  { font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; fill:#161616; }
-            .nlbl-w { font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; fill:#ffffff; }
-            .nlbl-r { font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; fill:#da1e28; }
-            .nsub  { font-family:'IBM Plex Mono',monospace; font-size:10px; fill:#525252; }
-            .nsub-w { font-family:'IBM Plex Mono',monospace; font-size:10px; fill:#a8a8a8; }
-            .nstep { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:#0f62fe; font-weight:700; letter-spacing:0.08em; }
-            .nstep-w { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:#78a9ff; font-weight:700; letter-spacing:0.08em; }
-            .ed { stroke:#161616; stroke-width:1.5; fill:none; }
-            .ed-blue { stroke:#0f62fe; stroke-width:1.5; fill:none; }
-            .ed-green { stroke:#198038; stroke-width:1.5; fill:none; }
-            .ed-red { stroke:#da1e28; stroke-width:1.5; stroke-dasharray:4 3; fill:none; }
-            .elbl { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; }
+            .nbox{fill:#fff;stroke:#161616;stroke-width:1.5;}
+            .nbox-accent{fill:#edf5ff;stroke:#0f62fe;stroke-width:1.5;}
+            .nbox-dark{fill:#161616;stroke:#161616;}
+            .nbox-fail{fill:#fff;stroke:#da1e28;stroke-width:1.5;}
+            .nlbl{font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;fill:#161616;}
+            .nlbl-w{font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;fill:#fff;}
+            .nlbl-r{font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;fill:#da1e28;}
+            .nsub{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#525252;}
+            .nsub-w{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#a8a8a8;}
+            .nstep{font-family:'IBM Plex Mono',monospace;font-size:9px;fill:#0f62fe;font-weight:700;letter-spacing:0.08em;}
+            .nstep-w{font-family:'IBM Plex Mono',monospace;font-size:9px;fill:#78a9ff;font-weight:700;letter-spacing:0.08em;}
+            .ed{stroke:#161616;stroke-width:1.5;fill:none;}
+            .ed-blue{stroke:#0f62fe;stroke-width:1.5;fill:none;}
+            .ed-green{stroke:#198038;stroke-width:1.5;fill:none;}
+            .ed-red{stroke:#da1e28;stroke-width:1.5;stroke-dasharray:4 3;fill:none;}
+            .elbl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;}
           </style>
         </defs>
 
-        <!-- Row 1 -->
-        <g>
-          <rect class="nbox-accent" x="20" y="40" width="200" height="80"/>
-          <text class="nstep" x="32" y="62">STEP 01</text>
-          <text class="nlbl" x="32" y="82">New AMI published</text>
-          <text class="nsub" x="32" y="100">SNS topic /</text>
-          <text class="nsub" x="32" y="112">EventBridge rule</text>
-        </g>
+        <rect class="nbox-accent" x="20" y="40" width="200" height="80"/>
+        <text class="nstep" x="32" y="62">STEP 01</text><text class="nlbl" x="32" y="82">New AMI published</text>
+        <text class="nsub" x="32" y="100">SNS topic /</text><text class="nsub" x="32" y="112">EventBridge rule</text>
 
-        <g>
-          <rect class="nbox" x="340" y="40" width="200" height="80"/>
-          <text class="nstep" x="352" y="62">STEP 02</text>
-          <text class="nlbl" x="352" y="82">Resolve latest AMI</text>
-          <text class="nsub" x="352" y="100">SSM Parameter Store</text>
-          <text class="nsub" x="352" y="112">aws ssm get-parameter</text>
-        </g>
+        <rect class="nbox" x="340" y="40" width="200" height="80"/>
+        <text class="nstep" x="352" y="62">STEP 02</text><text class="nlbl" x="352" y="82">Resolve latest AMI</text>
+        <text class="nsub" x="352" y="100">SSM Parameter Store</text><text class="nsub" x="352" y="112">aws ssm get-parameter</text>
 
-        <g>
-          <rect class="nbox" x="660" y="40" width="200" height="80"/>
-          <text class="nstep" x="672" y="62">STEP 03</text>
-          <text class="nlbl" x="672" y="82">Launch build EC2</text>
-          <text class="nsub" x="672" y="100">Packer / aws ec2 run</text>
-          <text class="nsub" x="672" y="112">t3.micro · disposable</text>
-        </g>
+        <rect class="nbox" x="660" y="40" width="200" height="80"/>
+        <text class="nstep" x="672" y="62">STEP 03</text><text class="nlbl" x="672" y="82">Launch build EC2</text>
+        <text class="nsub" x="672" y="100">Packer / aws ec2 run</text><text class="nsub" x="672" y="112">t3.micro · disposable</text>
 
-        <!-- Row 2 -->
-        <g>
-          <rect class="nbox" x="660" y="180" width="200" height="80"/>
-          <text class="nstep" x="672" y="202">STEP 04</text>
-          <text class="nlbl" x="672" y="222">Provision software</text>
-          <text class="nsub" x="672" y="240">Java 21 (Corretto)</text>
-          <text class="nsub" x="672" y="252">Python 3 + pip</text>
-        </g>
+        <rect class="nbox" x="660" y="180" width="200" height="80"/>
+        <text class="nstep" x="672" y="202">STEP 04</text><text class="nlbl" x="672" y="222">Provision software</text>
+        <text class="nsub" x="672" y="240">Java 21 (Corretto)</text><text class="nsub" x="672" y="252">Python 3 + pip</text>
 
-        <!-- Row 3 -->
-        <g>
-          <rect class="nbox" x="660" y="320" width="200" height="80"/>
-          <text class="nstep" x="672" y="342">STEP 05</text>
-          <text class="nlbl" x="672" y="362">Validation tests</text>
-          <text class="nsub" x="672" y="380">java --version | grep 21</text>
-          <text class="nsub" x="672" y="392">python3 --version</text>
-        </g>
+        <rect class="nbox" x="660" y="320" width="200" height="80"/>
+        <text class="nstep" x="672" y="342">STEP 05</text><text class="nlbl" x="672" y="362">Validation tests</text>
+        <text class="nsub" x="672" y="380">java --version | grep 21</text><text class="nsub" x="672" y="392">python3 --version</text>
 
-        <!-- Fail box -->
-        <g>
-          <rect class="nbox-fail" x="660" y="450" width="200" height="60"/>
-          <text class="nlbl-r" x="672" y="476">Halt · alert team</text>
-          <text class="nsub" x="672" y="494">no AMI published</text>
-        </g>
+        <rect class="nbox-fail" x="660" y="450" width="200" height="60"/>
+        <text class="nlbl-r" x="672" y="476">Halt · alert team</text>
+        <text class="nsub" x="672" y="494">no AMI published</text>
 
-        <!-- Bake (dark) -->
-        <g>
-          <rect class="nbox-dark" x="340" y="320" width="200" height="80"/>
-          <text class="nstep-w" x="352" y="342">STEP 06</text>
-          <text class="nlbl-w" x="352" y="362">Bake new AMI</text>
-          <text class="nsub-w" x="352" y="380">snapshot + tag</text>
-          <text class="nsub-w" x="352" y="392">create-image / packer</text>
-        </g>
+        <rect class="nbox-dark" x="340" y="320" width="200" height="80"/>
+        <text class="nstep-w" x="352" y="342">STEP 06</text><text class="nlbl-w" x="352" y="362">Bake new AMI</text>
+        <text class="nsub-w" x="352" y="380">snapshot + tag</text><text class="nsub-w" x="352" y="392">create-image / packer</text>
 
-        <!-- SNS -->
-        <g>
-          <rect class="nbox-accent" x="340" y="450" width="200" height="60"/>
-          <text class="nstep" x="352" y="472">STEP 07</text>
-          <text class="nlbl" x="352" y="490">Publish to SNS topic</text>
-          <text class="nsub" x="352" y="504">new-base-ami</text>
-        </g>
+        <rect class="nbox-accent" x="340" y="450" width="200" height="60"/>
+        <text class="nstep" x="352" y="472">STEP 07</text><text class="nlbl" x="352" y="490">Publish to SNS topic</text>
+        <text class="nsub" x="352" y="504">new-base-ami</text>
 
-        <!-- SQS -->
-        <g>
-          <rect class="nbox" x="20" y="450" width="200" height="60"/>
-          <text class="nlbl" x="32" y="476">SQS queue</text>
-          <text class="nsub" x="32" y="492">downstream app teams</text>
-          <text class="nsub" x="32" y="504">poll &amp; rebuild</text>
-        </g>
+        <rect class="nbox" x="20" y="450" width="200" height="60"/>
+        <text class="nlbl" x="32" y="476">SQS queue</text>
+        <text class="nsub" x="32" y="492">downstream app teams</text><text class="nsub" x="32" y="504">poll &amp; rebuild</text>
 
-        <!-- Edges -->
         <path class="ed-blue" d="M220,80 L338,80" marker-end="url(#arrow-blue)"/>
         <path class="ed" d="M540,80 L658,80" marker-end="url(#arrow)"/>
         <path class="ed" d="M760,120 L760,178" marker-end="url(#arrow)"/>
         <path class="ed" d="M760,260 L760,318" marker-end="url(#arrow)"/>
-
-        <!-- Pass branch -->
         <path class="ed-green" d="M658,360 L542,360" marker-end="url(#arrow-green)"/>
         <text class="elbl" x="568" y="350" fill="#198038">PASS</text>
-
-        <!-- Fail branch -->
         <path class="ed-red" d="M760,400 L760,448" marker-end="url(#arrow-red)"/>
         <text class="elbl" x="772" y="425" fill="#da1e28">FAIL</text>
-
-        <!-- Bake to SNS -->
         <path class="ed" d="M440,400 L440,448" marker-end="url(#arrow)"/>
-
-        <!-- SNS to SQS -->
         <path class="ed-blue" d="M338,480 L222,480" marker-end="url(#arrow-blue)"/>
       </svg>
     </div>
@@ -655,11 +703,13 @@
     </div>
   </section>
 
-  <!-- TOOLS -->
+  <!-- =================================================== -->
+  <!-- 04 · IMPLEMENTATION -->
+  <!-- =================================================== -->
   <section id="tools">
     <div class="eyebrow">04 · Implementation</div>
     <h2>Three tools, one job</h2>
-    <p class="lead">The same pipeline implemented three ways. Packer is recommended for the bake itself; Terraform manages the surrounding AWS infrastructure; the AWS CLI version shows what&rsquo;s happening underneath.</p>
+    <p class="lead">The same pipeline implemented three ways. Packer is recommended for the bake; Terraform manages the surrounding infrastructure; the AWS CLI version shows what&rsquo;s happening underneath.</p>
 
     <div class="tabs" role="tablist">
       <button class="tab-btn active" onclick="switchTab('packer', this)" role="tab">Packer · recommended</button>
@@ -671,15 +721,14 @@
     <div id="tab-packer" class="tab-pane active">
       <div class="card">
         <h3 style="margin-top:0;font-size:1.0625rem">Why Packer</h3>
-        <p style="color:var(--c-text-2);margin:0.5rem 0 0">Packer is a free HashiCorp tool whose only job is building machine images. One declarative file describes the build; one command runs it. Packer launches the temp instance, provisions, tests, snapshots, and cleans up.</p>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">A free HashiCorp tool whose only job is building machine images. One declarative file describes the build; one command runs it.</p>
         <button class="info-chip" onclick="openModal('m-packer')">Install Packer</button>
       </div>
 
       <div class="subhead"><span class="subhead-num">STEPS 02 — 06</span><h4>amibuild.pkr.hcl &mdash; the Packer template</h4></div>
       <div class="code-wrap">
         <div class="code-head"><span class="code-lang">hcl</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code><span class="cmt"># Describes the full image build in one declarative file</span>
-packer {
+<pre><code>packer {
   required_plugins {
     amazon = { version = <span class="str">"&gt;= 1.3.0"</span>, source = <span class="str">"github.com/hashicorp/amazon"</span> }
   }
@@ -690,6 +739,7 @@ source <span class="str">"amazon-ebs"</span> <span class="str">"base"</span> {
   region        = <span class="str">"us-east-1"</span>
   instance_type = <span class="str">"t3.micro"</span>
   ssh_username  = <span class="str">"ec2-user"</span>
+  iam_instance_profile = <span class="str">"PackerInstanceProfile"</span>
 
   source_ami_filter {
     filters = {
@@ -697,11 +747,10 @@ source <span class="str">"amazon-ebs"</span> <span class="str">"base"</span> {
       virtualization-type = <span class="str">"hvm"</span>
       root-device-type    = <span class="str">"ebs"</span>
     }
-    most_recent = <span class="key">true</span>          <span class="cmt"># always grab the newest</span>
+    most_recent = <span class="key">true</span>
     owners      = [<span class="str">"amazon"</span>]
   }
 
-  <span class="cmt"># STEP 06: how the baked AMI will be named &amp; tagged</span>
   ami_name = <span class="str">"golden-java21-python-{{timestamp}}"</span>
   tags = {
     BaseOS    = <span class="str">"AmazonLinux2023"</span>
@@ -714,48 +763,31 @@ source <span class="str">"amazon-ebs"</span> <span class="str">"base"</span> {
 build {
   sources = [<span class="str">"source.amazon-ebs.base"</span>]
 
-  <span class="cmt"># STEP 04: install our software</span>
-  provisioner <span class="str">"shell"</span> {
-    script = <span class="str">"provision.sh"</span>
-  }
+  provisioner <span class="str">"shell"</span> { script = <span class="str">"provision.sh"</span> }
 
-  <span class="cmt"># STEP 05: validate — build FAILS if any command returns non-zero</span>
   provisioner <span class="str">"shell"</span> {
     inline = [
-      <span class="str">"echo '--- Running tests ---'"</span>,
       <span class="str">"java --version | grep '21' || (echo 'JAVA TEST FAILED' &amp;&amp; exit 1)"</span>,
       <span class="str">"python3 --version || (echo 'PYTHON TEST FAILED' &amp;&amp; exit 1)"</span>,
       <span class="str">"echo 'ALL TESTS PASSED'"</span>
     ]
   }
 
-  <span class="cmt"># STEP 07: write the new AMI ID to a file for the next stage</span>
-  post-processor <span class="str">"manifest"</span> {
-    output = <span class="str">"manifest.json"</span>
-  }
+  post-processor <span class="str">"manifest"</span> { output = <span class="str">"manifest.json"</span> }
 }</code></pre>
       </div>
 
-      <div class="subhead"><span class="subhead-num">STEP 04</span><h4>provision.sh &mdash; the install script</h4></div>
+      <div class="subhead"><span class="subhead-num">STEP 04</span><h4>provision.sh</h4></div>
       <div class="code-wrap">
         <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
 <pre><code><span class="cmt">#!/bin/bash</span>
-<span class="key">set</span> -euo pipefail   <span class="cmt"># stop instantly on any error</span>
+<span class="key">set</span> -euo pipefail
 
-<span class="fn">echo</span> <span class="str">"Updating base packages..."</span>
 sudo dnf update -y
+sudo dnf install -y java-21-amazon-corretto-devel python3 python3-pip
 
-<span class="fn">echo</span> <span class="str">"Installing Java 21 (Amazon Corretto)..."</span>
-sudo dnf install -y java-21-amazon-corretto-devel
-
-<span class="fn">echo</span> <span class="str">"Installing Python 3 + pip..."</span>
-sudo dnf install -y python3 python3-pip
-
-<span class="cmt"># make Java visible to all future shells</span>
 <span class="fn">echo</span> <span class="str">'export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto'</span> \
-  | sudo tee /etc/profile.d/java.sh
-
-<span class="fn">echo</span> <span class="str">"Provisioning complete."</span></code></pre>
+  | sudo tee /etc/profile.d/java.sh</code></pre>
       </div>
 
       <div class="subhead"><span class="subhead-num">RUN IT</span><h4>Build the image</h4></div>
@@ -763,29 +795,24 @@ sudo dnf install -y python3 python3-pip
         <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
 <pre><code>packer init  amibuild.pkr.hcl
 packer build amibuild.pkr.hcl
-
 <span class="cmt"># on success, manifest.json now holds the new AMI ID</span></code></pre>
       </div>
 
       <div class="subhead"><span class="subhead-num">STEP 07</span><h4>Publish the new AMI ID</h4></div>
       <div class="code-wrap">
         <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code><span class="cmt"># pull the AMI id from Packer's manifest and announce it</span>
-NEW_AMI=$(jq -r <span class="str">'.builds[-1].artifact_id'</span> manifest.json | cut -d<span class="str">':'</span> -f2)
-
+<pre><code>NEW_AMI=$(jq -r <span class="str">'.builds[-1].artifact_id'</span> manifest.json | cut -d<span class="str">':'</span> -f2)
 aws sns publish \
   --topic-arn arn:aws:sns:us-east-1:111122223333:new-base-ami \
-  --subject  <span class="str">"New golden AMI ready"</span> \
-  --message  <span class="str">"{\"ami_id\":\"$NEW_AMI\",\"java\":\"21\",\"status\":\"READY\"}"</span></code></pre>
+  --message  <span class="str">"{\"ami_id\":\"$NEW_AMI\",\"status\":\"READY\"}"</span></code></pre>
       </div>
-      <div class="callout">Downstream teams have an SQS queue <strong>subscribed</strong> to that SNS topic, so this single publish reaches every consumer at once.</div>
     </div>
 
     <!-- TERRAFORM -->
     <div id="tab-tf" class="tab-pane">
       <div class="card">
         <h3 style="margin-top:0;font-size:1.0625rem">Where Terraform fits</h3>
-        <p style="color:var(--c-text-2);margin:0.5rem 0 0">Packer bakes the image. Terraform builds the surrounding infrastructure: the SNS topic, the SQS queue, the subscription wiring, the EventBridge trigger, IAM roles, and optionally <strong>EC2 Image Builder</strong> if you prefer AWS&rsquo;s native baking service. Use them together, each doing what it&rsquo;s best at.</p>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">Packer bakes the image. Terraform builds the surrounding infrastructure: SNS, SQS, EventBridge, IAM, and optionally EC2 Image Builder if you prefer AWS&rsquo;s native baking.</p>
       </div>
 
       <div class="subhead"><span class="subhead-num">STEPS 01 &amp; 07</span><h4>main.tf &mdash; messaging + trigger infrastructure</h4></div>
@@ -793,25 +820,19 @@ aws sns publish \
         <div class="code-head"><span class="code-lang">terraform</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
 <pre><code>provider <span class="str">"aws"</span> { region = <span class="str">"us-east-1"</span> }
 
-<span class="cmt"># STEP 07a: the topic our build publishes to</span>
-resource <span class="str">"aws_sns_topic"</span> <span class="str">"new_ami"</span> {
-  name = <span class="str">"new-base-ami"</span>
-}
+resource <span class="str">"aws_sns_topic"</span> <span class="str">"new_ami"</span> { name = <span class="str">"new-base-ami"</span> }
 
-<span class="cmt"># STEP 07b: the queue downstream apps poll from</span>
 resource <span class="str">"aws_sqs_queue"</span> <span class="str">"app_rebuild"</span> {
   name                       = <span class="str">"app-rebuild-queue"</span>
   visibility_timeout_seconds = <span class="num">300</span>
 }
 
-<span class="cmt"># STEP 07c: connect topic -&gt; queue (fan-out)</span>
 resource <span class="str">"aws_sns_topic_subscription"</span> <span class="str">"to_sqs"</span> {
   topic_arn = aws_sns_topic.new_ami.arn
   protocol  = <span class="str">"sqs"</span>
   endpoint  = aws_sqs_queue.app_rebuild.arn
 }
 
-<span class="cmt"># allow SNS to drop messages into the queue</span>
 resource <span class="str">"aws_sqs_queue_policy"</span> <span class="str">"allow_sns"</span> {
   queue_url = aws_sqs_queue.app_rebuild.id
   policy = jsonencode({
@@ -821,18 +842,13 @@ resource <span class="str">"aws_sqs_queue_policy"</span> <span class="str">"allo
       Principal = { Service = <span class="str">"sns.amazonaws.com"</span> },
       Action    = <span class="str">"sqs:SendMessage"</span>,
       Resource  = aws_sqs_queue.app_rebuild.arn,
-      Condition = {
-        ArnEquals = { <span class="str">"aws:SourceArn"</span> = aws_sns_topic.new_ami.arn }
-      }
+      Condition = { ArnEquals = { <span class="str">"aws:SourceArn"</span> = aws_sns_topic.new_ami.arn } }
     }]
   })
 }
 
-<span class="cmt"># STEP 01: EventBridge rule — fires when the SSM parameter</span>
-<span class="cmt"># holding the latest AMI id changes value</span>
 resource <span class="str">"aws_cloudwatch_event_rule"</span> <span class="str">"ami_changed"</span> {
-  name        = <span class="str">"al2023-ami-updated"</span>
-  description = <span class="str">"Latest Amazon Linux AMI changed"</span>
+  name = <span class="str">"al2023-ami-updated"</span>
   event_pattern = jsonencode({
     source      = [<span class="str">"aws.ssm"</span>],
     detail-type = [<span class="str">"Parameter Store Change"</span>],
@@ -843,169 +859,689 @@ resource <span class="str">"aws_cloudwatch_event_rule"</span> <span class="str">
   })
 }
 
-<span class="cmt"># point the rule at whatever runs Packer (Lambda, CodeBuild, etc.)</span>
 resource <span class="str">"aws_cloudwatch_event_target"</span> <span class="str">"run_builder"</span> {
   rule = aws_cloudwatch_event_rule.ami_changed.name
   arn  = aws_lambda_function.start_packer.arn
-}
-
-output <span class="str">"sns_topic_arn"</span> { value = aws_sns_topic.new_ami.arn }
-output <span class="str">"sqs_queue_url"</span> { value = aws_sqs_queue.app_rebuild.id }</code></pre>
+}</code></pre>
       </div>
 
-      <div class="subhead"><span class="subhead-num">APPLY</span><h4>Provision it</h4></div>
-      <div class="code-wrap">
-        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code>terraform init
-terraform plan
-terraform apply        <span class="cmt"># creates SNS + SQS + trigger</span></code></pre>
-      </div>
-
-      <div class="callout">
-        <strong>Optional native path:</strong> Terraform can also drive <code>aws_imagebuilder_image_pipeline</code> &mdash; AWS&rsquo;s managed AMI baking service &mdash; instead of Packer. Use it when you want to avoid running Packer infrastructure yourself.
-        <div style="margin-top:0.75rem"><button class="info-chip" onclick="openModal('m-imagebuilder')">EC2 Image Builder</button></div>
-      </div>
+      <div class="callout"><strong>Optional native path:</strong> Terraform can also drive <code>aws_imagebuilder_image_pipeline</code> &mdash; AWS&rsquo;s managed AMI baking service. <button class="info-chip" onclick="openModal('m-imagebuilder')">EC2 Image Builder</button></div>
     </div>
 
     <!-- CLI -->
     <div id="tab-cli" class="tab-pane">
       <div class="card">
         <h3 style="margin-top:0;font-size:1.0625rem">The no-special-tools path</h3>
-        <p style="color:var(--c-text-2);margin:0.5rem 0 0">With only the AWS CLI and bash, you can do every step by hand. This is the most transparent way to learn what Packer abstracts &mdash; but you manage cleanup yourself.</p>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">With only the AWS CLI and bash, you can do every step by hand &mdash; transparent but you manage cleanup yourself.</p>
       </div>
 
-      <div class="subhead"><span class="subhead-num">STEP 02</span><h4>Find the latest AMI from SSM</h4></div>
+      <div class="subhead"><span class="subhead-num">STEPS 02 — 07</span><h4>Full pipeline in one shell script</h4></div>
       <div class="code-wrap">
-        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code>BASE_AMI=$(aws ssm get-parameter \
+        <div class="code-head"><span class="code-lang">bash · build.sh</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt">#!/bin/bash</span>
+<span class="key">set</span> -euo pipefail
+
+<span class="cmt"># STEP 02</span>
+BASE_AMI=$(aws ssm get-parameter \
   --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
   --query <span class="str">'Parameter.Value'</span> --output text)
-<span class="fn">echo</span> <span class="str">"Latest base AMI: $BASE_AMI"</span></code></pre>
-      </div>
 
-      <div class="subhead"><span class="subhead-num">STEP 03</span><h4>Launch the temp build server</h4></div>
-      <div class="code-wrap">
-        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code>INSTANCE_ID=$(aws ec2 run-instances \
-  --image-id <span class="str">"$BASE_AMI"</span> \
-  --instance-type t3.micro \
-  --key-name my-build-key \
+<span class="cmt"># STEP 03</span>
+INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id <span class="str">"$BASE_AMI"</span> --instance-type t3.micro \
+  --iam-instance-profile Name=PackerInstanceProfile \
   --security-group-ids sg-0123456789 \
   --query <span class="str">'Instances[0].InstanceId'</span> --output text)
-
 aws ec2 wait instance-running --instance-ids <span class="str">"$INSTANCE_ID"</span>
 
-IP=$(aws ec2 describe-instances --instance-ids <span class="str">"$INSTANCE_ID"</span> \
-  --query <span class="str">'Reservations[0].Instances[0].PublicIpAddress'</span> --output text)</code></pre>
-      </div>
+<span class="cmt"># STEPS 04 + 05 — via SSM Run Command, no SSH needed</span>
+aws ssm send-command \
+  --instance-ids <span class="str">"$INSTANCE_ID"</span> \
+  --document-name <span class="str">"AWS-RunShellScript"</span> \
+  --parameters <span class="str">'commands=[
+    "sudo dnf update -y",
+    "sudo dnf install -y java-21-amazon-corretto-devel python3 python3-pip",
+    "java --version | grep 21 || exit 1",
+    "python3 --version || exit 1"
+  ]'</span>
 
-      <div class="subhead"><span class="subhead-num">STEPS 04 &amp; 05</span><h4>Provision and test over SSH</h4></div>
-      <div class="code-wrap">
-        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code>ssh -o StrictHostKeyChecking=no ec2-user@<span class="str">"$IP"</span> <span class="str">'bash -s'</span> &lt;&lt; <span class="str">'EOF'</span>
-set -euo pipefail
-sudo dnf update -y
-sudo dnf install -y java-21-amazon-corretto-devel python3 python3-pip
-
-<span class="cmt"># --- tests ---</span>
-java --version | grep 21 || { echo <span class="str">"JAVA FAIL"</span>; exit 1; }
-python3 --version          || { echo <span class="str">"PY FAIL"</span>;   exit 1; }
-echo <span class="str">"TESTS PASSED"</span>
-EOF</code></pre>
-      </div>
-
-      <div class="subhead"><span class="subhead-num">STEP 06</span><h4>Bake the AMI &mdash; only runs if the SSH block above succeeded</h4></div>
-      <div class="code-wrap">
-        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code>NEW_AMI=$(aws ec2 create-image \
+<span class="cmt"># STEP 06</span>
+NEW_AMI=$(aws ec2 create-image \
   --instance-id <span class="str">"$INSTANCE_ID"</span> \
   --name <span class="str">"golden-java21-python-$(date +%s)"</span> \
-  --tag-specifications <span class="str">'ResourceType=image,Tags=[{Key=Java,Value=21},{Key=BuiltBy,Value=AMIFactory}]'</span> \
   --query <span class="str">'ImageId'</span> --output text)
-
 aws ec2 wait image-available --image-ids <span class="str">"$NEW_AMI"</span>
+aws ec2 terminate-instances --instance-ids <span class="str">"$INSTANCE_ID"</span>
 
-<span class="cmt"># clean up the temporary build server</span>
-aws ec2 terminate-instances --instance-ids <span class="str">"$INSTANCE_ID"</span></code></pre>
-      </div>
-
-      <div class="subhead"><span class="subhead-num">STEP 07</span><h4>Announce via SNS</h4></div>
-      <div class="code-wrap">
-        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code>aws sns publish \
+<span class="cmt"># STEP 07</span>
+aws sns publish \
   --topic-arn arn:aws:sns:us-east-1:111122223333:new-base-ami \
   --message <span class="str">"{\"ami_id\":\"$NEW_AMI\",\"status\":\"READY\"}"</span></code></pre>
       </div>
     </div>
   </section>
 
-  <!-- DOWNSTREAM -->
+  <!-- =================================================== -->
+  <!-- 05 · DOWNSTREAM -->
+  <!-- =================================================== -->
   <section id="downstream">
     <div class="eyebrow">05 · Downstream</div>
     <h2>What consumers do</h2>
-    <p class="lead">The other side of step 07. Each consuming team polls their SQS queue. When a <code>READY</code> message arrives, they kick off their own Packer build using our new AMI as the base.</p>
+    <p class="lead">Each consuming team polls their SQS queue. When a <code>READY</code> message arrives, they kick off their own Packer build using our new AMI as the base.</p>
 
     <div class="code-wrap">
       <div class="code-head"><span class="code-lang">bash · downstream poller</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-<pre><code><span class="cmt"># runs on a schedule (cron, EventBridge, etc.)</span>
-MSG=$(aws sqs receive-message --queue-url <span class="str">"$QUEUE_URL"</span> --query <span class="str">'Messages[0]'</span>)
+<pre><code>MSG=$(aws sqs receive-message --queue-url <span class="str">"$QUEUE_URL"</span> --query <span class="str">'Messages[0]'</span>)
 NEW_BASE=$(<span class="fn">echo</span> <span class="str">"$MSG"</span> | jq -r <span class="str">'.Body | fromjson | .Message | fromjson | .ami_id'</span>)
 
-<span class="cmt"># feed it into their own packer build as a variable</span>
 packer build -var <span class="str">"base_ami=$NEW_BASE"</span> app-image.pkr.hcl
 
-<span class="cmt"># delete the message so it isn't processed twice</span>
 RH=$(<span class="fn">echo</span> <span class="str">"$MSG"</span> | jq -r <span class="str">'.ReceiptHandle'</span>)
 aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --receipt-handle <span class="str">"$RH"</span></code></pre>
     </div>
   </section>
 
-  <!-- REFERENCES -->
+  <!-- =================================================== -->
+  <!-- 06 · GITLAB CI/CD -->
+  <!-- =================================================== -->
+  <section id="gitlab">
+    <div class="eyebrow">06 · CI/CD</div>
+    <h2>Running the factory in a GitLab pipeline</h2>
+    <p class="lead">Manual builds are fine for learning. In production the pipeline runs in CI, authenticates to AWS without long-lived secrets, gates publish behind manual approval, and surfaces every artifact. Here&rsquo;s the full GitLab setup.</p>
+
+    <!-- 06.1 OIDC trust -->
+    <div class="subhead"><span class="subhead-num">06.1</span><h4>Federate GitLab to AWS with OIDC (no static keys)</h4></div>
+    <p>Storing AWS access keys as GitLab variables is the old way. Today, GitLab signs every job with a short-lived JWT and AWS exchanges it for temporary credentials. Set this up once.</p>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">terraform · oidc.tf</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt"># Register GitLab as an OIDC identity provider in AWS</span>
+resource <span class="str">"aws_iam_openid_connect_provider"</span> <span class="str">"gitlab"</span> {
+  url             = <span class="str">"https://gitlab.com"</span>
+  client_id_list  = [<span class="str">"https://gitlab.com"</span>]
+  thumbprint_list = [<span class="str">"b3dd7606d2b5a8b4a13771dbecc9ee1cecafa38a"</span>]
+  <span class="cmt"># Use `openssl s_client -connect gitlab.com:443` to recompute current thumbprint</span>
+}
+
+<span class="cmt"># ④ The role GitLab assumes — trust policy locks to a specific project &amp; branch</span>
+data <span class="str">"aws_iam_policy_document"</span> <span class="str">"gitlab_trust"</span> {
+  statement {
+    actions = [<span class="str">"sts:AssumeRoleWithWebIdentity"</span>]
+    principals {
+      type        = <span class="str">"Federated"</span>
+      identifiers = [aws_iam_openid_connect_provider.gitlab.arn]
+    }
+    condition {
+      test     = <span class="str">"StringEquals"</span>
+      variable = <span class="str">"gitlab.com:aud"</span>
+      values   = [<span class="str">"https://gitlab.com"</span>]
+    }
+    condition {
+      test     = <span class="str">"StringLike"</span>
+      variable = <span class="str">"gitlab.com:sub"</span>
+      values   = [<span class="str">"project_path:my-org/ami-factory:ref_type:branch:ref:main"</span>]
+    }
+  }
+}
+
+resource <span class="str">"aws_iam_role"</span> <span class="str">"gitlab_oidc"</span> {
+  name               = <span class="str">"GitLabOidcRole"</span>
+  assume_role_policy = data.aws_iam_policy_document.gitlab_trust.json
+}
+
+<span class="cmt"># Allow the OIDC role to assume the Packer build &amp; publish roles</span>
+resource <span class="str">"aws_iam_role_policy"</span> <span class="str">"gitlab_assume"</span> {
+  role = aws_iam_role.gitlab_oidc.id
+  policy = jsonencode({
+    Version = <span class="str">"2012-10-17"</span>,
+    Statement = [{
+      Effect   = <span class="str">"Allow"</span>,
+      Action   = <span class="str">"sts:AssumeRole"</span>,
+      Resource = [
+        <span class="str">"arn:aws:iam::${var.account_id}:role/PackerBuildRole"</span>,
+        <span class="str">"arn:aws:iam::${var.account_id}:role/AmiPublishRole"</span>
+      ]
+    }]
+  })
+}</code></pre>
+    </div>
+
+    <!-- 06.2 .gitlab-ci.yml -->
+    <div class="subhead"><span class="subhead-num">06.2</span><h4>.gitlab-ci.yml &mdash; the pipeline</h4></div>
+    <p>Four stages: <strong>validate</strong> (syntax check), <strong>plan</strong> (Terraform dry-run for infra changes), <strong>build</strong> (run Packer), <strong>publish</strong> (announce via SNS, gated by manual approval).</p>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">yaml · .gitlab-ci.yml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>stages:
+  - validate
+  - plan
+  - build
+  - publish
+
+variables:
+  AWS_REGION:          <span class="str">"us-east-1"</span>
+  AWS_DEFAULT_REGION:  <span class="str">"us-east-1"</span>
+  PACKER_ROLE_ARN:     <span class="str">"arn:aws:iam::111122223333:role/PackerBuildRole"</span>
+  PUBLISH_ROLE_ARN:    <span class="str">"arn:aws:iam::111122223333:role/AmiPublishRole"</span>
+  SNS_TOPIC_ARN:       <span class="str">"arn:aws:sns:us-east-1:111122223333:new-base-ami"</span>
+
+<span class="cmt"># Inject a GitLab-issued OIDC token into every job</span>
+default:
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+
+<span class="cmt"># Reusable: exchange OIDC token for AWS creds</span>
+.aws_oidc_login: &amp;aws_oidc_login |
+  CREDS=$(aws sts assume-role-with-web-identity \
+    --role-arn <span class="str">"arn:aws:iam::111122223333:role/GitLabOidcRole"</span> \
+    --role-session-name <span class="str">"gitlab-$CI_JOB_ID"</span> \
+    --web-identity-token <span class="str">"$GITLAB_OIDC_TOKEN"</span> \
+    --duration-seconds 3600 \
+    --query <span class="str">'Credentials'</span> --output json)
+  <span class="key">export</span> AWS_ACCESS_KEY_ID=$(<span class="fn">echo</span> <span class="str">"$CREDS"</span> | jq -r .AccessKeyId)
+  <span class="key">export</span> AWS_SECRET_ACCESS_KEY=$(<span class="fn">echo</span> <span class="str">"$CREDS"</span> | jq -r .SecretAccessKey)
+  <span class="key">export</span> AWS_SESSION_TOKEN=$(<span class="fn">echo</span> <span class="str">"$CREDS"</span> | jq -r .SessionToken)
+
+<span class="cmt"># ---------- VALIDATE ----------</span>
+validate:
+  stage: validate
+  image: hashicorp/packer:1.10
+  script:
+    - *aws_oidc_login
+    - packer init  amibuild.pkr.hcl
+    - packer validate amibuild.pkr.hcl
+
+<span class="cmt"># ---------- PLAN (Terraform infra changes) ----------</span>
+terraform-plan:
+  stage: plan
+  image: hashicorp/terraform:1.7
+  script:
+    - *aws_oidc_login
+    - terraform init
+    - terraform plan -out=tfplan
+  artifacts:
+    paths: [tfplan]
+    expire_in: 1 week
+
+<span class="cmt"># ---------- BUILD ----------</span>
+packer-build:
+  stage: build
+  image: hashicorp/packer:1.10
+  script:
+    - *aws_oidc_login
+    - <span class="cmt"># elevate from OIDC role to PackerBuildRole</span>
+    - BUILD_CREDS=$(aws sts assume-role --role-arn <span class="str">"$PACKER_ROLE_ARN"</span> --role-session-name packer-build)
+    - <span class="key">export</span> AWS_ACCESS_KEY_ID=$(<span class="fn">echo</span> <span class="str">"$BUILD_CREDS"</span> | jq -r .Credentials.AccessKeyId)
+    - <span class="key">export</span> AWS_SECRET_ACCESS_KEY=$(<span class="fn">echo</span> <span class="str">"$BUILD_CREDS"</span> | jq -r .Credentials.SecretAccessKey)
+    - <span class="key">export</span> AWS_SESSION_TOKEN=$(<span class="fn">echo</span> <span class="str">"$BUILD_CREDS"</span> | jq -r .Credentials.SessionToken)
+    - packer build -machine-readable amibuild.pkr.hcl | tee packer.log
+  artifacts:
+    paths: [manifest.json, packer.log]
+    expire_in: 30 days
+  rules:
+    - <span class="key">if</span>: $CI_COMMIT_BRANCH == <span class="str">"main"</span>
+
+<span class="cmt"># ---------- PUBLISH (manual gate) ----------</span>
+publish-ami:
+  stage: publish
+  image: amazon/aws-cli:latest
+  needs: [packer-build]
+  script:
+    - *aws_oidc_login
+    - PUBLISH_CREDS=$(aws sts assume-role --role-arn <span class="str">"$PUBLISH_ROLE_ARN"</span> --role-session-name publish)
+    - <span class="key">export</span> AWS_ACCESS_KEY_ID=$(<span class="fn">echo</span> <span class="str">"$PUBLISH_CREDS"</span> | jq -r .Credentials.AccessKeyId)
+    - <span class="key">export</span> AWS_SECRET_ACCESS_KEY=$(<span class="fn">echo</span> <span class="str">"$PUBLISH_CREDS"</span> | jq -r .Credentials.SecretAccessKey)
+    - <span class="key">export</span> AWS_SESSION_TOKEN=$(<span class="fn">echo</span> <span class="str">"$PUBLISH_CREDS"</span> | jq -r .Credentials.SessionToken)
+    - NEW_AMI=$(jq -r <span class="str">'.builds[-1].artifact_id'</span> manifest.json | cut -d<span class="str">':'</span> -f2)
+    - <span class="fn">echo</span> <span class="str">"Publishing AMI $NEW_AMI"</span>
+    - aws sns publish --topic-arn <span class="str">"$SNS_TOPIC_ARN"</span> --message <span class="str">"{\"ami_id\":\"$NEW_AMI\",\"status\":\"READY\"}"</span>
+  when: manual         <span class="cmt"># human approval required before publishing</span>
+  rules:
+    - <span class="key">if</span>: $CI_COMMIT_BRANCH == <span class="str">"main"</span></code></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <strong>Why the manual gate?</strong> Auto-publishing a fresh AMI immediately makes every downstream team rebuild. A 5-second human check on the build log prevents bad images from cascading through the org. Move to automatic after you trust the test suite.
+    </div>
+
+    <!-- 06.3 Scheduling -->
+    <div class="subhead"><span class="subhead-num">06.3</span><h4>Triggering on a schedule or AWS event</h4></div>
+    <p>The pipeline runs on merge to <code>main</code> by default. To also rebuild when AWS publishes a new base AMI, choose one:</p>
+    <ul style="padding-left:1.5rem;color:var(--c-text-2);font-size:0.9375rem;line-height:1.7">
+      <li><strong>GitLab schedule</strong> &mdash; configure a daily pipeline at <em>Settings &rarr; CI/CD &rarr; Schedules</em>. Simplest, but rebuilds even when nothing changed.</li>
+      <li><strong>EventBridge &rarr; Lambda &rarr; GitLab API</strong> &mdash; the AWS-side trigger from section 02. Lambda calls GitLab&rsquo;s <code>POST /projects/:id/trigger/pipeline</code> endpoint with a trigger token. Rebuilds only when something actually changed.</li>
+      <li><strong>SNS subscription &rarr; webhook</strong> &mdash; subscribe an HTTPS endpoint (GitLab webhook) directly to the public Amazon Linux AMI SNS topic. No Lambda required.</li>
+    </ul>
+  </section>
+
+  <!-- =================================================== -->
+  <!-- 07 · ANSIBLE & SSM -->
+  <!-- =================================================== -->
+  <section id="automation">
+    <div class="eyebrow">07 · Alternative paths</div>
+    <h2>Ansible, Systems Manager &amp; Image Builder</h2>
+    <p class="lead">Packer&rsquo;s shell provisioner works, but it isn&rsquo;t the only choice. Here are three production-grade alternatives for the provisioning step itself.</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" onclick="switchTab2('ansible', this)" role="tab">Ansible provisioner</button>
+      <button class="tab-btn" onclick="switchTab2('ssm', this)" role="tab">AWS Systems Manager</button>
+      <button class="tab-btn" onclick="switchTab2('ib', this)" role="tab">EC2 Image Builder</button>
+    </div>
+
+    <!-- ANSIBLE -->
+    <div id="tab2-ansible" class="tab-pane active">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:1.0625rem">Why use Ansible inside Packer</h3>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">Shell scripts are linear and don&rsquo;t track state. Ansible playbooks are <em>idempotent</em> (re-running produces the same result), describe configuration declaratively, and the same playbook can configure a baked AMI <em>and</em> an existing running server. If you already use Ansible for config management, reuse the same playbooks here.</p>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">07a.1</span><h4>Swap the shell provisioner for Ansible</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">hcl · amibuild.pkr.hcl</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>build {
+  sources = [<span class="str">"source.amazon-ebs.base"</span>]
+
+  provisioner <span class="str">"ansible"</span> {
+    playbook_file   = <span class="str">"./playbooks/base.yml"</span>
+    user            = <span class="str">"ec2-user"</span>
+    use_proxy       = <span class="key">false</span>
+    extra_arguments = [<span class="str">"--extra-vars"</span>, <span class="str">"java_version=21"</span>]
+  }
+}</code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">07a.2</span><h4>playbooks/base.yml</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">yaml · playbooks/base.yml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>---
+- name: Build golden base image
+  hosts: default
+  become: <span class="key">true</span>
+  vars:
+    java_version: 21
+
+  tasks:
+    - name: Update all packages
+      ansible.builtin.dnf:
+        name: <span class="str">"*"</span>
+        state: latest
+        update_cache: <span class="key">true</span>
+
+    - name: Install Amazon Corretto Java
+      ansible.builtin.dnf:
+        name: <span class="str">"java-{{ java_version }}-amazon-corretto-devel"</span>
+        state: present
+
+    - name: Install Python 3 + pip
+      ansible.builtin.dnf:
+        name:
+          - python3
+          - python3-pip
+        state: present
+
+    - name: Set JAVA_HOME for all users
+      ansible.builtin.copy:
+        content: <span class="str">"export JAVA_HOME=/usr/lib/jvm/java-{{ java_version }}-amazon-corretto\n"</span>
+        dest: /etc/profile.d/java.sh
+        mode: <span class="str">'0644'</span>
+
+    - name: Verify Java version
+      ansible.builtin.command: java --version
+      register: java_check
+      changed_when: <span class="key">false</span>
+      failed_when: <span class="str">"java_version | string not in java_check.stdout"</span>
+
+    - name: Verify Python
+      ansible.builtin.command: python3 --version
+      changed_when: <span class="key">false</span></code></pre>
+      </div>
+
+      <div class="callout callout-tip"><strong>Bonus:</strong> the same <code>base.yml</code> can configure a long-lived server, a Docker image (via the <code>docker</code> connection), or a Vagrant box. Write once, run everywhere.</div>
+    </div>
+
+    <!-- SSM -->
+    <div id="tab2-ssm" class="tab-pane">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:1.0625rem">Why AWS Systems Manager Automation</h3>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">SSM Automation Documents let you orchestrate the <em>entire</em> AMI build in AWS itself &mdash; no Packer, no external runner. AWS provides a pre-built document <code>AWS-UpdateLinuxAmi</code> that mirrors this exact workflow. Best fit for shops that already standardize on SSM for patching and compliance.</p>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">07b.1</span><h4>Use the built-in AWS-UpdateLinuxAmi document</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash · invoke SSM automation</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>aws ssm start-automation-execution \
+  --document-name <span class="str">"AWS-UpdateLinuxAmi"</span> \
+  --parameters <span class="str">'{
+    "SourceAmiId":          ["ami-0123456789abcdef0"],
+    "TargetAmiName":        ["golden-java21-python-{{global:DATE_TIME}}"],
+    "InstanceIamRole":      ["PackerInstanceRole"],
+    "AutomationAssumeRole": ["arn:aws:iam::111122223333:role/SsmAutomationRole"],
+    "PreUpdateScript":      ["echo skipping"],
+    "PostUpdateScript":     ["sudo dnf install -y java-21-amazon-corretto-devel python3 python3-pip"],
+    "SubnetId":             ["subnet-0123456789abcdef0"]
+  }'</span></code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">07b.2</span><h4>Or write a custom Automation document</h4></div>
+      <p>Full control over each step. The document below mirrors the seven-step plan exactly.</p>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">yaml · golden-ami.yml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>schemaVersion: <span class="str">'0.3'</span>
+description: Build golden AMI with Java 21 + Python
+assumeRole: <span class="str">"{{ AutomationAssumeRole }}"</span>
+parameters:
+  SourceAmiId:          { type: String }
+  SubnetId:             { type: String }
+  AutomationAssumeRole: { type: String }
+
+mainSteps:
+  - name: launchInstance
+    action: aws:runInstances
+    inputs:
+      ImageId: <span class="str">"{{ SourceAmiId }}"</span>
+      InstanceType: t3.micro
+      SubnetId: <span class="str">"{{ SubnetId }}"</span>
+      IamInstanceProfileName: PackerInstanceProfile
+      MinInstanceCount: 1
+      MaxInstanceCount: 1
+
+  - name: installSoftware
+    action: aws:runCommand
+    inputs:
+      DocumentName: AWS-RunShellScript
+      InstanceIds: [<span class="str">"{{ launchInstance.InstanceIds }}"</span>]
+      Parameters:
+        commands:
+          - sudo dnf update -y
+          - sudo dnf install -y java-21-amazon-corretto-devel python3 python3-pip
+
+  - name: runTests
+    action: aws:runCommand
+    inputs:
+      DocumentName: AWS-RunShellScript
+      InstanceIds: [<span class="str">"{{ launchInstance.InstanceIds }}"</span>]
+      Parameters:
+        commands:
+          - java --version | grep 21
+          - python3 --version
+
+  - name: createImage
+    action: aws:createImage
+    inputs:
+      InstanceId: <span class="str">"{{ launchInstance.InstanceIds }}"</span>
+      ImageName: <span class="str">"golden-java21-{{ global:DATE_TIME }}"</span>
+      NoReboot: <span class="key">false</span>
+
+  - name: terminateInstance
+    action: aws:changeInstanceState
+    inputs:
+      InstanceIds: [<span class="str">"{{ launchInstance.InstanceIds }}"</span>]
+      DesiredState: terminated</code></pre>
+      </div>
+
+      <div class="callout"><strong>Bonus SSM capability:</strong> pair this with <strong>SSM State Manager</strong> to <em>continuously</em> verify that already-running instances still match your golden config &mdash; drift detection for free.</div>
+    </div>
+
+    <!-- IMAGE BUILDER -->
+    <div id="tab2-ib" class="tab-pane">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:1.0625rem">Why EC2 Image Builder</h3>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">AWS&rsquo;s fully managed AMI-baking service. Handles scheduling, multi-region distribution, AMI sharing across accounts, vulnerability scanning via Amazon Inspector, and lifecycle policies &mdash; all built in. No runner to maintain.</p>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">07c.1</span><h4>Image Builder pipeline in Terraform</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">terraform · imagebuilder.tf</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>resource <span class="str">"aws_imagebuilder_component"</span> <span class="str">"java_python"</span> {
+  name        = <span class="str">"install-java21-python"</span>
+  platform    = <span class="str">"Linux"</span>
+  version     = <span class="str">"1.0.0"</span>
+  data = yamlencode({
+    name = <span class="str">"InstallJavaPython"</span>
+    schemaVersion = <span class="str">"1.0"</span>
+    phases = [{
+      name = <span class="str">"build"</span>
+      steps = [{
+        name = <span class="str">"Install"</span>
+        action = <span class="str">"ExecuteBash"</span>
+        inputs = {
+          commands = [
+            <span class="str">"dnf update -y"</span>,
+            <span class="str">"dnf install -y java-21-amazon-corretto-devel python3 python3-pip"</span>
+          ]
+        }
+      }]
+    }, {
+      name = <span class="str">"validate"</span>
+      steps = [{
+        name = <span class="str">"Verify"</span>
+        action = <span class="str">"ExecuteBash"</span>
+        inputs = { commands = [<span class="str">"java --version | grep 21"</span>, <span class="str">"python3 --version"</span>] }
+      }]
+    }]
+  })
+}
+
+resource <span class="str">"aws_imagebuilder_image_recipe"</span> <span class="str">"golden"</span> {
+  name         = <span class="str">"golden-java21-python"</span>
+  version      = <span class="str">"1.0.0"</span>
+  parent_image = <span class="str">"arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/x.x.x"</span>
+  component { component_arn = aws_imagebuilder_component.java_python.arn }
+}
+
+resource <span class="str">"aws_imagebuilder_image_pipeline"</span> <span class="str">"golden"</span> {
+  name                             = <span class="str">"golden-base-pipeline"</span>
+  image_recipe_arn                 = aws_imagebuilder_image_recipe.golden.arn
+  infrastructure_configuration_arn = aws_imagebuilder_infrastructure_configuration.this.arn
+  distribution_configuration_arn   = aws_imagebuilder_distribution_configuration.this.arn
+
+  schedule {
+    schedule_expression                = <span class="str">"cron(0 6 ? * mon)"</span>   <span class="cmt"># every Monday 6 AM</span>
+    pipeline_execution_start_condition = <span class="str">"EXPRESSION_MATCH_AND_DEPENDENCY_UPDATES_AVAILABLE"</span>
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout callout-tip"><strong>Trade-off:</strong> Image Builder is AWS-only. Packer + Ansible are portable to Azure, GCP, and on-prem. Pick Image Builder when you&rsquo;re fully committed to AWS and want zero infrastructure to maintain; pick Packer when portability matters.</div>
+    </div>
+  </section>
+
+  <!-- =================================================== -->
+  <!-- 08 · BEST PRACTICES -->
+  <!-- =================================================== -->
+  <section id="best-practices">
+    <div class="eyebrow">08 · Best practices</div>
+    <h2>Production-readiness checklist</h2>
+    <p class="lead">A factory that works in dev breaks in prod without these. Treat this as a checklist before you let the pipeline run unattended.</p>
+
+    <ol class="bplist">
+      <li>
+        <div>
+          <h4>Separate AWS accounts for build vs production</h4>
+          <p>Bake AMIs in a dedicated <em>build</em> account, then share them with <em>workload</em> accounts via Resource Access Manager. Blast radius of a compromised build is contained.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Always use least-privilege IAM</h4>
+          <p>The Packer role from section 00.4 lists every action by name. Avoid <code>ec2:*</code> or <code>Resource: "*"</code> in production. Use IAM Access Analyzer to refine policies based on actual usage.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>OIDC instead of long-lived access keys</h4>
+          <p>GitLab, GitHub, CircleCI, Buildkite, Jenkins on EKS all support OIDC to AWS. Rotate <em>nothing</em>, store <em>nothing</em>. If you still have static access keys in CI variables, that&rsquo;s the next thing to fix.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Encrypt EBS volumes with a customer-managed KMS key</h4>
+          <p>Default AWS-managed encryption is fine for many cases, but a CMK lets you audit who decrypts what, rotate the key on your schedule, and revoke access surgically. Set <code>encrypt_boot = true</code> and <code>kms_key_id</code> in Packer.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Tag every resource consistently</h4>
+          <p>At minimum: <code>BuiltBy</code>, <code>SourceAMI</code>, <code>BuildDate</code>, <code>Java</code>/<code>Python</code> version, <code>GitCommit</code>, <code>Pipeline</code>, <code>Owner</code>. Tags drive cost allocation, lifecycle policies, and incident forensics.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Version AMIs semantically</h4>
+          <p>Don&rsquo;t just use timestamps. Use names like <code>golden-base-v1.4.2-20260301</code> so consumers can pin to a known-good version and roll back deterministically.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Scan images for vulnerabilities before publishing</h4>
+          <p>Run Amazon Inspector against the freshly built AMI, or call out to Trivy / Grype as a Packer post-processor. Fail the build on critical CVEs.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Test by booting before announcing</h4>
+          <p>Add a stage that launches an instance from the new AMI, runs an integration smoke test, then terminates. Only on success does SNS publish. The validation inside Packer catches install errors; this catches boot-time issues.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Multi-region distribution via copy</h4>
+          <p>Use Packer&rsquo;s <code>ami_regions</code> list or Image Builder&rsquo;s distribution config to copy to every region you operate in. Each region gets its own AMI ID; surface a map of region&nbsp;&rarr;&nbsp;AMI to consumers.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Implement an AMI lifecycle policy</h4>
+          <p>Keep the last 5-10 versions. Deprecate older AMIs with <code>aws ec2 enable-image-deprecation</code> so consumers see warnings. Eventually deregister and delete underlying snapshots &mdash; orphaned snapshots are the #1 sneaky AWS cost.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Never bake secrets into AMIs</h4>
+          <p>Anyone who can launch the AMI can read its disk. Pull secrets at boot from Secrets Manager or SSM Parameter Store via instance role, never embed them.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Make provisioning idempotent</h4>
+          <p>Whether shell or Ansible, the script must be re-runnable. <code>dnf install</code> already is; <code>echo &gt;&gt; /etc/profile</code> is not (use <code>tee</code> or template files). Idempotence makes debugging dramatically easier.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Audit everything via CloudTrail</h4>
+          <p>Enable CloudTrail with a multi-region trail to a write-only S3 bucket. Every <code>RunInstances</code>, <code>CreateImage</code>, <code>AssumeRole</code> is logged. Invaluable for &ldquo;who built this AMI?&rdquo; and for post-incident review.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Pin every tool version</h4>
+          <p><code>packer 1.10.0</code>, <code>terraform 1.7.5</code>, <code>amazon plugin = "= 1.3.0"</code>. Floating versions cause non-reproducible builds. Treat your build environment itself as immutable infrastructure &mdash; pin it in a Docker image used by CI.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h4>Cost: use Spot for builds, on-demand for tests</h4>
+          <p>The build instance lives for 5-15 minutes; it&rsquo;s a perfect Spot candidate (70-90% cheaper). If Spot capacity is interrupted, fall back to on-demand automatically. Don&rsquo;t use Spot for the post-bake smoke test &mdash; you want predictability there.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- =================================================== -->
+  <!-- 09 · TROUBLESHOOTING -->
+  <!-- =================================================== -->
+  <section id="troubleshooting">
+    <div class="eyebrow">09 · Troubleshooting</div>
+    <h2>Common errors &amp; how to fix them</h2>
+    <p class="lead">Real errors from real builds. Find your error message on the left; the cause &amp; fix are on the right.</p>
+
+    <dl class="deflist">
+      <dt>UnauthorizedOperation: You are not authorized to perform: ec2:RunInstances</dt>
+      <dd><strong>Cause:</strong> The role running Packer is missing <code>ec2:RunInstances</code>, or (more often) missing <code>iam:PassRole</code> on the instance profile. <strong>Fix:</strong> use the policy in section 00.4 verbatim; double-check the instance profile ARN in the <code>iam:PassRole</code> resource matches what Packer is trying to pass.</dd>
+
+      <dt>InvalidAMIID.NotFound: The image id '[ami-xxx]' does not exist</dt>
+      <dd><strong>Cause:</strong> Region mismatch &mdash; an AMI from <code>us-east-1</code> doesn&rsquo;t exist in <code>us-west-2</code>. <strong>Fix:</strong> verify <code>AWS_REGION</code>, Packer&rsquo;s <code>region</code> field, and the source AMI&rsquo;s region all agree. If you need the AMI in multiple regions, use <code>aws ec2 copy-image</code> or Packer&rsquo;s <code>ami_regions</code>.</dd>
+
+      <dt>Timeout waiting for SSH</dt>
+      <dd><strong>Cause:</strong> one of: security group has no inbound 22 from runner IP, subnet has no route to internet (so no public IP gets assigned), wrong key pair, or instance is in a private subnet and you set <code>associate_public_ip_address = false</code>. <strong>Fix:</strong> first try <code>ssh_interface = "session_manager"</code> in Packer &mdash; it bypasses SSH entirely and just needs <code>AmazonSSMManagedInstanceCore</code> on the instance profile.</dd>
+
+      <dt>source_ami_filter returned no results</dt>
+      <dd><strong>Cause:</strong> wrong owner ID, wrong AMI name pattern, or no matching AMI in this region. <strong>Fix:</strong> Test the filter with <code>aws ec2 describe-images --owners amazon --filters "Name=name,Values=al2023-ami-*-x86_64" --query 'Images[*].Name' --output text | tr '\t' '\n' | sort | tail</code>. Confirm at least one row comes back before retrying Packer.</dd>
+
+      <dt>Packer hangs at "Provisioning with shell script"</dt>
+      <dd><strong>Cause:</strong> the provisioning script is waiting for user input. <code>dnf install java</code> (without <code>-y</code>) prompts for confirmation, hangs forever. <strong>Fix:</strong> always pass <code>-y</code> to dnf/yum/apt; always use <code>set -euo pipefail</code> at the top of every shell script so failures stop immediately rather than hanging.</dd>
+
+      <dt>KMS: not authorized to perform: kms:CreateGrant</dt>
+      <dd><strong>Cause:</strong> EBS encryption uses a customer-managed KMS key, but the Packer role lacks permission on that key. <strong>Fix:</strong> add the Packer role as a key user in the KMS key&rsquo;s <em>key policy</em> (not just IAM). Required actions: <code>Encrypt</code>, <code>Decrypt</code>, <code>ReEncrypt*</code>, <code>GenerateDataKey*</code>, <code>DescribeKey</code>, <code>CreateGrant</code>.</dd>
+
+      <dt>SNS topic does not exist (or you do not have access to perform sns:Publish)</dt>
+      <dd><strong>Cause:</strong> the topic ARN is wrong (region or account portion), or the publish role lacks <code>sns:Publish</code> on that specific ARN. <strong>Fix:</strong> verify with <code>aws sns list-topics --region us-east-1</code> and recheck the topic ARN region matches your CLI region.</dd>
+
+      <dt>SQS queue receives no messages, even though SNS publish succeeded</dt>
+      <dd><strong>Cause:</strong> the subscription isn&rsquo;t confirmed, or the queue policy doesn&rsquo;t allow SNS to send to it. <strong>Fix:</strong> verify with <code>aws sns list-subscriptions-by-topic --topic-arn $ARN</code> &mdash; status must be <code>Confirmed</code> (not <code>PendingConfirmation</code>). Confirm the SQS queue policy has the <code>aws:SourceArn</code> condition from section 04.</dd>
+
+      <dt>Build instance terminated unexpectedly during build</dt>
+      <dd><strong>Cause:</strong> you used Spot capacity and AWS reclaimed it, or someone set <code>InstanceInitiatedShutdownBehavior=terminate</code> with a <code>shutdown</code> in the script. <strong>Fix:</strong> for Spot, use Packer&rsquo;s <code>spot_price = "auto"</code> with on-demand fallback. Never call <code>shutdown</code> inside provisioning &mdash; Packer handles termination.</dd>
+
+      <dt>Image creation timed out after 1800 seconds</dt>
+      <dd><strong>Cause:</strong> snapshotting a large root volume (especially with lots of small files) can exceed Packer&rsquo;s default timeout. <strong>Fix:</strong> set <code>aws_polling { delay_seconds = 30, max_attempts = 200 }</code> in the source block. Also: clean up before baking (<code>dnf clean all</code>, remove <code>/tmp/*</code>, drop bash history) to shrink the snapshot.</dd>
+
+      <dt>Could not assume role with web identity (GitLab CI)</dt>
+      <dd><strong>Cause:</strong> trust policy on the OIDC role doesn&rsquo;t match the actual subject in the JWT. <strong>Fix:</strong> in a GitLab job, run <code>echo $GITLAB_OIDC_TOKEN | cut -d. -f2 | base64 -d | jq</code> and compare the <code>sub</code> claim to the trust policy condition. Common gotcha: trust policy uses <code>StringEquals</code> but the sub uses a different format (branch vs MR vs tag).</dd>
+
+      <dt>Packer plugin "amazon" not found</dt>
+      <dd><strong>Cause:</strong> ran <code>packer build</code> without first running <code>packer init</code>. <strong>Fix:</strong> always <code>packer init template.pkr.hcl</code> in CI before <code>packer build</code>. Cache the <code>~/.packer.d/plugins</code> directory to skip re-downloads.</dd>
+    </dl>
+
+    <div class="callout"><strong>Still stuck?</strong> Run Packer with <code>PACKER_LOG=1 packer build ...</code> for a verbose trace, and pipe to a file: <code>2&gt;&amp;1 | tee packer-debug.log</code>. The relevant error is usually 50-100 lines above the final failure message.</div>
+  </section>
+
+  <!-- =================================================== -->
+  <!-- 10 · REFERENCES -->
+  <!-- =================================================== -->
   <section id="references">
-    <div class="eyebrow">06 · References</div>
+    <div class="eyebrow">10 · References</div>
     <h2>Official documentation</h2>
     <p class="lead">Authoritative sources for every tool and service in this tutorial.</p>
 
     <div class="refs">
       <a class="ref-link" href="https://developer.hashicorp.com/packer/integrations/hashicorp/amazon" target="_blank" rel="noopener">
-        <span class="eyebrow">Packer</span>
-        <span class="ref-title">Amazon AMI builder reference</span>
-        <span class="ref-arrow">developer.hashicorp.com &rarr;</span>
+        <span class="eyebrow">Packer</span><span class="ref-title">Amazon AMI builder reference</span><span class="ref-arrow">developer.hashicorp.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://developer.hashicorp.com/packer/integrations/hashicorp/ansible" target="_blank" rel="noopener">
+        <span class="eyebrow">Packer</span><span class="ref-title">Ansible provisioner</span><span class="ref-arrow">developer.hashicorp.com &rarr;</span>
       </a>
       <a class="ref-link" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html" target="_blank" rel="noopener">
-        <span class="eyebrow">AWS EC2</span>
-        <span class="ref-title">Amazon Machine Images (AMI)</span>
-        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+        <span class="eyebrow">AWS EC2</span><span class="ref-title">Amazon Machine Images (AMI)</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
       </a>
       <a class="ref-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">
-        <span class="eyebrow">Terraform</span>
-        <span class="ref-title">AWS provider documentation</span>
-        <span class="ref-arrow">registry.terraform.io &rarr;</span>
+        <span class="eyebrow">Terraform</span><span class="ref-title">AWS provider documentation</span><span class="ref-arrow">registry.terraform.io &rarr;</span>
       </a>
       <a class="ref-link" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html" target="_blank" rel="noopener">
-        <span class="eyebrow">AWS</span>
-        <span class="ref-title">EC2 Image Builder user guide</span>
-        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+        <span class="eyebrow">AWS</span><span class="ref-title">EC2 Image Builder user guide</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/automation-walk.html" target="_blank" rel="noopener">
+        <span class="eyebrow">AWS SSM</span><span class="ref-title">Systems Manager Automation</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
       </a>
       <a class="ref-link" href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html" target="_blank" rel="noopener">
-        <span class="eyebrow">AWS</span>
-        <span class="ref-title">Amazon SNS developer guide</span>
-        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+        <span class="eyebrow">AWS</span><span class="ref-title">Amazon SNS developer guide</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
       </a>
       <a class="ref-link" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html" target="_blank" rel="noopener">
-        <span class="eyebrow">AWS</span>
-        <span class="ref-title">Amazon SQS developer guide</span>
-        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+        <span class="eyebrow">AWS</span><span class="ref-title">Amazon SQS developer guide</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
       </a>
       <a class="ref-link" href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html" target="_blank" rel="noopener">
-        <span class="eyebrow">Amazon Corretto</span>
-        <span class="ref-title">Corretto 21 (Java) user guide</span>
-        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+        <span class="eyebrow">Amazon Corretto</span><span class="ref-title">Corretto 21 (Java) user guide</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
       </a>
       <a class="ref-link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-public-parameters-ami.html" target="_blank" rel="noopener">
-        <span class="eyebrow">AWS SSM</span>
-        <span class="ref-title">Public AMI parameters</span>
-        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+        <span class="eyebrow">AWS SSM</span><span class="ref-title">Public AMI parameters</span><span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.gitlab.com/ee/ci/cloud_services/aws/" target="_blank" rel="noopener">
+        <span class="eyebrow">GitLab</span><span class="ref-title">OIDC with AWS</span><span class="ref-arrow">docs.gitlab.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.ansible.com/ansible/latest/collections/amazon/aws/index.html" target="_blank" rel="noopener">
+        <span class="eyebrow">Ansible</span><span class="ref-title">amazon.aws collection</span><span class="ref-arrow">docs.ansible.com &rarr;</span>
       </a>
     </div>
   </section>
@@ -1016,7 +1552,7 @@ aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --recei
 
 <footer>
   <div class="container">
-    <p>AWS AMI Factory tutorial &middot; IBM Carbon-inspired styling &middot; Replace account IDs, ARNs, regions, and security groups with your own values before running.</p>
+    <p>AWS AMI Factory tutorial &middot; IBM Carbon-inspired styling &middot; Replace account IDs, ARNs, regions, and security groups with your own values before running. Every code sample is illustrative &mdash; review against your security baseline before applying in production.</p>
   </div>
 </footer>
 
@@ -1024,7 +1560,7 @@ aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --recei
 <div class="modal-bg" id="modal-layer" onclick="if(event.target===this)closeModal()">
 
   <div class="modal-box" id="m-ami">
-    <div class="modal-head"><h3>What is an AMI?</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>What is an AMI?</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
       <p>AMI stands for <strong>Amazon Machine Image</strong>. It&rsquo;s a complete template of a server&rsquo;s disk: the operating system, system settings, and any software you installed.</p>
       <p>When you launch an EC2 instance (a virtual server), you must tell AWS which AMI to start from. Think of the AMI as the &ldquo;starting save file&rdquo; for a server.</p>
@@ -1034,7 +1570,7 @@ aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --recei
   </div>
 
   <div class="modal-box" id="m-golden">
-    <div class="modal-head"><h3>Why &ldquo;golden image&rdquo;?</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>Why &ldquo;golden image&rdquo;?</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
       <p>A <strong>golden image</strong> is your one official, approved, tested base that everyone builds from. The name comes from manufacturing: the &ldquo;golden master&rdquo; copy that everything else is stamped from.</p>
       <p>Because security patches and approved software live in the golden image, every team automatically inherits them. Update the golden image once, and the fix flows everywhere.</p>
@@ -1042,33 +1578,34 @@ aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --recei
   </div>
 
   <div class="modal-box" id="m-services">
-    <div class="modal-head"><h3>AWS services glossary</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>AWS services glossary</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
       <ul>
         <li><strong>EC2</strong> &mdash; virtual servers in the cloud.</li>
         <li><strong>AMI</strong> &mdash; the saved image an EC2 server boots from.</li>
         <li><strong>SSM Parameter Store</strong> &mdash; where AWS stores values, including the ID of the latest AMI.</li>
         <li><strong>EventBridge</strong> &mdash; listens for events and triggers actions.</li>
-        <li><strong>SNS</strong> &mdash; sends one message out to many subscribers (a megaphone).</li>
-        <li><strong>SQS</strong> &mdash; a queue that holds messages until a worker reads them (a mailbox).</li>
+        <li><strong>SNS</strong> &mdash; sends one message out to many subscribers (megaphone).</li>
+        <li><strong>SQS</strong> &mdash; a queue that holds messages until a worker reads them (mailbox).</li>
         <li><strong>Lambda</strong> &mdash; runs small bits of code with no server to manage.</li>
         <li><strong>IAM</strong> &mdash; controls who and what is allowed to do what.</li>
+        <li><strong>OIDC</strong> &mdash; OpenID Connect, lets external systems (GitLab, GitHub) authenticate to AWS without static credentials.</li>
       </ul>
     </div>
   </div>
 
   <div class="modal-box" id="m-trigger">
-    <div class="modal-head"><h3>How the trigger works</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>How the trigger works</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
       <p>AWS stores the ID of the newest Amazon Linux AMI in <strong>SSM Parameter Store</strong>. When AWS releases a new one, that stored value changes.</p>
       <p><strong>EventBridge</strong> watches for that exact change and automatically starts your build &mdash; no human needed.</p>
-      <p>AWS also publishes notifications to public <strong>SNS topics</strong> for AMI updates, which you can subscribe to as an alternative trigger.</p>
+      <p>AWS also publishes notifications to public <strong>SNS topics</strong> for AMI updates.</p>
       <p><a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-public-parameters-ami.html" target="_blank" rel="noopener">SSM public AMI parameters &rarr;</a></p>
     </div>
   </div>
 
   <div class="modal-box" id="m-corretto">
-    <div class="modal-head"><h3>What is Amazon Corretto?</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>What is Amazon Corretto?</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
       <p><strong>Corretto</strong> is Amazon&rsquo;s free, production-ready build of Java (OpenJDK). Corretto 21 gives you Java 21 with long-term security updates from AWS.</p>
       <p>One command installs it: <code>dnf install java-21-amazon-corretto-devel</code>.</p>
@@ -1077,18 +1614,17 @@ aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --recei
   </div>
 
   <div class="modal-box" id="m-snssqs">
-    <div class="modal-head"><h3>SNS vs SQS</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>SNS vs SQS</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
-      <p><strong>SNS &mdash; megaphone (push).</strong> You publish once; SNS instantly pushes a copy to every subscriber. Great for &ldquo;tell everyone something happened.&rdquo;</p>
+      <p><strong>SNS &mdash; megaphone (push).</strong> You publish once; SNS instantly pushes a copy to every subscriber.</p>
       <p><strong>SQS &mdash; mailbox (pull).</strong> Messages sit safely in a queue until a worker is ready to pick them up and process them one at a time.</p>
-      <p>The pattern used here is <strong>SNS &rarr; SQS fan-out</strong>: SNS broadcasts the event, and each consuming team has its own SQS queue subscribed to it, so no one misses or blocks anyone else.</p>
+      <p>The pattern used here is <strong>SNS &rarr; SQS fan-out</strong>: SNS broadcasts the event; each consuming team has its own SQS queue subscribed to it.</p>
     </div>
   </div>
 
   <div class="modal-box" id="m-packer">
-    <div class="modal-head"><h3>Install Packer</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>Install Packer</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
-      <p>Packer is a single free binary from HashiCorp.</p>
 <pre><code><span class="cmt"># macOS</span>
 brew install packer
 
@@ -1102,10 +1638,9 @@ sudo dnf install -y packer</code></pre>
   </div>
 
   <div class="modal-box" id="m-imagebuilder">
-    <div class="modal-head"><h3>EC2 Image Builder</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-head"><h3>EC2 Image Builder</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
-      <p><strong>EC2 Image Builder</strong> is AWS&rsquo;s own managed service for baking AMIs. Instead of running Packer yourself, AWS runs the build, tests, and distribution on a schedule or trigger.</p>
-      <p>Trade-off: less portable than Packer (AWS-only), but zero build infrastructure to maintain. You can define an Image Builder pipeline entirely in Terraform.</p>
+      <p><strong>EC2 Image Builder</strong> is AWS&rsquo;s own managed service for baking AMIs. Instead of running Packer yourself, AWS runs the build, tests, and distribution on a schedule or trigger. Less portable, zero infrastructure to maintain.</p>
       <p><a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html" target="_blank" rel="noopener">EC2 Image Builder docs &rarr;</a></p>
     </div>
   </div>
@@ -1113,7 +1648,6 @@ sudo dnf install -y packer</code></pre>
 </div>
 
 <script>
-  // Font size control
   var fs = 16;
   function changeFont(d) {
     fs = Math.min(36, Math.max(14, fs + d));
@@ -1121,15 +1655,25 @@ sudo dnf install -y packer</code></pre>
     document.getElementById('fontDisplay').textContent = fs + 'px';
   }
 
-  // Tabs
   function switchTab(id, btn) {
-    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); });
-    document.getElementById('tab-' + id).classList.add('active');
-    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+    var pane = document.getElementById('tab-' + id);
+    var siblings = pane.parentNode.querySelectorAll('.tab-pane');
+    siblings.forEach(function(p){ p.classList.remove('active'); });
+    pane.classList.add('active');
+    var tabRow = btn.parentNode.querySelectorAll('.tab-btn');
+    tabRow.forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+  }
+  function switchTab2(id, btn) {
+    var pane = document.getElementById('tab2-' + id);
+    var siblings = pane.parentNode.querySelectorAll('.tab-pane');
+    siblings.forEach(function(p){ p.classList.remove('active'); });
+    pane.classList.add('active');
+    var tabRow = btn.parentNode.querySelectorAll('.tab-btn');
+    tabRow.forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
   }
 
-  // Modals
   function openModal(id) {
     document.querySelectorAll('.modal-box').forEach(function(m){ m.classList.remove('show'); });
     document.getElementById(id).classList.add('show');
@@ -1142,7 +1686,6 @@ sudo dnf install -y packer</code></pre>
   }
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
 
-  // Copy code
   function copyCode(btn) {
     var pre = btn.closest('.code-wrap').querySelector('pre');
     var text = pre.innerText;
@@ -1156,7 +1699,6 @@ sudo dnf install -y packer</code></pre>
     }
   }
 
-  // Active TOC link on scroll
   var sections = document.querySelectorAll('section[id]');
   var tocLinks = document.querySelectorAll('.toc-link');
   function updateToc() {
