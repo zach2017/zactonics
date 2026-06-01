@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS Data Infrastructure AMI + Ansible Support Guide</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            ibmBlue: '#0f62fe',
+            ibmBlueDark: '#0043ce',
+            ibmGray: '#f4f4f4',
+            ibmInk: '#161616',
+            ibmMuted: '#525252'
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(0,0,0,0.08)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --page-font-size: 18px; }
+    body { font-size: var(--page-font-size); }
+    .section-body { display: none; }
+    .section-body.open { display: block; }
+    .modal-backdrop { display: none; }
+    .modal-backdrop.open { display: flex; }
+    .focus-ring:focus { outline: 3px solid #0f62fe; outline-offset: 3px; }
+    .codeblock { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+
+<body class="bg-white text-ibmInk dark:bg-neutral-950 dark:text-neutral-100 transition-colors duration-300">
+  <header class="sticky top-0 z-40 border-b border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-950/95 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-widest text-ibmBlue font-bold">AWS Data Platform Infrastructure</p>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-black dark:text-white">AMI + Ansible + GitLab CI/CD Support Guide</h1>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="toggleTheme()" class="focus-ring rounded-lg bg-ibmBlue text-white px-4 py-2 font-semibold hover:bg-ibmBlueDark">Dark / Light</button>
+        <button onclick="changeFont(-2)" class="focus-ring rounded-lg border border-ibmBlue px-3 py-2 font-bold text-ibmBlue dark:text-blue-300">A−</button>
+        <button onclick="changeFont(2)" class="focus-ring rounded-lg border border-ibmBlue px-3 py-2 font-bold text-ibmBlue dark:text-blue-300">A+</button>
+        <span id="fontSizeLabel" class="text-sm text-ibmMuted dark:text-neutral-300">Font: 18px</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    <section class="grid lg:grid-cols-[280px_1fr] gap-6">
+      <aside class="lg:sticky lg:top-28 h-fit bg-ibmGray dark:bg-neutral-900 rounded-2xl p-5 shadow-soft">
+        <h2 class="font-extrabold text-xl mb-3">Table of Contents</h2>
+        <nav class="space-y-2 text-base">
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#goal">1. Platform Goal</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#architecture">2. Recommended Architecture</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#ami">3. AMI Strategy</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#ansible">4. Ansible Configuration</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#services">5. Data Services</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#clusters">6. Clustering, Failover & Fault Tolerance</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#load">7. Load Management & Scaling</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#options">8. Options Decision Matrix</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#cicd">9. GitLab CI/CD</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#backup">10. Backup & Restore</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#ssm">11. AWS SSM Operations</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#iac">12. Terraform vs CloudFormation</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#proscons">13. Pros & Cons</a>
+          <a class="block text-ibmBlue dark:text-blue-300 font-semibold hover:underline" href="#references">14. References</a>
+        </nav>
+      </aside>
+
+      <div class="space-y-6">
+        <section class="rounded-3xl p-6 md:p-10 bg-gradient-to-br from-white to-blue-50 dark:from-neutral-900 dark:to-neutral-950 border border-blue-100 dark:border-neutral-800 shadow-soft">
+          <p class="text-ibmBlue dark:text-blue-300 font-bold uppercase tracking-widest">2026-ready recommendation</p>
+          <h2 class="text-3xl md:text-5xl font-black mt-2 text-black dark:text-white">Build reusable AWS data infrastructure that data users can safely use.</h2>
+          <p class="mt-5 text-ibmMuted dark:text-neutral-300 leading-relaxed">
+            This page recommends a support model for Linux AMIs, custom golden images, service-specific AMIs, Ansible, GitLab CI/CD, AWS SSM, Terraform, CloudFormation, clustering, load management, failover, fault tolerance, and manual backup operations for Kafka, ZooKeeper, NiFi, PostgreSQL, OpenSearch, and ETL worker servers.
+          </p>
+          <div class="mt-6 flex flex-wrap gap-3">
+            <button onclick="openModal('promptModal')" class="focus-ring rounded-xl bg-ibmBlue px-5 py-3 text-white font-bold hover:bg-ibmBlueDark">View Clear Prompt</button>
+            <button onclick="expandAll()" class="focus-ring rounded-xl border border-ibmBlue px-5 py-3 text-ibmBlue dark:text-blue-300 font-bold">Expand All Sections</button>
+            <button onclick="collapseAll()" class="focus-ring rounded-xl border border-neutral-400 px-5 py-3 font-bold">Collapse All</button>
+          </div>
+        </section>
+
+        <article id="goal" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">1. Platform Goal</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body open px-5 pb-6 leading-relaxed">
+            <p>The goal is to provide approved infrastructure that data users can request and use without needing deep AWS administrator knowledge.</p>
+            <div class="grid md:grid-cols-2 gap-4 mt-4">
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">Data users should get</h3>
+                <ul class="list-disc pl-6 mt-2 space-y-1">
+                  <li>ETL worker servers</li>
+                  <li>NiFi development or production nodes</li>
+                  <li>Kafka topics and broker access</li>
+                  <li>PostgreSQL schemas or databases</li>
+                  <li>OpenSearch indexes and dashboards</li>
+                  <li>S3 landing, raw, processed, and archive buckets</li>
+                  <li>Backup restore support</li>
+                </ul>
+              </div>
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">Platform team should provide</h3>
+                <ul class="list-disc pl-6 mt-2 space-y-1">
+                  <li>Approved AMIs</li>
+                  <li>Terraform modules</li>
+                  <li>CloudFormation templates</li>
+                  <li>Ansible playbooks</li>
+                  <li>GitLab CI/CD templates</li>
+                  <li>AWS Systems Manager runbooks</li>
+                  <li>Clear backup and restore procedures</li>
+                </ul>
+              </div>
+            </div>
+            <button onclick="openModal('goalModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details</button>
+          </div>
+        </article>
+
+        <article id="architecture" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">2. Recommended Architecture</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6">
+            <div class="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
+              <svg viewBox="0 0 1100 380" class="min-w-[900px] w-full bg-white dark:bg-neutral-950" role="img" aria-label="AWS data platform architecture diagram">
+                <defs>
+                  <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L7,3 z" fill="#0f62fe"></path>
+                  </marker>
+                </defs>
+                <rect x="30" y="35" width="190" height="75" rx="14" fill="#edf5ff" stroke="#0f62fe"/>
+                <text x="125" y="67" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">Data User</text>
+                <text x="125" y="92" text-anchor="middle" font-size="14" fill="#525252">Request / Portal</text>
+
+                <rect x="285" y="35" width="205" height="75" rx="14" fill="#edf5ff" stroke="#0f62fe"/>
+                <text x="387" y="67" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">GitLab CI/CD</text>
+                <text x="387" y="92" text-anchor="middle" font-size="14" fill="#525252">OIDC + approvals</text>
+
+                <rect x="555" y="35" width="210" height="75" rx="14" fill="#edf5ff" stroke="#0f62fe"/>
+                <text x="660" y="67" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">IaC Deploy</text>
+                <text x="660" y="92" text-anchor="middle" font-size="14" fill="#525252">Terraform / CFN</text>
+
+                <rect x="830" y="35" width="220" height="75" rx="14" fill="#edf5ff" stroke="#0f62fe"/>
+                <text x="940" y="67" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">AWS Services</text>
+                <text x="940" y="92" text-anchor="middle" font-size="14" fill="#525252">EC2, S3, VPC, IAM</text>
+
+                <line x1="220" y1="72" x2="285" y2="72" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)"/>
+                <line x1="490" y1="72" x2="555" y2="72" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)"/>
+                <line x1="765" y1="72" x2="830" y2="72" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)"/>
+
+                <rect x="70" y="180" width="230" height="95" rx="14" fill="#f4f4f4" stroke="#8d8d8d"/>
+                <text x="185" y="214" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">AMI Pipeline</text>
+                <text x="185" y="240" text-anchor="middle" font-size="14" fill="#525252">AL2023 → Golden → Service</text>
+
+                <rect x="350" y="180" width="230" height="95" rx="14" fill="#f4f4f4" stroke="#8d8d8d"/>
+                <text x="465" y="214" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">Ansible Roles</text>
+                <text x="465" y="240" text-anchor="middle" font-size="14" fill="#525252">Kafka, NiFi, Postgres tools</text>
+
+                <rect x="630" y="180" width="230" height="95" rx="14" fill="#f4f4f4" stroke="#8d8d8d"/>
+                <text x="745" y="214" text-anchor="middle" font-size="18" font-weight="700" fill="#161616">SSM Operations</text>
+                <text x="745" y="240" text-anchor="middle" font-size="14" fill="#525252">Session, Run, Automation</text>
+
+                <rect x="350" y="300" width="230" height="55" rx="14" fill="#d0e2ff" stroke="#0f62fe"/>
+                <text x="465" y="334" text-anchor="middle" font-size="17" font-weight="800" fill="#161616">Backup + Restore</text>
+
+                <line x1="300" y1="226" x2="350" y2="226" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)"/>
+                <line x1="580" y1="226" x2="630" y2="226" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)"/>
+                <line x1="745" y1="275" x2="510" y2="300" stroke="#0f62fe" stroke-width="4" marker-end="url(#arrow)"/>
+              </svg>
+            </div>
+            <p class="mt-4 leading-relaxed">Recommended flow: user request → approval → GitLab pipeline → Terraform or CloudFormation → EC2 from approved AMI → Ansible/SSM configuration → monitored data service.</p>
+          </div>
+        </article>
+
+        <article id="ami" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">3. AMI Strategy: Base, Golden, Service, and Custom Images</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>AMI creation and lifecycle support must be a core capability. Do not treat AMIs as a one-time server copy. Treat them as versioned platform products.</p>
+            <div class="mt-4 grid md:grid-cols-4 gap-4">
+              <div class="rounded-xl p-4 bg-blue-50 dark:bg-neutral-800">
+                <h3 class="font-extrabold">Base AMI</h3>
+                <p>Amazon Linux 2023, patched, minimal baseline.</p>
+              </div>
+              <div class="rounded-xl p-4 bg-blue-50 dark:bg-neutral-800">
+                <h3 class="font-extrabold">Golden AMI</h3>
+                <p>Security, SSM, CloudWatch, standard users, hardening.</p>
+              </div>
+              <div class="rounded-xl p-4 bg-blue-50 dark:bg-neutral-800">
+                <h3 class="font-extrabold">Service AMI</h3>
+                <p>Kafka, ZooKeeper, NiFi, OpenSearch, PostgreSQL tools.</p>
+              </div>
+              <div class="rounded-xl p-4 bg-blue-50 dark:bg-neutral-800">
+                <h3 class="font-extrabold">Custom AMI</h3>
+                <p>Project-specific drivers, ETL tools, Java/Python packages.</p>
+              </div>
+            </div>
+
+            <h3 class="text-xl font-extrabold mt-6">Three-layer image model</h3>
+            <pre class="codeblock mt-3 rounded-xl bg-neutral-950 text-white p-4 text-sm">Layer 1: AWS Base AMI
+        Amazon Linux 2023
+
+Layer 2: Company Golden AMI
+        Security hardening
+        SSM Agent
+        CloudWatch Agent
+        Logging
+        Standard users/groups
+        Patch baseline
+
+Layer 3: Service AMI
+        Kafka
+        ZooKeeper
+        NiFi
+        PostgreSQL tools
+        OpenSearch
+        ETL workers</pre>
+
+            <h3 class="text-xl font-extrabold mt-6">AMI build process</h3>
+            <ol class="list-decimal pl-6 mt-2 space-y-1">
+              <li>Select latest approved Amazon Linux 2023 AMI.</li>
+              <li>Build with EC2 Image Builder or Packer.</li>
+              <li>Run Ansible roles for baseline and service setup.</li>
+              <li>Patch OS and packages.</li>
+              <li>Install SSM Agent, CloudWatch Agent, security tools, and backup helpers.</li>
+              <li>Run validation tests.</li>
+              <li>Create and tag AMI.</li>
+              <li>Scan image.</li>
+              <li>Promote only after approval.</li>
+              <li>Store latest approved AMI ID in SSM Parameter Store.</li>
+            </ol>
+
+            <button onclick="openModal('amiModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details about AMI lifecycle</button>
+          </div>
+        </article>
+
+        <article id="ansible" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">4. Ansible Configuration Model</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>Use Ansible for both image baking and post-launch configuration. Keep secrets and environment-specific values outside the AMI.</p>
+            <pre class="codeblock mt-4 rounded-xl bg-neutral-950 text-white p-4 text-sm">ansible/
+  roles/
+    base_linux/
+    security_hardening/
+    cloudwatch_agent/
+    ssm_agent/
+    disk_mounts/
+    kafka/
+    zookeeper/
+    nifi/
+    postgres_tools/
+    opensearch/
+    etl_worker/
+    backup_agent/</pre>
+            <h3 class="font-extrabold text-xl mt-5">Bake into AMI</h3>
+            <ul class="list-disc pl-6 mt-2 space-y-1">
+              <li>OS updates and standard packages</li>
+              <li>Java, Python, CLI tools</li>
+              <li>SSM and CloudWatch agents</li>
+              <li>Service binaries</li>
+              <li>Systemd templates</li>
+              <li>Directory and disk layout</li>
+            </ul>
+            <h3 class="font-extrabold text-xl mt-5">Configure at runtime</h3>
+            <ul class="list-disc pl-6 mt-2 space-y-1">
+              <li>Passwords, private keys, and certificates</li>
+              <li>Kafka broker IDs and cluster IDs</li>
+              <li>NiFi sensitive properties key</li>
+              <li>Database connection strings</li>
+              <li>S3 bucket names</li>
+              <li>OpenSearch seed hosts</li>
+            </ul>
+          </div>
+        </article>
+
+        <article id="services" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">5. Data Services to Support</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6">
+            <div class="overflow-x-auto">
+              <table class="w-full border-collapse text-left text-base">
+                <thead>
+                  <tr class="bg-ibmBlue text-white">
+                    <th class="p-3">Service</th>
+                    <th class="p-3">Best Practice</th>
+                    <th class="p-3">AMI Use</th>
+                    <th class="p-3">Managed Alternative</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  <tr><td class="p-3 font-bold">Kafka</td><td class="p-3">Use MSK when possible; self-manage only when required.</td><td class="p-3">Broker AMI with Java, Kafka, systemd, disk mounts.</td><td class="p-3">Amazon MSK</td></tr>
+                  <tr><td class="p-3 font-bold">ZooKeeper</td><td class="p-3">Support for legacy only; prefer newer Kafka KRaft patterns.</td><td class="p-3">ZooKeeper AMI with myid scripts and snapshots.</td><td class="p-3">MSK-managed patterns</td></tr>
+                  <tr><td class="p-3 font-bold">NiFi</td><td class="p-3">Externalize secrets, repos, certificates, and flow registry.</td><td class="p-3">NiFi AMI with Java, service user, repo mount layout.</td><td class="p-3">EKS/ECS deployment if containerized</td></tr>
+                  <tr><td class="p-3 font-bold">PostgreSQL</td><td class="p-3">Prefer RDS for production databases.</td><td class="p-3">Use AMI for tools, migration, dev, or self-managed edge cases.</td><td class="p-3">Amazon RDS / Aurora PostgreSQL</td></tr>
+                  <tr><td class="p-3 font-bold">OpenSearch</td><td class="p-3">Prefer managed OpenSearch unless deep EC2 control is needed.</td><td class="p-3">OpenSearch AMI with data volume, JVM tuning, snapshot config.</td><td class="p-3">Amazon OpenSearch Service</td></tr>
+                  <tr><td class="p-3 font-bold">ETL Worker</td><td class="p-3">Give data users a standard compute workspace.</td><td class="p-3">Python, Java, AWS CLI, JDBC, Kafka tools, psql, jq, yq.</td><td class="p-3">Glue, EMR, Batch, ECS, EKS</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+
+        <article id="clusters" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">6. Clustering, Failover, and Fault Tolerance</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>
+              Data infrastructure should be designed for node failure, Availability Zone failure, software failure, bad deployments, storage limits, and network interruptions.
+              The support team should define <strong>RTO</strong>, how quickly the service must recover, and <strong>RPO</strong>, how much data loss is acceptable.
+            </p>
+
+            <div class="grid md:grid-cols-3 gap-4 mt-4">
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">High Availability</h3>
+                <p>Run across at least two or three Availability Zones, avoid single EC2 nodes for critical services, and use health checks.</p>
+              </div>
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">Fault Tolerance</h3>
+                <p>Design so one node, disk, broker, processor, or AZ can fail without taking down the platform.</p>
+              </div>
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">Failover</h3>
+                <p>Use automated failover when available, and documented manual failover when full automation is too risky.</p>
+              </div>
+            </div>
+
+            <h3 class="text-xl font-extrabold mt-6">Recommended AWS Cluster Pattern</h3>
+            <pre class="codeblock mt-3 rounded-xl bg-neutral-950 text-white p-4 text-sm">VPC
+  Public subnets:
+    - Load balancers only, if public access is required
+
+  Private app/data subnets across 3 AZs:
+    - Kafka brokers or MSK brokers
+    - NiFi cluster nodes
+    - OpenSearch nodes or managed OpenSearch
+    - ETL worker Auto Scaling group
+    - RDS / Aurora Multi-AZ database
+
+  Shared services:
+    - Route 53 private DNS
+    - AWS Systems Manager
+    - CloudWatch logs and metrics
+    - AWS Backup
+    - Secrets Manager / Parameter Store
+    - S3 backup and archive buckets</pre>
+
+            <h3 class="text-xl font-extrabold mt-6">Service-by-Service Fault Tolerance Guidance</h3>
+            <div class="overflow-x-auto mt-3">
+              <table class="w-full border-collapse text-left text-base">
+                <thead>
+                  <tr class="bg-ibmBlue text-white">
+                    <th class="p-3">Service</th>
+                    <th class="p-3">Cluster Recommendation</th>
+                    <th class="p-3">Failover / Tolerance Notes</th>
+                    <th class="p-3">Team Warning</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  <tr>
+                    <td class="p-3 font-bold">Kafka</td>
+                    <td class="p-3">Minimum 3 brokers across 3 AZs for production. Use replication factor 3 for important topics.</td>
+                    <td class="p-3">Partition leadership moves if a broker fails. Monitor under-replicated partitions and consumer lag.</td>
+                    <td class="p-3">Do not run critical Kafka on one EC2 instance. Bad partition design can overload one broker.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">ZooKeeper</td>
+                    <td class="p-3">Use odd-number quorum, usually 3 or 5 nodes.</td>
+                    <td class="p-3">Cluster remains healthy if quorum survives. Three nodes can lose one node; five nodes can lose two.</td>
+                    <td class="p-3">Avoid 2-node ZooKeeper. Split-brain and quorum loss are common design risks.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">NiFi</td>
+                    <td class="p-3">Use 3+ NiFi nodes behind an internal load balancer. Use NiFi Registry for versioned flows.</td>
+                    <td class="p-3">Cluster Coordinator and Primary Node roles can move. Repositories need careful disk planning.</td>
+                    <td class="p-3">Content, FlowFile, and Provenance repositories can fill disks quickly and stop flows.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">PostgreSQL</td>
+                    <td class="p-3">Prefer RDS Multi-AZ or Aurora PostgreSQL for production.</td>
+                    <td class="p-3">Managed failover reduces operational burden. Use read replicas for read scaling, not as the only backup.</td>
+                    <td class="p-3">Self-managed PostgreSQL failover is complex and needs tested runbooks.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">OpenSearch</td>
+                    <td class="p-3">Prefer managed OpenSearch with dedicated masters and data nodes across AZs.</td>
+                    <td class="p-3">Use replicas, shard allocation awareness, snapshots, and health checks.</td>
+                    <td class="p-3">Too many shards or undersized JVM memory causes instability.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">ETL Workers</td>
+                    <td class="p-3">Use Auto Scaling groups, ECS, EKS, AWS Batch, Glue, or EMR depending on workload.</td>
+                    <td class="p-3">Workers should be replaceable. Store state in S3, databases, queues, or managed services.</td>
+                    <td class="p-3">Do not keep important state only on worker local disks.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <button onclick="openModal('clusterModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details about HA and failover</button>
+          </div>
+        </article>
+
+        <article id="load" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">7. Load Management, Scaling, and Capacity Planning</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>
+              Load management means keeping data services stable when usage grows, jobs spike, or one component slows down.
+              The team should monitor throughput, latency, queue depth, disk usage, CPU, memory, network, and error rates.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-4 mt-4">
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">Horizontal scaling</h3>
+                <p>Add nodes, brokers, workers, or replicas. Best for Kafka, NiFi clusters, ETL workers, OpenSearch data nodes, ECS/EKS jobs, and stateless services.</p>
+              </div>
+              <div class="rounded-xl bg-blue-50 dark:bg-neutral-800 p-4">
+                <h3 class="font-extrabold text-xl">Vertical scaling</h3>
+                <p>Use larger instances, more memory, faster disks, or better network. Useful for PostgreSQL, OpenSearch memory pressure, and heavy NiFi repositories.</p>
+              </div>
+            </div>
+
+            <h3 class="text-xl font-extrabold mt-6">Load Balancer Options</h3>
+            <div class="overflow-x-auto mt-3">
+              <table class="w-full border-collapse text-left text-base">
+                <thead>
+                  <tr class="bg-ibmBlue text-white">
+                    <th class="p-3">Option</th>
+                    <th class="p-3">Best For</th>
+                    <th class="p-3">Pros</th>
+                    <th class="p-3">Cons</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  <tr>
+                    <td class="p-3 font-bold">Application Load Balancer</td>
+                    <td class="p-3">NiFi UI/API, internal web apps, REST services.</td>
+                    <td class="p-3">Layer 7 routing, TLS termination, path routing, health checks.</td>
+                    <td class="p-3">Not ideal for all raw TCP workloads.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Network Load Balancer</td>
+                    <td class="p-3">High-throughput TCP services and stable IP needs.</td>
+                    <td class="p-3">Fast, scalable, static IP support, TCP/TLS/UDP.</td>
+                    <td class="p-3">Less application-aware than ALB.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Route 53 DNS</td>
+                    <td class="p-3">Private service discovery and failover records.</td>
+                    <td class="p-3">Simple, supports health checks and weighted routing.</td>
+                    <td class="p-3">DNS caching can delay failover.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Service Mesh</td>
+                    <td class="p-3">EKS/ECS microservices with advanced traffic control.</td>
+                    <td class="p-3">mTLS, retries, traffic splitting, observability.</td>
+                    <td class="p-3">Adds operational complexity.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 class="text-xl font-extrabold mt-6">Important Capacity Metrics</h3>
+            <div class="grid md:grid-cols-3 gap-4 mt-3">
+              <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+                <h4 class="font-extrabold">Kafka</h4>
+                <p>Consumer lag, broker disk usage, network in/out, request latency, under-replicated partitions.</p>
+              </div>
+              <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+                <h4 class="font-extrabold">NiFi</h4>
+                <p>Queued FlowFiles, back pressure, JVM heap, repository disk usage, processor errors, provenance growth.</p>
+              </div>
+              <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+                <h4 class="font-extrabold">PostgreSQL</h4>
+                <p>Connections, locks, replication lag, IOPS, slow queries, storage growth, CPU, memory.</p>
+              </div>
+              <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+                <h4 class="font-extrabold">OpenSearch</h4>
+                <p>Cluster health, shard count, JVM pressure, indexing latency, search latency, disk watermarks.</p>
+              </div>
+              <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+                <h4 class="font-extrabold">ETL Workers</h4>
+                <p>Job duration, failure rate, retries, CPU, memory, temporary disk usage, queue depth.</p>
+              </div>
+              <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+                <h4 class="font-extrabold">Network</h4>
+                <p>Cross-AZ traffic, dropped packets, NAT gateway saturation, endpoint errors, TLS handshake failures.</p>
+              </div>
+            </div>
+
+            <button onclick="openModal('loadModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details about load management</button>
+          </div>
+        </article>
+
+        <article id="options" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">8. Options Decision Matrix for the Team</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>
+              The team should understand that there is no single perfect option. The right design depends on control, cost, compliance, operational skill, uptime needs, and how fast data users need environments.
+            </p>
+
+            <div class="overflow-x-auto mt-4">
+              <table class="w-full border-collapse text-left text-base">
+                <thead>
+                  <tr class="bg-ibmBlue text-white">
+                    <th class="p-3">Need</th>
+                    <th class="p-3">Best Option</th>
+                    <th class="p-3">Why</th>
+                    <th class="p-3">Tradeoff</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  <tr>
+                    <td class="p-3 font-bold">Fast reusable EC2 servers</td>
+                    <td class="p-3">Golden AMIs + Terraform</td>
+                    <td class="p-3">Fast, repeatable, controlled.</td>
+                    <td class="p-3">Requires AMI lifecycle management.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Least operational burden for Kafka</td>
+                    <td class="p-3">Amazon MSK</td>
+                    <td class="p-3">AWS manages brokers, patching options, monitoring integration.</td>
+                    <td class="p-3">Less low-level control than EC2.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Production PostgreSQL</td>
+                    <td class="p-3">RDS or Aurora PostgreSQL</td>
+                    <td class="p-3">Backups, Multi-AZ, patching, monitoring, failover support.</td>
+                    <td class="p-3">Some OS-level access is not available.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Search platform</td>
+                    <td class="p-3">Amazon OpenSearch Service</td>
+                    <td class="p-3">Managed cluster features and AWS integration.</td>
+                    <td class="p-3">Version, plugin, and cluster-control limits may apply.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">NiFi with exact custom control</td>
+                    <td class="p-3">EC2 cluster with AMIs and Ansible</td>
+                    <td class="p-3">Full configuration control and direct file system control.</td>
+                    <td class="p-3">Team must own patching, scaling, HA, and recovery.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Elastic ETL compute</td>
+                    <td class="p-3">ECS, EKS, AWS Batch, Glue, or EMR</td>
+                    <td class="p-3">Better fit for bursty or job-based workloads.</td>
+                    <td class="p-3">Requires container/job orchestration skills.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-bold">Simple manual operations</td>
+                    <td class="p-3">AWS SSM Run Command and Automation</td>
+                    <td class="p-3">Repeatable, auditable, no SSH needed.</td>
+                    <td class="p-3">Runbooks must be tested and permission-controlled.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 class="text-xl font-extrabold mt-6">Simple Team Rule</h3>
+            <p class="mt-2">
+              Use <strong>managed services</strong> when the business needs reliability faster than deep customization.
+              Use <strong>EC2 with custom AMIs</strong> when the team needs full control, special software, custom agents, unusual networking, or deep file-system access.
+              Use <strong>containers</strong> when workloads are portable, job-based, or need fast scaling.
+            </p>
+
+            <button onclick="openModal('optionsModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details about choosing options</button>
+          </div>
+        </article>
+
+        <article id="cicd" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">9. GitLab CI/CD Pipeline</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>Use GitLab protected branches, merge approvals, IaC scanning, Ansible linting, and OIDC federation to AWS. Avoid long-lived AWS access keys in GitLab variables.</p>
+            <pre class="codeblock mt-4 rounded-xl bg-neutral-950 text-white p-4 text-sm">stages:
+  - validate
+  - security_scan
+  - build_ami
+  - test_ami
+  - publish_ami
+  - deploy_dev
+  - deploy_stage
+  - deploy_prod
+
+recommended_controls:
+  - terraform fmt and validate
+  - ansible-lint
+  - static IaC scan
+  - AMI vulnerability scan
+  - boot test instance
+  - confirm SSM connectivity
+  - confirm CloudWatch logs
+  - publish AMI ID to SSM Parameter Store</pre>
+            <button onclick="openModal('gitlabModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details about secure GitLab to AWS access</button>
+          </div>
+        </article>
+
+        <article id="backup" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">10. Backup and Restore Strategy</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>Backups must be automated, monitored, encrypted, tagged, and tested. Manual backup procedures should exist for emergency and training purposes.</p>
+            <div class="grid md:grid-cols-2 gap-4 mt-4">
+              <div class="rounded-xl p-4 bg-blue-50 dark:bg-neutral-800">
+                <h3 class="font-extrabold">Automated</h3>
+                <ul class="list-disc pl-6 mt-2">
+                  <li>AWS Backup plans</li>
+                  <li>EBS snapshots</li>
+                  <li>RDS automated backups</li>
+                  <li>OpenSearch snapshots</li>
+                  <li>S3 versioning and lifecycle rules</li>
+                  <li>Cross-account or cross-region copies</li>
+                </ul>
+              </div>
+              <div class="rounded-xl p-4 bg-blue-50 dark:bg-neutral-800">
+                <h3 class="font-extrabold">Manual / SSM</h3>
+                <ul class="list-disc pl-6 mt-2">
+                  <li>SSM Run Command backup scripts</li>
+                  <li>SSM Automation restore runbooks</li>
+                  <li>Manual EBS snapshot from console</li>
+                  <li>Manual pg_dump or pg_restore</li>
+                  <li>NiFi flow/config export</li>
+                  <li>Kafka config/topic metadata export</li>
+                </ul>
+              </div>
+            </div>
+            <button onclick="openModal('backupModal')" class="mt-4 text-ibmBlue dark:text-blue-300 font-bold underline">More details about manual backup</button>
+          </div>
+        </article>
+
+        <article id="ssm" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">11. AWS Systems Manager Operations</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>AWS Systems Manager should be the main operations control plane for EC2-based data infrastructure.</p>
+            <ul class="list-disc pl-6 mt-3 space-y-1">
+              <li><strong>Session Manager:</strong> shell access without public SSH.</li>
+              <li><strong>Run Command:</strong> execute approved scripts on nodes.</li>
+              <li><strong>Automation:</strong> guided AMI creation, backups, restores, and patching.</li>
+              <li><strong>Patch Manager:</strong> patch baseline and maintenance windows.</li>
+              <li><strong>Parameter Store:</strong> AMI IDs, non-secret config, environment values.</li>
+              <li><strong>Inventory:</strong> package and system visibility.</li>
+              <li><strong>State Manager:</strong> desired-state enforcement for agents and configs.</li>
+            </ul>
+            <pre class="codeblock mt-4 rounded-xl bg-neutral-950 text-white p-4 text-sm">/data-platform/amis/base/latest
+/data-platform/amis/golden/latest
+/data-platform/amis/kafka/latest
+/data-platform/amis/zookeeper/latest
+/data-platform/amis/nifi/latest
+/data-platform/amis/postgres-tools/latest
+/data-platform/amis/opensearch/latest
+/data-platform/amis/etl-worker/latest</pre>
+          </div>
+        </article>
+
+        <article id="iac" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">12. Terraform and CloudFormation</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6 leading-relaxed">
+            <p>Use Terraform modules or CloudFormation stacks to consume approved AMIs from SSM Parameter Store. Do not hardcode AMI IDs in production templates.</p>
+            <div class="grid md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <h3 class="font-extrabold text-xl">Terraform example</h3>
+                <pre class="codeblock mt-2 rounded-xl bg-neutral-950 text-white p-4 text-sm">data "aws_ssm_parameter" "etl_worker_ami" {
+  name = "/data-platform/amis/etl-worker/latest"
+}
+
+resource "aws_instance" "etl_worker" {
+  ami           = data.aws_ssm_parameter.etl_worker_ami.value
+  instance_type = "t3.large"
+}</pre>
+              </div>
+              <div>
+                <h3 class="font-extrabold text-xl">CloudFormation example</h3>
+                <pre class="codeblock mt-2 rounded-xl bg-neutral-950 text-white p-4 text-sm">Parameters:
+  EtlWorkerAmiId:
+    Type: AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;
+    Default: /data-platform/amis/etl-worker/latest
+
+Resources:
+  Worker:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref EtlWorkerAmiId
+      InstanceType: t3.large</pre>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="proscons" class="guide-section rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft">
+          <button onclick="toggleSection(this)" class="section-toggle focus-ring w-full text-left p-5 flex items-center justify-between gap-4">
+            <span class="text-2xl font-extrabold">13. Pros and Cons</span>
+            <span class="text-ibmBlue dark:text-blue-300 font-black">+</span>
+          </button>
+          <div class="section-body px-5 pb-6">
+            <div class="overflow-x-auto">
+              <table class="w-full border-collapse text-left text-base">
+                <thead>
+                  <tr class="bg-ibmBlue text-white">
+                    <th class="p-3">Option</th>
+                    <th class="p-3">Pros</th>
+                    <th class="p-3">Cons</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  <tr><td class="p-3 font-bold">Custom AMIs</td><td class="p-3">Fast launch, consistent builds, easier support.</td><td class="p-3">Must manage patching, scanning, cleanup, and approvals.</td></tr>
+                  <tr><td class="p-3 font-bold">Ansible</td><td class="p-3">Flexible, readable, reusable for bake and runtime.</td><td class="p-3">Needs discipline, testing, and inventory control.</td></tr>
+                  <tr><td class="p-3 font-bold">Terraform</td><td class="p-3">Strong multi-cloud/module workflow, popular with platform teams.</td><td class="p-3">State management and provider version discipline required.</td></tr>
+                  <tr><td class="p-3 font-bold">CloudFormation</td><td class="p-3">AWS-native, no separate state file, StackSets support.</td><td class="p-3">Can be verbose and less portable.</td></tr>
+                  <tr><td class="p-3 font-bold">Manual Console</td><td class="p-3">Good for emergency and training.</td><td class="p-3">Easy to drift from standard, harder to audit.</td></tr>
+                  <tr><td class="p-3 font-bold">Managed AWS Services</td><td class="p-3">Less operational burden, better AWS integration.</td><td class="p-3">Less low-level control, possible service-specific limits.</td></tr>
+                  <tr><td class="p-3 font-bold">Multi-AZ Clusters</td><td class="p-3">Improves availability and protects against AZ failure.</td><td class="p-3">Costs more and may add cross-AZ traffic charges and latency.</td></tr>
+                  <tr><td class="p-3 font-bold">Auto Scaling</td><td class="p-3">Handles load changes and replaces failed nodes.</td><td class="p-3">Stateful systems need special care; scaling does not fix bad partitioning or slow queries.</td></tr>
+                  <tr><td class="p-3 font-bold">Load Balancers</td><td class="p-3">Provide health checks, stable endpoints, and traffic distribution.</td><td class="p-3">Not all stateful data services work well behind every load balancer type.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+        <article id="references" class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-soft p-5">
+          <h2 class="text-2xl font-extrabold">14. Official Reference Links</h2>
+          <p class="mt-2 text-ibmMuted dark:text-neutral-300">Use official documentation as the source of truth before production implementation.</p>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-base">
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/linux/al2023/ug/ec2.html"><strong>Amazon Linux 2023 on EC2</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html"><strong>What is EC2 Image Builder?</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/ami-image-pipelines.html"><strong>Create AMI Image Pipelines</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html"><strong>AWS Systems Manager Parameter Store</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-param-runcommand.html"><strong>Parameter Store with Run Command</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.gitlab.com/ci/cloud_services/aws/"><strong>GitLab CI/CD with AWS OIDC</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.gitlab.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html"><strong>AWS CloudFormation User Guide</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+            <a class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 hover:border-ibmBlue" target="_blank" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html"><strong>AWS Backup Developer Guide</strong><br><span class="text-ibmBlue dark:text-blue-300">docs.aws.amazon.com</span></a>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-neutral-200 dark:border-neutral-800 mt-8">
+    <div class="max-w-7xl mx-auto px-4 py-6 text-sm text-ibmMuted dark:text-neutral-400">
+      Built as a single-page AWS infrastructure support guide. Review all IAM, security, cost, and compliance decisions with your cloud governance team before production use.
+    </div>
+  </footer>
+
+  <!-- Modals -->
+  <div id="promptModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-3xl w-full p-6 shadow-soft">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">Clear Prompt Used</h2>
+        <button onclick="closeModal('promptModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <p class="mt-4 leading-relaxed">Act as a senior AWS Solutions Architect and Data Platform Operations expert. Create a 2026-ready infrastructure support recommendation and best-practices guide for a Data ETL and Data Services team running Kafka, ZooKeeper, Apache NiFi, PostgreSQL, OpenSearch, and supporting services on AWS. Focus on Amazon Linux 2023 base AMIs, custom golden AMIs, service AMIs, Ansible, GitLab CI/CD, AWS SSM, Terraform, CloudFormation, manual backup, restore processes, pros, cons, and making infrastructure usable for data users.</p>
+    </div>
+  </div>
+
+  <div id="goalModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-3xl w-full p-6 shadow-soft">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">Data User Platform Mindset</h2>
+        <button onclick="closeModal('goalModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <p class="mt-4 leading-relaxed">The infrastructure should feel like a product. Data users should not need to know every EC2, IAM, VPC, or backup detail. The support team should expose safe choices, approved templates, documented runbooks, and clear service-level expectations.</p>
+    </div>
+  </div>
+
+  <div id="amiModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-3xl w-full p-6 shadow-soft">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">AMI Lifecycle Details</h2>
+        <button onclick="closeModal('amiModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <ul class="list-disc pl-6 mt-4 space-y-2">
+        <li>Build monthly and immediately after critical security fixes.</li>
+        <li>Keep the last three approved versions for rollback.</li>
+        <li>Deprecate old AMIs after migration.</li>
+        <li>Never bake static passwords, private keys, API tokens, or environment secrets into AMIs.</li>
+        <li>Tag AMIs with owner, service, patch level, build date, Git commit, Ansible role, and approval state.</li>
+        <li>Store latest approved AMI IDs in SSM Parameter Store.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div id="gitlabModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-3xl w-full p-6 shadow-soft">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">GitLab to AWS Security</h2>
+        <button onclick="closeModal('gitlabModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <p class="mt-4 leading-relaxed">Use OIDC federation so GitLab jobs can assume AWS IAM roles with temporary credentials. This is safer than storing long-lived AWS access keys in GitLab variables. Restrict trust policies by project, branch, environment, and protected refs.</p>
+    </div>
+  </div>
+
+  <div id="backupModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-3xl w-full p-6 shadow-soft">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">Manual Backup Process</h2>
+        <button onclick="closeModal('backupModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <ol class="list-decimal pl-6 mt-4 space-y-2">
+        <li>Confirm service owner and change window.</li>
+        <li>Check disk space, service health, and current alerts.</li>
+        <li>Run SSM Automation or Run Command backup script.</li>
+        <li>Create EBS snapshot or application-level export.</li>
+        <li>Tag backup with service, owner, date, environment, and retention.</li>
+        <li>Verify backup artifact exists.</li>
+        <li>Document backup ID, location, and restore command.</li>
+        <li>Schedule restore test if backup protects production data.</li>
+      </ol>
+    </div>
+  </div>
+
+
+  <div id="clusterModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-4xl w-full p-6 shadow-soft max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">HA, Failover, and Fault Tolerance Details</h2>
+        <button onclick="closeModal('clusterModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <div class="mt-4 space-y-4 leading-relaxed">
+        <p><strong>High availability</strong> means the platform stays usable when a normal failure happens. <strong>Fault tolerance</strong> means the system can absorb failures without data loss or major outage. <strong>Failover</strong> is the process of moving traffic or leadership from a failed component to a healthy one.</p>
+        <ul class="list-disc pl-6 space-y-2">
+          <li>Use at least two Availability Zones for non-critical systems and three Availability Zones for important production clusters.</li>
+          <li>For Kafka, design topics with replication factor, partition count, and minimum in-sync replicas that match the business criticality.</li>
+          <li>For ZooKeeper, use odd-number quorums. Never use a two-node quorum for important systems.</li>
+          <li>For NiFi, plan repository disks carefully. Repository disk exhaustion is a common production outage cause.</li>
+          <li>For PostgreSQL, prefer RDS Multi-AZ or Aurora because database failover is difficult to self-manage safely.</li>
+          <li>For OpenSearch, keep shard count reasonable and test snapshot restores.</li>
+          <li>For every service, document who can fail over, when they can fail over, and how to roll back.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-4xl w-full p-6 shadow-soft max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">Load Management Details</h2>
+        <button onclick="closeModal('loadModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <div class="mt-4 space-y-4 leading-relaxed">
+        <p>Load problems usually show up as slow pipelines, growing queues, disk pressure, high memory, or users reporting that data is late. The team should set thresholds before production use.</p>
+        <ol class="list-decimal pl-6 space-y-2">
+          <li><strong>Measure baseline load:</strong> normal records per second, average job duration, average query latency, and normal disk growth.</li>
+          <li><strong>Set alarms:</strong> warn before saturation, not after outage.</li>
+          <li><strong>Control back pressure:</strong> NiFi queues, Kafka retention, consumer lag, and worker concurrency should be intentionally configured.</li>
+          <li><strong>Separate workloads:</strong> avoid mixing heavy batch jobs, user queries, and ingestion spikes on the same under-sized nodes.</li>
+          <li><strong>Test failure:</strong> stop a broker, stop a NiFi node, restore a database snapshot, and verify the team knows what happens.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div id="optionsModal" class="modal-backdrop fixed inset-0 z-50 bg-black/60 items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-900 rounded-2xl max-w-4xl w-full p-6 shadow-soft max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between gap-4">
+        <h2 class="text-2xl font-extrabold">How to Choose the Right Platform Option</h2>
+        <button onclick="closeModal('optionsModal')" class="text-2xl font-black text-ibmBlue">×</button>
+      </div>
+      <div class="mt-4 space-y-4 leading-relaxed">
+        <p>Use these questions during architecture reviews:</p>
+        <ul class="list-disc pl-6 space-y-2">
+          <li>Does AWS offer a managed service that meets the need?</li>
+          <li>Does the team truly need root access, custom plugins, or special OS configuration?</li>
+          <li>What is the recovery time objective and recovery point objective?</li>
+          <li>Can the workload be rebuilt from code, AMI, Ansible, and data backup?</li>
+          <li>Can a data user safely request this through a controlled process?</li>
+          <li>Is the cost of self-managing lower after including patching, support, on-call, backups, and outages?</li>
+        </ul>
+        <p>The safest default is managed services for critical databases, streams, and search platforms; custom AMIs for controlled EC2 patterns; and containers or serverless options for elastic ETL jobs.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentFontSize = Number(localStorage.getItem('awsGuideFontSize')) || 18;
+    const root = document.documentElement;
+
+    function applyFontSize() {
+      currentFontSize = Math.max(14, Math.min(36, currentFontSize));
+      root.style.setProperty('--page-font-size', currentFontSize + 'px');
+      document.getElementById('fontSizeLabel').textContent = 'Font: ' + currentFontSize + 'px';
+      localStorage.setItem('awsGuideFontSize', currentFontSize);
+    }
+
+    function changeFont(delta) {
+      currentFontSize += delta;
+      applyFontSize();
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('awsGuideTheme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+
+    function toggleSection(button) {
+      const body = button.parentElement.querySelector('.section-body');
+      const symbol = button.querySelector('span:last-child');
+      body.classList.toggle('open');
+      symbol.textContent = body.classList.contains('open') ? '−' : '+';
+    }
+
+    function expandAll() {
+      document.querySelectorAll('.section-body').forEach(el => el.classList.add('open'));
+      document.querySelectorAll('.section-toggle span:last-child').forEach(el => el.textContent = '−');
+    }
+
+    function collapseAll() {
+      document.querySelectorAll('.section-body').forEach(el => el.classList.remove('open'));
+      document.querySelectorAll('.section-toggle span:last-child').forEach(el => el.textContent = '+');
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('open'));
+      }
+    });
+
+    document.querySelectorAll('.modal-backdrop').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('open');
+      });
+    });
+
+    if (localStorage.getItem('awsGuideTheme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+    applyFontSize();
+  </script>
+</body>
+</html>
