@@ -309,6 +309,199 @@ aws sns publish \
   <p class="ml-12 mt-3">In the EC2 Image Builder console, watch the pipeline move through Build → Test → Distribute. If the test phase fails, no image is created and no "ready" message is sent — exactly what you want.</p>
 </section>
 
+<!-- TERRAFORM -->
+<h2 class="text-2xl font-bold mb-3 border-b-2 border-gray-900 pb-2">Bonus: build it all with Terraform</h2>
+<section class="mb-12 fade-in">
+  <p class="mb-4">The CLI commands above are great for learning, but typing them one by one is easy to get wrong. <strong>Terraform</strong> is an "Infrastructure as Code" tool: you describe everything you want in one text file, and Terraform creates (or deletes) it all for you with a single command. Think of it as a recipe card for your <em>entire</em> AWS setup — not just the image, but the topics, queue, role, and pipeline too.</p>
+  <div class="bg-gray-50 border border-gray-300 rounded-lg p-4 mb-5">
+    <p class="font-semibold mb-1">Three commands to run it:</p>
+    <p class="mono text-sm">terraform init &nbsp;→&nbsp; terraform plan &nbsp;→&nbsp; terraform apply</p>
+    <p class="text-sm text-gray-600 mt-2"><span class="mono">init</span> downloads the AWS plugin, <span class="mono">plan</span> shows what will be created, and <span class="mono">apply</span> actually builds it. Run <span class="mono">terraform destroy</span> to remove everything.</p>
+  </div>
+  <div class="flex flex-wrap gap-2 mb-5">
+    <button onclick="openModal('m-tf')" class="ibm-blue underline text-sm">What is Terraform / IaC?</button>
+    <button onclick="openModal('m-tfstate')" class="ibm-blue underline text-sm">What is "state"?</button>
+    <button onclick="openModal('m-tfheredoc')" class="ibm-blue underline text-sm">What's that &lt;&lt;-EOT bit?</button>
+  </div>
+
+  <p class="mb-2 font-semibold">Save this as <span class="mono">main.tf</span>:</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto">
+provider "aws" {
+  region = "us-east-1"
+}
+
+# --- 1. Latest Amazon Linux 2023 as the base image ---
+data "aws_ami" "al2023" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+}
+
+# --- 2. IAM role + instance profile for Image Builder ---
+resource "aws_iam_role" "ib" {
+  name = "ImageBuilderRole"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ib_core" {
+  role       = aws_iam_role.ib.name
+  policy_arn = "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder"
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ib.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ib" {
+  name = "ImageBuilderProfile"
+  role = aws_iam_role.ib.name
+}
+
+# --- 3. SNS topics + SQS queue ---
+resource "aws_sns_topic" "trigger" { name = "new-base-image-trigger" }
+resource "aws_sns_topic" "ready"   { name = "image-ready-topic" }
+resource "aws_sqs_queue"  "updates" { name = "image-update-queue" }
+
+# Let the "ready" topic deliver into the queue
+resource "aws_sqs_queue_policy" "allow_sns" {
+  queue_url = aws_sqs_queue.updates.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "sns.amazonaws.com" }
+      Action    = "sqs:SendMessage"
+      Resource  = aws_sqs_queue.updates.arn
+      Condition = { ArnEquals = { "aws:SourceArn" = aws_sns_topic.ready.arn } }
+    }]
+  })
+}
+
+resource "aws_sns_topic_subscription" "queue_sub" {
+  topic_arn = aws_sns_topic.ready.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.updates.arn
+}
+
+# --- 4. Build component: install Java 21 + Python ---
+resource "aws_imagebuilder_component" "install" {
+  name        = "InstallJavaPython"
+  platform    = "Linux"
+  version     = "1.0.0"
+  data = &lt;&lt;-EOT
+    name: InstallJavaPython
+    schemaVersion: 1.0
+    phases:
+      - name: build
+        steps:
+          - name: Java21
+            action: ExecuteBash
+            inputs:
+              commands:
+                - sudo dnf install -y java-21-amazon-corretto-devel
+          - name: Python
+            action: ExecuteBash
+            inputs:
+              commands:
+                - sudo dnf install -y python3 python3-pip
+  EOT
+}
+
+# --- 5. Test component: verify versions ---
+resource "aws_imagebuilder_component" "verify" {
+  name        = "VerifyJavaPython"
+  platform    = "Linux"
+  version     = "1.0.0"
+  data = &lt;&lt;-EOT
+    name: VerifyJavaPython
+    schemaVersion: 1.0
+    phases:
+      - name: test
+        steps:
+          - name: CheckJava
+            action: ExecuteBash
+            inputs:
+              commands:
+                - 'java -version 2>&1 | grep "21" || (echo missing && exit 1)'
+          - name: CheckPython
+            action: ExecuteBash
+            inputs:
+              commands:
+                - 'python3 --version || (echo missing && exit 1)'
+  EOT
+}
+
+# --- 6. Recipe = base image + components ---
+resource "aws_imagebuilder_image_recipe" "recipe" {
+  name         = "base-java-python-recipe"
+  parent_image = data.aws_ami.al2023.id
+  version      = "1.0.0"
+  component { component_arn = aws_imagebuilder_component.install.arn }
+  component { component_arn = aws_imagebuilder_component.verify.arn }
+}
+
+# --- 7. Infra config: role + the SNS topic to notify when done ---
+resource "aws_imagebuilder_infrastructure_configuration" "infra" {
+  name                  = "base-infra"
+  instance_profile_name = aws_iam_instance_profile.ib.name
+  instance_types        = ["t3.medium"]
+  sns_topic_arn         = aws_sns_topic.ready.arn
+}
+
+# --- 8. The pipeline itself ---
+resource "aws_imagebuilder_image_pipeline" "pipeline" {
+  name                             = "base-java-python-pipeline"
+  image_recipe_arn                 = aws_imagebuilder_image_recipe.recipe.arn
+  infrastructure_configuration_arn = aws_imagebuilder_infrastructure_configuration.infra.arn
+}
+
+output "pipeline_arn" { value = aws_imagebuilder_image_pipeline.pipeline.arn }
+output "queue_url"    { value = aws_sqs_queue.updates.id }
+  </div>
+
+  <div class="bg-gray-50 border border-gray-300 rounded-lg p-4 mt-5">
+    <p class="font-semibold mb-1">Notice what Terraform did for you:</p>
+    <p class="text-sm">No <span class="mono">ACCOUNT_ID</span> to copy-paste anywhere — Terraform wires the ARNs together automatically (e.g. <span class="mono">aws_sns_topic.ready.arn</span>). It also figured out the order: the role before the profile, the topics before the subscription. Change one line, re-run <span class="mono">apply</span>, and only what changed gets updated.</p>
+  </div>
+
+  <p class="mt-5 mb-2">The Lambda trigger from Step 7 still fits the same way — add this to the file to create the function and subscribe it to the trigger topic:</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto">
+resource "aws_lambda_function" "starter" {
+  function_name = "StartImageBuild"
+  runtime       = "python3.12"
+  handler       = "index.handler"
+  role          = aws_iam_role.lambda.arn
+  filename      = "lambda.zip"   # zip containing index.py from Step 7
+}
+
+resource "aws_sns_topic_subscription" "lambda_sub" {
+  topic_arn = aws_sns_topic.trigger.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.starter.arn
+}
+
+resource "aws_lambda_permission" "allow_sns" {
+  statement_id  = "AllowSNS"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.starter.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.trigger.arn
+}
+  </div>
+  <button onclick="openModal('m-tflambda')" class="ibm-blue underline text-sm mt-2 inline-block">Note: the Lambda role + zip</button>
+</section>
+
 <!-- SUMMARY -->
 <section class="mb-12 ibm-blue-bg text-white rounded-lg p-6 fade-in">
   <h2 class="text-xl md:text-2xl font-bold mb-3">You're done! 🎉</h2>
@@ -325,6 +518,8 @@ aws sns publish \
     <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon SQS Developer Guide →</a>
     <a href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon Corretto 21 (Java) →</a>
     <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/start-build-image-pipeline.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Start a pipeline (CLI/SNS) →</a>
+    <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/imagebuilder_image_pipeline" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Terraform: imagebuilder_image_pipeline →</a>
+    <a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Terraform: Get started with AWS →</a>
   </div>
 </section>
 
@@ -361,7 +556,11 @@ const modals = {
   'm-latest': ['How "latest" image tracking works', 'Amazon publishes the newest Amazon Linux AMI ID into a public SSM parameter and Image Builder image ARN. Pointing your recipe at the managed parent image (with x.x.x version) tells Image Builder to grab the most recent one each build — so you stay patched automatically.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-base-images.html'],
   'm-infra': ['Image Builder publishes to SNS for itself', 'The infrastructure configuration has a built-in SNS field. When you set --sns-topic-arn, Image Builder posts a JSON message (including the new AMI ID and build status) to that topic at the end of every run — no extra Lambda needed for the announcement.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/ibhow-notification-settings.html'],
   'm-trigger': ['How do you fire the trigger?', 'Anything that can publish to SNS: a CloudWatch scheduled rule (e.g., weekly), an EventBridge rule watching for new Amazon Linux releases, or a manual "aws sns publish" command. The trigger topic decouples "when to build" from "how to build".', 'https://docs.aws.amazon.com/sns/latest/dg/sns-publishing.html'],
-  'm-consume': ['Why a queue instead of direct calls?', 'A queue buffers work. If ten app teams subscribe, none get overwhelmed, and if a consumer is offline it still gets the message later. SQS also retries and supports dead-letter queues for messages that repeatedly fail, making the system reliable.', 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-architecture.html']
+  'm-consume': ['Why a queue instead of direct calls?', 'A queue buffers work. If ten app teams subscribe, none get overwhelmed, and if a consumer is offline it still gets the message later. SQS also retries and supports dead-letter queues for messages that repeatedly fail, making the system reliable.', 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-architecture.html'],
+  'm-tf': ['What is Terraform / Infrastructure as Code?', '<b>Terraform</b> lets you write down your cloud setup as plain text. Instead of clicking buttons or typing many commands, you describe the end result ("I want these topics, this queue, this pipeline") and Terraform makes reality match. This is called <b>Infrastructure as Code (IaC)</b> — your infrastructure lives in a file you can save, share, review, and version-control like any other code.', 'https://developer.hashicorp.com/terraform/intro'],
+  'm-tfstate': ['What is Terraform "state"?', 'Terraform keeps a <b>state file</b> that remembers what it has already created, so it knows the difference between "make new" and "update existing". For real teams, store this state in a shared, locked backend (like an S3 bucket with DynamoDB locking) so two people don\'t change things at the same time.', 'https://developer.hashicorp.com/terraform/language/state'],
+  'm-tfheredoc': ['What\'s the &lt;&lt;-EOT block?', 'That is a <b>heredoc</b> — a way to write a multi-line block of text (here, the YAML component recipe) directly inside Terraform. Everything between &lt;&lt;-EOT and the closing EOT is passed through as-is. The dash in &lt;&lt;- lets Terraform strip the leading indentation so it stays readable.', 'https://developer.hashicorp.com/terraform/language/expressions/strings'],
+  'm-tflambda': ['The Lambda role + zip', 'This snippet assumes two extra things you\'d add: an IAM role for the Lambda (named aws_iam_role.lambda here) that allows imagebuilder:StartImagePipelineExecution and basic logging, and a lambda.zip file containing the index.py handler from Step 7. Terraform can build the zip for you with the archive_file data source.', 'https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function']
 };
 
 let wrap = document.getElementById('modalWrap');
