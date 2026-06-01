@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Image Builder Tutorial — Base Build Pipeline</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
+<style>
+  :root { --base-font: 16px; }
+  body { font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif; font-size: var(--base-font); }
+  .mono { font-family: 'IBM Plex Mono', 'Courier New', monospace; }
+  .ibm-blue { color: #0530AD; }
+  .ibm-blue-bg { background-color: #0530AD; }
+  .code-block { background:#0a0a0a; color:#e8e8e8; border-left:4px solid #0530AD; }
+  .step-num { background:#0530AD; color:#fff; }
+  .modal { display:none; }
+  .modal.active { display:flex; }
+  .fade-in { animation: fade .4s ease both; }
+  @keyframes fade { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  ::-webkit-scrollbar{width:10px} ::-webkit-scrollbar-thumb{background:#0530AD}
+</style>
+</head>
+<body class="bg-white text-gray-900 leading-relaxed">
+
+<!-- HEADER -->
+<header class="border-b-4 border-gray-900 sticky top-0 bg-white z-40">
+  <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold tracking-tight">AWS Image Builder Pipeline</h1>
+      <p class="text-sm md:text-base text-gray-600">Build a base Amazon Linux AMI with Java 21 + Python, test it, and notify other teams.</p>
+    </div>
+    <div class="flex items-center gap-2 border border-gray-300 rounded px-3 py-2">
+      <span class="text-xs font-semibold mr-1">Font size</span>
+      <button onclick="changeFont(-2)" class="step-num w-9 h-9 rounded font-bold text-lg" aria-label="Decrease font">A−</button>
+      <span id="fontVal" class="mono text-sm w-12 text-center">16px</span>
+      <button onclick="changeFont(2)" class="step-num w-9 h-9 rounded font-bold text-lg" aria-label="Increase font">A+</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 py-8">
+
+<!-- INTRO -->
+<section class="mb-10 fade-in">
+  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-3">What are we building? (Read this first)</h2>
+  <p class="mb-4">Imagine you run a kitchen. Every cook needs the same clean, pre-stocked workstation before they start cooking. In AWS, that "pre-stocked workstation" is an <strong>AMI</strong> (Amazon Machine Image) — a saved snapshot of a server with software already installed. Instead of every team setting up Java and Python by hand, we build <strong>one</strong> good base image and share it.</p>
+  <p class="mb-4">This tutorial uses <strong>EC2 Image Builder</strong>, an AWS service that automatically bakes images for you. Here is the full story of what happens:</p>
+  <div class="bg-gray-50 border border-gray-300 rounded-lg p-5">
+    <ol class="space-y-2">
+      <li>1. A message (<strong>SNS trigger</strong>) says: "A new Amazon Linux image is available — go build!"</li>
+      <li>2. Image Builder takes the <strong>latest Amazon Linux</strong> image as a starting point.</li>
+      <li>3. It installs <strong>Java 21</strong> and <strong>Python</strong> on top.</li>
+      <li>4. It runs <strong>tests</strong> to confirm both actually work.</li>
+      <li>5. When tests pass, it sends an <strong>SNS + SQS message</strong> so other teams know a fresh image is ready for their apps.</li>
+    </ol>
+  </div>
+  <div class="mt-4 flex flex-wrap gap-2">
+    <button onclick="openModal('m-ami')" class="ibm-blue underline text-sm">What is an AMI?</button>
+    <button onclick="openModal('m-sns')" class="ibm-blue underline text-sm">What is SNS vs SQS?</button>
+    <button onclick="openModal('m-why')" class="ibm-blue underline text-sm">Why automate this?</button>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="mb-12 fade-in">
+  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-3">The flow at a glance</h2>
+  <div class="code-block mono text-sm rounded-lg p-5 overflow-x-auto">
+SNS "new base image" topic ──▶ Lambda ──▶ EC2 Image Builder Pipeline
+                                              │
+              (latest Amazon Linux AMI) ──────┤ 1. Build  → install Java 21 + Python
+                                              │ 2. Test   → verify versions
+                                              ▼
+                                       New hardened AMI
+                                              │
+                                              ▼
+                          SNS topic "image-ready" ──▶ SQS queue
+                                                          │
+                                                          ▼
+                                       App teams poll queue & update their stacks
+  </div>
+</section>
+
+<!-- PREREQUISITES -->
+<section class="mb-12 fade-in">
+  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-3">Before you start (Prerequisites)</h2>
+  <ul class="space-y-2 list-disc list-inside">
+    <li>An AWS account with permissions for EC2 Image Builder, IAM, SNS, SQS, and Lambda.</li>
+    <li>The <strong>AWS CLI</strong> installed and configured (<span class="mono">aws configure</span>).</li>
+    <li>A region picked (this guide uses <span class="mono">us-east-1</span>).</li>
+    <li>Basic comfort copying commands into a terminal.</li>
+  </ul>
+  <button onclick="openModal('m-iam')" class="ibm-blue underline text-sm mt-3 inline-block">Help: setting up IAM permissions</button>
+</section>
+
+<!-- STEPS -->
+<h2 class="text-2xl font-bold mb-6 border-b-2 border-gray-900 pb-2">Step-by-step guide</h2>
+
+<!-- STEP 1 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">1</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Create the IAM role Image Builder will use</h3>
+  </div>
+  <p class="mb-3 ml-12">Image Builder needs a "badge" (IAM role) to act on your behalf. AWS gives ready-made permission policies, so we just attach them.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+aws iam create-role --role-name ImageBuilderRole \
+  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+
+aws iam attach-role-policy --role-name ImageBuilderRole \
+  --policy-arn arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder
+
+aws iam attach-role-policy --role-name ImageBuilderRole \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+aws iam create-instance-profile --instance-profile-name ImageBuilderProfile
+aws iam add-role-to-instance-profile --instance-profile-name ImageBuilderProfile \
+  --role-name ImageBuilderRole
+  </div>
+  <button onclick="openModal('m-role')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Why two policies?</button>
+</section>
+
+<!-- STEP 2 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">2</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Create the notification topics (SNS) and queue (SQS)</h3>
+  </div>
+  <p class="mb-3 ml-12">We make two SNS topics: one that <em>triggers</em> the build, and one that <em>announces</em> the finished image. We also create an SQS queue subscribed to the "ready" topic so app teams can pull messages reliably.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+# Topic that kicks off a build
+aws sns create-topic --name new-base-image-trigger
+
+# Topic that announces a finished image
+aws sns create-topic --name image-ready-topic
+
+# A queue for downstream app teams
+aws sqs create-queue --queue-name image-update-queue
+
+# Subscribe the queue to the "ready" topic
+aws sns subscribe \
+  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:image-ready-topic \
+  --protocol sqs \
+  --notification-endpoint arn:aws:sqs:us-east-1:ACCOUNT_ID:image-update-queue
+  </div>
+  <p class="ml-12 mt-2 text-sm text-gray-600">Replace <span class="mono">ACCOUNT_ID</span> with your 12-digit AWS account number.</p>
+  <button onclick="openModal('m-queueperm')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Don't forget: queue access policy</button>
+</section>
+
+<!-- STEP 3 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">3</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Write the BUILD component (install Java 21 + Python)</h3>
+  </div>
+  <p class="mb-3 ml-12">A <strong>component</strong> is a recipe written in YAML telling Image Builder what to install. Save this as <span class="mono">build-component.yaml</span>.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+name: InstallJavaPython
+description: Install Java 21 and Python on Amazon Linux
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: InstallJava21
+        action: ExecuteBash
+        inputs:
+          commands:
+            - sudo dnf install -y java-21-amazon-corretto-devel
+      - name: InstallPython
+        action: ExecuteBash
+        inputs:
+          commands:
+            - sudo dnf install -y python3 python3-pip
+            - python3 -m pip install --upgrade pip
+  </div>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12 mt-3">
+aws imagebuilder create-component \
+  --name InstallJavaPython --semantic-version 1.0.0 \
+  --platform Linux --data file://build-component.yaml
+  </div>
+  <button onclick="openModal('m-corretto')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">What is Amazon Corretto?</button>
+</section>
+
+<!-- STEP 4 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">4</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Write the TEST component (verify it works)</h3>
+  </div>
+  <p class="mb-3 ml-12">Tests run in the special <span class="mono">validate</span>/<span class="mono">test</span> phase. If any command exits with an error, the whole build fails and no broken image is published. Save as <span class="mono">test-component.yaml</span>.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+name: VerifyJavaPython
+description: Confirm Java 21 and Python are installed
+schemaVersion: 1.0
+phases:
+  - name: test
+    steps:
+      - name: CheckJava
+        action: ExecuteBash
+        inputs:
+          commands:
+            - 'java -version 2>&1 | grep "21" || (echo "Java 21 missing" && exit 1)'
+      - name: CheckPython
+        action: ExecuteBash
+        inputs:
+          commands:
+            - 'python3 --version || (echo "Python missing" && exit 1)'
+  </div>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12 mt-3">
+aws imagebuilder create-component \
+  --name VerifyJavaPython --semantic-version 1.0.0 \
+  --platform Linux --data file://test-component.yaml
+  </div>
+  <button onclick="openModal('m-exit')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Why "exit 1" matters</button>
+</section>
+
+<!-- STEP 5 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">5</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Create the recipe (latest Amazon Linux + your components)</h3>
+  </div>
+  <p class="mb-3 ml-12">A <strong>recipe</strong> = base image + components. Using the SSM-managed "latest" parameter means each build automatically starts from the newest Amazon Linux, no manual updates needed.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+aws imagebuilder create-image-recipe \
+  --name base-java-python-recipe --semantic-version 1.0.0 \
+  --parent-image "arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/x.x.x" \
+  --components \
+    'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapython/1.0.0' \
+    'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/verifyjavapython/1.0.0'
+  </div>
+  <button onclick="openModal('m-latest')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">How "latest" image tracking works</button>
+</section>
+
+<!-- STEP 6 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">6</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Create infrastructure config + the pipeline (with SNS notification)</h3>
+  </div>
+  <p class="mb-3 ml-12">The infrastructure config tells Image Builder which IAM role and instance type to use — and which SNS topic to ping when an image finishes. This is how the "image-ready" announcement happens automatically.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+aws imagebuilder create-infrastructure-configuration \
+  --name base-infra \
+  --instance-profile-name ImageBuilderProfile \
+  --instance-types t3.medium \
+  --sns-topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:image-ready-topic
+
+aws imagebuilder create-image-pipeline \
+  --name base-java-python-pipeline \
+  --image-recipe-arn arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:image-recipe/base-java-python-recipe/1.0.0 \
+  --infrastructure-configuration-arn arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:infrastructure-configuration/base-infra
+  </div>
+  <button onclick="openModal('m-infra')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Image Builder publishes to SNS for free</button>
+</section>
+
+<!-- STEP 7 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">7</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Connect the TRIGGER topic to a Lambda that starts the build</h3>
+  </div>
+  <p class="mb-3 ml-12">When the "new-base-image-trigger" topic gets a message, a tiny Lambda function starts the pipeline. Here is the Python handler:</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+import boto3
+def handler(event, context):
+    ib = boto3.client('imagebuilder')
+    ib.start_image_pipeline_execution(
+        imagePipelineArn='arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:image-pipeline/base-java-python-pipeline'
+    )
+    return {"status": "build started"}
+  </div>
+  <p class="ml-12 mt-2">Then subscribe the Lambda to the trigger topic:</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12 mt-2">
+aws sns subscribe \
+  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:new-base-image-trigger \
+  --protocol lambda \
+  --notification-endpoint arn:aws:lambda:us-east-1:ACCOUNT_ID:function:StartImageBuild
+  </div>
+  <button onclick="openModal('m-trigger')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">How do you fire the trigger?</button>
+</section>
+
+<!-- STEP 8 -->
+<section class="mb-8 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">8</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Downstream teams read the SQS queue</h3>
+  </div>
+  <p class="mb-3 ml-12">When a build succeeds, Image Builder posts to "image-ready-topic" → which fans out to your SQS queue. App teams just poll the queue and grab the new AMI ID to update their launch templates.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+aws sqs receive-message \
+  --queue-url https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/image-update-queue \
+  --max-number-of-messages 1
+  </div>
+  <button onclick="openModal('m-consume')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Why a queue instead of direct calls?</button>
+</section>
+
+<!-- STEP 9 -->
+<section class="mb-12 fade-in">
+  <div class="flex items-start gap-3 mb-3">
+    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">9</span>
+    <h3 class="text-lg md:text-xl font-bold pt-1">Test the whole pipeline end-to-end</h3>
+  </div>
+  <p class="mb-3 ml-12">Publish a message to the trigger topic and watch the chain react.</p>
+  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:new-base-image-trigger \
+  --message "New Amazon Linux available, please build"
+  </div>
+  <p class="ml-12 mt-3">In the EC2 Image Builder console, watch the pipeline move through Build → Test → Distribute. If the test phase fails, no image is created and no "ready" message is sent — exactly what you want.</p>
+</section>
+
+<!-- SUMMARY -->
+<section class="mb-12 ibm-blue-bg text-white rounded-lg p-6 fade-in">
+  <h2 class="text-xl md:text-2xl font-bold mb-3">You're done! 🎉</h2>
+  <p>You now have a fully automated factory: a trigger message builds a fresh Amazon Linux image with Java 21 and Python, tests it, and tells everyone else when it's ready. Re-run anytime by publishing to the trigger topic.</p>
+</section>
+
+<!-- REFERENCES -->
+<section class="mb-16 fade-in">
+  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-4">Official documentation & references</h2>
+  <div class="grid md:grid-cols-2 gap-3">
+    <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">EC2 Image Builder User Guide →</a>
+    <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Component YAML reference →</a>
+    <a href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon SNS Developer Guide →</a>
+    <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon SQS Developer Guide →</a>
+    <a href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon Corretto 21 (Java) →</a>
+    <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/start-build-image-pipeline.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Start a pipeline (CLI/SNS) →</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t-4 border-gray-900 py-6 text-center text-sm text-gray-600">
+  AWS Image Builder Tutorial · Middle-school-friendly edition · Use the A+ / A− buttons to resize text.
+</footer>
+
+<!-- MODALS -->
+<div id="modalWrap">
+  <!-- generated below -->
+</div>
+
+<script>
+/* ---------- Font size control 14–36 ---------- */
+let fontSize = 16;
+function changeFont(delta){
+  fontSize = Math.min(36, Math.max(14, fontSize + delta));
+  document.documentElement.style.setProperty('--base-font', fontSize + 'px');
+  document.getElementById('fontVal').textContent = fontSize + 'px';
+}
+
+/* ---------- Popups ---------- */
+const modals = {
+  'm-ami': ['What is an AMI?', 'An <b>Amazon Machine Image</b> is a saved template of a server: the operating system plus any software and settings. When you launch a virtual server (EC2 instance), you pick an AMI as its starting point — like choosing a phone with apps pre-installed instead of an empty one.', 'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html'],
+  'm-sns': ['SNS vs SQS — what\'s the difference?', '<b>SNS</b> (Simple Notification Service) is a megaphone: it broadcasts one message to many subscribers instantly (push). <b>SQS</b> (Simple Queue Service) is a mailbox: messages wait safely until a worker picks them up (pull). We use SNS to announce, and SQS so app teams never miss a message even if they are busy.', 'https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html'],
+  'm-why': ['Why automate image building?', 'Doing it by hand is slow and easy to get wrong — one team forgets a patch, another installs the wrong Java version. Automating gives every team an identical, tested, secure starting image. It also rebuilds quickly when a new base OS or security patch arrives.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html'],
+  'm-iam': ['Setting up IAM permissions', 'IAM (Identity and Access Management) controls who can do what in AWS. For this tutorial your user needs permissions for imagebuilder:*, iam:CreateRole/PassRole, sns:*, sqs:*, and lambda:*. In a real company, ask your cloud admin to scope these down to least privilege.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-setting-up.html'],
+  'm-role': ['Why two managed policies?', '<b>EC2InstanceProfileForImageBuilder</b> lets the temporary build server do Image Builder work. <b>AmazonSSMManagedInstanceCore</b> lets AWS Systems Manager run commands on that server and collect logs. Together they let the build run and report back without you opening SSH.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/security-iam-service-role.html'],
+  'm-queueperm': ['Queue access policy', 'For an SNS topic to drop messages into an SQS queue, the queue must grant SNS permission. Attach an SQS policy allowing the "sns.amazonaws.com" service the sqs:SendMessage action, with a condition matching your topic ARN. Without it, messages silently fail to arrive.', 'https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html'],
+  'm-corretto': ['What is Amazon Corretto?', 'Corretto is Amazon\'s free, production-ready build of OpenJDK (Java). It receives long-term security patches at no cost. We install <b>java-21-amazon-corretto-devel</b> to get the full Java 21 development kit on Amazon Linux 2023.', 'https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html'],
+  'm-exit': ['Why "exit 1" matters', 'In Linux, a command that ends with exit code 0 means success; anything else means failure. By forcing <b>exit 1</b> when Java or Python is missing, we make the test phase fail loudly. Image Builder then stops and refuses to publish a broken image.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html'],
+  'm-latest': ['How "latest" image tracking works', 'Amazon publishes the newest Amazon Linux AMI ID into a public SSM parameter and Image Builder image ARN. Pointing your recipe at the managed parent image (with x.x.x version) tells Image Builder to grab the most recent one each build — so you stay patched automatically.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-base-images.html'],
+  'm-infra': ['Image Builder publishes to SNS for itself', 'The infrastructure configuration has a built-in SNS field. When you set --sns-topic-arn, Image Builder posts a JSON message (including the new AMI ID and build status) to that topic at the end of every run — no extra Lambda needed for the announcement.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/ibhow-notification-settings.html'],
+  'm-trigger': ['How do you fire the trigger?', 'Anything that can publish to SNS: a CloudWatch scheduled rule (e.g., weekly), an EventBridge rule watching for new Amazon Linux releases, or a manual "aws sns publish" command. The trigger topic decouples "when to build" from "how to build".', 'https://docs.aws.amazon.com/sns/latest/dg/sns-publishing.html'],
+  'm-consume': ['Why a queue instead of direct calls?', 'A queue buffers work. If ten app teams subscribe, none get overwhelmed, and if a consumer is offline it still gets the message later. SQS also retries and supports dead-letter queues for messages that repeatedly fail, making the system reliable.', 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-architecture.html']
+};
+
+let wrap = document.getElementById('modalWrap');
+for (const id in modals){
+  const [title, body, link] = modals[id];
+  wrap.innerHTML += `
+  <div id="${id}" class="modal fixed inset-0 bg-black bg-opacity-60 z-50 items-center justify-center p-4" onclick="if(event.target===this)closeModal('${id}')">
+    <div class="bg-white rounded-lg max-w-lg w-full p-6 fade-in border-t-4" style="border-color:#0530AD">
+      <h3 class="text-lg font-bold ibm-blue mb-3">${title}</h3>
+      <p class="mb-4">${body}</p>
+      <a href="${link}" target="_blank" rel="noopener" class="ibm-blue underline text-sm">Read the official docs →</a>
+      <button onclick="closeModal('${id}')" class="block mt-5 step-num px-4 py-2 rounded font-semibold">Close</button>
+    </div>
+  </div>`;
+}
+function openModal(id){ document.getElementById(id).classList.add('active'); }
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+document.addEventListener('keydown', e => { if(e.key==='Escape') document.querySelectorAll('.modal.active').forEach(m=>m.classList.remove('active')); });
+</script>
+</body>
+</html>
