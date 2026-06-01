@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS AMI Factory · Packer, Terraform &amp; CLI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  /* IBM Carbon design tokens */
+  :root {
+    --c-bg:        #ffffff;
+    --c-bg-soft:   #f4f4f4;
+    --c-bg-mute:   #fafafa;
+    --c-border:    #e0e0e0;
+    --c-border-strong: #c6c6c6;
+    --c-text:      #161616;
+    --c-text-2:    #525252;
+    --c-text-3:    #6f6f6f;
+    --c-blue:      #0f62fe;
+    --c-blue-dark: #002d9c;
+    --c-blue-soft: #edf5ff;
+    --c-blue-hover:#0353e9;
+    --c-green:     #198038;
+    --c-red:       #da1e28;
+    --c-code-bg:   #161616;
+    --c-code-fg:   #f4f4f4;
+    --base-font:   16px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-size: var(--base-font);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Typography */
+  h1, h2, h3, h4 { color: var(--c-text); font-weight: 600; letter-spacing: -0.01em; }
+  h1 { font-weight: 300; letter-spacing: -0.02em; }
+  .mono, code, pre, kbd { font-family: 'IBM Plex Mono', monospace; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-text-2); }
+
+  /* Top navigation bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--c-text); color: #fff;
+    border-bottom: 1px solid #393939;
+  }
+  .topbar-inner { max-width: 1280px; margin: 0 auto; padding: 0 1rem; display: flex; align-items: center; justify-content: space-between; height: 48px; }
+  .brand { font-weight: 600; font-size: 0.875rem; letter-spacing: 0.01em; }
+  .brand-pipe { color: #6f6f6f; margin: 0 0.5rem; }
+  .brand-sub { color: #c6c6c6; font-weight: 400; font-size: 0.8125rem; }
+
+  /* Font controls */
+  .fctrl { display: flex; align-items: center; gap: 0.25rem; }
+  .fctrl-label { font-size: 0.75rem; color: #c6c6c6; margin-right: 0.5rem; }
+  @media (max-width: 640px) { .fctrl-label { display: none; } }
+  .fctrl-btn {
+    width: 36px; height: 32px;
+    background: transparent;
+    color: #fff;
+    border: 1px solid #525252;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .fctrl-btn:hover { background: #393939; border-color: #6f6f6f; }
+  .fctrl-display { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: #c6c6c6; min-width: 44px; text-align: center; }
+
+  /* Layout */
+  .container { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
+  @media (max-width: 640px) { .container { padding: 0 1rem; } }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 3rem;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; gap: 0; }
+    .toc-side { display: none; }
+  }
+
+  /* Side TOC */
+  .toc-side {
+    position: sticky; top: 64px;
+    align-self: start;
+    padding-top: 3rem;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+  .toc-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-text-3); padding: 0 0 0.75rem 1rem; border-bottom: 1px solid var(--c-border); }
+  .toc-link {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--c-text-2);
+    text-decoration: none;
+    font-size: 0.875rem;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .toc-link:hover { color: var(--c-blue); background: var(--c-blue-soft); }
+  .toc-link.active { color: var(--c-blue); border-left-color: var(--c-blue); background: var(--c-blue-soft); font-weight: 500; }
+
+  /* Hero */
+  .hero { padding: 4rem 0 3rem; border-bottom: 1px solid var(--c-border); }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.1; margin: 0.75rem 0 1.5rem; }
+  .hero p { font-size: clamp(1rem, 1.6vw, 1.125rem); color: var(--c-text-2); max-width: 56rem; line-height: 1.55; }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 0; margin-top: 2rem; }
+  .hero-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--c-text);
+    padding: 0.375rem 0.875rem;
+    border: 1px solid var(--c-border);
+    border-right: none;
+    background: #fff;
+  }
+  .hero-tag:last-child { border-right: 1px solid var(--c-border); }
+
+  /* Section */
+  section { padding: 3.5rem 0; border-bottom: 1px solid var(--c-border); }
+  section:last-of-type { border-bottom: none; }
+  section h2 { font-size: clamp(1.5rem, 2.8vw, 2rem); margin: 0.5rem 0 1.25rem; font-weight: 400; }
+  section p.lead { color: var(--c-text-2); max-width: 52rem; margin-bottom: 1.75rem; }
+
+  /* Cards */
+  .card {
+    background: #fff;
+    border: 1px solid var(--c-border);
+    padding: 1.5rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card-mute { background: var(--c-bg-mute); }
+  .card:hover { border-color: var(--c-border-strong); }
+
+  /* Step list */
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .step {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--c-border);
+    transition: background 0.15s;
+  }
+  .step:hover { background: var(--c-bg-mute); }
+  .step:last-child { border-bottom: 1px solid var(--c-border); }
+  .step-num {
+    width: 40px; height: 40px;
+    background: var(--c-text);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 0.9375rem;
+  }
+  .step h3 { font-size: 1.0625rem; margin: 0 0 0.375rem; font-weight: 600; }
+  .step p { color: var(--c-text-2); margin: 0; font-size: 0.9375rem; }
+
+  /* Info chip */
+  .info-chip {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    background: transparent;
+    color: var(--c-blue);
+    border: none;
+    padding: 0.25rem 0; margin-top: 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .info-chip:hover { color: var(--c-blue-hover); text-decoration: underline; }
+  .info-chip::before { content: ""; width: 14px; height: 14px; border: 1.5px solid currentColor; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; line-height: 1; }
+  .info-chip::after { content: "i"; font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; font-weight: 700; color: currentColor; margin-left: -0.875rem; margin-right: 0.5rem; }
+
+  /* Code blocks */
+  .code-wrap {
+    background: var(--c-code-bg);
+    margin: 1rem 0 1.5rem;
+    position: relative;
+  }
+  .code-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.625rem 1rem;
+    background: #262626;
+    color: #c6c6c6;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    border-bottom: 1px solid #393939;
+  }
+  .code-lang { color: #78a9ff; }
+  .copy-btn {
+    background: transparent;
+    color: #c6c6c6;
+    border: 1px solid #525252;
+    padding: 0.25rem 0.625rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: #393939; color: #fff; }
+  .copy-btn.copied { color: var(--c-green); border-color: var(--c-green); }
+  pre {
+    margin: 0;
+    padding: 1.25rem 1rem;
+    overflow-x: auto;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--c-code-fg);
+  }
+  pre code { color: inherit; background: transparent; padding: 0; font-size: inherit; }
+  .cmt { color: #8d8d8d; font-style: italic; }
+  .key { color: #78a9ff; }
+  .str { color: #ff8389; }
+  .num { color: #ffb784; }
+  .fn  { color: #d4bbff; }
+
+  /* Inline code */
+  p code, li code, .step code {
+    background: var(--c-bg-soft);
+    color: var(--c-blue-dark);
+    padding: 0.125rem 0.375rem;
+    font-size: 0.85em;
+    border-radius: 2px;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--c-border);
+    overflow-x: auto;
+    margin-bottom: 2rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.875rem 1.25rem;
+    color: var(--c-text-2);
+    font-family: inherit;
+    font-size: 0.9375rem;
+    font-weight: 400;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--c-text); background: var(--c-bg-mute); }
+  .tab-btn.active { color: var(--c-text); border-bottom-color: var(--c-blue); font-weight: 600; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Subsection header */
+  .subhead {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 2rem 0 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .subhead-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--c-blue);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .subhead h4 { font-size: 1.0625rem; margin: 0; font-weight: 600; }
+
+  /* References grid */
+  .refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0; border: 1px solid var(--c-border); }
+  .ref-link {
+    display: flex; flex-direction: column; gap: 0.25rem;
+    padding: 1.25rem;
+    color: var(--c-text);
+    text-decoration: none;
+    border-right: 1px solid var(--c-border);
+    border-bottom: 1px solid var(--c-border);
+    transition: background 0.15s;
+  }
+  .ref-link:hover { background: var(--c-blue-soft); }
+  .ref-link .eyebrow { color: var(--c-text-3); font-size: 0.7rem; }
+  .ref-link .ref-title { font-size: 0.9375rem; font-weight: 500; color: var(--c-text); }
+  .ref-link .ref-arrow { color: var(--c-blue); font-size: 0.875rem; margin-top: 0.25rem; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(22, 22, 22, 0.65);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 1rem;
+    animation: fadeIn 0.15s ease;
+  }
+  .modal-bg.open { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-box {
+    background: #fff;
+    max-width: 600px; width: 100%;
+    max-height: 85vh; overflow-y: auto;
+    border-top: 3px solid var(--c-blue);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    display: none;
+  }
+  .modal-box.show { display: block; }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 1.5rem 0.75rem;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .modal-head h3 { font-size: 1.125rem; margin: 0; font-weight: 600; }
+  .modal-close {
+    background: none; border: none;
+    width: 32px; height: 32px;
+    font-size: 1.25rem;
+    color: var(--c-text-2);
+    cursor: pointer;
+  }
+  .modal-close:hover { color: var(--c-text); background: var(--c-bg-soft); }
+  .modal-body { padding: 1.25rem 1.5rem 1.5rem; font-size: 0.9375rem; color: var(--c-text); }
+  .modal-body p { margin: 0 0 0.875rem; }
+  .modal-body p:last-child { margin-bottom: 0; }
+  .modal-body ul { margin: 0 0 1rem; padding-left: 1.25rem; }
+  .modal-body li { margin-bottom: 0.5rem; }
+  .modal-body a { color: var(--c-blue); text-decoration: none; font-weight: 500; }
+  .modal-body a:hover { text-decoration: underline; }
+  .modal-body pre { font-size: 0.8125rem; padding: 0.875rem; margin: 0.5rem 0; }
+
+  /* SVG container */
+  .diagram-wrap {
+    background: #fff;
+    border: 1px solid var(--c-border);
+    padding: 1.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .diagram-wrap svg { display: block; min-width: 720px; }
+  .diagram-caption { margin-top: 0.875rem; font-size: 0.875rem; color: var(--c-text-3); display: flex; flex-wrap: wrap; gap: 1.25rem; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; margin-right: 0.375rem; vertical-align: middle; }
+
+  /* Callout */
+  .callout {
+    background: var(--c-blue-soft);
+    border-left: 3px solid var(--c-blue);
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+    font-size: 0.9375rem;
+  }
+  .callout strong { color: var(--c-blue-dark); }
+
+  /* Footer */
+  footer {
+    background: var(--c-bg-mute);
+    padding: 2.5rem 0;
+    border-top: 1px solid var(--c-border);
+    font-size: 0.8125rem;
+    color: var(--c-text-3);
+  }
+
+  /* Utilities */
+  .mt-section { margin-top: 2.5rem; }
+  .badges-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+  .badge { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; padding: 0.25rem 0.625rem; background: var(--c-bg-soft); color: var(--c-text-2); border-radius: 0; }
+
+  ::selection { background: var(--c-blue-soft); color: var(--c-text); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<nav class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      AWS<span class="brand-pipe">/</span><span class="brand-sub">AMI Factory Tutorial</span>
+    </div>
+    <div class="fctrl">
+      <span class="fctrl-label">Text size</span>
+      <button class="fctrl-btn" onclick="changeFont(-2)" aria-label="Decrease font">A−</button>
+      <span class="fctrl-display" id="fontDisplay">16px</span>
+      <button class="fctrl-btn" onclick="changeFont(2)" aria-label="Increase font">A+</button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="container">
+    <div class="eyebrow">Solution Architect Tutorial · Updated 2026</div>
+    <h1>Building an AWS AMI&nbsp;Factory</h1>
+    <p>An automated pipeline that bakes a custom Amazon Machine Image every time AWS publishes a new Amazon Linux base. The image ships with Java 21 and Python pre-installed, runs validation tests, and fans out a notification through SNS and SQS so downstream teams can rebuild their applications.</p>
+    <div class="hero-tags">
+      <span class="hero-tag">Packer</span>
+      <span class="hero-tag">Terraform</span>
+      <span class="hero-tag">AWS&nbsp;CLI</span>
+      <span class="hero-tag">EventBridge</span>
+      <span class="hero-tag">SNS&nbsp;&middot;&nbsp;SQS</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+<div class="layout">
+
+  <!-- SIDE TOC -->
+  <aside class="toc-side">
+    <div class="toc-title">On this page</div>
+    <nav>
+      <a class="toc-link" href="#background">Background</a>
+      <a class="toc-link" href="#plan">The plan</a>
+      <a class="toc-link" href="#workflow">Workflow diagram</a>
+      <a class="toc-link" href="#tools">Pick your tool</a>
+      <a class="toc-link" href="#downstream">Downstream consumers</a>
+      <a class="toc-link" href="#references">References</a>
+    </nav>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main>
+
+  <!-- BACKGROUND -->
+  <section id="background">
+    <div class="eyebrow">01 · Background</div>
+    <h2>What we&rsquo;re building, and why</h2>
+    <p class="lead">Before any code, the concept in plain language. Skip ahead if you already know what an AMI is.</p>
+
+    <div class="card card-mute">
+      <p>Picture baking cookies. Instead of measuring flour and sugar every morning, you make <em>one</em> perfect batch of dough and freeze portions of it. Each morning you thaw a portion and bake. Same recipe every time, no measuring.</p>
+      <p style="margin-top:1rem"><strong>An Amazon Machine Image (AMI) is that frozen dough &mdash; for a server.</strong> It captures a fully configured operating system plus any software you pre-installed. When you launch an EC2 instance from an AMI, it boots already set up.</p>
+      <p style="margin-top:1rem">In this tutorial we build a <strong>golden base AMI</strong>: a clean Amazon Linux server with Java 21 and Python already installed and tested. Other teams build <em>their</em> application images on top of <em>our</em> golden image, so everyone starts from the same trusted foundation.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:1.25rem;margin-top:1rem">
+        <button class="info-chip" onclick="openModal('m-ami')">What is an AMI?</button>
+        <button class="info-chip" onclick="openModal('m-golden')">Why &ldquo;golden image&rdquo;?</button>
+        <button class="info-chip" onclick="openModal('m-services')">AWS services glossary</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAN -->
+  <section id="plan">
+    <div class="eyebrow">02 · The plan</div>
+    <h2>Seven steps, in order</h2>
+    <p class="lead">The entire workflow before any code. Each step here maps directly to a code block below.</p>
+
+    <ol class="steps">
+      <li class="step">
+        <span class="step-num">01</span>
+        <div>
+          <h3>A trigger fires when a new Amazon Linux AMI is published</h3>
+          <p>AWS releases new base AMIs regularly with security patches. We listen for that event so our build runs automatically. Two trigger styles are common: an SNS notification from AWS&rsquo;s public AMI topic, or an EventBridge rule watching SSM Parameter Store.</p>
+          <button class="info-chip" onclick="openModal('m-trigger')">How the trigger works</button>
+        </div>
+      </li>
+      <li class="step">
+        <span class="step-num">02</span>
+        <div>
+          <h3>Look up the latest Amazon Linux AMI ID</h3>
+          <p>The trigger tells us &ldquo;something changed.&rdquo; We then query <strong>SSM Parameter Store</strong> for the exact newest AMI ID. AWS publishes these as public parameters.</p>
+        </div>
+      </li>
+      <li class="step">
+        <span class="step-num">03</span>
+        <div>
+          <h3>Launch a temporary build instance from that base</h3>
+          <p>Packer (or our shell script) spins up a disposable EC2 instance from the latest base image. This is where we install software.</p>
+        </div>
+      </li>
+      <li class="step">
+        <span class="step-num">04</span>
+        <div>
+          <h3>Install Java&nbsp;21 + Python and configure them</h3>
+          <p>A provisioning script runs on the temp instance: install <code>java-21-amazon-corretto</code> and <code>python3</code>, set <code>JAVA_HOME</code>, update packages.</p>
+          <button class="info-chip" onclick="openModal('m-corretto')">What is Corretto?</button>
+        </div>
+      </li>
+      <li class="step">
+        <span class="step-num">05</span>
+        <div>
+          <h3>Run validation tests</h3>
+          <p>Before saving anything, verify: does <code>java --version</code> report 21? Does <code>python3 --version</code> succeed? If any test fails the build halts and no AMI is published.</p>
+        </div>
+      </li>
+      <li class="step">
+        <span class="step-num">06</span>
+        <div>
+          <h3>Bake the new AMI</h3>
+          <p>Tests passed. Packer snapshots the instance into a new AMI and tags it with build date, source AMI ID, Java version, and a build identifier.</p>
+        </div>
+      </li>
+      <li class="step">
+        <span class="step-num">07</span>
+        <div>
+          <h3>Publish a notification to SNS&nbsp;&rarr;&nbsp;SQS</h3>
+          <p>The new AMI ID goes to an <strong>SNS topic</strong>. The topic fans the message out to an <strong>SQS queue</strong> that downstream teams poll. They read it and rebuild their application images on top of the new base.</p>
+          <button class="info-chip" onclick="openModal('m-snssqs')">SNS vs SQS</button>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- WORKFLOW -->
+  <section id="workflow">
+    <div class="eyebrow">03 · Workflow</div>
+    <h2>The full pipeline at a glance</h2>
+    <p class="lead">A visual map of every step, including the failure branch. Pan horizontally on mobile.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 880 540" width="100%" role="img" aria-label="AMI factory workflow diagram" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#161616"/>
+          </marker>
+          <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#0f62fe"/>
+          </marker>
+          <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#198038"/>
+          </marker>
+          <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="#da1e28"/>
+          </marker>
+          <style>
+            .nbox { fill:#ffffff; stroke:#161616; stroke-width:1.5; }
+            .nbox-accent { fill:#edf5ff; stroke:#0f62fe; stroke-width:1.5; }
+            .nbox-dark { fill:#161616; stroke:#161616; }
+            .nbox-fail { fill:#ffffff; stroke:#da1e28; stroke-width:1.5; }
+            .nlbl  { font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; fill:#161616; }
+            .nlbl-w { font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; fill:#ffffff; }
+            .nlbl-r { font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; fill:#da1e28; }
+            .nsub  { font-family:'IBM Plex Mono',monospace; font-size:10px; fill:#525252; }
+            .nsub-w { font-family:'IBM Plex Mono',monospace; font-size:10px; fill:#a8a8a8; }
+            .nstep { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:#0f62fe; font-weight:700; letter-spacing:0.08em; }
+            .nstep-w { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:#78a9ff; font-weight:700; letter-spacing:0.08em; }
+            .ed { stroke:#161616; stroke-width:1.5; fill:none; }
+            .ed-blue { stroke:#0f62fe; stroke-width:1.5; fill:none; }
+            .ed-green { stroke:#198038; stroke-width:1.5; fill:none; }
+            .ed-red { stroke:#da1e28; stroke-width:1.5; stroke-dasharray:4 3; fill:none; }
+            .elbl { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; }
+          </style>
+        </defs>
+
+        <!-- Row 1 -->
+        <g>
+          <rect class="nbox-accent" x="20" y="40" width="200" height="80"/>
+          <text class="nstep" x="32" y="62">STEP 01</text>
+          <text class="nlbl" x="32" y="82">New AMI published</text>
+          <text class="nsub" x="32" y="100">SNS topic /</text>
+          <text class="nsub" x="32" y="112">EventBridge rule</text>
+        </g>
+
+        <g>
+          <rect class="nbox" x="340" y="40" width="200" height="80"/>
+          <text class="nstep" x="352" y="62">STEP 02</text>
+          <text class="nlbl" x="352" y="82">Resolve latest AMI</text>
+          <text class="nsub" x="352" y="100">SSM Parameter Store</text>
+          <text class="nsub" x="352" y="112">aws ssm get-parameter</text>
+        </g>
+
+        <g>
+          <rect class="nbox" x="660" y="40" width="200" height="80"/>
+          <text class="nstep" x="672" y="62">STEP 03</text>
+          <text class="nlbl" x="672" y="82">Launch build EC2</text>
+          <text class="nsub" x="672" y="100">Packer / aws ec2 run</text>
+          <text class="nsub" x="672" y="112">t3.micro · disposable</text>
+        </g>
+
+        <!-- Row 2 -->
+        <g>
+          <rect class="nbox" x="660" y="180" width="200" height="80"/>
+          <text class="nstep" x="672" y="202">STEP 04</text>
+          <text class="nlbl" x="672" y="222">Provision software</text>
+          <text class="nsub" x="672" y="240">Java 21 (Corretto)</text>
+          <text class="nsub" x="672" y="252">Python 3 + pip</text>
+        </g>
+
+        <!-- Row 3 -->
+        <g>
+          <rect class="nbox" x="660" y="320" width="200" height="80"/>
+          <text class="nstep" x="672" y="342">STEP 05</text>
+          <text class="nlbl" x="672" y="362">Validation tests</text>
+          <text class="nsub" x="672" y="380">java --version | grep 21</text>
+          <text class="nsub" x="672" y="392">python3 --version</text>
+        </g>
+
+        <!-- Fail box -->
+        <g>
+          <rect class="nbox-fail" x="660" y="450" width="200" height="60"/>
+          <text class="nlbl-r" x="672" y="476">Halt · alert team</text>
+          <text class="nsub" x="672" y="494">no AMI published</text>
+        </g>
+
+        <!-- Bake (dark) -->
+        <g>
+          <rect class="nbox-dark" x="340" y="320" width="200" height="80"/>
+          <text class="nstep-w" x="352" y="342">STEP 06</text>
+          <text class="nlbl-w" x="352" y="362">Bake new AMI</text>
+          <text class="nsub-w" x="352" y="380">snapshot + tag</text>
+          <text class="nsub-w" x="352" y="392">create-image / packer</text>
+        </g>
+
+        <!-- SNS -->
+        <g>
+          <rect class="nbox-accent" x="340" y="450" width="200" height="60"/>
+          <text class="nstep" x="352" y="472">STEP 07</text>
+          <text class="nlbl" x="352" y="490">Publish to SNS topic</text>
+          <text class="nsub" x="352" y="504">new-base-ami</text>
+        </g>
+
+        <!-- SQS -->
+        <g>
+          <rect class="nbox" x="20" y="450" width="200" height="60"/>
+          <text class="nlbl" x="32" y="476">SQS queue</text>
+          <text class="nsub" x="32" y="492">downstream app teams</text>
+          <text class="nsub" x="32" y="504">poll &amp; rebuild</text>
+        </g>
+
+        <!-- Edges -->
+        <path class="ed-blue" d="M220,80 L338,80" marker-end="url(#arrow-blue)"/>
+        <path class="ed" d="M540,80 L658,80" marker-end="url(#arrow)"/>
+        <path class="ed" d="M760,120 L760,178" marker-end="url(#arrow)"/>
+        <path class="ed" d="M760,260 L760,318" marker-end="url(#arrow)"/>
+
+        <!-- Pass branch -->
+        <path class="ed-green" d="M658,360 L542,360" marker-end="url(#arrow-green)"/>
+        <text class="elbl" x="568" y="350" fill="#198038">PASS</text>
+
+        <!-- Fail branch -->
+        <path class="ed-red" d="M760,400 L760,448" marker-end="url(#arrow-red)"/>
+        <text class="elbl" x="772" y="425" fill="#da1e28">FAIL</text>
+
+        <!-- Bake to SNS -->
+        <path class="ed" d="M440,400 L440,448" marker-end="url(#arrow)"/>
+
+        <!-- SNS to SQS -->
+        <path class="ed-blue" d="M338,480 L222,480" marker-end="url(#arrow-blue)"/>
+      </svg>
+    </div>
+    <div class="diagram-caption">
+      <span><span class="legend-dot" style="background:#0f62fe"></span>Trigger &amp; pub/sub</span>
+      <span><span class="legend-dot" style="background:#161616"></span>Build pipeline</span>
+      <span><span class="legend-dot" style="background:#198038"></span>Tests pass</span>
+      <span><span class="legend-dot" style="background:#da1e28"></span>Tests fail (halt)</span>
+    </div>
+  </section>
+
+  <!-- TOOLS -->
+  <section id="tools">
+    <div class="eyebrow">04 · Implementation</div>
+    <h2>Three tools, one job</h2>
+    <p class="lead">The same pipeline implemented three ways. Packer is recommended for the bake itself; Terraform manages the surrounding AWS infrastructure; the AWS CLI version shows what&rsquo;s happening underneath.</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" onclick="switchTab('packer', this)" role="tab">Packer · recommended</button>
+      <button class="tab-btn" onclick="switchTab('tf', this)" role="tab">Terraform</button>
+      <button class="tab-btn" onclick="switchTab('cli', this)" role="tab">AWS CLI &amp; shell</button>
+    </div>
+
+    <!-- PACKER -->
+    <div id="tab-packer" class="tab-pane active">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:1.0625rem">Why Packer</h3>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">Packer is a free HashiCorp tool whose only job is building machine images. One declarative file describes the build; one command runs it. Packer launches the temp instance, provisions, tests, snapshots, and cleans up.</p>
+        <button class="info-chip" onclick="openModal('m-packer')">Install Packer</button>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEPS 02 — 06</span><h4>amibuild.pkr.hcl &mdash; the Packer template</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">hcl</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt"># Describes the full image build in one declarative file</span>
+packer {
+  required_plugins {
+    amazon = { version = <span class="str">"&gt;= 1.3.0"</span>, source = <span class="str">"github.com/hashicorp/amazon"</span> }
+  }
+}
+
+<span class="cmt"># STEP 02: look up the LATEST Amazon Linux 2023 AMI automatically</span>
+source <span class="str">"amazon-ebs"</span> <span class="str">"base"</span> {
+  region        = <span class="str">"us-east-1"</span>
+  instance_type = <span class="str">"t3.micro"</span>
+  ssh_username  = <span class="str">"ec2-user"</span>
+
+  source_ami_filter {
+    filters = {
+      name                = <span class="str">"al2023-ami-*-x86_64"</span>
+      virtualization-type = <span class="str">"hvm"</span>
+      root-device-type    = <span class="str">"ebs"</span>
+    }
+    most_recent = <span class="key">true</span>          <span class="cmt"># always grab the newest</span>
+    owners      = [<span class="str">"amazon"</span>]
+  }
+
+  <span class="cmt"># STEP 06: how the baked AMI will be named &amp; tagged</span>
+  ami_name = <span class="str">"golden-java21-python-{{timestamp}}"</span>
+  tags = {
+    BaseOS    = <span class="str">"AmazonLinux2023"</span>
+    Java      = <span class="str">"21-Corretto"</span>
+    BuiltBy   = <span class="str">"AMIFactory"</span>
+    SourceAMI = <span class="str">"{{ .SourceAMI }}"</span>
+  }
+}
+
+build {
+  sources = [<span class="str">"source.amazon-ebs.base"</span>]
+
+  <span class="cmt"># STEP 04: install our software</span>
+  provisioner <span class="str">"shell"</span> {
+    script = <span class="str">"provision.sh"</span>
+  }
+
+  <span class="cmt"># STEP 05: validate — build FAILS if any command returns non-zero</span>
+  provisioner <span class="str">"shell"</span> {
+    inline = [
+      <span class="str">"echo '--- Running tests ---'"</span>,
+      <span class="str">"java --version | grep '21' || (echo 'JAVA TEST FAILED' &amp;&amp; exit 1)"</span>,
+      <span class="str">"python3 --version || (echo 'PYTHON TEST FAILED' &amp;&amp; exit 1)"</span>,
+      <span class="str">"echo 'ALL TESTS PASSED'"</span>
+    ]
+  }
+
+  <span class="cmt"># STEP 07: write the new AMI ID to a file for the next stage</span>
+  post-processor <span class="str">"manifest"</span> {
+    output = <span class="str">"manifest.json"</span>
+  }
+}</code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEP 04</span><h4>provision.sh &mdash; the install script</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt">#!/bin/bash</span>
+<span class="key">set</span> -euo pipefail   <span class="cmt"># stop instantly on any error</span>
+
+<span class="fn">echo</span> <span class="str">"Updating base packages..."</span>
+sudo dnf update -y
+
+<span class="fn">echo</span> <span class="str">"Installing Java 21 (Amazon Corretto)..."</span>
+sudo dnf install -y java-21-amazon-corretto-devel
+
+<span class="fn">echo</span> <span class="str">"Installing Python 3 + pip..."</span>
+sudo dnf install -y python3 python3-pip
+
+<span class="cmt"># make Java visible to all future shells</span>
+<span class="fn">echo</span> <span class="str">'export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto'</span> \
+  | sudo tee /etc/profile.d/java.sh
+
+<span class="fn">echo</span> <span class="str">"Provisioning complete."</span></code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">RUN IT</span><h4>Build the image</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>packer init  amibuild.pkr.hcl
+packer build amibuild.pkr.hcl
+
+<span class="cmt"># on success, manifest.json now holds the new AMI ID</span></code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEP 07</span><h4>Publish the new AMI ID</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt"># pull the AMI id from Packer's manifest and announce it</span>
+NEW_AMI=$(jq -r <span class="str">'.builds[-1].artifact_id'</span> manifest.json | cut -d<span class="str">':'</span> -f2)
+
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:111122223333:new-base-ami \
+  --subject  <span class="str">"New golden AMI ready"</span> \
+  --message  <span class="str">"{\"ami_id\":\"$NEW_AMI\",\"java\":\"21\",\"status\":\"READY\"}"</span></code></pre>
+      </div>
+      <div class="callout">Downstream teams have an SQS queue <strong>subscribed</strong> to that SNS topic, so this single publish reaches every consumer at once.</div>
+    </div>
+
+    <!-- TERRAFORM -->
+    <div id="tab-tf" class="tab-pane">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:1.0625rem">Where Terraform fits</h3>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">Packer bakes the image. Terraform builds the surrounding infrastructure: the SNS topic, the SQS queue, the subscription wiring, the EventBridge trigger, IAM roles, and optionally <strong>EC2 Image Builder</strong> if you prefer AWS&rsquo;s native baking service. Use them together, each doing what it&rsquo;s best at.</p>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEPS 01 &amp; 07</span><h4>main.tf &mdash; messaging + trigger infrastructure</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">terraform</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>provider <span class="str">"aws"</span> { region = <span class="str">"us-east-1"</span> }
+
+<span class="cmt"># STEP 07a: the topic our build publishes to</span>
+resource <span class="str">"aws_sns_topic"</span> <span class="str">"new_ami"</span> {
+  name = <span class="str">"new-base-ami"</span>
+}
+
+<span class="cmt"># STEP 07b: the queue downstream apps poll from</span>
+resource <span class="str">"aws_sqs_queue"</span> <span class="str">"app_rebuild"</span> {
+  name                       = <span class="str">"app-rebuild-queue"</span>
+  visibility_timeout_seconds = <span class="num">300</span>
+}
+
+<span class="cmt"># STEP 07c: connect topic -&gt; queue (fan-out)</span>
+resource <span class="str">"aws_sns_topic_subscription"</span> <span class="str">"to_sqs"</span> {
+  topic_arn = aws_sns_topic.new_ami.arn
+  protocol  = <span class="str">"sqs"</span>
+  endpoint  = aws_sqs_queue.app_rebuild.arn
+}
+
+<span class="cmt"># allow SNS to drop messages into the queue</span>
+resource <span class="str">"aws_sqs_queue_policy"</span> <span class="str">"allow_sns"</span> {
+  queue_url = aws_sqs_queue.app_rebuild.id
+  policy = jsonencode({
+    Version = <span class="str">"2012-10-17"</span>,
+    Statement = [{
+      Effect    = <span class="str">"Allow"</span>,
+      Principal = { Service = <span class="str">"sns.amazonaws.com"</span> },
+      Action    = <span class="str">"sqs:SendMessage"</span>,
+      Resource  = aws_sqs_queue.app_rebuild.arn,
+      Condition = {
+        ArnEquals = { <span class="str">"aws:SourceArn"</span> = aws_sns_topic.new_ami.arn }
+      }
+    }]
+  })
+}
+
+<span class="cmt"># STEP 01: EventBridge rule — fires when the SSM parameter</span>
+<span class="cmt"># holding the latest AMI id changes value</span>
+resource <span class="str">"aws_cloudwatch_event_rule"</span> <span class="str">"ami_changed"</span> {
+  name        = <span class="str">"al2023-ami-updated"</span>
+  description = <span class="str">"Latest Amazon Linux AMI changed"</span>
+  event_pattern = jsonencode({
+    source      = [<span class="str">"aws.ssm"</span>],
+    detail-type = [<span class="str">"Parameter Store Change"</span>],
+    detail = {
+      name      = [{ prefix = <span class="str">"/aws/service/ami-amazon-linux-latest/"</span> }],
+      operation = [<span class="str">"Update"</span>]
+    }
+  })
+}
+
+<span class="cmt"># point the rule at whatever runs Packer (Lambda, CodeBuild, etc.)</span>
+resource <span class="str">"aws_cloudwatch_event_target"</span> <span class="str">"run_builder"</span> {
+  rule = aws_cloudwatch_event_rule.ami_changed.name
+  arn  = aws_lambda_function.start_packer.arn
+}
+
+output <span class="str">"sns_topic_arn"</span> { value = aws_sns_topic.new_ami.arn }
+output <span class="str">"sqs_queue_url"</span> { value = aws_sqs_queue.app_rebuild.id }</code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">APPLY</span><h4>Provision it</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>terraform init
+terraform plan
+terraform apply        <span class="cmt"># creates SNS + SQS + trigger</span></code></pre>
+      </div>
+
+      <div class="callout">
+        <strong>Optional native path:</strong> Terraform can also drive <code>aws_imagebuilder_image_pipeline</code> &mdash; AWS&rsquo;s managed AMI baking service &mdash; instead of Packer. Use it when you want to avoid running Packer infrastructure yourself.
+        <div style="margin-top:0.75rem"><button class="info-chip" onclick="openModal('m-imagebuilder')">EC2 Image Builder</button></div>
+      </div>
+    </div>
+
+    <!-- CLI -->
+    <div id="tab-cli" class="tab-pane">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:1.0625rem">The no-special-tools path</h3>
+        <p style="color:var(--c-text-2);margin:0.5rem 0 0">With only the AWS CLI and bash, you can do every step by hand. This is the most transparent way to learn what Packer abstracts &mdash; but you manage cleanup yourself.</p>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEP 02</span><h4>Find the latest AMI from SSM</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>BASE_AMI=$(aws ssm get-parameter \
+  --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+  --query <span class="str">'Parameter.Value'</span> --output text)
+<span class="fn">echo</span> <span class="str">"Latest base AMI: $BASE_AMI"</span></code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEP 03</span><h4>Launch the temp build server</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id <span class="str">"$BASE_AMI"</span> \
+  --instance-type t3.micro \
+  --key-name my-build-key \
+  --security-group-ids sg-0123456789 \
+  --query <span class="str">'Instances[0].InstanceId'</span> --output text)
+
+aws ec2 wait instance-running --instance-ids <span class="str">"$INSTANCE_ID"</span>
+
+IP=$(aws ec2 describe-instances --instance-ids <span class="str">"$INSTANCE_ID"</span> \
+  --query <span class="str">'Reservations[0].Instances[0].PublicIpAddress'</span> --output text)</code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEPS 04 &amp; 05</span><h4>Provision and test over SSH</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>ssh -o StrictHostKeyChecking=no ec2-user@<span class="str">"$IP"</span> <span class="str">'bash -s'</span> &lt;&lt; <span class="str">'EOF'</span>
+set -euo pipefail
+sudo dnf update -y
+sudo dnf install -y java-21-amazon-corretto-devel python3 python3-pip
+
+<span class="cmt"># --- tests ---</span>
+java --version | grep 21 || { echo <span class="str">"JAVA FAIL"</span>; exit 1; }
+python3 --version          || { echo <span class="str">"PY FAIL"</span>;   exit 1; }
+echo <span class="str">"TESTS PASSED"</span>
+EOF</code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEP 06</span><h4>Bake the AMI &mdash; only runs if the SSH block above succeeded</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>NEW_AMI=$(aws ec2 create-image \
+  --instance-id <span class="str">"$INSTANCE_ID"</span> \
+  --name <span class="str">"golden-java21-python-$(date +%s)"</span> \
+  --tag-specifications <span class="str">'ResourceType=image,Tags=[{Key=Java,Value=21},{Key=BuiltBy,Value=AMIFactory}]'</span> \
+  --query <span class="str">'ImageId'</span> --output text)
+
+aws ec2 wait image-available --image-ids <span class="str">"$NEW_AMI"</span>
+
+<span class="cmt"># clean up the temporary build server</span>
+aws ec2 terminate-instances --instance-ids <span class="str">"$INSTANCE_ID"</span></code></pre>
+      </div>
+
+      <div class="subhead"><span class="subhead-num">STEP 07</span><h4>Announce via SNS</h4></div>
+      <div class="code-wrap">
+        <div class="code-head"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code>aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:111122223333:new-base-ami \
+  --message <span class="str">"{\"ami_id\":\"$NEW_AMI\",\"status\":\"READY\"}"</span></code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNSTREAM -->
+  <section id="downstream">
+    <div class="eyebrow">05 · Downstream</div>
+    <h2>What consumers do</h2>
+    <p class="lead">The other side of step 07. Each consuming team polls their SQS queue. When a <code>READY</code> message arrives, they kick off their own Packer build using our new AMI as the base.</p>
+
+    <div class="code-wrap">
+      <div class="code-head"><span class="code-lang">bash · downstream poller</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre><code><span class="cmt"># runs on a schedule (cron, EventBridge, etc.)</span>
+MSG=$(aws sqs receive-message --queue-url <span class="str">"$QUEUE_URL"</span> --query <span class="str">'Messages[0]'</span>)
+NEW_BASE=$(<span class="fn">echo</span> <span class="str">"$MSG"</span> | jq -r <span class="str">'.Body | fromjson | .Message | fromjson | .ami_id'</span>)
+
+<span class="cmt"># feed it into their own packer build as a variable</span>
+packer build -var <span class="str">"base_ami=$NEW_BASE"</span> app-image.pkr.hcl
+
+<span class="cmt"># delete the message so it isn't processed twice</span>
+RH=$(<span class="fn">echo</span> <span class="str">"$MSG"</span> | jq -r <span class="str">'.ReceiptHandle'</span>)
+aws sqs delete-message --queue-url <span class="str">"$QUEUE_URL"</span> --receipt-handle <span class="str">"$RH"</span></code></pre>
+    </div>
+  </section>
+
+  <!-- REFERENCES -->
+  <section id="references">
+    <div class="eyebrow">06 · References</div>
+    <h2>Official documentation</h2>
+    <p class="lead">Authoritative sources for every tool and service in this tutorial.</p>
+
+    <div class="refs">
+      <a class="ref-link" href="https://developer.hashicorp.com/packer/integrations/hashicorp/amazon" target="_blank" rel="noopener">
+        <span class="eyebrow">Packer</span>
+        <span class="ref-title">Amazon AMI builder reference</span>
+        <span class="ref-arrow">developer.hashicorp.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html" target="_blank" rel="noopener">
+        <span class="eyebrow">AWS EC2</span>
+        <span class="ref-title">Amazon Machine Images (AMI)</span>
+        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">
+        <span class="eyebrow">Terraform</span>
+        <span class="ref-title">AWS provider documentation</span>
+        <span class="ref-arrow">registry.terraform.io &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html" target="_blank" rel="noopener">
+        <span class="eyebrow">AWS</span>
+        <span class="ref-title">EC2 Image Builder user guide</span>
+        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html" target="_blank" rel="noopener">
+        <span class="eyebrow">AWS</span>
+        <span class="ref-title">Amazon SNS developer guide</span>
+        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html" target="_blank" rel="noopener">
+        <span class="eyebrow">AWS</span>
+        <span class="ref-title">Amazon SQS developer guide</span>
+        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html" target="_blank" rel="noopener">
+        <span class="eyebrow">Amazon Corretto</span>
+        <span class="ref-title">Corretto 21 (Java) user guide</span>
+        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+      <a class="ref-link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-public-parameters-ami.html" target="_blank" rel="noopener">
+        <span class="eyebrow">AWS SSM</span>
+        <span class="ref-title">Public AMI parameters</span>
+        <span class="ref-arrow">docs.aws.amazon.com &rarr;</span>
+      </a>
+    </div>
+  </section>
+
+  </main>
+</div>
+</div>
+
+<footer>
+  <div class="container">
+    <p>AWS AMI Factory tutorial &middot; IBM Carbon-inspired styling &middot; Replace account IDs, ARNs, regions, and security groups with your own values before running.</p>
+  </div>
+</footer>
+
+<!-- MODALS -->
+<div class="modal-bg" id="modal-layer" onclick="if(event.target===this)closeModal()">
+
+  <div class="modal-box" id="m-ami">
+    <div class="modal-head"><h3>What is an AMI?</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p>AMI stands for <strong>Amazon Machine Image</strong>. It&rsquo;s a complete template of a server&rsquo;s disk: the operating system, system settings, and any software you installed.</p>
+      <p>When you launch an EC2 instance (a virtual server), you must tell AWS which AMI to start from. Think of the AMI as the &ldquo;starting save file&rdquo; for a server.</p>
+      <p>Custom AMIs let you boot servers that are already configured &mdash; no setup time, and every server is identical, which prevents the classic &ldquo;it works on my machine&rdquo; problem.</p>
+      <p><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html" target="_blank" rel="noopener">Read the official AMI documentation &rarr;</a></p>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-golden">
+    <div class="modal-head"><h3>Why &ldquo;golden image&rdquo;?</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p>A <strong>golden image</strong> is your one official, approved, tested base that everyone builds from. The name comes from manufacturing: the &ldquo;golden master&rdquo; copy that everything else is stamped from.</p>
+      <p>Because security patches and approved software live in the golden image, every team automatically inherits them. Update the golden image once, and the fix flows everywhere.</p>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-services">
+    <div class="modal-head"><h3>AWS services glossary</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <ul>
+        <li><strong>EC2</strong> &mdash; virtual servers in the cloud.</li>
+        <li><strong>AMI</strong> &mdash; the saved image an EC2 server boots from.</li>
+        <li><strong>SSM Parameter Store</strong> &mdash; where AWS stores values, including the ID of the latest AMI.</li>
+        <li><strong>EventBridge</strong> &mdash; listens for events and triggers actions.</li>
+        <li><strong>SNS</strong> &mdash; sends one message out to many subscribers (a megaphone).</li>
+        <li><strong>SQS</strong> &mdash; a queue that holds messages until a worker reads them (a mailbox).</li>
+        <li><strong>Lambda</strong> &mdash; runs small bits of code with no server to manage.</li>
+        <li><strong>IAM</strong> &mdash; controls who and what is allowed to do what.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-trigger">
+    <div class="modal-head"><h3>How the trigger works</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p>AWS stores the ID of the newest Amazon Linux AMI in <strong>SSM Parameter Store</strong>. When AWS releases a new one, that stored value changes.</p>
+      <p><strong>EventBridge</strong> watches for that exact change and automatically starts your build &mdash; no human needed.</p>
+      <p>AWS also publishes notifications to public <strong>SNS topics</strong> for AMI updates, which you can subscribe to as an alternative trigger.</p>
+      <p><a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-public-parameters-ami.html" target="_blank" rel="noopener">SSM public AMI parameters &rarr;</a></p>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-corretto">
+    <div class="modal-head"><h3>What is Amazon Corretto?</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p><strong>Corretto</strong> is Amazon&rsquo;s free, production-ready build of Java (OpenJDK). Corretto 21 gives you Java 21 with long-term security updates from AWS.</p>
+      <p>One command installs it: <code>dnf install java-21-amazon-corretto-devel</code>.</p>
+      <p><a href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html" target="_blank" rel="noopener">Corretto 21 documentation &rarr;</a></p>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-snssqs">
+    <div class="modal-head"><h3>SNS vs SQS</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p><strong>SNS &mdash; megaphone (push).</strong> You publish once; SNS instantly pushes a copy to every subscriber. Great for &ldquo;tell everyone something happened.&rdquo;</p>
+      <p><strong>SQS &mdash; mailbox (pull).</strong> Messages sit safely in a queue until a worker is ready to pick them up and process them one at a time.</p>
+      <p>The pattern used here is <strong>SNS &rarr; SQS fan-out</strong>: SNS broadcasts the event, and each consuming team has its own SQS queue subscribed to it, so no one misses or blocks anyone else.</p>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-packer">
+    <div class="modal-head"><h3>Install Packer</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p>Packer is a single free binary from HashiCorp.</p>
+<pre><code><span class="cmt"># macOS</span>
+brew install packer
+
+<span class="cmt"># Amazon Linux / RHEL</span>
+sudo dnf install -y dnf-plugins-core
+sudo dnf config-manager --add-repo \
+  https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+sudo dnf install -y packer</code></pre>
+      <p><a href="https://developer.hashicorp.com/packer/install" target="_blank" rel="noopener">Official install guide &rarr;</a></p>
+    </div>
+  </div>
+
+  <div class="modal-box" id="m-imagebuilder">
+    <div class="modal-head"><h3>EC2 Image Builder</h3><button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <p><strong>EC2 Image Builder</strong> is AWS&rsquo;s own managed service for baking AMIs. Instead of running Packer yourself, AWS runs the build, tests, and distribution on a schedule or trigger.</p>
+      <p>Trade-off: less portable than Packer (AWS-only), but zero build infrastructure to maintain. You can define an Image Builder pipeline entirely in Terraform.</p>
+      <p><a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html" target="_blank" rel="noopener">EC2 Image Builder docs &rarr;</a></p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Font size control
+  var fs = 16;
+  function changeFont(d) {
+    fs = Math.min(36, Math.max(14, fs + d));
+    document.documentElement.style.setProperty('--base-font', fs + 'px');
+    document.getElementById('fontDisplay').textContent = fs + 'px';
+  }
+
+  // Tabs
+  function switchTab(id, btn) {
+    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); });
+    document.getElementById('tab-' + id).classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+  }
+
+  // Modals
+  function openModal(id) {
+    document.querySelectorAll('.modal-box').forEach(function(m){ m.classList.remove('show'); });
+    document.getElementById(id).classList.add('show');
+    document.getElementById('modal-layer').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    document.getElementById('modal-layer').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
+
+  // Copy code
+  function copyCode(btn) {
+    var pre = btn.closest('.code-wrap').querySelector('pre');
+    var text = pre.innerText;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function(){
+        var orig = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(function(){ btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+      });
+    }
+  }
+
+  // Active TOC link on scroll
+  var sections = document.querySelectorAll('section[id]');
+  var tocLinks = document.querySelectorAll('.toc-link');
+  function updateToc() {
+    var pos = window.scrollY + 120;
+    var current = null;
+    sections.forEach(function(s){
+      if (s.offsetTop <= pos) current = s.id;
+    });
+    tocLinks.forEach(function(l){
+      l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', updateToc, { passive: true });
+  updateToc();
+</script>
+</body>
+</html>

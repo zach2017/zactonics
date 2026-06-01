@@ -184,7 +184,7 @@
   <div class="inner">
     <div class="kicker reveal">AWS Solution Guide · Beginner Friendly</div>
     <h1 class="reveal" style="animation-delay:.05s">Build a golden base image, automatically.</h1>
-    <p class="lede reveal" style="animation-delay:.1s">A step-by-step walkthrough of an EC2 Image Builder pipeline: triggered by SNS, built on the latest Amazon Linux, hardened with Java&nbsp;21 and Python, tested, then announced to other teams over SNS and SQS.</p>
+    <p class="lede reveal" style="animation-delay:.1s">A step-by-step walkthrough of an EC2 Image Builder pipeline: triggered by SNS, built on the latest Amazon Linux, hardened with Java&nbsp;21, Python, and Kafka client libraries, tested, then announced to other teams over SNS and SQS.</p>
     <div class="chips reveal" style="animation-delay:.15s">
       <span class="chip">EC2 Image Builder</span>
       <span class="chip">Amazon Linux 2023</span>
@@ -192,6 +192,8 @@
       <span class="chip">Python 3</span>
       <span class="chip">SNS + SQS</span>
       <span class="chip">Lambda</span>
+      <span class="chip">Kafka-ready</span>
+      <span class="chip">Ansible · ZooKeeper · NiFi</span>
       <span class="chip">Terraform</span>
     </div>
   </div>
@@ -203,6 +205,8 @@
     <a href="#overview">Overview</a>
     <a href="#concepts">Key concepts</a>
     <a href="#flow">Architecture flow</a>
+    <a href="#user-setup">User &amp; permissions</a>
+    <a href="#console">AWS Console map</a>
     <a href="#prereq">Prerequisites</a>
     <a href="#s1">1 · IAM role</a>
     <a href="#s2">2 · SNS &amp; SQS</a>
@@ -214,6 +218,9 @@
     <a href="#s8">8 · Consume queue</a>
     <a href="#s9">9 · End-to-end test</a>
     <a href="#terraform">Terraform version</a>
+    <a href="#custom-parent">Custom parent AMI</a>
+    <a href="#variants">Variant images</a>
+    <a href="#gotchas">Gotchas &amp; fixes</a>
     <a href="#refs">Documentation</a>
   </nav>
 
@@ -223,15 +230,15 @@
     <h2 class="sec">What are we building?</h2>
     <div class="sec-rule"></div>
     <div class="analogy">
-      Imagine you run a busy kitchen. Every cook needs the same clean, fully-stocked workstation before service begins. In AWS, that pre-stocked workstation is an <strong>AMI</strong> — a saved snapshot of a server with the operating system and software already installed. Rather than have every team set up Java and Python by hand (slow, and easy to get wrong), we bake <strong>one</strong> trusted "golden" image and share it.
+      Imagine you run a busy kitchen. Every cook needs the same clean, fully-stocked workstation before service begins. In AWS, that pre-stocked workstation is an <strong>AMI</strong> — a saved snapshot of a server with the operating system and software already installed. Rather than have every team set up Java and Python by hand (slow, and easy to get wrong), we bake <strong>one</strong> trusted "golden" image and share it. We'll also make this image <strong>Kafka-ready</strong> — the right system libraries so any future application can talk to a Kafka cluster (Amazon MSK or self-hosted) without extra setup.
     </div>
     <p>This guide uses <strong>EC2 Image Builder</strong>, the AWS service that bakes machine images on a repeatable, automated pipeline. Here is the whole story, start to finish:</p>
     <ol class="flow">
       <li>A message on an <strong>SNS topic</strong> says: "a new base image is needed — go build."</li>
       <li>A small <strong>Lambda</strong> function catches that message and starts the pipeline.</li>
       <li>Image Builder pulls the <strong>latest Amazon Linux 2023</strong> AMI as its starting point.</li>
-      <li>It installs <strong>Java 21</strong> (Amazon Corretto) and <strong>Python 3</strong> on top.</li>
-      <li>It runs a <strong>test phase</strong> that proves both actually work — if not, the build fails and nothing ships.</li>
+      <li>It installs <strong>Java 21</strong> (Amazon Corretto), <strong>Python 3</strong>, and the system libraries needed for <strong>Kafka clients</strong> (librdkafka, openssl, cyrus-sasl, zlib).</li>
+      <li>It runs a <strong>test phase</strong> that proves Java, Python, and the Kafka libraries actually work — if not, the build fails and nothing ships.</li>
       <li>On success, Image Builder publishes to a second <strong>SNS topic</strong>, which fans out to an <strong>SQS queue</strong>.</li>
       <li>Downstream app teams read that queue and update their applications to the new image.</li>
     </ol>
@@ -289,6 +296,218 @@
               ┌───────────────┐
               │ SQS  updates  │  ◀── app teams poll &amp; redeploy
               └───────────────┘</pre>
+    </div>
+  </section>
+
+  <section id="user-setup">
+    <h2 class="sec">Setting up your AWS user (least-privilege)</h2>
+    <div class="sec-rule"></div>
+    <p>Before clicking anything, give yourself an <strong>IAM user</strong> with only the permissions this tutorial actually needs — no more. "Least privilege" is the AWS security principle that an identity should hold the smallest set of permissions that lets it do its job. If credentials ever leak, the blast radius stays small.</p>
+
+    <p>There are <strong>three different identities</strong> at play here, and it's worth knowing which is which before you start clicking:</p>
+    <ol class="flow">
+      <li><strong>You, the human builder</strong> — the IAM user that runs the AWS CLI or clicks through the Console to create the pipeline. Needs setup permissions.</li>
+      <li><strong>The Image Builder build instance</strong> — the temporary EC2 server that bakes the image. Needs <em>runtime</em> permissions via an instance profile (the role from Step 1).</li>
+      <li><strong>The Lambda trigger</strong> — the function that starts the pipeline. Needs permission to call <span class="mono">imagebuilder:StartImagePipelineExecution</span> and write logs.</li>
+    </ol>
+
+    <h3 style="margin-top:28px">Step A · Create the human builder user (AWS Console)</h3>
+    <p>The recommended modern path is <strong>IAM Identity Center</strong> (formerly AWS SSO), but a plain IAM user works fine for a single-account learning setup. Both routes appear below.</p>
+    <ol class="flow">
+      <li>Sign in to the AWS Console as a root or admin user, then go to <span class="mono">IAM → Users → Create user</span>.</li>
+      <li>Name the user (e.g. <span class="mono">image-pipeline-builder</span>) and tick <em>Provide user access to the AWS Management Console</em> if you want browser access. Pick <em>I want to create an IAM user</em>.</li>
+      <li>On the permissions page, choose <em>Attach policies directly</em>, then click <em>Create policy</em> (we'll attach our own minimal one — not <span class="mono">AdministratorAccess</span>).</li>
+      <li>Paste the JSON policy below, name it <span class="mono">ImageBuilderTutorialMinimal</span>, save, and attach it to the user.</li>
+      <li>Open the user and create an <em>Access key</em> for <em>Command Line Interface (CLI)</em>. Copy the key and secret somewhere safe — they appear once.</li>
+      <li>On your machine, run <span class="mono">aws configure</span> and paste the key, secret, default region (<span class="mono">us-east-1</span>), and output format (<span class="mono">json</span>).</li>
+    </ol>
+
+    <h3 style="margin-top:24px">The minimum policy for the human builder</h3>
+    <p>This JSON grants only what you need to walk through every step of this tutorial — no more. Adjust the resource ARNs to your account and region for an even tighter grant.</p>
+    <div class="code">
+      <div class="bar"><span class="tag">json · least-privilege policy</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>{
+  <span class="tok-s">"Version"</span>: <span class="tok-s">"2012-10-17"</span>,
+  <span class="tok-s">"Statement"</span>: [
+    {
+      <span class="tok-s">"Sid"</span>: <span class="tok-s">"ImageBuilderManage"</span>,
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: [
+        <span class="tok-s">"imagebuilder:CreateComponent"</span>,
+        <span class="tok-s">"imagebuilder:CreateImageRecipe"</span>,
+        <span class="tok-s">"imagebuilder:CreateInfrastructureConfiguration"</span>,
+        <span class="tok-s">"imagebuilder:CreateImagePipeline"</span>,
+        <span class="tok-s">"imagebuilder:StartImagePipelineExecution"</span>,
+        <span class="tok-s">"imagebuilder:Get*"</span>,
+        <span class="tok-s">"imagebuilder:List*"</span>,
+        <span class="tok-s">"imagebuilder:Update*"</span>,
+        <span class="tok-s">"imagebuilder:Delete*"</span>
+      ],
+      <span class="tok-s">"Resource"</span>: <span class="tok-s">"*"</span>
+    },
+    {
+      <span class="tok-s">"Sid"</span>: <span class="tok-s">"IamSetupForImageBuilder"</span>,
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: [
+        <span class="tok-s">"iam:CreateRole"</span>,
+        <span class="tok-s">"iam:AttachRolePolicy"</span>,
+        <span class="tok-s">"iam:CreateInstanceProfile"</span>,
+        <span class="tok-s">"iam:AddRoleToInstanceProfile"</span>,
+        <span class="tok-s">"iam:GetRole"</span>,
+        <span class="tok-s">"iam:GetInstanceProfile"</span>,
+        <span class="tok-s">"iam:PassRole"</span>,
+        <span class="tok-s">"iam:CreateServiceLinkedRole"</span>
+      ],
+      <span class="tok-s">"Resource"</span>: [
+        <span class="tok-s">"arn:aws:iam::*:role/ImageBuilderRole"</span>,
+        <span class="tok-s">"arn:aws:iam::*:role/LambdaImageBuilderTrigger"</span>,
+        <span class="tok-s">"arn:aws:iam::*:instance-profile/ImageBuilderProfile"</span>,
+        <span class="tok-s">"arn:aws:iam::*:role/aws-service-role/imagebuilder.amazonaws.com/*"</span>
+      ]
+    },
+    {
+      <span class="tok-s">"Sid"</span>: <span class="tok-s">"Messaging"</span>,
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: [
+        <span class="tok-s">"sns:CreateTopic"</span>, <span class="tok-s">"sns:Subscribe"</span>, <span class="tok-s">"sns:Publish"</span>,
+        <span class="tok-s">"sns:GetTopicAttributes"</span>, <span class="tok-s">"sns:SetTopicAttributes"</span>,
+        <span class="tok-s">"sqs:CreateQueue"</span>, <span class="tok-s">"sqs:GetQueueAttributes"</span>,
+        <span class="tok-s">"sqs:SetQueueAttributes"</span>, <span class="tok-s">"sqs:ReceiveMessage"</span>
+      ],
+      <span class="tok-s">"Resource"</span>: <span class="tok-s">"*"</span>
+    },
+    {
+      <span class="tok-s">"Sid"</span>: <span class="tok-s">"LambdaTriggerSetup"</span>,
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: [
+        <span class="tok-s">"lambda:CreateFunction"</span>, <span class="tok-s">"lambda:AddPermission"</span>,
+        <span class="tok-s">"lambda:GetFunction"</span>, <span class="tok-s">"lambda:UpdateFunctionCode"</span>
+      ],
+      <span class="tok-s">"Resource"</span>: <span class="tok-s">"arn:aws:lambda:*:*:function:StartImageBuild"</span>
+    },
+    {
+      <span class="tok-s">"Sid"</span>: <span class="tok-s">"ReadOnlyForConsoleNav"</span>,
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: [
+        <span class="tok-s">"ec2:DescribeImages"</span>, <span class="tok-s">"ec2:DescribeInstanceTypes"</span>,
+        <span class="tok-s">"ec2:DescribeSubnets"</span>, <span class="tok-s">"ec2:DescribeSecurityGroups"</span>,
+        <span class="tok-s">"logs:DescribeLogGroups"</span>, <span class="tok-s">"logs:GetLogEvents"</span>
+      ],
+      <span class="tok-s">"Resource"</span>: <span class="tok-s">"*"</span>
+    }
+  ]
+}</pre>
+    </div>
+    <div class="note warn">
+      <span class="h">Why each block exists</span>
+      <strong>ImageBuilderManage</strong> creates and runs the pipeline · <strong>IamSetupForImageBuilder</strong> creates only the three named roles/profiles, scoped by ARN · <strong>Messaging</strong> sets up SNS/SQS · <strong>LambdaTriggerSetup</strong> covers the trigger function (only) · <strong>ReadOnlyForConsoleNav</strong> lets the AWS Console show the dropdowns (subnets, security groups, etc.) you'll pick from. Nothing here grants account-wide admin.
+    </div>
+
+    <h3 style="margin-top:24px">Step B · The Image Builder service role (runtime)</h3>
+    <p>This is the role the build EC2 instance assumes while baking — the one created in Step 1 of the main guide. The two AWS-managed policies attached to it are the official minimum:</p>
+    <ol class="flow">
+      <li><span class="mono">EC2InstanceProfileForImageBuilder</span> — permission for the build instance to talk to the Image Builder service, write artifacts to its working S3 buckets, and publish logs.</li>
+      <li><span class="mono">AmazonSSMManagedInstanceCore</span> — permission for AWS Systems Manager to send build commands to the instance and stream the output back. This is how Image Builder controls the box without SSH.</li>
+    </ol>
+    <p>You don't add anything extra for installing Java/Python/Kafka libraries — those installs only need internet access from the build subnet to pull packages from <span class="mono">dnf</span> repositories.</p>
+
+    <h3 style="margin-top:24px">Step C · The Lambda trigger role</h3>
+    <p>The function from Step 7 needs its own tiny role. Create it with this trust policy and inline permissions:</p>
+    <div class="code">
+      <div class="bar"><span class="tag">json · trust policy</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>{
+  <span class="tok-s">"Version"</span>: <span class="tok-s">"2012-10-17"</span>,
+  <span class="tok-s">"Statement"</span>: [{
+    <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+    <span class="tok-s">"Principal"</span>: { <span class="tok-s">"Service"</span>: <span class="tok-s">"lambda.amazonaws.com"</span> },
+    <span class="tok-s">"Action"</span>: <span class="tok-s">"sts:AssumeRole"</span>
+  }]
+}</pre>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="tag">json · inline policy</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>{
+  <span class="tok-s">"Version"</span>: <span class="tok-s">"2012-10-17"</span>,
+  <span class="tok-s">"Statement"</span>: [
+    {
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: <span class="tok-s">"imagebuilder:StartImagePipelineExecution"</span>,
+      <span class="tok-s">"Resource"</span>: <span class="tok-s">"arn:aws:imagebuilder:*:*:image-pipeline/base-java-python-pipeline"</span>
+    },
+    {
+      <span class="tok-s">"Effect"</span>: <span class="tok-s">"Allow"</span>,
+      <span class="tok-s">"Action"</span>: [
+        <span class="tok-s">"logs:CreateLogGroup"</span>,
+        <span class="tok-s">"logs:CreateLogStream"</span>,
+        <span class="tok-s">"logs:PutLogEvents"</span>
+      ],
+      <span class="tok-s">"Resource"</span>: <span class="tok-s">"arn:aws:logs:*:*:*"</span>
+    }
+  ]
+}</pre>
+    </div>
+
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('leastpriv')"><span class="i">i</span>Least privilege explained</button>
+      <button class="info-btn" onclick="openModal('identitycenter')"><span class="i">i</span>IAM Identity Center vs IAM user</button>
+      <button class="info-btn" onclick="openModal('passrole')"><span class="i">i</span>What is iam:PassRole?</button>
+      <button class="info-btn" onclick="openModal('servicelinked')"><span class="i">i</span>Service-linked roles</button>
+    </div>
+  </section>
+
+  <section id="console">
+    <h2 class="sec">Where things live in the AWS Console</h2>
+    <div class="sec-rule"></div>
+    <p>Prefer clicking to typing? Every CLI step in this guide has an equivalent path in the AWS Management Console. Here's the menu map. The Console URL for each service is also listed so you can bookmark them.</p>
+
+    <h3 style="margin-top:16px">EC2 Image Builder</h3>
+    <p>From the main Console, the search bar is the fastest way in. Type <em>Image Builder</em> and select <em>EC2 Image Builder</em>. The left-hand navigation pane contains every resource type you'll create:</p>
+    <ol class="flow">
+      <li><strong>Image pipelines</strong> — list view and "Create image pipeline" wizard. This is the end-to-end flow: it lets you create components, recipe, infrastructure config, and the pipeline in one guided wizard, if you prefer the all-in-one approach over building each piece separately.</li>
+      <li><strong>Images</strong> — every AMI Image Builder has ever produced for your account, with build status and logs.</li>
+      <li><strong>Components</strong> — "Create component" lets you paste in the YAML from Steps 3 and 4. Phase = <em>build</em> for the install component, <em>test</em> for the verify component.</li>
+      <li><strong>Image recipes</strong> — "Create image recipe" lets you pick the parent image (search "Amazon Linux 2023") and add your components in order.</li>
+      <li><strong>Infrastructure configurations</strong> — pick the IAM role, instance type, and the SNS topic for notifications.</li>
+      <li><strong>Distribution settings</strong> — optional; only needed when you copy AMIs to other regions or share with other accounts.</li>
+    </ol>
+    <p>Direct URL: <a href="https://console.aws.amazon.com/imagebuilder/home" target="_blank" rel="noopener">https://console.aws.amazon.com/imagebuilder/home</a></p>
+
+    <h3 style="margin-top:24px">IAM (roles, users, policies)</h3>
+    <ol class="flow">
+      <li><strong>IAM → Users</strong> — create the human builder user.</li>
+      <li><strong>IAM → Roles</strong> — create <span class="mono">ImageBuilderRole</span> (trusted entity = EC2) and <span class="mono">LambdaImageBuilderTrigger</span> (trusted entity = Lambda).</li>
+      <li><strong>IAM → Policies</strong> — paste the least-privilege JSON above and save as a customer-managed policy.</li>
+      <li><strong>IAM → Roles → [your role] → Add permissions → Attach policies</strong> — attach the two managed policies (<span class="mono">EC2InstanceProfileForImageBuilder</span>, <span class="mono">AmazonSSMManagedInstanceCore</span>).</li>
+    </ol>
+    <p>Direct URL: <a href="https://console.aws.amazon.com/iam/home" target="_blank" rel="noopener">https://console.aws.amazon.com/iam/home</a></p>
+
+    <h3 style="margin-top:24px">SNS &amp; SQS</h3>
+    <ol class="flow">
+      <li><strong>Amazon SNS → Topics → Create topic</strong> — type <em>Standard</em>. Create two: <span class="mono">new-base-image-trigger</span> and <span class="mono">image-ready-topic</span>.</li>
+      <li><strong>Amazon SQS → Queues → Create queue</strong> — type <em>Standard</em>. Name it <span class="mono">image-update-queue</span>.</li>
+      <li>On the queue's detail page, click <strong>SNS subscriptions → Subscribe to Amazon SNS topic</strong> and pick <span class="mono">image-ready-topic</span>. SQS will automatically offer to write the queue access policy for you — accept it.</li>
+    </ol>
+    <p>Direct URLs: <a href="https://console.aws.amazon.com/sns/v3/home" target="_blank" rel="noopener">SNS Console</a> · <a href="https://console.aws.amazon.com/sqs/v3/home" target="_blank" rel="noopener">SQS Console</a></p>
+
+    <h3 style="margin-top:24px">Lambda</h3>
+    <ol class="flow">
+      <li><strong>Lambda → Functions → Create function</strong>. Choose <em>Author from scratch</em>, runtime <em>Python 3.12</em>, and use the <span class="mono">LambdaImageBuilderTrigger</span> role.</li>
+      <li>Paste the handler code from Step 7 into the inline editor and click <em>Deploy</em>.</li>
+      <li>Click <em>Add trigger</em> on the function overview, choose <em>SNS</em>, and pick <span class="mono">new-base-image-trigger</span>.</li>
+    </ol>
+    <p>Direct URL: <a href="https://console.aws.amazon.com/lambda/home" target="_blank" rel="noopener">https://console.aws.amazon.com/lambda/home</a></p>
+
+    <h3 style="margin-top:24px">Watching a build run</h3>
+    <p>After firing the trigger (Step 9), open <strong>EC2 Image Builder → Images</strong>. Click the in-progress image to see its phases tick through. For deeper logs:</p>
+    <ol class="flow">
+      <li><strong>CloudWatch → Log groups → /aws/imagebuilder/&lt;your-image-name&gt;</strong> shows every command the build instance ran.</li>
+      <li><strong>EC2 → Instances</strong> shows the temporary build instance (it terminates automatically once the build completes).</li>
+      <li><strong>SQS → image-update-queue → Send and receive messages → Poll for messages</strong> is the easiest way to see the "image-ready" announcement land.</li>
+    </ol>
+
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('wizard')"><span class="i">i</span>The Image pipeline wizard explained</button>
+      <button class="info-btn" onclick="openModal('cwlogs')"><span class="i">i</span>Reading CloudWatch logs</button>
     </div>
   </section>
 
@@ -378,14 +597,23 @@ aws sns subscribe \
       <div class="step-head"><div class="step-badge">3</div><h3>Write the BUILD component (install Java 21 + Python)</h3></div>
       <div class="step-body">
         <p>A <strong>component</strong> is a YAML recipe of steps Image Builder runs while baking. Components have phases: <span class="mono">build</span> runs during image creation, <span class="mono">validate</span> just after, and <span class="mono">test</span> against the finished image. Save this as <span class="mono">build-component.yaml</span>.</p>
+        <div class="note">
+          <span class="h">Why these extra packages for Kafka readiness</span>
+          Future applications on this AMI will need to connect to Kafka (Amazon MSK or self-managed). Java Kafka clients use SSL/SASL, which needs the JDK's truststore (already in Corretto). Python Kafka clients like <span class="mono">confluent-kafka</span> link against <strong>librdkafka</strong>, which in turn needs <strong>openssl</strong>, <strong>cyrus-sasl</strong>, <strong>zlib</strong>, and a compiler. Installing these system libraries now means each app team can <span class="mono">pip install confluent-kafka</span> later without any compile errors.
+        </div>
         <div class="code">
           <div class="bar"><span class="tag">yaml · build-component.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
-<pre><span class="tok-k">name</span>: InstallJavaPython
-<span class="tok-k">description</span>: Install Java 21 (Corretto) and Python 3
+<pre><span class="tok-k">name</span>: InstallJavaPythonKafka
+<span class="tok-k">description</span>: Install Java 21 (Corretto), Python 3, and Kafka client system libs
 <span class="tok-k">schemaVersion</span>: 1.0
 <span class="tok-k">phases</span>:
   - <span class="tok-k">name</span>: build
     <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: SystemUpdate
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - sudo dnf update -y
       - <span class="tok-k">name</span>: InstallJava21
         <span class="tok-k">action</span>: ExecuteBash
         <span class="tok-k">inputs</span>:
@@ -395,19 +623,30 @@ aws sns subscribe \
         <span class="tok-k">action</span>: ExecuteBash
         <span class="tok-k">inputs</span>:
           <span class="tok-k">commands</span>:
-            - sudo dnf install -y python3 python3-pip
-            - python3 -m pip install --upgrade pip</pre>
+            - sudo dnf install -y python3 python3-pip python3-devel
+            - python3 -m pip install --upgrade pip
+      - <span class="tok-k">name</span>: KafkaClientLibs
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            <span class="tok-c"># System libs Kafka clients (Java &amp; Python) need</span>
+            - sudo dnf install -y gcc openssl openssl-devel cyrus-sasl cyrus-sasl-devel zlib zlib-devel
+            - sudo dnf install -y librdkafka librdkafka-devel
+            <span class="tok-c"># Pre-install Python Kafka clients so apps don't compile at runtime</span>
+            - sudo python3 -m pip install confluent-kafka kafka-python</pre>
         </div>
         <div class="code">
           <div class="bar"><span class="tag">bash · register the component</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
 <pre>aws imagebuilder create-component \
-  <span class="tok-f">--name</span> InstallJavaPython <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--name</span> InstallJavaPythonKafka <span class="tok-f">--semantic-version</span> 1.0.0 \
   <span class="tok-f">--platform</span> Linux <span class="tok-f">--data</span> file://build-component.yaml</pre>
         </div>
         <div class="infobtns">
           <button class="info-btn" onclick="openModal('component')"><span class="i">i</span>How components &amp; phases work</button>
           <button class="info-btn" onclick="openModal('corretto')"><span class="i">i</span>Why Amazon Corretto for Java?</button>
           <button class="info-btn" onclick="openModal('dnf')"><span class="i">i</span>What is dnf?</button>
+          <button class="info-btn" onclick="openModal('kafka')"><span class="i">i</span>Kafka client packages explained</button>
+          <button class="info-btn" onclick="openModal('msk')"><span class="i">i</span>What is Amazon MSK?</button>
         </div>
       </div>
     </div>
@@ -418,8 +657,8 @@ aws sns subscribe \
         <p>Tests run in the <span class="mono">test</span> phase against the freshly built image. The trick: if any command exits with a non-zero code, the phase fails, the whole pipeline stops, and <strong>no broken image is ever published</strong>. Save as <span class="mono">test-component.yaml</span>.</p>
         <div class="code">
           <div class="bar"><span class="tag">yaml · test-component.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
-<pre><span class="tok-k">name</span>: VerifyJavaPython
-<span class="tok-k">description</span>: Confirm Java 21 and Python are present and runnable
+<pre><span class="tok-k">name</span>: VerifyJavaPythonKafka
+<span class="tok-k">description</span>: Confirm Java 21, Python, and Kafka client libs are present
 <span class="tok-k">schemaVersion</span>: 1.0
 <span class="tok-k">phases</span>:
   - <span class="tok-k">name</span>: test
@@ -433,12 +672,19 @@ aws sns subscribe \
         <span class="tok-k">action</span>: ExecuteBash
         <span class="tok-k">inputs</span>:
           <span class="tok-k">commands</span>:
-            - <span class="tok-s">'python3 --version || (echo "Python missing" &amp;&amp; exit 1)'</span></pre>
+            - <span class="tok-s">'python3 --version || (echo "Python missing" &amp;&amp; exit 1)'</span>
+      - <span class="tok-k">name</span>: CheckKafkaLibs
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - <span class="tok-s">'rpm -q librdkafka || (echo "librdkafka missing" &amp;&amp; exit 1)'</span>
+            - <span class="tok-s">'python3 -c "import confluent_kafka; print(confluent_kafka.version())" || (echo "confluent-kafka import failed" &amp;&amp; exit 1)'</span>
+            - <span class="tok-s">'python3 -c "import kafka; print(kafka.__version__)" || (echo "kafka-python import failed" &amp;&amp; exit 1)'</span></pre>
         </div>
         <div class="code">
           <div class="bar"><span class="tag">bash · register the component</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
 <pre>aws imagebuilder create-component \
-  <span class="tok-f">--name</span> VerifyJavaPython <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--name</span> VerifyJavaPythonKafka <span class="tok-f">--semantic-version</span> 1.0.0 \
   <span class="tok-f">--platform</span> Linux <span class="tok-f">--data</span> file://test-component.yaml</pre>
         </div>
         <div class="note ok">
@@ -462,8 +708,8 @@ aws sns subscribe \
   <span class="tok-f">--name</span> base-java-python-recipe <span class="tok-f">--semantic-version</span> 1.0.0 \
   <span class="tok-f">--parent-image</span> <span class="tok-s">"arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/x.x.x"</span> \
   <span class="tok-f">--components</span> \
-    <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapython/1.0.0'</span> \
-    <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/verifyjavapython/1.0.0'</span></pre>
+    <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapythonkafka/1.0.0'</span> \
+    <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/verifyjavapythonkafka/1.0.0'</span></pre>
         </div>
         <div class="infobtns">
           <button class="info-btn" onclick="openModal('recipe')"><span class="i">i</span>What lives in a recipe?</button>
@@ -631,9 +877,9 @@ aws imagebuilder create-image-pipeline \
 
 <span class="tok-c"># 4. Build + 5. Test components (inline YAML via heredoc)</span>
 <span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_component"</span> <span class="tok-s">"install"</span> {
-  name = <span class="tok-s">"InstallJavaPython"</span>  platform = <span class="tok-s">"Linux"</span>  version = <span class="tok-s">"1.0.0"</span>
+  name = <span class="tok-s">"InstallJavaPythonKafka"</span>  platform = <span class="tok-s">"Linux"</span>  version = <span class="tok-s">"1.0.0"</span>
   data = &lt;&lt;-EOT
-    name: InstallJavaPython
+    name: InstallJavaPythonKafka
     schemaVersion: 1.0
     phases:
       - name: build
@@ -643,13 +889,20 @@ aws imagebuilder create-image-pipeline \
             inputs: { commands: ["sudo dnf install -y java-21-amazon-corretto-devel"] }
           - name: Python
             action: ExecuteBash
-            inputs: { commands: ["sudo dnf install -y python3 python3-pip"] }
+            inputs: { commands: ["sudo dnf install -y python3 python3-pip python3-devel"] }
+          - name: KafkaLibs
+            action: ExecuteBash
+            inputs:
+              commands:
+                - "sudo dnf install -y gcc openssl openssl-devel cyrus-sasl cyrus-sasl-devel zlib zlib-devel"
+                - "sudo dnf install -y librdkafka librdkafka-devel"
+                - "sudo python3 -m pip install confluent-kafka kafka-python"
   EOT
 }
 <span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_component"</span> <span class="tok-s">"verify"</span> {
-  name = <span class="tok-s">"VerifyJavaPython"</span>  platform = <span class="tok-s">"Linux"</span>  version = <span class="tok-s">"1.0.0"</span>
+  name = <span class="tok-s">"VerifyJavaPythonKafka"</span>  platform = <span class="tok-s">"Linux"</span>  version = <span class="tok-s">"1.0.0"</span>
   data = &lt;&lt;-EOT
-    name: VerifyJavaPython
+    name: VerifyJavaPythonKafka
     schemaVersion: 1.0
     phases:
       - name: test
@@ -660,6 +913,12 @@ aws imagebuilder create-image-pipeline \
           - name: CheckPython
             action: ExecuteBash
             inputs: { commands: ['python3 --version || (echo missing &amp;&amp; exit 1)'] }
+          - name: CheckKafka
+            action: ExecuteBash
+            inputs:
+              commands:
+                - 'rpm -q librdkafka || (echo missing &amp;&amp; exit 1)'
+                - 'python3 -c "import confluent_kafka" || (echo missing &amp;&amp; exit 1)'
   EOT
 }
 
@@ -691,6 +950,314 @@ aws imagebuilder create-image-pipeline \
     </div>
   </section>
 
+  <section id="custom-parent">
+    <h2 class="sec">Starting from your own custom AMI</h2>
+    <div class="sec-rule"></div>
+    <p>Up to now, the recipe's parent has been the AWS-published Amazon Linux 2023 image. But maybe your company already has a "company-approved" AMI — perhaps one your security team has already hardened with a CIS benchmark, an antivirus agent, or company SSL certs. Image Builder is happy to build on top of that instead. You have three choices for what to point the recipe at:</p>
+
+    <h3 style="margin-top:18px">Option A · An ordinary EC2 AMI you own</h3>
+    <p>If your security team gave you an AMI ID like <span class="mono">ami-0abcd1234efgh5678</span>, you can pass that ID directly. Image Builder will boot a temporary instance from your AMI, run your components, and snapshot the result.</p>
+    <div class="code">
+      <div class="bar"><span class="tag">bash · use a custom AMI as parent</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws imagebuilder create-image-recipe \
+  <span class="tok-f">--name</span> kafka-on-company-base <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--parent-image</span> <span class="tok-s">"ami-0abcd1234efgh5678"</span> \
+  <span class="tok-f">--components</span> <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapythonkafka/1.0.0'</span></pre>
+    </div>
+    <div class="note warn">
+      <span class="h">The AMI must have the SSM Agent installed and running</span>
+      Image Builder controls the build instance through AWS Systems Manager. If your custom AMI doesn't have the SSM Agent, or the agent can't reach the SSM endpoints from your subnet, the build will hang and eventually time out. Amazon Linux 2023, Ubuntu 22.04+ from the Marketplace, and the official Windows Server AMIs all include it.
+    </div>
+
+    <h3 style="margin-top:24px">Option B · An AMI from SSM Parameter Store</h3>
+    <p>If you want "always the newest" pointing at your own custom AMI, store its ID in <strong>SSM Parameter Store</strong> and reference the parameter. When your security team publishes a new hardened AMI, they update the parameter value — and your next Image Builder run picks it up automatically.</p>
+    <div class="code">
+      <div class="bar"><span class="tag">bash · resolve latest from SSM</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-c"># Security team publishes new AMI and updates the parameter</span>
+aws ssm put-parameter <span class="tok-f">--name</span> /company/golden/al2023 \
+  <span class="tok-f">--type</span> String <span class="tok-f">--value</span> ami-0abcd1234efgh5678 <span class="tok-f">--overwrite</span>
+
+<span class="tok-c"># You read the current value when creating the recipe</span>
+PARENT_AMI=$(aws ssm get-parameter <span class="tok-f">--name</span> /company/golden/al2023 \
+  <span class="tok-f">--query</span> Parameter.Value <span class="tok-f">--output</span> text)
+
+aws imagebuilder create-image-recipe \
+  <span class="tok-f">--name</span> base-on-company-golden <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--parent-image</span> <span class="tok-s">"$PARENT_AMI"</span> \
+  <span class="tok-f">--components</span> <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapythonkafka/1.0.0'</span></pre>
+    </div>
+
+    <h3 style="margin-top:24px">Option C · Stack on top of a previous Image Builder output</h3>
+    <p>You can chain pipelines. Pipeline 1 produces a "base-with-Java-Python" image; Pipeline 2 takes that AMI as its parent and adds Kafka tools; Pipeline 3 takes Pipeline 2's output and adds your app code. Each layer is small, reusable, and quick to rebuild. The parent ARN looks like the AWS-managed one but with your AMI ID:</p>
+    <div class="code">
+      <div class="bar"><span class="tag">bash · chain pipelines via the prior AMI</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws imagebuilder create-image-recipe \
+  <span class="tok-f">--name</span> kafka-layer <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--parent-image</span> <span class="tok-s">"ami-PRIOR_PIPELINE_OUTPUT"</span> \
+  <span class="tok-f">--components</span> <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installkafkacli/1.0.0'</span></pre>
+    </div>
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('chained')"><span class="i">i</span>Why chain pipelines?</button>
+      <button class="info-btn" onclick="openModal('ssmagent')"><span class="i">i</span>SSM Agent requirement</button>
+      <button class="info-btn" onclick="openModal('amiownership')"><span class="i">i</span>Who owns the AMI?</button>
+    </div>
+  </section>
+
+  <section id="variants">
+    <h2 class="sec">Variant images: Kafka, Ansible, ZooKeeper, NiFi</h2>
+    <div class="sec-rule"></div>
+    <p>Once you have a good Java-and-Python base image, making specialized images for other tools becomes easy. Each tool just needs its own <strong>component</strong> (a YAML recipe of install steps) added to a new image recipe. Below are starter components for four common ones. All assume the base image already has Java 21 and Python — so you just add the tool itself on top.</p>
+
+    <h3 style="margin-top:18px">Kafka client / broker tools</h3>
+    <p>If apps will only <em>connect</em> to Amazon MSK or another Kafka cluster, the libraries already in the base image are enough. If you want command-line tools (<span class="mono">kafka-topics.sh</span>, <span class="mono">kafka-console-producer.sh</span>) or a local broker for testing, install Apache Kafka itself:</p>
+    <div class="code">
+      <div class="bar"><span class="tag">yaml · kafka-tools.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">name</span>: InstallKafkaTools
+<span class="tok-k">schemaVersion</span>: 1.0
+<span class="tok-k">phases</span>:
+  - <span class="tok-k">name</span>: build
+    <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: DownloadKafka
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - KAFKA_VERSION=3.7.0
+            - SCALA_VERSION=2.13
+            - curl -fLO https://downloads.apache.org/kafka/${KAFKA_VERSION}/kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz
+            - sudo tar -xzf kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz -C /opt
+            - sudo ln -s /opt/kafka_${SCALA_VERSION}-${KAFKA_VERSION} /opt/kafka
+            - echo <span class="tok-s">'export PATH=$PATH:/opt/kafka/bin'</span> | sudo tee /etc/profile.d/kafka.sh</pre>
+    </div>
+
+    <h3 style="margin-top:24px">Ansible (config management on this AMI)</h3>
+    <p>Ansible is a tool for automating server configuration. Putting it on the base image lets you run playbooks against the instance, or use the instance as an Ansible control node that manages others.</p>
+    <div class="code">
+      <div class="bar"><span class="tag">yaml · ansible.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">name</span>: InstallAnsible
+<span class="tok-k">schemaVersion</span>: 1.0
+<span class="tok-k">phases</span>:
+  - <span class="tok-k">name</span>: build
+    <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: AnsibleAndDeps
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            <span class="tok-c"># Ansible runs over SSH; sshpass helps with password-auth hosts (optional)</span>
+            - sudo dnf install -y openssh-clients sshpass git
+            - sudo python3 -m pip install ansible ansible-lint boto3 botocore
+            - ansible --version</pre>
+    </div>
+
+    <h3 style="margin-top:24px">Apache ZooKeeper</h3>
+    <p>ZooKeeper is a coordination service used by older Kafka clusters and many other distributed systems. It needs Java (already there) plus its own user, data directory, and a config file.</p>
+    <div class="code">
+      <div class="bar"><span class="tag">yaml · zookeeper.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">name</span>: InstallZooKeeper
+<span class="tok-k">schemaVersion</span>: 1.0
+<span class="tok-k">phases</span>:
+  - <span class="tok-k">name</span>: build
+    <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: DownloadZK
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - ZK_VERSION=3.9.2
+            - curl -fLO https://downloads.apache.org/zookeeper/zookeeper-${ZK_VERSION}/apache-zookeeper-${ZK_VERSION}-bin.tar.gz
+            - sudo tar -xzf apache-zookeeper-${ZK_VERSION}-bin.tar.gz -C /opt
+            - sudo ln -s /opt/apache-zookeeper-${ZK_VERSION}-bin /opt/zookeeper
+      - <span class="tok-k">name</span>: ZKUserAndDirs
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - sudo useradd -r -s /sbin/nologin zookeeper
+            - sudo mkdir -p /var/lib/zookeeper /var/log/zookeeper
+            - sudo chown -R zookeeper:zookeeper /opt/zookeeper /var/lib/zookeeper /var/log/zookeeper
+            - sudo cp /opt/zookeeper/conf/zoo_sample.cfg /opt/zookeeper/conf/zoo.cfg</pre>
+    </div>
+
+    <h3 style="margin-top:24px">Apache NiFi (data flow)</h3>
+    <p>NiFi is a visual data-flow tool — useful for moving data between systems with little or no code. It is a Java app, so installation means downloading the tarball, creating a service user, and dropping a systemd unit so it starts on boot.</p>
+    <div class="code">
+      <div class="bar"><span class="tag">yaml · nifi.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">name</span>: InstallNiFi
+<span class="tok-k">schemaVersion</span>: 1.0
+<span class="tok-k">phases</span>:
+  - <span class="tok-k">name</span>: build
+    <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: DownloadNiFi
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - NIFI_VERSION=1.27.0
+            - curl -fLO https://downloads.apache.org/nifi/${NIFI_VERSION}/nifi-${NIFI_VERSION}-bin.zip
+            - sudo dnf install -y unzip
+            - sudo unzip -q nifi-${NIFI_VERSION}-bin.zip -d /opt
+            - sudo ln -s /opt/nifi-${NIFI_VERSION} /opt/nifi
+      - <span class="tok-k">name</span>: NiFiServiceUser
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - sudo useradd -r -s /sbin/nologin nifi
+            - sudo chown -R nifi:nifi /opt/nifi-${NIFI_VERSION}
+      - <span class="tok-k">name</span>: SystemdUnit
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - |
+              sudo tee /etc/systemd/system/nifi.service &gt;/dev/null &lt;&lt;'EOF'
+              [Unit]
+              Description=Apache NiFi
+              After=network.target
+              [Service]
+              Type=forking
+              User=nifi
+              ExecStart=/opt/nifi/bin/nifi.sh start
+              ExecStop=/opt/nifi/bin/nifi.sh stop
+              [Install]
+              WantedBy=multi-user.target
+              EOF
+            - sudo systemctl daemon-reload
+            - sudo systemctl enable nifi</pre>
+    </div>
+
+    <div class="note ok">
+      <span class="h">How to combine these</span>
+      Register each component once with <span class="mono">aws imagebuilder create-component</span>. Then create a separate <strong>recipe</strong> per image type — a "Kafka edition" recipe lists the base + Kafka tools components; a "NiFi edition" recipe lists the base + NiFi component. One pipeline per recipe means each variant rebuilds independently when its source tool releases a new version.
+    </div>
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('verifydl')"><span class="i">i</span>Always verify downloads</button>
+      <button class="info-btn" onclick="openModal('systemd')"><span class="i">i</span>What is systemd?</button>
+      <button class="info-btn" onclick="openModal('layerstrategy')"><span class="i">i</span>Layered vs flat images</button>
+    </div>
+  </section>
+
+  <section id="gotchas">
+    <h2 class="sec">Gotchas &amp; fixes</h2>
+    <div class="sec-rule"></div>
+    <p>Things that bite people the first time they build an image. Each one tells you the symptom, the cause in plain language, and how to fix it.</p>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>"Image not found" or "parent image does not exist"</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> Creating the recipe (or starting a build) fails with <span class="mono">InvalidParameterValueException: The parent image does not exist</span>.</p>
+        <p><strong>Likely causes:</strong></p>
+        <ol class="flow">
+          <li><strong>Wrong region in the ARN.</strong> Image Builder's managed AMIs are per-region. An ARN with <span class="mono">us-east-1</span> won't resolve if your CLI is configured for <span class="mono">eu-west-2</span>.</li>
+          <li><strong>Wrong AMI architecture.</strong> The ARN ends in <span class="mono">amazon-linux-2023-x86</span> for Intel/AMD, or <span class="mono">amazon-linux-2023-arm64</span> for Graviton. Pick the one matching your instance type.</li>
+          <li><strong>Custom AMI not shared with your account.</strong> If you're pointing at someone else's AMI ID, they must explicitly share it with your account ID (EC2 → AMIs → Permissions).</li>
+          <li><strong>SSM parameter is empty or has the wrong value.</strong> Resolve it first with <span class="mono">aws ssm get-parameter</span> and confirm it returns a valid <span class="mono">ami-...</span> ID.</li>
+          <li><strong>Account doesn't have permission to use the image.</strong> Even AWS-managed images can be region-restricted; switch region in your CLI or in the ARN.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>Build hangs forever in "BUILDING" state</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> The pipeline run sits at "BUILDING" for 30+ minutes with no logs.</p>
+        <p><strong>Cause:</strong> The build instance can't reach AWS Systems Manager. Image Builder controls the box through SSM, so without that channel it sits there silently.</p>
+        <p><strong>Fixes (try in order):</strong></p>
+        <ol class="flow">
+          <li>Confirm <span class="mono">AmazonSSMManagedInstanceCore</span> is attached to the role you gave the infra config.</li>
+          <li>If the build subnet is private with no NAT gateway, add VPC endpoints for <span class="mono">ssm</span>, <span class="mono">ssmmessages</span>, <span class="mono">ec2messages</span>, and <span class="mono">s3</span>.</li>
+          <li>If using a custom parent AMI, confirm it has the SSM Agent installed and configured to start on boot.</li>
+          <li>Check the security group on the build instance permits outbound HTTPS (port 443).</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>"dnf install" fails with "Cannot find a valid baseurl for repo"</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> A build step that calls <span class="mono">sudo dnf install -y …</span> fails. The CloudWatch log shows the package manager can't fetch its repository metadata.</p>
+        <p><strong>Cause:</strong> The build instance has no internet access. Amazon Linux package mirrors live on the public internet (or AWS S3 mirrors).</p>
+        <p><strong>Fixes:</strong> place the build in a subnet with a NAT gateway, or use a subnet inside a VPC that has an S3 gateway endpoint plus the AL2023 internal repos. If your security policy forbids internet from build subnets, mirror your packages to a private repo and override <span class="mono">/etc/dnf/dnf.conf</span> in your component.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>"Component already exists" when re-running</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> Re-running <span class="mono">create-component</span> with the same <span class="mono">--semantic-version</span> errors out.</p>
+        <p><strong>Cause:</strong> Components are immutable. Once <span class="mono">InstallJavaPythonKafka/1.0.0</span> exists, you can't overwrite it.</p>
+        <p><strong>Fix:</strong> bump the version (<span class="mono">1.0.1</span>) and update any recipe that referenced it. This is a feature, not a bug — old AMIs always know exactly which component versions baked them.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>"PassRole" denied when creating the infra config</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> <span class="mono">User: arn:aws:iam::…:user/X is not authorized to perform: iam:PassRole</span>.</p>
+        <p><strong>Cause:</strong> Your human user can create roles but isn't allowed to <em>hand</em> the Image Builder role to the service.</p>
+        <p><strong>Fix:</strong> add <span class="mono">iam:PassRole</span> to your user policy scoped to the exact role ARN (<span class="mono">arn:aws:iam::*:role/ImageBuilderRole</span>). The least-privilege policy earlier in this guide already includes this.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>Test phase fails with "command not found" — even though the build phase installed it</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> <span class="mono">java: command not found</span> in the test phase, although the build phase ran <span class="mono">dnf install</span> successfully.</p>
+        <p><strong>Cause:</strong> The test phase runs on a <em>fresh</em> instance launched from the finished AMI, with a fresh shell session. If your install put a binary somewhere not on the default PATH (e.g. <span class="mono">/opt/kafka/bin</span>), the test shell won't see it.</p>
+        <p><strong>Fix:</strong> in the build phase, write a file in <span class="mono">/etc/profile.d/</span> that exports the new PATH for all future logins. The Kafka component above already does this.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>SNS subscription confirmed but no messages arrive</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> Builds complete, but your SQS queue never receives the "image-ready" message.</p>
+        <p><strong>Causes:</strong></p>
+        <ol class="flow">
+          <li>The queue's access policy doesn't allow <span class="mono">sns.amazonaws.com</span> to <span class="mono">sqs:SendMessage</span>. Without it SNS silently drops messages.</li>
+          <li>The subscription is in a different region from the topic.</li>
+          <li>If using server-side encryption (SQS KMS keys), the KMS key policy must also allow SNS.</li>
+        </ol>
+        <p><strong>Fix:</strong> in the SQS Console, open the queue → Access policy → Edit, and paste the policy from Step 2's warning box (or use Terraform which writes it correctly).</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>"Apache download failed" or "404 Not Found" mid-build</h3></div>
+      <div class="step-body">
+        <p><strong>Symptom:</strong> A NiFi or ZooKeeper component fails because the download URL returns 404.</p>
+        <p><strong>Cause:</strong> Apache rotates its mirrors and removes old versions from the primary downloads server. The variant components above pin a version — that exact version may have aged out.</p>
+        <p><strong>Fixes:</strong></p>
+        <ol class="flow">
+          <li>Pull from the Apache archive instead: <span class="mono">https://archive.apache.org/dist/&lt;project&gt;/...</span> — older releases stay there permanently.</li>
+          <li>Better: copy the tarball to your own S3 bucket once and have the component download from there. Survives the open-source mirror going offline.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>Pipeline says SUCCESS but AMI doesn't appear in EC2 → AMIs</h3></div>
+      <div class="step-body">
+        <p><strong>Cause:</strong> By default the AMI appears in the region the pipeline ran in. If your team looks in a different region, they won't see it.</p>
+        <p><strong>Fix:</strong> add a <strong>distribution configuration</strong> to the pipeline listing every region the AMI should be copied into, and which accounts may launch it.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><div class="step-badge" style="background:#da1e28">!</div><h3>Quick checklist before pressing "Run"</h3>
+      </div>
+      <div class="step-body">
+        <ol class="flow">
+          <li>Replace every <span class="mono">ACCOUNT_ID</span> placeholder with your real 12-digit account number.</li>
+          <li>Confirm your CLI region matches the region in every ARN.</li>
+          <li>Confirm the parent image ARN/ID exists in that region.</li>
+          <li>Confirm the SQS queue access policy allows the SNS topic.</li>
+          <li>Bump component <span class="mono">--semantic-version</span> if you've edited any YAML.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('vpcendpoints')"><span class="i">i</span>VPC endpoints for SSM</button>
+      <button class="info-btn" onclick="openModal('immutable')"><span class="i">i</span>Why components are immutable</button>
+      <button class="info-btn" onclick="openModal('archive')"><span class="i">i</span>Apache archive vs downloads</button>
+    </div>
+  </section>
+
   <section>
     <div class="done">
       <h2>You've built an image factory.</h2>
@@ -718,6 +1285,20 @@ aws imagebuilder create-image-pipeline \
       <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"><div class="src">AWS Docs</div><div class="ttl">Install / configure the AWS CLI <span class="arrow">→</span></div></a>
       <a class="ref" target="_blank" rel="noopener" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/imagebuilder_image_pipeline"><div class="src">Terraform Registry</div><div class="ttl">aws_imagebuilder_image_pipeline <span class="arrow">→</span></div></a>
       <a class="ref" target="_blank" rel="noopener" href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started"><div class="src">HashiCorp</div><div class="ttl">Terraform: get started with AWS <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html"><div class="src">AWS Docs</div><div class="ttl">IAM security best practices <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html"><div class="src">AWS Docs</div><div class="ttl">iam:PassRole granting reference <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html"><div class="src">AWS Docs</div><div class="ttl">IAM Identity Center (SSO) <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/create-image-pipelines-console.html"><div class="src">AWS Docs</div><div class="ttl">Create a pipeline (Console wizard) <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html"><div class="src">AWS Docs</div><div class="ttl">Amazon MSK (managed Kafka) <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://github.com/confluentinc/librdkafka"><div class="src">GitHub</div><div class="ttl">librdkafka — C Kafka client <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.confluent.io/kafka-clients/python/current/overview.html"><div class="src">Confluent Docs</div><div class="ttl">confluent-kafka-python client <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://kafka.apache.org/quickstart"><div class="src">Apache</div><div class="ttl">Apache Kafka quickstart <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html"><div class="src">Ansible Docs</div><div class="ttl">Ansible installation guide <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://zookeeper.apache.org/doc/current/zookeeperStarted.html"><div class="src">Apache</div><div class="ttl">ZooKeeper getting started <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://nifi.apache.org/docs.html"><div class="src">Apache</div><div class="ttl">Apache NiFi documentation <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html"><div class="src">AWS Docs</div><div class="ttl">SSM Agent installation <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/troubleshooting.html"><div class="src">AWS Docs</div><div class="ttl">Image Builder troubleshooting <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/best-practices.html"><div class="src">AWS Docs</div><div class="ttl">Image Builder best practices <span class="arrow">→</span></div></a>
     </div>
   </section>
 
@@ -784,7 +1365,24 @@ const M = {
   tf:['What is Terraform / IaC?','<p><b>Terraform</b> lets you write your cloud setup as plain text and have it created to match. This is <b>Infrastructure as Code</b>: your infrastructure lives in a file you can review, version-control, and reproduce exactly in another account or region.</p>','https://developer.hashicorp.com/terraform/intro'],
   tfstate:['What is Terraform "state"?','<p>Terraform keeps a <b>state file</b> recording what it has already created, so it knows the difference between "make new" and "update". For teams, store state in a shared, locked backend (S3 + DynamoDB) so two people can\'t clash.</p>','https://developer.hashicorp.com/terraform/language/state'],
   heredoc:['The &lt;&lt;-EOT block','<p>That is a <b>heredoc</b> — a way to embed a multi-line string (here, the YAML component) directly in Terraform. Everything between <span class="mono">&lt;&lt;-EOT</span> and <span class="mono">EOT</span> is passed through; the dash lets Terraform strip indentation for readability.</p>','https://developer.hashicorp.com/terraform/language/expressions/strings'],
-  tflambda:['Adding the Lambda in Terraform','<p>Create an <span class="mono">aws_lambda_function</span> (with an IAM role allowing <span class="mono">imagebuilder:StartImagePipelineExecution</span>), an <span class="mono">aws_sns_topic_subscription</span> with <span class="mono">protocol = "lambda"</span>, and an <span class="mono">aws_lambda_permission</span> so SNS can invoke it. The zip can be built with the <span class="mono">archive_file</span> data source.</p>','https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function']
+  tflambda:['Adding the Lambda in Terraform','<p>Create an <span class="mono">aws_lambda_function</span> (with an IAM role allowing <span class="mono">imagebuilder:StartImagePipelineExecution</span>), an <span class="mono">aws_sns_topic_subscription</span> with <span class="mono">protocol = "lambda"</span>, and an <span class="mono">aws_lambda_permission</span> so SNS can invoke it. The zip can be built with the <span class="mono">archive_file</span> data source.</p>','https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function'],
+  leastpriv:['Least privilege explained','<p>The <b>principle of least privilege</b> says every identity should hold only the permissions it needs, nothing more. If an access key leaks, an attacker can only do what that identity could do. Granting <span class="mono">AdministratorAccess</span> for "convenience" is the single most common cloud-security mistake.</p>','https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege'],
+  identitycenter:['IAM Identity Center vs IAM user','<p><b>IAM Identity Center</b> (formerly AWS SSO) is the modern way to give humans access: federated logins, short-lived credentials, and central management across many accounts. <b>IAM users</b> with long-lived access keys are simpler but riskier — fine for a single-account tutorial, but Identity Center is preferred for any real environment.</p>','https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html'],
+  passrole:['What is iam:PassRole?','<p><span class="mono">iam:PassRole</span> is the permission to <em>hand a role to another AWS service</em>. When you tell Image Builder "use ImageBuilderProfile to bake," IAM checks that your user is allowed to pass that role. Restricting which roles you may pass — by ARN, as in the policy above — is a key least-privilege guardrail.</p>','https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html'],
+  servicelinked:['Service-linked roles','<p>A <b>service-linked role</b> is a special IAM role that an AWS service creates and manages on your behalf. Image Builder creates <span class="mono">AWSServiceRoleForImageBuilder</span> the first time you use it, which is why the user policy grants <span class="mono">iam:CreateServiceLinkedRole</span> scoped to that name.</p>','https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-linked-role'],
+  wizard:['The Image pipeline wizard','<p>The Console's "Create image pipeline" wizard walks you through everything — components, recipe, infra config, distribution, schedule — in one form. Good for first-time exploration. The CLI/Terraform path in this guide is better for repeatability, code review, and version control.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/create-image-pipelines-console.html'],
+  cwlogs:['Reading CloudWatch logs','<p>Image Builder streams every command from the build instance to a log group named <span class="mono">/aws/imagebuilder/&lt;image-name&gt;</span> in CloudWatch Logs. Open the log group, pick the most recent stream, and scroll to find the command that exited non-zero — that's the build failure.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/troubleshooting.html'],
+  kafka:['Kafka client packages explained','<p><b>librdkafka</b> is the high-performance C library that most Kafka clients (including Python\'s <span class="mono">confluent-kafka</span>) wrap. It depends on <b>openssl</b> for TLS to brokers, <b>cyrus-sasl</b> for SASL/SCRAM authentication (used by Amazon MSK with IAM), and <b>zlib</b> for compression. Installing these in the base image means apps don\'t need a compiler at deploy time.</p>','https://github.com/confluentinc/librdkafka/wiki/FAQ'],
+  msk:['What is Amazon MSK?','<p><b>Amazon MSK</b> is the managed Apache Kafka service from AWS. Apps running on this AMI can connect to MSK using either the Java client (already supported because Corretto is installed) or the Python <span class="mono">confluent-kafka</span> client (already supported because librdkafka is installed).</p>','https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html'],
+  chained:['Why chain pipelines?','<p>Layered images keep each step small and re-buildable. Pipeline 1 makes a Java/Python base. Pipeline 2 adds Kafka tools on top. Pipeline 3 adds your app. When Kafka releases a new version, only Pipeline 2 and 3 need to rerun — Pipeline 1\'s base is untouched and proven. It is the AMI equivalent of Docker image layers.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-base-images.html'],
+  ssmagent:['SSM Agent requirement','<p>Image Builder uses AWS Systems Manager to send build commands to the temporary EC2 instance. The instance must run the <b>SSM Agent</b> from boot. Amazon Linux 2023 has it pre-installed; for custom or third-party AMIs you may need to install it yourself before using the AMI as a parent.</p>','https://docs.aws.amazon.com/systems-manager/latest/userguide/ssm-agent.html'],
+  amiownership:['Who owns the AMI?','<p>An AMI is owned by the account that created it. Cross-account use requires the owner to <b>share</b> the AMI: in EC2 → AMIs → Permissions, add the consuming account IDs. If the AMI uses an EBS snapshot, those snapshots may need separate sharing too.</p>','https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/sharingamis-explicit.html'],
+  verifydl:['Always verify downloads','<p>For production images, don\'t trust a tarball you just downloaded. Apache publishes SHA-512 sums and GPG signatures next to each release; your build component should verify the checksum before extracting. This catches both corrupted downloads and a compromised mirror.</p>','https://www.apache.org/info/verification.html'],
+  systemd:['What is systemd?','<p><b>systemd</b> is the program that starts and supervises services on modern Linux. A <span class="mono">.service</span> file in <span class="mono">/etc/systemd/system/</span> tells systemd how to start a program (NiFi, ZooKeeper, …), which user it runs as, and what to do if it crashes. <span class="mono">systemctl enable</span> wires it to start on boot.</p>','https://systemd.io/'],
+  layerstrategy:['Layered vs flat images','<p><b>Flat:</b> one recipe that installs everything for one purpose (base + Java + Python + Kafka + NiFi). Simple, but big and hard to share. <b>Layered:</b> one recipe per logical layer, chained via parent AMIs. More files to manage, but each layer rebuilds quickly and is reusable across teams.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/best-practices.html'],
+  vpcendpoints:['VPC endpoints for SSM','<p>If your build subnet has no NAT gateway, the build instance still needs to talk to SSM. Create <b>interface VPC endpoints</b> for <span class="mono">com.amazonaws.&lt;region&gt;.ssm</span>, <span class="mono">.ssmmessages</span>, and <span class="mono">.ec2messages</span>, and a <b>gateway endpoint</b> for S3. Now traffic stays inside the AWS network without ever touching the internet.</p>','https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-create-vpc.html'],
+  immutable:['Why components are immutable','<p>Image Builder freezes every component version so a recipe built last year still produces the exact same software stack today. Trying to mutate <span class="mono">1.0.0</span> would silently change what older images contained. Bumping the version (<span class="mono">1.0.1</span>) keeps history intact and makes rollbacks possible.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-components.html'],
+  archive:['Apache archive vs downloads','<p><span class="mono">downloads.apache.org</span> serves the <em>currently recommended</em> releases. Older versions move to <span class="mono">archive.apache.org/dist/</span> and stay there. If your component pins a specific version, point at the archive URL — it won\'t suddenly 404 when Apache rotates its mirrors.</p>','https://archive.apache.org/dist/']
 };
 function openModal(id){
   const m = M[id]; if(!m) return;
