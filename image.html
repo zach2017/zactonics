@@ -3,402 +3,635 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AWS Image Builder Tutorial — Base Build Pipeline</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
+<title>AWS EC2 Image Builder — Base Image Pipeline Tutorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --base-font: 16px; }
-  body { font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif; font-size: var(--base-font); }
-  .mono { font-family: 'IBM Plex Mono', 'Courier New', monospace; }
-  .ibm-blue { color: #0530AD; }
-  .ibm-blue-bg { background-color: #0530AD; }
-  .code-block { background:#0a0a0a; color:#e8e8e8; border-left:4px solid #0530AD; }
-  .step-num { background:#0530AD; color:#fff; }
-  .modal { display:none; }
-  .modal.active { display:flex; }
-  .fade-in { animation: fade .4s ease both; }
-  @keyframes fade { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-  ::-webkit-scrollbar{width:10px} ::-webkit-scrollbar-thumb{background:#0530AD}
+  :root{
+    --fs: 16px;
+    --ink:#161616;
+    --ink-2:#393939;
+    --ink-3:#525252;
+    --line:#e0e0e0;
+    --line-2:#c6c6c6;
+    --bg:#ffffff;
+    --bg-soft:#f4f4f4;
+    --blue:#0f62fe;
+    --blue-70:#0043ce;
+    --blue-90:#001d6c;
+    --blue-100:#001141;
+    --accent:#4589ff;
+    --code-bg:#161616;
+    --code-ink:#f4f4f4;
+    --green:#24a148;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'IBM Plex Sans',system-ui,sans-serif;
+    font-size:var(--fs); line-height:1.55; font-weight:400;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace}
+  a{color:var(--blue-70)}
+
+  .shell{
+    position:sticky; top:0; z-index:50;
+    background:var(--ink); color:#fff;
+    height:48px; display:flex; align-items:center;
+    border-bottom:1px solid #393939;
+  }
+  .shell .wrap{display:flex; align-items:center; gap:16px; width:100%; padding:0 16px}
+  .shell .brand{font-weight:600; font-size:.95rem; letter-spacing:.01em; display:flex; align-items:center; gap:10px}
+  .shell .brand .dot{width:8px;height:8px;background:var(--accent);display:inline-block}
+  .shell .brand span.thin{font-weight:300; opacity:.75}
+  .fontctl{margin-left:auto; display:flex; align-items:center; gap:6px}
+  .fontctl .lbl{font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; opacity:.7; margin-right:2px}
+  .fontctl button{
+    width:34px;height:30px;border:1px solid #525252;background:#262626;color:#fff;
+    font-family:'IBM Plex Mono';font-weight:600;cursor:pointer;font-size:.85rem;
+    transition:background .15s,border-color .15s;
+  }
+  .fontctl button:hover{background:var(--blue);border-color:var(--blue)}
+  .fontctl .val{font-family:'IBM Plex Mono';font-size:.75rem;width:46px;text-align:center;opacity:.85}
+
+  .hero{
+    background:linear-gradient(135deg,var(--blue-100) 0%,var(--blue-90) 55%,var(--blue-70) 100%);
+    color:#fff; position:relative; overflow:hidden; border-bottom:4px solid var(--blue);
+  }
+  .hero:before{
+    content:""; position:absolute; inset:0;
+    background-image:linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+    background-size:32px 100%; opacity:.5;
+  }
+  .hero .inner{max-width:1120px; margin:0 auto; padding:64px 24px 56px; position:relative}
+  .hero .kicker{font-size:.72rem; text-transform:uppercase; letter-spacing:.18em; color:var(--accent); font-weight:600; margin-bottom:18px}
+  .hero h1{font-size:clamp(1.9rem,5vw,3.1rem); line-height:1.05; font-weight:600; margin:0 0 18px; letter-spacing:-.02em}
+  .hero p.lede{font-size:clamp(1rem,2vw,1.2rem); font-weight:300; max-width:680px; color:#e8eaf6; margin:0}
+  .hero .chips{display:flex; flex-wrap:wrap; gap:10px; margin-top:28px}
+  .chip{font-size:.78rem; font-weight:500; padding:6px 12px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25)}
+
+  .layout{max-width:1120px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:240px 1fr; gap:48px}
+  nav.toc{position:sticky; top:72px; align-self:start; padding:32px 0; font-size:.85rem; max-height:calc(100vh - 80px); overflow:auto}
+  nav.toc h4{font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-3); margin:0 0 12px; font-weight:600}
+  nav.toc a{display:block; padding:6px 12px; color:var(--ink-2); text-decoration:none; border-left:2px solid var(--line); transition:.15s}
+  nav.toc a:hover{color:var(--blue-70); border-left-color:var(--blue); background:var(--bg-soft)}
+  main{padding:40px 0 80px; min-width:0}
+
+  section{margin-bottom:56px; scroll-margin-top:64px}
+  h2.sec{font-size:1.7rem; font-weight:600; letter-spacing:-.01em; margin:0 0 6px}
+  .sec-rule{height:3px; width:56px; background:var(--blue); margin:14px 0 22px}
+  h3{font-size:1.15rem; font-weight:600; margin:0}
+  p{margin:0 0 16px; color:var(--ink-2)}
+  strong{color:var(--ink); font-weight:600}
+
+  .analogy{border-left:4px solid var(--accent); background:var(--bg-soft); padding:18px 22px; margin:0 0 22px; font-family:'IBM Plex Serif'; font-size:1.02rem; color:var(--ink-2)}
+
+  ol.flow{counter-reset:f; list-style:none; padding:0; margin:0}
+  ol.flow li{counter-increment:f; position:relative; padding:14px 16px 14px 56px; border:1px solid var(--line); border-bottom:none; background:#fff; color:var(--ink-2)}
+  ol.flow li:last-child{border-bottom:1px solid var(--line)}
+  ol.flow li:before{content:counter(f); position:absolute; left:0; top:0; bottom:0; width:40px; background:var(--blue-90); color:#fff; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono'; font-weight:600}
+
+  .step{border:1px solid var(--line); background:#fff; margin-bottom:20px}
+  .step-head{display:flex; align-items:center; gap:16px; padding:18px 22px; border-bottom:1px solid var(--line); background:linear-gradient(90deg,var(--bg-soft),#fff)}
+  .step-badge{flex:none; width:42px; height:42px; background:var(--blue-90); color:#fff; font-family:'IBM Plex Mono'; font-weight:600; font-size:1.1rem; display:flex; align-items:center; justify-content:center}
+  .step-body{padding:22px}
+  .step-body p:last-child{margin-bottom:0}
+
+  .code{position:relative; background:var(--code-bg); color:var(--code-ink); border-left:3px solid var(--blue); margin:4px 0 16px; overflow:hidden}
+  .code .bar{display:flex; align-items:center; justify-content:space-between; padding:8px 14px; background:#262626; border-bottom:1px solid #393939}
+  .code .bar .tag{font-family:'IBM Plex Mono'; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; color:#8d8d8d}
+  .code .bar .copy{font-family:'IBM Plex Mono'; font-size:.7rem; color:#c6c6c6; background:none; border:1px solid #525252; padding:3px 10px; cursor:pointer; transition:.15s}
+  .code .bar .copy:hover{background:var(--blue); border-color:var(--blue); color:#fff}
+  .code pre{margin:0; padding:16px 18px; overflow-x:auto; font-family:'IBM Plex Mono'; font-size:.84em; line-height:1.6; white-space:pre}
+  .tok-c{color:#8d8d8d; font-style:italic}
+  .tok-k{color:#78a9ff}
+  .tok-s{color:#3ddbd9}
+  .tok-f{color:#d4bbff}
+
+  .note{border:1px solid var(--line-2); border-left:4px solid var(--blue); background:#edf5ff; padding:14px 18px; margin:0 0 16px; font-size:.92rem; color:var(--ink-2)}
+  .note.warn{border-left-color:#ff832b; background:#fff2e8}
+  .note.ok{border-left-color:var(--green); background:#defbe6}
+  .note .h{font-weight:600; color:var(--ink); display:block; margin-bottom:4px}
+
+  .infobtns{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+  .info-btn{font-size:.82rem; font-weight:500; cursor:pointer; background:#fff; border:1px solid var(--line-2); color:var(--blue-70); padding:7px 14px 7px 12px; display:inline-flex; align-items:center; gap:8px; transition:.15s}
+  .info-btn:hover{border-color:var(--blue); background:#edf5ff}
+  .info-btn .i{width:16px;height:16px;border-radius:50%;background:var(--blue);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+
+  .refs{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0; border:1px solid var(--line); border-bottom:none}
+  .ref{padding:18px 20px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); text-decoration:none; color:var(--ink); display:block; transition:.15s}
+  .ref:hover{background:var(--bg-soft)}
+  .ref .src{font-family:'IBM Plex Mono'; font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); margin-bottom:6px}
+  .ref .ttl{font-weight:600; font-size:.95rem; color:var(--blue-70); display:flex; align-items:center; justify-content:space-between; gap:8px}
+  .ref .arrow{transition:transform .15s}
+  .ref:hover .arrow{transform:translateX(4px)}
+
+  .done{background:linear-gradient(135deg,var(--blue-90),var(--blue-70)); color:#fff; padding:36px 32px; position:relative; overflow:hidden}
+  .done:before{content:""; position:absolute; right:-40px; top:-40px; width:180px; height:180px; border:2px solid rgba(255,255,255,.15); border-radius:50%}
+  .done h2{color:#fff; margin:0 0 12px; font-size:1.5rem}
+  .done p{color:#e8eaf6; margin:0}
+
+  .overlay{position:fixed; inset:0; background:rgba(22,22,22,.55); backdrop-filter:blur(2px); display:none; align-items:flex-start; justify-content:center; padding:8vh 20px; z-index:100}
+  .overlay.active{display:flex; animation:fade .2s ease}
+  .modal{background:#fff; max-width:560px; width:100%; box-shadow:0 12px 48px rgba(0,0,0,.3); animation:rise .25s cubic-bezier(.2,.8,.2,1)}
+  .modal .top{padding:20px 24px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; gap:16px}
+  .modal .top h3{font-size:1.15rem; color:var(--ink)}
+  .modal .top .x{background:none;border:none;font-size:1.4rem;line-height:1;cursor:pointer;color:var(--ink-3);padding:0 4px}
+  .modal .top .x:hover{color:var(--ink)}
+  .modal .mbody{padding:20px 24px; color:var(--ink-2); font-size:.95rem}
+  .modal .mbody p{margin:0 0 12px}
+  .modal .mfoot{padding:14px 24px 20px}
+  .modal .mfoot a{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:.9rem;text-decoration:none;color:#fff;background:var(--blue);padding:10px 16px;transition:.15s}
+  .modal .mfoot a:hover{background:var(--blue-70)}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+  footer{border-top:1px solid var(--line); padding:28px 24px; color:var(--ink-3); font-size:.85rem}
+  footer .fwrap{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
+
+  .reveal{opacity:0;transform:translateY(12px);animation:up .5s ease forwards}
+  @keyframes up{to{opacity:1;transform:translateY(0)}}
+
+  @media(max-width:860px){
+    .layout{grid-template-columns:1fr; gap:0}
+    nav.toc{display:none}
+    .hero .inner{padding:44px 20px 40px}
+    main{padding:28px 0 60px}
+  }
+  ::-webkit-scrollbar{width:12px;height:12px}
+  ::-webkit-scrollbar-thumb{background:var(--line-2)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ink-3)}
 </style>
 </head>
-<body class="bg-white text-gray-900 leading-relaxed">
+<body>
 
-<!-- HEADER -->
-<header class="border-b-4 border-gray-900 sticky top-0 bg-white z-40">
-  <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl md:text-3xl font-bold tracking-tight">AWS Image Builder Pipeline</h1>
-      <p class="text-sm md:text-base text-gray-600">Build a base Amazon Linux AMI with Java 21 + Python, test it, and notify other teams.</p>
+<div class="shell">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>AWS Image Builder <span class="thin">/ Base Pipeline Guide</span></div>
+    <div class="fontctl">
+      <span class="lbl">Text</span>
+      <button onclick="changeFont(-2)" aria-label="Decrease text size">A−</button>
+      <span class="val" id="fontVal">16px</span>
+      <button onclick="changeFont(2)" aria-label="Increase text size">A+</button>
     </div>
-    <div class="flex items-center gap-2 border border-gray-300 rounded px-3 py-2">
-      <span class="text-xs font-semibold mr-1">Font size</span>
-      <button onclick="changeFont(-2)" class="step-num w-9 h-9 rounded font-bold text-lg" aria-label="Decrease font">A−</button>
-      <span id="fontVal" class="mono text-sm w-12 text-center">16px</span>
-      <button onclick="changeFont(2)" class="step-num w-9 h-9 rounded font-bold text-lg" aria-label="Increase font">A+</button>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="inner">
+    <div class="kicker reveal">AWS Solution Guide · Beginner Friendly</div>
+    <h1 class="reveal" style="animation-delay:.05s">Build a golden base image, automatically.</h1>
+    <p class="lede reveal" style="animation-delay:.1s">A step-by-step walkthrough of an EC2 Image Builder pipeline: triggered by SNS, built on the latest Amazon Linux, hardened with Java&nbsp;21 and Python, tested, then announced to other teams over SNS and SQS.</p>
+    <div class="chips reveal" style="animation-delay:.15s">
+      <span class="chip">EC2 Image Builder</span>
+      <span class="chip">Amazon Linux 2023</span>
+      <span class="chip">Java 21 (Corretto)</span>
+      <span class="chip">Python 3</span>
+      <span class="chip">SNS + SQS</span>
+      <span class="chip">Lambda</span>
+      <span class="chip">Terraform</span>
     </div>
   </div>
 </header>
 
-<main class="max-w-5xl mx-auto px-4 py-8">
+<div class="layout">
+  <nav class="toc">
+    <h4>On this page</h4>
+    <a href="#overview">Overview</a>
+    <a href="#concepts">Key concepts</a>
+    <a href="#flow">Architecture flow</a>
+    <a href="#prereq">Prerequisites</a>
+    <a href="#s1">1 · IAM role</a>
+    <a href="#s2">2 · SNS &amp; SQS</a>
+    <a href="#s3">3 · Build component</a>
+    <a href="#s4">4 · Test component</a>
+    <a href="#s5">5 · Image recipe</a>
+    <a href="#s6">6 · Pipeline</a>
+    <a href="#s7">7 · Trigger Lambda</a>
+    <a href="#s8">8 · Consume queue</a>
+    <a href="#s9">9 · End-to-end test</a>
+    <a href="#terraform">Terraform version</a>
+    <a href="#refs">Documentation</a>
+  </nav>
 
-<!-- INTRO -->
-<section class="mb-10 fade-in">
-  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-3">What are we building? (Read this first)</h2>
-  <p class="mb-4">Imagine you run a kitchen. Every cook needs the same clean, pre-stocked workstation before they start cooking. In AWS, that "pre-stocked workstation" is an <strong>AMI</strong> (Amazon Machine Image) — a saved snapshot of a server with software already installed. Instead of every team setting up Java and Python by hand, we build <strong>one</strong> good base image and share it.</p>
-  <p class="mb-4">This tutorial uses <strong>EC2 Image Builder</strong>, an AWS service that automatically bakes images for you. Here is the full story of what happens:</p>
-  <div class="bg-gray-50 border border-gray-300 rounded-lg p-5">
-    <ol class="space-y-2">
-      <li>1. A message (<strong>SNS trigger</strong>) says: "A new Amazon Linux image is available — go build!"</li>
-      <li>2. Image Builder takes the <strong>latest Amazon Linux</strong> image as a starting point.</li>
-      <li>3. It installs <strong>Java 21</strong> and <strong>Python</strong> on top.</li>
-      <li>4. It runs <strong>tests</strong> to confirm both actually work.</li>
-      <li>5. When tests pass, it sends an <strong>SNS + SQS message</strong> so other teams know a fresh image is ready for their apps.</li>
+  <main>
+
+  <section id="overview">
+    <h2 class="sec">What are we building?</h2>
+    <div class="sec-rule"></div>
+    <div class="analogy">
+      Imagine you run a busy kitchen. Every cook needs the same clean, fully-stocked workstation before service begins. In AWS, that pre-stocked workstation is an <strong>AMI</strong> — a saved snapshot of a server with the operating system and software already installed. Rather than have every team set up Java and Python by hand (slow, and easy to get wrong), we bake <strong>one</strong> trusted "golden" image and share it.
+    </div>
+    <p>This guide uses <strong>EC2 Image Builder</strong>, the AWS service that bakes machine images on a repeatable, automated pipeline. Here is the whole story, start to finish:</p>
+    <ol class="flow">
+      <li>A message on an <strong>SNS topic</strong> says: "a new base image is needed — go build."</li>
+      <li>A small <strong>Lambda</strong> function catches that message and starts the pipeline.</li>
+      <li>Image Builder pulls the <strong>latest Amazon Linux 2023</strong> AMI as its starting point.</li>
+      <li>It installs <strong>Java 21</strong> (Amazon Corretto) and <strong>Python 3</strong> on top.</li>
+      <li>It runs a <strong>test phase</strong> that proves both actually work — if not, the build fails and nothing ships.</li>
+      <li>On success, Image Builder publishes to a second <strong>SNS topic</strong>, which fans out to an <strong>SQS queue</strong>.</li>
+      <li>Downstream app teams read that queue and update their applications to the new image.</li>
     </ol>
-  </div>
-  <div class="mt-4 flex flex-wrap gap-2">
-    <button onclick="openModal('m-ami')" class="ibm-blue underline text-sm">What is an AMI?</button>
-    <button onclick="openModal('m-sns')" class="ibm-blue underline text-sm">What is SNS vs SQS?</button>
-    <button onclick="openModal('m-why')" class="ibm-blue underline text-sm">Why automate this?</button>
-  </div>
-</section>
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('ami')"><span class="i">i</span>What exactly is an AMI?</button>
+      <button class="info-btn" onclick="openModal('golden')"><span class="i">i</span>What is a "golden image"?</button>
+      <button class="info-btn" onclick="openModal('why')"><span class="i">i</span>Why automate this at all?</button>
+    </div>
+  </section>
 
-<!-- ARCHITECTURE -->
-<section class="mb-12 fade-in">
-  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-3">The flow at a glance</h2>
-  <div class="code-block mono text-sm rounded-lg p-5 overflow-x-auto">
-SNS "new base image" topic ──▶ Lambda ──▶ EC2 Image Builder Pipeline
-                                              │
-              (latest Amazon Linux AMI) ──────┤ 1. Build  → install Java 21 + Python
-                                              │ 2. Test   → verify versions
-                                              ▼
-                                       New hardened AMI
-                                              │
-                                              ▼
-                          SNS topic "image-ready" ──▶ SQS queue
-                                                          │
-                                                          ▼
-                                       App teams poll queue & update their stacks
-  </div>
-</section>
+  <section id="concepts">
+    <h2 class="sec">Key concepts (in plain language)</h2>
+    <div class="sec-rule"></div>
+    <p>You'll meet a handful of building blocks. Tap any term for a deeper explanation and a link to the official AWS documentation.</p>
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('component')"><span class="i">i</span>Component</button>
+      <button class="info-btn" onclick="openModal('recipe')"><span class="i">i</span>Recipe</button>
+      <button class="info-btn" onclick="openModal('infra')"><span class="i">i</span>Infrastructure config</button>
+      <button class="info-btn" onclick="openModal('pipeline')"><span class="i">i</span>Pipeline</button>
+      <button class="info-btn" onclick="openModal('sns')"><span class="i">i</span>SNS vs SQS</button>
+      <button class="info-btn" onclick="openModal('corretto')"><span class="i">i</span>Amazon Corretto</button>
+      <button class="info-btn" onclick="openModal('iam')"><span class="i">i</span>IAM roles &amp; profiles</button>
+      <button class="info-btn" onclick="openModal('ssm')"><span class="i">i</span>SSM Parameter Store</button>
+    </div>
+  </section>
 
-<!-- PREREQUISITES -->
-<section class="mb-12 fade-in">
-  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-3">Before you start (Prerequisites)</h2>
-  <ul class="space-y-2 list-disc list-inside">
-    <li>An AWS account with permissions for EC2 Image Builder, IAM, SNS, SQS, and Lambda.</li>
-    <li>The <strong>AWS CLI</strong> installed and configured (<span class="mono">aws configure</span>).</li>
-    <li>A region picked (this guide uses <span class="mono">us-east-1</span>).</li>
-    <li>Basic comfort copying commands into a terminal.</li>
-  </ul>
-  <button onclick="openModal('m-iam')" class="ibm-blue underline text-sm mt-3 inline-block">Help: setting up IAM permissions</button>
-</section>
+  <section id="flow">
+    <h2 class="sec">The flow at a glance</h2>
+    <div class="sec-rule"></div>
+    <div class="code">
+      <div class="bar"><span class="tag">architecture · text diagram</span></div>
+<pre>  ┌─────────────────────────┐
+  │  SNS  new-base-trigger  │  ◀── EventBridge schedule / manual publish
+  └───────────┬─────────────┘
+              ▼
+        ┌───────────┐
+        │  Lambda   │  start_image_pipeline_execution()
+        └─────┬─────┘
+              ▼
+  ┌──────────────────────────────────────────────┐
+  │           EC2 Image Builder Pipeline          │
+  │                                                │
+  │  parent: latest Amazon Linux 2023 AMI          │
+  │   ├─ BUILD  → install Java 21 + Python 3        │
+  │   └─ TEST   → verify versions (fail = stop)     │
+  └───────────────────────┬────────────────────────┘
+                          ▼
+                  New hardened AMI
+                          │
+                          ▼
+        ┌────────────────────────────┐
+        │   SNS  image-ready-topic    │
+        └─────────────┬───────────────┘
+                      ▼
+              ┌───────────────┐
+              │ SQS  updates  │  ◀── app teams poll &amp; redeploy
+              └───────────────┘</pre>
+    </div>
+  </section>
 
-<!-- STEPS -->
-<h2 class="text-2xl font-bold mb-6 border-b-2 border-gray-900 pb-2">Step-by-step guide</h2>
+  <section id="prereq">
+    <h2 class="sec">Before you start</h2>
+    <div class="sec-rule"></div>
+    <ol class="flow">
+      <li>An AWS account with permissions for EC2 Image Builder, IAM, SNS, SQS, and Lambda.</li>
+      <li>The <strong>AWS CLI v2</strong> installed and configured with <span class="mono">aws configure</span>.</li>
+      <li>A chosen region — this guide uses <span class="mono">us-east-1</span>. Replace <span class="mono">ACCOUNT_ID</span> with your 12-digit account number throughout.</li>
+      <li>Basic comfort copying commands into a terminal. No prior Image Builder experience required.</li>
+    </ol>
+    <div class="note">
+      <span class="h">Tip</span>
+      Every CLI block below has a <strong>Copy</strong> button. The matching Terraform version near the end builds the same thing in one file, if you prefer Infrastructure as Code.
+    </div>
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('cli')"><span class="i">i</span>Installing &amp; configuring the AWS CLI</button>
+      <button class="info-btn" onclick="openModal('iam')"><span class="i">i</span>What permissions do I need?</button>
+    </div>
+  </section>
 
-<!-- STEP 1 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">1</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Create the IAM role Image Builder will use</h3>
-  </div>
-  <p class="mb-3 ml-12">Image Builder needs a "badge" (IAM role) to act on your behalf. AWS gives ready-made permission policies, so we just attach them.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-aws iam create-role --role-name ImageBuilderRole \
-  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+  <section id="s1">
+    <h2 class="sec">Step-by-step guide</h2>
+    <div class="sec-rule"></div>
 
-aws iam attach-role-policy --role-name ImageBuilderRole \
-  --policy-arn arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder
+    <div class="step">
+      <div class="step-head"><div class="step-badge">1</div><h3>Create the IAM role Image Builder uses</h3></div>
+      <div class="step-body">
+        <p>The temporary server that Image Builder spins up to bake your image needs a "badge" — an <strong>IAM role</strong> — to act on your behalf. AWS publishes two managed permission policies that cover everything needed, so we attach those rather than writing our own. We then wrap the role in an <strong>instance profile</strong>, which is how a role gets handed to an EC2 instance.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · aws cli</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-c"># 1. Create the role and allow EC2 to assume it</span>
+aws iam create-role <span class="tok-f">--role-name</span> ImageBuilderRole \
+  <span class="tok-f">--assume-role-policy-document</span> <span class="tok-s">'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'</span>
 
-aws iam attach-role-policy --role-name ImageBuilderRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+<span class="tok-c"># 2. Attach the two AWS-managed policies</span>
+aws iam attach-role-policy <span class="tok-f">--role-name</span> ImageBuilderRole \
+  <span class="tok-f">--policy-arn</span> arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder
+aws iam attach-role-policy <span class="tok-f">--role-name</span> ImageBuilderRole \
+  <span class="tok-f">--policy-arn</span> arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
-aws iam create-instance-profile --instance-profile-name ImageBuilderProfile
-aws iam add-role-to-instance-profile --instance-profile-name ImageBuilderProfile \
-  --role-name ImageBuilderRole
-  </div>
-  <button onclick="openModal('m-role')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Why two policies?</button>
-</section>
+<span class="tok-c"># 3. Wrap it in an instance profile and attach the role</span>
+aws iam create-instance-profile <span class="tok-f">--instance-profile-name</span> ImageBuilderProfile
+aws iam add-role-to-instance-profile <span class="tok-f">--instance-profile-name</span> ImageBuilderProfile \
+  <span class="tok-f">--role-name</span> ImageBuilderRole</pre>
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('role')"><span class="i">i</span>Why these two policies?</button>
+          <button class="info-btn" onclick="openModal('iam')"><span class="i">i</span>Role vs instance profile</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 2 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">2</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Create the notification topics (SNS) and queue (SQS)</h3>
-  </div>
-  <p class="mb-3 ml-12">We make two SNS topics: one that <em>triggers</em> the build, and one that <em>announces</em> the finished image. We also create an SQS queue subscribed to the "ready" topic so app teams can pull messages reliably.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-# Topic that kicks off a build
-aws sns create-topic --name new-base-image-trigger
+    <div class="step" id="s2">
+      <div class="step-head"><div class="step-badge">2</div><h3>Create the SNS topics and SQS queue</h3></div>
+      <div class="step-body">
+        <p>We need two <strong>SNS topics</strong>: one that <em>triggers</em> a build, and one that <em>announces</em> a finished image. We also create an <strong>SQS queue</strong> and subscribe it to the "ready" topic, so downstream teams receive every announcement reliably even if they're momentarily offline.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · aws cli</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-c"># Topic that kicks off a build</span>
+aws sns create-topic <span class="tok-f">--name</span> new-base-image-trigger
+<span class="tok-c"># Topic that announces a finished image</span>
+aws sns create-topic <span class="tok-f">--name</span> image-ready-topic
+<span class="tok-c"># Durable queue for downstream app teams</span>
+aws sqs create-queue <span class="tok-f">--queue-name</span> image-update-queue
 
-# Topic that announces a finished image
-aws sns create-topic --name image-ready-topic
-
-# A queue for downstream app teams
-aws sqs create-queue --queue-name image-update-queue
-
-# Subscribe the queue to the "ready" topic
+<span class="tok-c"># Subscribe the queue to the "ready" topic (fan-out)</span>
 aws sns subscribe \
-  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:image-ready-topic \
-  --protocol sqs \
-  --notification-endpoint arn:aws:sqs:us-east-1:ACCOUNT_ID:image-update-queue
-  </div>
-  <p class="ml-12 mt-2 text-sm text-gray-600">Replace <span class="mono">ACCOUNT_ID</span> with your 12-digit AWS account number.</p>
-  <button onclick="openModal('m-queueperm')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Don't forget: queue access policy</button>
-</section>
+  <span class="tok-f">--topic-arn</span> arn:aws:sns:us-east-1:ACCOUNT_ID:image-ready-topic \
+  <span class="tok-f">--protocol</span> sqs \
+  <span class="tok-f">--notification-endpoint</span> arn:aws:sqs:us-east-1:ACCOUNT_ID:image-update-queue</pre>
+        </div>
+        <div class="note warn">
+          <span class="h">Don't skip: the queue access policy</span>
+          An SNS topic can only deliver into an SQS queue if the queue grants it permission. Attach a queue policy allowing the <span class="mono">sns.amazonaws.com</span> service the <span class="mono">sqs:SendMessage</span> action, scoped to your topic's ARN — otherwise messages silently vanish. The Terraform version below wires this for you automatically.
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('sns')"><span class="i">i</span>SNS vs SQS — the difference</button>
+          <button class="info-btn" onclick="openModal('fanout')"><span class="i">i</span>What is fan-out?</button>
+          <button class="info-btn" onclick="openModal('queueperm')"><span class="i">i</span>Queue access policy detail</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 3 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">3</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Write the BUILD component (install Java 21 + Python)</h3>
-  </div>
-  <p class="mb-3 ml-12">A <strong>component</strong> is a recipe written in YAML telling Image Builder what to install. Save this as <span class="mono">build-component.yaml</span>.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-name: InstallJavaPython
-description: Install Java 21 and Python on Amazon Linux
-schemaVersion: 1.0
-phases:
-  - name: build
-    steps:
-      - name: InstallJava21
-        action: ExecuteBash
-        inputs:
-          commands:
+    <div class="step" id="s3">
+      <div class="step-head"><div class="step-badge">3</div><h3>Write the BUILD component (install Java 21 + Python)</h3></div>
+      <div class="step-body">
+        <p>A <strong>component</strong> is a YAML recipe of steps Image Builder runs while baking. Components have phases: <span class="mono">build</span> runs during image creation, <span class="mono">validate</span> just after, and <span class="mono">test</span> against the finished image. Save this as <span class="mono">build-component.yaml</span>.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">yaml · build-component.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">name</span>: InstallJavaPython
+<span class="tok-k">description</span>: Install Java 21 (Corretto) and Python 3
+<span class="tok-k">schemaVersion</span>: 1.0
+<span class="tok-k">phases</span>:
+  - <span class="tok-k">name</span>: build
+    <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: InstallJava21
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
             - sudo dnf install -y java-21-amazon-corretto-devel
-      - name: InstallPython
-        action: ExecuteBash
-        inputs:
-          commands:
+      - <span class="tok-k">name</span>: InstallPython
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
             - sudo dnf install -y python3 python3-pip
-            - python3 -m pip install --upgrade pip
-  </div>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12 mt-3">
-aws imagebuilder create-component \
-  --name InstallJavaPython --semantic-version 1.0.0 \
-  --platform Linux --data file://build-component.yaml
-  </div>
-  <button onclick="openModal('m-corretto')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">What is Amazon Corretto?</button>
-</section>
+            - python3 -m pip install --upgrade pip</pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · register the component</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws imagebuilder create-component \
+  <span class="tok-f">--name</span> InstallJavaPython <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--platform</span> Linux <span class="tok-f">--data</span> file://build-component.yaml</pre>
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('component')"><span class="i">i</span>How components &amp; phases work</button>
+          <button class="info-btn" onclick="openModal('corretto')"><span class="i">i</span>Why Amazon Corretto for Java?</button>
+          <button class="info-btn" onclick="openModal('dnf')"><span class="i">i</span>What is dnf?</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 4 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">4</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Write the TEST component (verify it works)</h3>
-  </div>
-  <p class="mb-3 ml-12">Tests run in the special <span class="mono">validate</span>/<span class="mono">test</span> phase. If any command exits with an error, the whole build fails and no broken image is published. Save as <span class="mono">test-component.yaml</span>.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-name: VerifyJavaPython
-description: Confirm Java 21 and Python are installed
-schemaVersion: 1.0
-phases:
-  - name: test
-    steps:
-      - name: CheckJava
-        action: ExecuteBash
-        inputs:
-          commands:
-            - 'java -version 2>&1 | grep "21" || (echo "Java 21 missing" && exit 1)'
-      - name: CheckPython
-        action: ExecuteBash
-        inputs:
-          commands:
-            - 'python3 --version || (echo "Python missing" && exit 1)'
-  </div>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12 mt-3">
-aws imagebuilder create-component \
-  --name VerifyJavaPython --semantic-version 1.0.0 \
-  --platform Linux --data file://test-component.yaml
-  </div>
-  <button onclick="openModal('m-exit')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Why "exit 1" matters</button>
-</section>
+    <div class="step" id="s4">
+      <div class="step-head"><div class="step-badge">4</div><h3>Write the TEST component (prove it works)</h3></div>
+      <div class="step-body">
+        <p>Tests run in the <span class="mono">test</span> phase against the freshly built image. The trick: if any command exits with a non-zero code, the phase fails, the whole pipeline stops, and <strong>no broken image is ever published</strong>. Save as <span class="mono">test-component.yaml</span>.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">yaml · test-component.yaml</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">name</span>: VerifyJavaPython
+<span class="tok-k">description</span>: Confirm Java 21 and Python are present and runnable
+<span class="tok-k">schemaVersion</span>: 1.0
+<span class="tok-k">phases</span>:
+  - <span class="tok-k">name</span>: test
+    <span class="tok-k">steps</span>:
+      - <span class="tok-k">name</span>: CheckJava
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - <span class="tok-s">'java -version 2>&amp;1 | grep "21" || (echo "Java 21 missing" &amp;&amp; exit 1)'</span>
+      - <span class="tok-k">name</span>: CheckPython
+        <span class="tok-k">action</span>: ExecuteBash
+        <span class="tok-k">inputs</span>:
+          <span class="tok-k">commands</span>:
+            - <span class="tok-s">'python3 --version || (echo "Python missing" &amp;&amp; exit 1)'</span></pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · register the component</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws imagebuilder create-component \
+  <span class="tok-f">--name</span> VerifyJavaPython <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--platform</span> Linux <span class="tok-f">--data</span> file://test-component.yaml</pre>
+        </div>
+        <div class="note ok">
+          <span class="h">Why <span class="mono">exit 1</span> matters</span>
+          In Linux, exit code 0 means success and anything else means failure. Forcing <span class="mono">exit 1</span> when Java or Python is missing makes the test phase fail loudly, so Image Builder refuses to publish a faulty image. This is your quality gate.
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('testphase')"><span class="i">i</span>Build vs validate vs test phases</button>
+          <button class="info-btn" onclick="openModal('exit')"><span class="i">i</span>Exit codes explained</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 5 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">5</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Create the recipe (latest Amazon Linux + your components)</h3>
-  </div>
-  <p class="mb-3 ml-12">A <strong>recipe</strong> = base image + components. Using the SSM-managed "latest" parameter means each build automatically starts from the newest Amazon Linux, no manual updates needed.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-aws imagebuilder create-image-recipe \
-  --name base-java-python-recipe --semantic-version 1.0.0 \
-  --parent-image "arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/x.x.x" \
-  --components \
-    'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapython/1.0.0' \
-    'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/verifyjavapython/1.0.0'
-  </div>
-  <button onclick="openModal('m-latest')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">How "latest" image tracking works</button>
-</section>
+    <div class="step" id="s5">
+      <div class="step-head"><div class="step-badge">5</div><h3>Create the image recipe</h3></div>
+      <div class="step-body">
+        <p>A <strong>recipe</strong> combines a base ("parent") image with your components. Pointing the parent at the AWS-managed Amazon Linux 2023 image ARN with a wildcard version means every build automatically starts from the newest, fully-patched release — no manual updating.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · aws cli</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws imagebuilder create-image-recipe \
+  <span class="tok-f">--name</span> base-java-python-recipe <span class="tok-f">--semantic-version</span> 1.0.0 \
+  <span class="tok-f">--parent-image</span> <span class="tok-s">"arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2023-x86/x.x.x"</span> \
+  <span class="tok-f">--components</span> \
+    <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/installjavapython/1.0.0'</span> \
+    <span class="tok-s">'componentArn=arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:component/verifyjavapython/1.0.0'</span></pre>
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('recipe')"><span class="i">i</span>What lives in a recipe?</button>
+          <button class="info-btn" onclick="openModal('latest')"><span class="i">i</span>How "latest" tracking works</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 6 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">6</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Create infrastructure config + the pipeline (with SNS notification)</h3>
-  </div>
-  <p class="mb-3 ml-12">The infrastructure config tells Image Builder which IAM role and instance type to use — and which SNS topic to ping when an image finishes. This is how the "image-ready" announcement happens automatically.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-aws imagebuilder create-infrastructure-configuration \
-  --name base-infra \
-  --instance-profile-name ImageBuilderProfile \
-  --instance-types t3.medium \
-  --sns-topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:image-ready-topic
+    <div class="step" id="s6">
+      <div class="step-head"><div class="step-badge">6</div><h3>Create infrastructure config + the pipeline</h3></div>
+      <div class="step-body">
+        <p>The <strong>infrastructure configuration</strong> says which IAM profile and instance type to build on — and, crucially, which SNS topic to notify when a build finishes. That single field is what produces the "image-ready" announcement for free, no extra code needed. The <strong>pipeline</strong> then binds the recipe and the infra config together.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · aws cli</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws imagebuilder create-infrastructure-configuration \
+  <span class="tok-f">--name</span> base-infra \
+  <span class="tok-f">--instance-profile-name</span> ImageBuilderProfile \
+  <span class="tok-f">--instance-types</span> t3.medium \
+  <span class="tok-f">--sns-topic-arn</span> arn:aws:sns:us-east-1:ACCOUNT_ID:image-ready-topic
 
 aws imagebuilder create-image-pipeline \
-  --name base-java-python-pipeline \
-  --image-recipe-arn arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:image-recipe/base-java-python-recipe/1.0.0 \
-  --infrastructure-configuration-arn arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:infrastructure-configuration/base-infra
-  </div>
-  <button onclick="openModal('m-infra')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Image Builder publishes to SNS for free</button>
-</section>
+  <span class="tok-f">--name</span> base-java-python-pipeline \
+  <span class="tok-f">--image-recipe-arn</span> arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:image-recipe/base-java-python-recipe/1.0.0 \
+  <span class="tok-f">--infrastructure-configuration-arn</span> arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:infrastructure-configuration/base-infra</pre>
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('infra')"><span class="i">i</span>What infra config controls</button>
+          <button class="info-btn" onclick="openModal('ibsns')"><span class="i">i</span>The built-in SNS notification</button>
+          <button class="info-btn" onclick="openModal('dist')"><span class="i">i</span>Distribution (multi-region)</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 7 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">7</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Connect the TRIGGER topic to a Lambda that starts the build</h3>
-  </div>
-  <p class="mb-3 ml-12">When the "new-base-image-trigger" topic gets a message, a tiny Lambda function starts the pipeline. Here is the Python handler:</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-import boto3
-def handler(event, context):
-    ib = boto3.client('imagebuilder')
+    <div class="step" id="s7">
+      <div class="step-head"><div class="step-badge">7</div><h3>Wire the trigger topic to a Lambda</h3></div>
+      <div class="step-body">
+        <p>When the <span class="mono">new-base-image-trigger</span> topic receives a message, a tiny Lambda starts the pipeline. Separating "when to build" (the trigger) from "how to build" (the pipeline) keeps the system flexible — you can later swap in an EventBridge schedule without touching the pipeline.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">python · lambda handler (index.py)</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">import</span> boto3
+
+<span class="tok-k">def</span> handler(event, context):
+    ib = boto3.client(<span class="tok-s">'imagebuilder'</span>)
     ib.start_image_pipeline_execution(
-        imagePipelineArn='arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:image-pipeline/base-java-python-pipeline'
+        imagePipelineArn=<span class="tok-s">'arn:aws:imagebuilder:us-east-1:ACCOUNT_ID:image-pipeline/base-java-python-pipeline'</span>
     )
-    return {"status": "build started"}
-  </div>
-  <p class="ml-12 mt-2">Then subscribe the Lambda to the trigger topic:</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12 mt-2">
-aws sns subscribe \
-  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:new-base-image-trigger \
-  --protocol lambda \
-  --notification-endpoint arn:aws:lambda:us-east-1:ACCOUNT_ID:function:StartImageBuild
-  </div>
-  <button onclick="openModal('m-trigger')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">How do you fire the trigger?</button>
-</section>
+    <span class="tok-k">return</span> {<span class="tok-s">"status"</span>: <span class="tok-s">"build started"</span>}</pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · subscribe Lambda to the trigger topic</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws sns subscribe \
+  <span class="tok-f">--topic-arn</span> arn:aws:sns:us-east-1:ACCOUNT_ID:new-base-image-trigger \
+  <span class="tok-f">--protocol</span> lambda \
+  <span class="tok-f">--notification-endpoint</span> arn:aws:lambda:us-east-1:ACCOUNT_ID:function:StartImageBuild</pre>
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('trigger')"><span class="i">i</span>How do you fire the trigger?</button>
+          <button class="info-btn" onclick="openModal('lambdaperm')"><span class="i">i</span>Lambda needs an invoke permission</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 8 -->
-<section class="mb-8 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">8</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Downstream teams read the SQS queue</h3>
-  </div>
-  <p class="mb-3 ml-12">When a build succeeds, Image Builder posts to "image-ready-topic" → which fans out to your SQS queue. App teams just poll the queue and grab the new AMI ID to update their launch templates.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-aws sqs receive-message \
-  --queue-url https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/image-update-queue \
-  --max-number-of-messages 1
-  </div>
-  <button onclick="openModal('m-consume')" class="ibm-blue underline text-sm mt-2 ml-12 inline-block">Why a queue instead of direct calls?</button>
-</section>
+    <div class="step" id="s8">
+      <div class="step-head"><div class="step-badge">8</div><h3>Downstream teams consume the queue</h3></div>
+      <div class="step-body">
+        <p>When a build succeeds, Image Builder posts a JSON message (including the new AMI ID and status) to <span class="mono">image-ready-topic</span>, which fans out to the SQS queue. App teams poll the queue, read the AMI ID, and roll it into their launch templates or Auto Scaling groups.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · poll the queue</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws sqs receive-message \
+  <span class="tok-f">--queue-url</span> https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/image-update-queue \
+  <span class="tok-f">--max-number-of-messages</span> 1 \
+  <span class="tok-f">--wait-time-seconds</span> 10</pre>
+        </div>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('consume')"><span class="i">i</span>Why a queue, not a direct call?</button>
+          <button class="info-btn" onclick="openModal('dlq')"><span class="i">i</span>Dead-letter queues</button>
+        </div>
+      </div>
+    </div>
 
-<!-- STEP 9 -->
-<section class="mb-12 fade-in">
-  <div class="flex items-start gap-3 mb-3">
-    <span class="step-num w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">9</span>
-    <h3 class="text-lg md:text-xl font-bold pt-1">Test the whole pipeline end-to-end</h3>
-  </div>
-  <p class="mb-3 ml-12">Publish a message to the trigger topic and watch the chain react.</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto ml-12">
-aws sns publish \
-  --topic-arn arn:aws:sns:us-east-1:ACCOUNT_ID:new-base-image-trigger \
-  --message "New Amazon Linux available, please build"
-  </div>
-  <p class="ml-12 mt-3">In the EC2 Image Builder console, watch the pipeline move through Build → Test → Distribute. If the test phase fails, no image is created and no "ready" message is sent — exactly what you want.</p>
-</section>
+    <div class="step" id="s9">
+      <div class="step-head"><div class="step-badge">9</div><h3>Test the whole pipeline end-to-end</h3></div>
+      <div class="step-body">
+        <p>Publish one message to the trigger topic and watch the chain react.</p>
+        <div class="code">
+          <div class="bar"><span class="tag">bash · fire the trigger</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre>aws sns publish \
+  <span class="tok-f">--topic-arn</span> arn:aws:sns:us-east-1:ACCOUNT_ID:new-base-image-trigger \
+  <span class="tok-f">--message</span> <span class="tok-s">"New Amazon Linux available, please build"</span></pre>
+        </div>
+        <p>In the EC2 Image Builder console, watch the pipeline move through <strong>Build → Test → Distribute</strong>. If the test phase fails, no image is created and no "ready" message is sent — exactly the safety behaviour you want.</p>
+        <div class="infobtns">
+          <button class="info-btn" onclick="openModal('logs')"><span class="i">i</span>Where to find build logs</button>
+          <button class="info-btn" onclick="openModal('schedule')"><span class="i">i</span>Run it on a schedule instead</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<!-- TERRAFORM -->
-<h2 class="text-2xl font-bold mb-3 border-b-2 border-gray-900 pb-2">Bonus: build it all with Terraform</h2>
-<section class="mb-12 fade-in">
-  <p class="mb-4">The CLI commands above are great for learning, but typing them one by one is easy to get wrong. <strong>Terraform</strong> is an "Infrastructure as Code" tool: you describe everything you want in one text file, and Terraform creates (or deletes) it all for you with a single command. Think of it as a recipe card for your <em>entire</em> AWS setup — not just the image, but the topics, queue, role, and pipeline too.</p>
-  <div class="bg-gray-50 border border-gray-300 rounded-lg p-4 mb-5">
-    <p class="font-semibold mb-1">Three commands to run it:</p>
-    <p class="mono text-sm">terraform init &nbsp;→&nbsp; terraform plan &nbsp;→&nbsp; terraform apply</p>
-    <p class="text-sm text-gray-600 mt-2"><span class="mono">init</span> downloads the AWS plugin, <span class="mono">plan</span> shows what will be created, and <span class="mono">apply</span> actually builds it. Run <span class="mono">terraform destroy</span> to remove everything.</p>
-  </div>
-  <div class="flex flex-wrap gap-2 mb-5">
-    <button onclick="openModal('m-tf')" class="ibm-blue underline text-sm">What is Terraform / IaC?</button>
-    <button onclick="openModal('m-tfstate')" class="ibm-blue underline text-sm">What is "state"?</button>
-    <button onclick="openModal('m-tfheredoc')" class="ibm-blue underline text-sm">What's that &lt;&lt;-EOT bit?</button>
-  </div>
+  <section id="terraform">
+    <h2 class="sec">Bonus: build it all with Terraform</h2>
+    <div class="sec-rule"></div>
+    <p>The CLI commands are great for learning, but typing them one by one invites mistakes. <strong>Terraform</strong> lets you describe the entire setup — role, topics, queue, components, recipe, pipeline — in one file, then create or destroy it with a single command. It also wires the ARNs together automatically, so there is no <span class="mono">ACCOUNT_ID</span> to paste anywhere.</p>
+    <div class="note">
+      <span class="h">Three commands to run it</span>
+      <span class="mono">terraform init</span> downloads the AWS plugin · <span class="mono">terraform plan</span> previews changes · <span class="mono">terraform apply</span> builds it. Run <span class="mono">terraform destroy</span> to remove everything.
+    </div>
+    <div class="infobtns" style="margin-bottom:18px">
+      <button class="info-btn" onclick="openModal('tf')"><span class="i">i</span>What is Terraform / IaC?</button>
+      <button class="info-btn" onclick="openModal('tfstate')"><span class="i">i</span>What is "state"?</button>
+      <button class="info-btn" onclick="openModal('heredoc')"><span class="i">i</span>The &lt;&lt;-EOT block</button>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="tag">hcl · main.tf</span><button class="copy" onclick="copyCode(this)">Copy</button></div>
+<pre><span class="tok-k">provider</span> <span class="tok-s">"aws"</span> { region = <span class="tok-s">"us-east-1"</span> }
 
-  <p class="mb-2 font-semibold">Save this as <span class="mono">main.tf</span>:</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto">
-provider "aws" {
-  region = "us-east-1"
-}
-
-# --- 1. Latest Amazon Linux 2023 as the base image ---
-data "aws_ami" "al2023" {
+<span class="tok-c"># 1. Always start from the latest Amazon Linux 2023 AMI</span>
+<span class="tok-k">data</span> <span class="tok-s">"aws_ami"</span> <span class="tok-s">"al2023"</span> {
   most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["al2023-ami-2023.*-x86_64"]
-  }
+  owners      = [<span class="tok-s">"amazon"</span>]
+  filter { name = <span class="tok-s">"name"</span>  values = [<span class="tok-s">"al2023-ami-2023.*-x86_64"</span>] }
 }
 
-# --- 2. IAM role + instance profile for Image Builder ---
-resource "aws_iam_role" "ib" {
-  name = "ImageBuilderRole"
+<span class="tok-c"># 2. IAM role + instance profile</span>
+<span class="tok-k">resource</span> <span class="tok-s">"aws_iam_role"</span> <span class="tok-s">"ib"</span> {
+  name = <span class="tok-s">"ImageBuilderRole"</span>
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
+    Version = <span class="tok-s">"2012-10-17"</span>
+    Statement = [{ Effect = <span class="tok-s">"Allow"</span>, Action = <span class="tok-s">"sts:AssumeRole"</span>,
+      Principal = { Service = <span class="tok-s">"ec2.amazonaws.com"</span> } }]
   })
 }
-
-resource "aws_iam_role_policy_attachment" "ib_core" {
-  role       = aws_iam_role.ib.name
-  policy_arn = "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder"
+<span class="tok-k">resource</span> <span class="tok-s">"aws_iam_role_policy_attachment"</span> <span class="tok-s">"core"</span> {
+  role = aws_iam_role.ib.name
+  policy_arn = <span class="tok-s">"arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder"</span>
 }
-
-resource "aws_iam_role_policy_attachment" "ssm" {
-  role       = aws_iam_role.ib.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+<span class="tok-k">resource</span> <span class="tok-s">"aws_iam_role_policy_attachment"</span> <span class="tok-s">"ssm"</span> {
+  role = aws_iam_role.ib.name
+  policy_arn = <span class="tok-s">"arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"</span>
 }
-
-resource "aws_iam_instance_profile" "ib" {
-  name = "ImageBuilderProfile"
+<span class="tok-k">resource</span> <span class="tok-s">"aws_iam_instance_profile"</span> <span class="tok-s">"ib"</span> {
+  name = <span class="tok-s">"ImageBuilderProfile"</span>
   role = aws_iam_role.ib.name
 }
 
-# --- 3. SNS topics + SQS queue ---
-resource "aws_sns_topic" "trigger" { name = "new-base-image-trigger" }
-resource "aws_sns_topic" "ready"   { name = "image-ready-topic" }
-resource "aws_sqs_queue"  "updates" { name = "image-update-queue" }
+<span class="tok-c"># 3. SNS topics + SQS queue (with policy so SNS can deliver)</span>
+<span class="tok-k">resource</span> <span class="tok-s">"aws_sns_topic"</span> <span class="tok-s">"trigger"</span> { name = <span class="tok-s">"new-base-image-trigger"</span> }
+<span class="tok-k">resource</span> <span class="tok-s">"aws_sns_topic"</span> <span class="tok-s">"ready"</span>   { name = <span class="tok-s">"image-ready-topic"</span> }
+<span class="tok-k">resource</span> <span class="tok-s">"aws_sqs_queue"</span>  <span class="tok-s">"updates"</span> { name = <span class="tok-s">"image-update-queue"</span> }
 
-# Let the "ready" topic deliver into the queue
-resource "aws_sqs_queue_policy" "allow_sns" {
+<span class="tok-k">resource</span> <span class="tok-s">"aws_sqs_queue_policy"</span> <span class="tok-s">"allow_sns"</span> {
   queue_url = aws_sqs_queue.updates.id
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "sns.amazonaws.com" }
-      Action    = "sqs:SendMessage"
-      Resource  = aws_sqs_queue.updates.arn
-      Condition = { ArnEquals = { "aws:SourceArn" = aws_sns_topic.ready.arn } }
-    }]
+    Version = <span class="tok-s">"2012-10-17"</span>
+    Statement = [{ Effect = <span class="tok-s">"Allow"</span>, Principal = { Service = <span class="tok-s">"sns.amazonaws.com"</span> },
+      Action = <span class="tok-s">"sqs:SendMessage"</span>, Resource = aws_sqs_queue.updates.arn,
+      Condition = { ArnEquals = { <span class="tok-s">"aws:SourceArn"</span> = aws_sns_topic.ready.arn } } }]
   })
 }
-
-resource "aws_sns_topic_subscription" "queue_sub" {
+<span class="tok-k">resource</span> <span class="tok-s">"aws_sns_topic_subscription"</span> <span class="tok-s">"queue_sub"</span> {
   topic_arn = aws_sns_topic.ready.arn
-  protocol  = "sqs"
+  protocol  = <span class="tok-s">"sqs"</span>
   endpoint  = aws_sqs_queue.updates.arn
 }
 
-# --- 4. Build component: install Java 21 + Python ---
-resource "aws_imagebuilder_component" "install" {
-  name        = "InstallJavaPython"
-  platform    = "Linux"
-  version     = "1.0.0"
+<span class="tok-c"># 4. Build + 5. Test components (inline YAML via heredoc)</span>
+<span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_component"</span> <span class="tok-s">"install"</span> {
+  name = <span class="tok-s">"InstallJavaPython"</span>  platform = <span class="tok-s">"Linux"</span>  version = <span class="tok-s">"1.0.0"</span>
   data = &lt;&lt;-EOT
     name: InstallJavaPython
     schemaVersion: 1.0
@@ -407,22 +640,14 @@ resource "aws_imagebuilder_component" "install" {
         steps:
           - name: Java21
             action: ExecuteBash
-            inputs:
-              commands:
-                - sudo dnf install -y java-21-amazon-corretto-devel
+            inputs: { commands: ["sudo dnf install -y java-21-amazon-corretto-devel"] }
           - name: Python
             action: ExecuteBash
-            inputs:
-              commands:
-                - sudo dnf install -y python3 python3-pip
+            inputs: { commands: ["sudo dnf install -y python3 python3-pip"] }
   EOT
 }
-
-# --- 5. Test component: verify versions ---
-resource "aws_imagebuilder_component" "verify" {
-  name        = "VerifyJavaPython"
-  platform    = "Linux"
-  version     = "1.0.0"
+<span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_component"</span> <span class="tok-s">"verify"</span> {
+  name = <span class="tok-s">"VerifyJavaPython"</span>  platform = <span class="tok-s">"Linux"</span>  version = <span class="tok-s">"1.0.0"</span>
   data = &lt;&lt;-EOT
     name: VerifyJavaPython
     schemaVersion: 1.0
@@ -431,154 +656,145 @@ resource "aws_imagebuilder_component" "verify" {
         steps:
           - name: CheckJava
             action: ExecuteBash
-            inputs:
-              commands:
-                - 'java -version 2>&1 | grep "21" || (echo missing && exit 1)'
+            inputs: { commands: ['java -version 2>&amp;1 | grep "21" || (echo missing &amp;&amp; exit 1)'] }
           - name: CheckPython
             action: ExecuteBash
-            inputs:
-              commands:
-                - 'python3 --version || (echo missing && exit 1)'
+            inputs: { commands: ['python3 --version || (echo missing &amp;&amp; exit 1)'] }
   EOT
 }
 
-# --- 6. Recipe = base image + components ---
-resource "aws_imagebuilder_image_recipe" "recipe" {
-  name         = "base-java-python-recipe"
+<span class="tok-c"># 6. Recipe → 7. Infra config (with SNS) → 8. Pipeline</span>
+<span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_image_recipe"</span> <span class="tok-s">"recipe"</span> {
+  name = <span class="tok-s">"base-java-python-recipe"</span>  version = <span class="tok-s">"1.0.0"</span>
   parent_image = data.aws_ami.al2023.id
-  version      = "1.0.0"
   component { component_arn = aws_imagebuilder_component.install.arn }
   component { component_arn = aws_imagebuilder_component.verify.arn }
 }
-
-# --- 7. Infra config: role + the SNS topic to notify when done ---
-resource "aws_imagebuilder_infrastructure_configuration" "infra" {
-  name                  = "base-infra"
+<span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_infrastructure_configuration"</span> <span class="tok-s">"infra"</span> {
+  name = <span class="tok-s">"base-infra"</span>
   instance_profile_name = aws_iam_instance_profile.ib.name
-  instance_types        = ["t3.medium"]
+  instance_types        = [<span class="tok-s">"t3.medium"</span>]
   sns_topic_arn         = aws_sns_topic.ready.arn
 }
-
-# --- 8. The pipeline itself ---
-resource "aws_imagebuilder_image_pipeline" "pipeline" {
-  name                             = "base-java-python-pipeline"
+<span class="tok-k">resource</span> <span class="tok-s">"aws_imagebuilder_image_pipeline"</span> <span class="tok-s">"pipeline"</span> {
+  name = <span class="tok-s">"base-java-python-pipeline"</span>
   image_recipe_arn                 = aws_imagebuilder_image_recipe.recipe.arn
   infrastructure_configuration_arn = aws_imagebuilder_infrastructure_configuration.infra.arn
 }
 
-output "pipeline_arn" { value = aws_imagebuilder_image_pipeline.pipeline.arn }
-output "queue_url"    { value = aws_sqs_queue.updates.id }
+<span class="tok-k">output</span> <span class="tok-s">"pipeline_arn"</span> { value = aws_imagebuilder_image_pipeline.pipeline.arn }
+<span class="tok-k">output</span> <span class="tok-s">"queue_url"</span>    { value = aws_sqs_queue.updates.id }</pre>
+    </div>
+    <p>The Lambda trigger from Step 7 fits the same way — add a <span class="mono">aws_lambda_function</span>, an <span class="mono">aws_sns_topic_subscription</span> with <span class="mono">protocol = "lambda"</span>, and an <span class="mono">aws_lambda_permission</span> so SNS may invoke it.</p>
+    <div class="infobtns">
+      <button class="info-btn" onclick="openModal('tflambda')"><span class="i">i</span>Adding the Lambda in Terraform</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="done">
+      <h2>You've built an image factory.</h2>
+      <p>A single trigger message now bakes a fresh Amazon Linux image with Java 21 and Python, tests it, and announces it to every downstream team — repeatably, and with a quality gate that blocks broken builds. Re-run anytime by publishing to the trigger topic, or attach an EventBridge schedule to run it weekly.</p>
+    </div>
+  </section>
+
+  <section id="refs">
+    <h2 class="sec">Official documentation &amp; references</h2>
+    <div class="sec-rule"></div>
+    <div class="refs">
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html"><div class="src">AWS Docs</div><div class="ttl">EC2 Image Builder User Guide <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html"><div class="src">AWS Docs</div><div class="ttl">Component document (YAML) reference <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/start-build-image-pipeline.html"><div class="src">AWS Docs</div><div class="ttl">Run an image pipeline <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/ibhow-notification-settings.html"><div class="src">AWS Docs</div><div class="ttl">Image Builder SNS notifications <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-base-images.html"><div class="src">AWS Docs</div><div class="ttl">Managing base (parent) images <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/security-iam-service-role.html"><div class="src">AWS Docs</div><div class="ttl">Image Builder IAM service roles <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html"><div class="src">AWS Docs</div><div class="ttl">Amazon SNS Developer Guide <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html"><div class="src">AWS Docs</div><div class="ttl">Subscribe an SQS queue to SNS <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html"><div class="src">AWS Docs</div><div class="ttl">Amazon SQS Developer Guide <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"><div class="src">AWS Docs</div><div class="ttl">SQS dead-letter queues <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html"><div class="src">AWS Docs</div><div class="ttl">Amazon Corretto 21 (Java) <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/lambda/latest/dg/with-sns.html"><div class="src">AWS Docs</div><div class="ttl">Using Lambda with SNS <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-ec2-aliases.html"><div class="src">AWS Docs</div><div class="ttl">SSM public parameters for AMIs <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"><div class="src">AWS Docs</div><div class="ttl">Install / configure the AWS CLI <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/imagebuilder_image_pipeline"><div class="src">Terraform Registry</div><div class="ttl">aws_imagebuilder_image_pipeline <span class="arrow">→</span></div></a>
+      <a class="ref" target="_blank" rel="noopener" href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started"><div class="src">HashiCorp</div><div class="ttl">Terraform: get started with AWS <span class="arrow">→</span></div></a>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<footer>
+  <div class="fwrap">
+    <span>AWS EC2 Image Builder · base image pipeline guide · beginner-friendly edition</span>
+    <span class="mono">Use A− / A+ to resize text (14–36px)</span>
   </div>
-
-  <div class="bg-gray-50 border border-gray-300 rounded-lg p-4 mt-5">
-    <p class="font-semibold mb-1">Notice what Terraform did for you:</p>
-    <p class="text-sm">No <span class="mono">ACCOUNT_ID</span> to copy-paste anywhere — Terraform wires the ARNs together automatically (e.g. <span class="mono">aws_sns_topic.ready.arn</span>). It also figured out the order: the role before the profile, the topics before the subscription. Change one line, re-run <span class="mono">apply</span>, and only what changed gets updated.</p>
-  </div>
-
-  <p class="mt-5 mb-2">The Lambda trigger from Step 7 still fits the same way — add this to the file to create the function and subscribe it to the trigger topic:</p>
-  <div class="code-block mono text-sm rounded-lg p-4 overflow-x-auto">
-resource "aws_lambda_function" "starter" {
-  function_name = "StartImageBuild"
-  runtime       = "python3.12"
-  handler       = "index.handler"
-  role          = aws_iam_role.lambda.arn
-  filename      = "lambda.zip"   # zip containing index.py from Step 7
-}
-
-resource "aws_sns_topic_subscription" "lambda_sub" {
-  topic_arn = aws_sns_topic.trigger.arn
-  protocol  = "lambda"
-  endpoint  = aws_lambda_function.starter.arn
-}
-
-resource "aws_lambda_permission" "allow_sns" {
-  statement_id  = "AllowSNS"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.starter.function_name
-  principal     = "sns.amazonaws.com"
-  source_arn    = aws_sns_topic.trigger.arn
-}
-  </div>
-  <button onclick="openModal('m-tflambda')" class="ibm-blue underline text-sm mt-2 inline-block">Note: the Lambda role + zip</button>
-</section>
-
-<!-- SUMMARY -->
-<section class="mb-12 ibm-blue-bg text-white rounded-lg p-6 fade-in">
-  <h2 class="text-xl md:text-2xl font-bold mb-3">You're done! 🎉</h2>
-  <p>You now have a fully automated factory: a trigger message builds a fresh Amazon Linux image with Java 21 and Python, tests it, and tells everyone else when it's ready. Re-run anytime by publishing to the trigger topic.</p>
-</section>
-
-<!-- REFERENCES -->
-<section class="mb-16 fade-in">
-  <h2 class="text-xl md:text-2xl font-bold ibm-blue mb-4">Official documentation & references</h2>
-  <div class="grid md:grid-cols-2 gap-3">
-    <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">EC2 Image Builder User Guide →</a>
-    <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Component YAML reference →</a>
-    <a href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon SNS Developer Guide →</a>
-    <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon SQS Developer Guide →</a>
-    <a href="https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Amazon Corretto 21 (Java) →</a>
-    <a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/start-build-image-pipeline.html" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Start a pipeline (CLI/SNS) →</a>
-    <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/imagebuilder_image_pipeline" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Terraform: imagebuilder_image_pipeline →</a>
-    <a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" target="_blank" rel="noopener" class="border border-gray-300 rounded p-3 hover:bg-gray-50 block">Terraform: Get started with AWS →</a>
-  </div>
-</section>
-
-</main>
-
-<footer class="border-t-4 border-gray-900 py-6 text-center text-sm text-gray-600">
-  AWS Image Builder Tutorial · Middle-school-friendly edition · Use the A+ / A− buttons to resize text.
 </footer>
 
-<!-- MODALS -->
-<div id="modalWrap">
-  <!-- generated below -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="top"><h3 id="mTitle"></h3><button class="x" onclick="closeModal()" aria-label="Close">×</button></div>
+    <div class="mbody" id="mBody"></div>
+    <div class="mfoot"><a id="mLink" target="_blank" rel="noopener">Read the official docs →</a></div>
+  </div>
 </div>
 
 <script>
-/* ---------- Font size control 14–36 ---------- */
-let fontSize = 16;
-function changeFont(delta){
-  fontSize = Math.min(36, Math.max(14, fontSize + delta));
-  document.documentElement.style.setProperty('--base-font', fontSize + 'px');
-  document.getElementById('fontVal').textContent = fontSize + 'px';
+let fs = 16;
+function changeFont(d){
+  fs = Math.min(36, Math.max(14, fs + d));
+  document.documentElement.style.setProperty('--fs', fs + 'px');
+  document.getElementById('fontVal').textContent = fs + 'px';
 }
-
-/* ---------- Popups ---------- */
-const modals = {
-  'm-ami': ['What is an AMI?', 'An <b>Amazon Machine Image</b> is a saved template of a server: the operating system plus any software and settings. When you launch a virtual server (EC2 instance), you pick an AMI as its starting point — like choosing a phone with apps pre-installed instead of an empty one.', 'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html'],
-  'm-sns': ['SNS vs SQS — what\'s the difference?', '<b>SNS</b> (Simple Notification Service) is a megaphone: it broadcasts one message to many subscribers instantly (push). <b>SQS</b> (Simple Queue Service) is a mailbox: messages wait safely until a worker picks them up (pull). We use SNS to announce, and SQS so app teams never miss a message even if they are busy.', 'https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html'],
-  'm-why': ['Why automate image building?', 'Doing it by hand is slow and easy to get wrong — one team forgets a patch, another installs the wrong Java version. Automating gives every team an identical, tested, secure starting image. It also rebuilds quickly when a new base OS or security patch arrives.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html'],
-  'm-iam': ['Setting up IAM permissions', 'IAM (Identity and Access Management) controls who can do what in AWS. For this tutorial your user needs permissions for imagebuilder:*, iam:CreateRole/PassRole, sns:*, sqs:*, and lambda:*. In a real company, ask your cloud admin to scope these down to least privilege.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-setting-up.html'],
-  'm-role': ['Why two managed policies?', '<b>EC2InstanceProfileForImageBuilder</b> lets the temporary build server do Image Builder work. <b>AmazonSSMManagedInstanceCore</b> lets AWS Systems Manager run commands on that server and collect logs. Together they let the build run and report back without you opening SSH.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/security-iam-service-role.html'],
-  'm-queueperm': ['Queue access policy', 'For an SNS topic to drop messages into an SQS queue, the queue must grant SNS permission. Attach an SQS policy allowing the "sns.amazonaws.com" service the sqs:SendMessage action, with a condition matching your topic ARN. Without it, messages silently fail to arrive.', 'https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html'],
-  'm-corretto': ['What is Amazon Corretto?', 'Corretto is Amazon\'s free, production-ready build of OpenJDK (Java). It receives long-term security patches at no cost. We install <b>java-21-amazon-corretto-devel</b> to get the full Java 21 development kit on Amazon Linux 2023.', 'https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html'],
-  'm-exit': ['Why "exit 1" matters', 'In Linux, a command that ends with exit code 0 means success; anything else means failure. By forcing <b>exit 1</b> when Java or Python is missing, we make the test phase fail loudly. Image Builder then stops and refuses to publish a broken image.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html'],
-  'm-latest': ['How "latest" image tracking works', 'Amazon publishes the newest Amazon Linux AMI ID into a public SSM parameter and Image Builder image ARN. Pointing your recipe at the managed parent image (with x.x.x version) tells Image Builder to grab the most recent one each build — so you stay patched automatically.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-base-images.html'],
-  'm-infra': ['Image Builder publishes to SNS for itself', 'The infrastructure configuration has a built-in SNS field. When you set --sns-topic-arn, Image Builder posts a JSON message (including the new AMI ID and build status) to that topic at the end of every run — no extra Lambda needed for the announcement.', 'https://docs.aws.amazon.com/imagebuilder/latest/userguide/ibhow-notification-settings.html'],
-  'm-trigger': ['How do you fire the trigger?', 'Anything that can publish to SNS: a CloudWatch scheduled rule (e.g., weekly), an EventBridge rule watching for new Amazon Linux releases, or a manual "aws sns publish" command. The trigger topic decouples "when to build" from "how to build".', 'https://docs.aws.amazon.com/sns/latest/dg/sns-publishing.html'],
-  'm-consume': ['Why a queue instead of direct calls?', 'A queue buffers work. If ten app teams subscribe, none get overwhelmed, and if a consumer is offline it still gets the message later. SQS also retries and supports dead-letter queues for messages that repeatedly fail, making the system reliable.', 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-architecture.html'],
-  'm-tf': ['What is Terraform / Infrastructure as Code?', '<b>Terraform</b> lets you write down your cloud setup as plain text. Instead of clicking buttons or typing many commands, you describe the end result ("I want these topics, this queue, this pipeline") and Terraform makes reality match. This is called <b>Infrastructure as Code (IaC)</b> — your infrastructure lives in a file you can save, share, review, and version-control like any other code.', 'https://developer.hashicorp.com/terraform/intro'],
-  'm-tfstate': ['What is Terraform "state"?', 'Terraform keeps a <b>state file</b> that remembers what it has already created, so it knows the difference between "make new" and "update existing". For real teams, store this state in a shared, locked backend (like an S3 bucket with DynamoDB locking) so two people don\'t change things at the same time.', 'https://developer.hashicorp.com/terraform/language/state'],
-  'm-tfheredoc': ['What\'s the &lt;&lt;-EOT block?', 'That is a <b>heredoc</b> — a way to write a multi-line block of text (here, the YAML component recipe) directly inside Terraform. Everything between &lt;&lt;-EOT and the closing EOT is passed through as-is. The dash in &lt;&lt;- lets Terraform strip the leading indentation so it stays readable.', 'https://developer.hashicorp.com/terraform/language/expressions/strings'],
-  'm-tflambda': ['The Lambda role + zip', 'This snippet assumes two extra things you\'d add: an IAM role for the Lambda (named aws_iam_role.lambda here) that allows imagebuilder:StartImagePipelineExecution and basic logging, and a lambda.zip file containing the index.py handler from Step 7. Terraform can build the zip for you with the archive_file data source.', 'https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function']
+function copyCode(btn){
+  const pre = btn.closest('.code').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(()=>{
+    const o = btn.textContent; btn.textContent = 'Copied ✓';
+    setTimeout(()=>btn.textContent = o, 1400);
+  });
+}
+const M = {
+  ami:['What is an AMI?','<p>An <b>Amazon Machine Image</b> is a saved template of a server: the operating system plus any installed software and settings. When you launch a virtual server (an EC2 instance), you choose an AMI as its starting point — like buying a phone with apps pre-installed instead of a blank one.</p>','https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html'],
+  golden:['What is a "golden image"?','<p>A <b>golden image</b> is an approved, standardized base image that every team builds on top of. It bakes in your security patches, agents, and runtimes once, so each application starts from the same trusted foundation instead of configuring servers from scratch.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html'],
+  why:['Why automate image building?','<p>Doing it by hand is slow and error-prone — one team forgets a patch, another installs the wrong Java. Automation gives every team an identical, tested, secure starting image, and rebuilds in minutes whenever a new base OS or security update lands.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html'],
+  component:['Components & phases','<p>A <b>component</b> is a YAML document of steps Image Builder runs. Steps are grouped into phases: <b>build</b> (during creation), <b>validate</b> (right after), and <b>test</b> (against the finished image). You reuse components across many recipes.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html'],
+  recipe:['What is a recipe?','<p>A <b>recipe</b> = a parent (base) image + an ordered list of components + optional settings like volume size. It is the blueprint for what gets baked. Recipes are versioned, so you can track exactly what changed between image builds.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-recipes.html'],
+  infra:['Infrastructure configuration','<p>This defines <b>where and how</b> the build runs: the IAM instance profile, instance type, subnet/security group, logging, and the SNS topic to notify. It is separate from the recipe so you can reuse the same build environment for many images.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-infra-config.html'],
+  pipeline:['What is a pipeline?','<p>A <b>pipeline</b> ties a recipe to an infrastructure configuration (and optional distribution settings), and can run on a schedule or on demand. Triggering the pipeline is what actually produces a new image.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/start-build-image-pipeline.html'],
+  sns:['SNS vs SQS','<p><b>SNS</b> (Simple Notification Service) is a megaphone: it pushes one message to many subscribers instantly. <b>SQS</b> (Simple Queue Service) is a mailbox: messages wait safely until a worker pulls them. We announce with SNS and buffer with SQS so no team misses an update.</p>','https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html'],
+  fanout:['What is fan-out?','<p><b>Fan-out</b> is the SNS → multiple SQS pattern: one published message is copied to every subscribed queue. Each consuming team gets its own private copy to process at its own pace, fully decoupled from the others.</p>','https://docs.aws.amazon.com/sns/latest/dg/sns-common-scenarios.html'],
+  queueperm:['Queue access policy','<p>For SNS to drop messages into SQS, the <b>queue</b> must allow it. Attach an SQS policy granting <span class="mono">sns.amazonaws.com</span> the <span class="mono">sqs:SendMessage</span> action, with a condition matching your topic ARN. Without it, delivery fails silently.</p>','https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html'],
+  corretto:['Why Amazon Corretto?','<p><b>Corretto</b> is Amazon\'s free, production-ready build of OpenJDK with long-term security patches at no cost. Installing <span class="mono">java-21-amazon-corretto-devel</span> gives you the full Java 21 development kit on Amazon Linux 2023.</p>','https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/what-is-corretto-21.html'],
+  iam:['IAM roles & instance profiles','<p>An <b>IAM role</b> is a set of permissions something can temporarily assume. An <b>instance profile</b> is the wrapper that hands a role to an EC2 instance. Image Builder\'s temporary build server uses the profile to do its work without long-lived keys.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/security-iam-service-role.html'],
+  ssm:['SSM Parameter Store','<p><b>AWS Systems Manager Parameter Store</b> holds named values. Amazon publishes the newest AMI IDs as public parameters, so tools can always resolve "the latest Amazon Linux" without hard-coding an ID that goes stale.</p>','https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-ec2-aliases.html'],
+  cli:['Install & configure the AWS CLI','<p>Install AWS CLI v2 for your OS, then run <span class="mono">aws configure</span> to set your access key, secret, default region, and output format. After that, every command in this guide will work from your terminal.</p>','https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html'],
+  role:['Why these two managed policies?','<p><b>EC2InstanceProfileForImageBuilder</b> lets the temporary build server perform Image Builder work. <b>AmazonSSMManagedInstanceCore</b> lets Systems Manager run commands on it and collect logs — so the build runs and reports back without you opening SSH.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/security-iam-awsmanpol.html'],
+  dnf:['What is dnf?','<p><b>dnf</b> is the package manager on Amazon Linux 2023 (the successor to yum). <span class="mono">dnf install -y</span> downloads and installs software non-interactively — the <span class="mono">-y</span> auto-confirms prompts, which is essential in an unattended build.</p>','https://docs.aws.amazon.com/linux/al2023/ug/package-management.html'],
+  testphase:['Build vs validate vs test','<p>The <b>build</b> phase changes the image (installs software). <b>validate</b> runs immediately after, still on the build instance. <b>test</b> launches a brand-new instance from the finished image and checks it behaves — the realistic final gate before distribution.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-application-documents.html'],
+  exit:['Exit codes explained','<p>Every Linux command returns an exit code: <b>0</b> means success, anything else means failure. By forcing <span class="mono">exit 1</span> when a check fails, you make Image Builder treat the build as failed and stop — preventing a broken image from shipping.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/troubleshooting.html'],
+  latest:['How "latest" tracking works','<p>Pointing the recipe\'s parent at the AWS-managed Amazon Linux image ARN with a wildcard version (<span class="mono">x.x.x</span>) tells Image Builder to grab the most recent release at each build, so your golden image always starts fully patched.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-base-images.html'],
+  ibsns:['The built-in SNS notification','<p>The infrastructure configuration has a native <span class="mono">snsTopicArn</span> field. Set it, and Image Builder posts a JSON message — including the new AMI ID and build status — to that topic at the end of every run. No extra Lambda required for the announcement.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/ibhow-notification-settings.html'],
+  dist:['Distribution settings','<p>A <b>distribution configuration</b> controls where finished images go: which regions to copy the AMI into, what to name it, and which accounts may use it. Add one to the pipeline when teams run in multiple regions.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/manage-distribution-settings.html'],
+  trigger:['How do you fire the trigger?','<p>Anything that can publish to SNS: a manual <span class="mono">aws sns publish</span>, an <b>EventBridge</b> scheduled rule (e.g. weekly), or a rule reacting to a new Amazon Linux release. The trigger topic decouples "when to build" from "how to build".</p>','https://docs.aws.amazon.com/sns/latest/dg/sns-publishing.html'],
+  lambdaperm:['Lambda invoke permission','<p>For SNS to call your function, Lambda must grant it. Add a resource-based permission allowing <span class="mono">sns.amazonaws.com</span> the <span class="mono">lambda:InvokeFunction</span> action, scoped to the trigger topic ARN. The CLI <span class="mono">add-permission</span> or Terraform <span class="mono">aws_lambda_permission</span> does this.</p>','https://docs.aws.amazon.com/lambda/latest/dg/with-sns.html'],
+  consume:['Why a queue, not a direct call?','<p>A queue buffers work. If ten teams subscribe, none get overwhelmed, and an offline consumer still receives the message later. SQS also retries delivery and supports dead-letter queues for repeatedly-failing messages — making the system resilient.</p>','https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-architecture.html'],
+  dlq:['Dead-letter queues','<p>A <b>dead-letter queue</b> catches messages a consumer fails to process after a set number of attempts, so they don\'t loop forever or get lost. You inspect the DLQ later to debug the bad messages without blocking the main flow.</p>','https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html'],
+  logs:['Where to find build logs','<p>Image Builder streams detailed logs to <b>Amazon CloudWatch Logs</b> (and optionally an S3 bucket you specify in the infra config). If a phase fails, that\'s where you see exactly which command errored.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/troubleshooting.html'],
+  schedule:['Run it on a schedule','<p>Give the pipeline a <b>schedule expression</b> (cron or rate) so it rebuilds automatically — e.g. weekly — picking up the newest base OS and patches without anyone publishing a trigger message.</p>','https://docs.aws.amazon.com/imagebuilder/latest/userguide/start-build-image-pipeline.html'],
+  tf:['What is Terraform / IaC?','<p><b>Terraform</b> lets you write your cloud setup as plain text and have it created to match. This is <b>Infrastructure as Code</b>: your infrastructure lives in a file you can review, version-control, and reproduce exactly in another account or region.</p>','https://developer.hashicorp.com/terraform/intro'],
+  tfstate:['What is Terraform "state"?','<p>Terraform keeps a <b>state file</b> recording what it has already created, so it knows the difference between "make new" and "update". For teams, store state in a shared, locked backend (S3 + DynamoDB) so two people can\'t clash.</p>','https://developer.hashicorp.com/terraform/language/state'],
+  heredoc:['The &lt;&lt;-EOT block','<p>That is a <b>heredoc</b> — a way to embed a multi-line string (here, the YAML component) directly in Terraform. Everything between <span class="mono">&lt;&lt;-EOT</span> and <span class="mono">EOT</span> is passed through; the dash lets Terraform strip indentation for readability.</p>','https://developer.hashicorp.com/terraform/language/expressions/strings'],
+  tflambda:['Adding the Lambda in Terraform','<p>Create an <span class="mono">aws_lambda_function</span> (with an IAM role allowing <span class="mono">imagebuilder:StartImagePipelineExecution</span>), an <span class="mono">aws_sns_topic_subscription</span> with <span class="mono">protocol = "lambda"</span>, and an <span class="mono">aws_lambda_permission</span> so SNS can invoke it. The zip can be built with the <span class="mono">archive_file</span> data source.</p>','https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function']
 };
-
-let wrap = document.getElementById('modalWrap');
-for (const id in modals){
-  const [title, body, link] = modals[id];
-  wrap.innerHTML += `
-  <div id="${id}" class="modal fixed inset-0 bg-black bg-opacity-60 z-50 items-center justify-center p-4" onclick="if(event.target===this)closeModal('${id}')">
-    <div class="bg-white rounded-lg max-w-lg w-full p-6 fade-in border-t-4" style="border-color:#0530AD">
-      <h3 class="text-lg font-bold ibm-blue mb-3">${title}</h3>
-      <p class="mb-4">${body}</p>
-      <a href="${link}" target="_blank" rel="noopener" class="ibm-blue underline text-sm">Read the official docs →</a>
-      <button onclick="closeModal('${id}')" class="block mt-5 step-num px-4 py-2 rounded font-semibold">Close</button>
-    </div>
-  </div>`;
+function openModal(id){
+  const m = M[id]; if(!m) return;
+  document.getElementById('mTitle').textContent = m[0];
+  document.getElementById('mBody').innerHTML = m[1];
+  document.getElementById('mLink').href = m[2];
+  document.getElementById('overlay').classList.add('active');
 }
-function openModal(id){ document.getElementById(id).classList.add('active'); }
-function closeModal(id){ document.getElementById(id).classList.remove('active'); }
-document.addEventListener('keydown', e => { if(e.key==='Escape') document.querySelectorAll('.modal.active').forEach(m=>m.classList.remove('active')); });
+function closeModal(){ document.getElementById('overlay').classList.remove('active'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 </script>
 </body>
 </html>
