@@ -389,6 +389,168 @@
       <button onclick="openModal('m-cicd')" class="mt-2 inline-flex items-center gap-2 text-ibmblue hover:text-ibmblued font-medium text-sm">More Details →</button>
     </section>
 
+    <!-- Two-Pipeline / Two-Repo split -->
+    <section id="twopipe" class="mt-12 fade-up">
+      <h2 class="text-2xl font-bold border-b-2 border-ibmblue pb-2 mb-4">Two Pipelines, Two Repositories</h2>
+      <p class="mb-3 text-gray-700 dark:text-gray-300">Separate the <strong>base/golden AMI build</strong> from the <strong>service AMI build and deployment</strong>. These change at different speeds, have different owners, and need different approvals — so they live in <strong>two GitLab repositories</strong>, each with its own pipeline. The base pipeline produces a hardened, approved parent image; the service pipeline consumes it, layers the service on top, and deploys infrastructure with Terraform or CloudFormation.</p>
+
+      <div class="ibm-rule bg-blue-50 dark:bg-ibmnavy/40 p-4 rounded-r mb-5">
+        <strong class="text-ibmblued dark:text-blue-300">The handoff:</strong> the base pipeline publishes its approved AMI ID to SSM Parameter Store (e.g. <code class="bg-white dark:bg-gray-800 px-1 rounded">/platform/ami/golden/latest</code>). The service pipeline reads that parameter as its parent image. This decouples the two — a base re-bake never forces a service code change, and a service build always starts from the current approved base.
+      </div>
+
+      <!-- Repo 1 -->
+      <div class="grid lg:grid-cols-2 gap-4 mb-5">
+        <div class="border border-gray-200 dark:border-gray-700 rounded p-4">
+          <h3 class="font-semibold text-ibmblued dark:text-blue-300 mb-1">Repo 1 — Base / Golden AMI</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Owner: platform/security team · Changes: slow (patches, baseline updates)</p>
+          <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Builds AL2023 → hardened golden AMI. Output is an approved parent image, nothing service-specific.</p>
+          <div class="mono text-xs bg-gray-50 dark:bg-gray-800 rounded p-3 overflow-x-auto text-gray-700 dark:text-gray-300 leading-relaxed">platform-base-ami/<br>├─ .gitlab-ci.yml<br>├─ packer/ (or imagebuilder/)<br>│&nbsp;&nbsp;└─ golden.pkr.hcl<br>├─ ansible/<br>│&nbsp;&nbsp;├─ baseline.yml<br>│&nbsp;&nbsp;└─ roles/ (hardening, agents, cloudwatch, ssm)<br>├─ tests/ (smoke + compliance)<br>└─ README.md</div>
+        </div>
+        <!-- Repo 2 -->
+        <div class="border border-gray-200 dark:border-gray-700 rounded p-4">
+          <h3 class="font-semibold text-ibmblued dark:text-blue-300 mb-1">Repo 2 — Service AMI + Deploy</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Owner: data platform / service team · Changes: faster (service config, infra)</p>
+          <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Reads the golden AMI from Parameter Store, layers the service (Kafka, etc.), then deploys with Terraform/CloudFormation.</p>
+          <div class="mono text-xs bg-gray-50 dark:bg-gray-800 rounded p-3 overflow-x-auto text-gray-700 dark:text-gray-300 leading-relaxed">data-service-platform/<br>├─ .gitlab-ci.yml<br>├─ packer/ (parent = golden AMI param)<br>├─ ansible/roles/ (kafka, zookeeper, nifi, opensearch, etl)<br>├─ terraform/ (or cloudformation/)<br>│&nbsp;&nbsp;├─ modules/<br>│&nbsp;&nbsp;└─ envs/ dev · stage · prod<br>├─ scripts/ (bootstrap user-data)<br>└─ tests/</div>
+        </div>
+      </div>
+
+      <!-- Flow diagram -->
+      <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-900 mb-5">
+        <svg viewBox="0 0 920 210" class="w-full min-w-[760px]" font-family="IBM Plex Sans, sans-serif">
+          <defs>
+            <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#0f62fe"/>
+            </marker>
+          </defs>
+          <!-- Repo 1 lane -->
+          <rect class="bandnode band" x="10" y="10" width="900" height="80" rx="4"/>
+          <text class="subnode sub" x="22" y="28" font-weight="700">Pipeline 1 · Repo: platform-base-ami</text>
+          <rect class="boxnode box" x="30" y="36" width="150" height="42" rx="4"/>
+          <text class="lblnode lbl" x="105" y="62" text-anchor="middle" font-size="12">lint · scan</text>
+          <rect class="boxnode box" x="210" y="36" width="170" height="42" rx="4"/>
+          <text class="lblnode lbl" x="295" y="62" text-anchor="middle" font-size="12">build golden AMI</text>
+          <rect class="boxnode box" x="410" y="36" width="150" height="42" rx="4"/>
+          <text class="lblnode lbl" x="485" y="62" text-anchor="middle" font-size="12">test image</text>
+          <rect class="boxnode box" x="590" y="36" width="300" height="42" rx="4"/>
+          <text class="lblnode lbl" x="740" y="56" text-anchor="middle" font-size="12">publish AMI ID →</text>
+          <text class="subnode sub" x="740" y="71" text-anchor="middle">/platform/ami/golden/latest</text>
+          <line stroke="#0f62fe" stroke-width="2" x1="180" y1="57" x2="208" y2="57" marker-end="url(#arrow3)"/>
+          <line stroke="#0f62fe" stroke-width="2" x1="380" y1="57" x2="408" y2="57" marker-end="url(#arrow3)"/>
+          <line stroke="#0f62fe" stroke-width="2" x1="560" y1="57" x2="588" y2="57" marker-end="url(#arrow3)"/>
+
+          <!-- handoff -->
+          <line stroke="#0f62fe" stroke-width="2" stroke-dasharray="4 3" x1="740" y1="90" x2="740" y2="120" marker-end="url(#arrow3)"/>
+          <text class="subnode sub" x="752" y="110">SSM Parameter Store handoff</text>
+
+          <!-- Repo 2 lane -->
+          <rect class="bandnode band" x="10" y="120" width="900" height="80" rx="4"/>
+          <text class="subnode sub" x="22" y="138" font-weight="700">Pipeline 2 · Repo: data-service-platform</text>
+          <rect class="boxnode box" x="30" y="146" width="175" height="42" rx="4"/>
+          <text class="lblnode lbl" x="117" y="166" text-anchor="middle" font-size="12">read golden AMI</text>
+          <text class="subnode sub" x="117" y="180" text-anchor="middle">build service AMI</text>
+          <rect class="boxnode box" x="235" y="146" width="150" height="42" rx="4"/>
+          <text class="lblnode lbl" x="310" y="172" text-anchor="middle" font-size="12">test service AMI</text>
+          <rect class="boxnode box" x="415" y="146" width="170" height="42" rx="4"/>
+          <text class="lblnode lbl" x="500" y="166" text-anchor="middle" font-size="12">terraform / CFN</text>
+          <text class="subnode sub" x="500" y="180" text-anchor="middle">deploy dev → stage</text>
+          <rect class="boxnode box" x="615" y="146" width="275" height="42" rx="4"/>
+          <text class="lblnode lbl" x="752" y="166" text-anchor="middle" font-size="12">deploy production (approval)</text>
+          <text class="subnode sub" x="752" y="180" text-anchor="middle">running Kafka / NiFi / OpenSearch cluster</text>
+          <line stroke="#0f62fe" stroke-width="2" x1="205" y1="167" x2="233" y2="167" marker-end="url(#arrow3)"/>
+          <line stroke="#0f62fe" stroke-width="2" x1="385" y1="167" x2="413" y2="167" marker-end="url(#arrow3)"/>
+          <line stroke="#0f62fe" stroke-width="2" x1="585" y1="167" x2="613" y2="167" marker-end="url(#arrow3)"/>
+        </svg>
+      </div>
+
+      <!-- Detailed Pipeline 1 -->
+      <h3 class="font-semibold text-lg mb-2">Pipeline 1 — Base / Golden AMI (detailed stages)</h3>
+      <p class="mb-3 text-sm text-gray-700 dark:text-gray-300">Triggered on merge to <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">main</code> in <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">platform-base-ami</code>, or on a schedule (e.g. monthly patch cycle) so the golden image stays current. Authenticates to AWS via OIDC; no static keys.</p>
+
+      <details open class="mb-2 border border-gray-200 dark:border-gray-700 rounded">
+        <summary class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 font-semibold text-sm">
+          <span class="chev text-ibmblue">▶</span> Stage walkthrough
+        </summary>
+        <div class="p-4 text-sm text-gray-700 dark:text-gray-300 space-y-3">
+          <div><strong>1. validate</strong> — <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">ansible-lint</code>, <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">yamllint</code>, <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">packer validate</code>/<code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">packer fmt -check</code>. Fails fast on style/syntax before any cloud cost is incurred.</div>
+          <div><strong>2. security-scan</strong> — secret scan (e.g. gitleaks), dependency/SAST scan, and a static policy check of the Packer/Ansible config. Blocks merge on high-severity findings.</div>
+          <div><strong>3. build</strong> — Packer (or EC2 Image Builder) launches a temporary EC2 from the current AL2023 base, then runs the <strong>baseline Ansible roles</strong>: OS update, CIS-style hardening, CloudWatch Agent, SSM Agent, audit/logging, corporate CA certs, tagging. Produces an unvalidated AMI.</div>
+          <div><strong>4. test</strong> — boots an instance from the new AMI and runs automated checks: agents report in, hardening controls present (e.g. via a compliance tool / InSpec-style tests), no unexpected open ports, expected packages and versions installed.</div>
+          <div><strong>5. scan-image</strong> — vulnerability scan of the built AMI (e.g. Amazon Inspector). Fails the pipeline if critical CVEs are present.</div>
+          <div><strong>6. publish</strong> — tags the AMI as approved (commit SHA, build date, pipeline ID), optionally copies it cross-region, and <strong>writes the new AMI ID to SSM Parameter Store</strong> at <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">/platform/ami/golden/latest</code> (plus a versioned path for rollback).</div>
+          <div><strong>7. notify / trigger</strong> — optionally calls the Pipeline 2 trigger API so dependent service images rebuild on the new base.</div>
+          <div class="ibm-rule bg-blue-50 dark:bg-ibmnavy/40 p-3 rounded-r"><strong>Approvals &amp; guardrails:</strong> protected <code class="bg-white dark:bg-gray-800 px-1 rounded">main</code>, mandatory MR review by the platform/security team, environment-scoped OIDC role limited to image-build actions, and manual approval before the <em>publish</em> stage promotes an image to "approved".</div>
+        </div>
+      </details>
+
+      <details class="mb-5 border border-gray-200 dark:border-gray-700 rounded">
+        <summary class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 font-semibold text-sm">
+          <span class="chev text-ibmblue">▶</span> Inputs, outputs &amp; rollback
+        </summary>
+        <div class="p-4 text-sm text-gray-700 dark:text-gray-300 space-y-2">
+          <p><strong>Inputs:</strong> AL2023 source AMI (looked up by SSM public parameter), baseline Ansible roles, hardening policy, allowed region list.</p>
+          <p><strong>Outputs:</strong> one approved golden AMI per region; its ID in Parameter Store; build metadata and scan reports as pipeline artifacts.</p>
+          <p><strong>Rollback:</strong> because each build writes a versioned parameter (e.g. <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">/platform/ami/golden/2026-06-01</code>) alongside <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">/latest</code>, you can repoint <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">/latest</code> to a previous known-good AMI without rebuilding.</p>
+          <p><strong>Config tool:</strong> Ansible does the work; a tiny shell/cloud-init step only bootstraps Ansible inside the builder instance.</p>
+        </div>
+      </details>
+
+      <!-- Detailed Pipeline 2 -->
+      <h3 class="font-semibold text-lg mb-2">Pipeline 2 — Service AMI + Deploy (detailed stages)</h3>
+      <p class="mb-3 text-sm text-gray-700 dark:text-gray-300">Lives in <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">data-service-platform</code>. Runs per service (Kafka, ZooKeeper, NiFi, OpenSearch, ETL) — typically one pipeline configuration parameterized by service, or a child pipeline per service. Starts from the approved golden AMI it reads from Parameter Store.</p>
+
+      <details open class="mb-2 border border-gray-200 dark:border-gray-700 rounded">
+        <summary class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 font-semibold text-sm">
+          <span class="chev text-ibmblue">▶</span> Stage walkthrough
+        </summary>
+        <div class="p-4 text-sm text-gray-700 dark:text-gray-300 space-y-3">
+          <div><strong>1. validate</strong> — <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">ansible-lint</code>, <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">terraform fmt -check</code> + <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">terraform validate</code> (or <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">cfn-lint</code>), and a service config schema check.</div>
+          <div><strong>2. security-scan</strong> — secret scan, SAST, IaC security scan (e.g. tfsec/checkov) on the Terraform/CloudFormation, plus dependency scanning of service config.</div>
+          <div><strong>3. resolve-parent</strong> — reads <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">/platform/ami/golden/latest</code> from Parameter Store to pin the parent image; the build fails if no approved golden AMI exists.</div>
+          <div><strong>4. build service AMI</strong> — Packer launches from the golden AMI and runs the <strong>service Ansible role</strong> (e.g. <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">kafka</code>): installs JVM + Kafka binaries, lays down config templates, sets tuned kernel/JVM/ulimit values, places the bootstrap script. Only the service layer is added — the hardened base is inherited.</div>
+          <div><strong>5. test service AMI</strong> — boots an instance, confirms the service binary is present and starts, ports listen, and a single-node smoke test passes (e.g. create a topic and produce/consume for Kafka).</div>
+          <div><strong>6. scan + publish</strong> — vulnerability scan, tag as approved, then write the service AMI ID to its own path, e.g. <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">/platform/ami/kafka/latest</code>.</div>
+          <div><strong>7. deploy-dev</strong> — Terraform/CloudFormation reads the service AMI ID and launches a Multi-AZ cluster in dev: an Auto Scaling group / launch template per node role, EBS data volumes, security groups, load balancer/target groups, and SSM associations that run the <strong>runtime bootstrap</strong> so nodes join the cluster.</div>
+          <div><strong>8. integration-test (dev)</strong> — validates the live cluster: brokers register, quorum forms, health checks green, end-to-end produce/consume or query succeeds.</div>
+          <div><strong>9. deploy-stage</strong> — same Terraform with stage variables; manual approval gate; prod-like validation.</div>
+          <div><strong>10. deploy-prod</strong> — manual approval + change record; deploys the HA Multi-AZ cluster. Rollout is controlled (rolling/canary) so the cluster stays available.</div>
+          <div class="ibm-rule bg-blue-50 dark:bg-ibmnavy/40 p-3 rounded-r"><strong>Approvals &amp; guardrails:</strong> protected branches, MR review by the service team, per-environment OIDC roles (dev role can't touch prod), <code class="bg-white dark:bg-gray-800 px-1 rounded">terraform plan</code> posted to the MR for review, and manual approvals before stage and prod.</div>
+        </div>
+      </details>
+
+      <details class="mb-5 border border-gray-200 dark:border-gray-700 rounded">
+        <summary class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 font-semibold text-sm">
+          <span class="chev text-ibmblue">▶</span> Inputs, outputs &amp; rollback
+        </summary>
+        <div class="p-4 text-sm text-gray-700 dark:text-gray-300 space-y-2">
+          <p><strong>Inputs:</strong> golden AMI ID (from Parameter Store), service Ansible role, Terraform/CFN modules, per-environment variable sets, bootstrap user-data script.</p>
+          <p><strong>Outputs:</strong> an approved service AMI and its Parameter Store ID; a running, health-checked Multi-AZ cluster per environment; Terraform state and plan artifacts.</p>
+          <p><strong>Rollback:</strong> repoint the service AMI parameter to the prior version and re-run deploy, or use Terraform to revert to the last applied state; Auto Scaling replaces nodes with the rolled-back image automatically.</p>
+          <p><strong>Config tool:</strong> Ansible builds the AMI <em>and</em> runs at first boot (same roles, tag-gated <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">--tags build</code> vs <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">--tags runtime</code>); a short shell/cloud-init bootstrap in user-data fetches and invokes it.</p>
+        </div>
+      </details>
+
+      <!-- Config layer comparison -->
+      <h3 class="font-semibold text-lg mb-2">Configuration layer: Ansible vs. shell vs. other</h3>
+      <p class="mb-3 text-sm text-gray-700 dark:text-gray-300">Both pipelines need a tool to actually configure the image and the running instance. Ansible is the recommended default for anything non-trivial; shell scripts are fine for tiny, fast bootstraps. Use them together where it makes sense (a thin shell wrapper that invokes Ansible).</p>
+      <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded mb-3">
+        <table class="w-full text-sm">
+          <thead class="bg-ibmblue text-white">
+            <tr><th class="text-left p-3">Option</th><th class="text-left p-3">Pros</th><th class="text-left p-3">Cons</th><th class="text-left p-3">Best for</th></tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr><td class="p-3 font-medium">Ansible</td><td class="p-3">Idempotent, readable YAML, reusable roles, agentless over SSH/SSM, large module set</td><td class="p-3">Heavier dependency; slower than raw shell for trivial tasks</td><td class="p-3">All real service config; reuse across base + runtime</td></tr>
+            <tr class="bg-gray-50 dark:bg-gray-800/50"><td class="p-3 font-medium">Shell scripts</td><td class="p-3">No dependencies, fast, universal, perfect for tiny bootstraps</td><td class="p-3">Not idempotent by default; brittle &amp; hard to maintain at scale</td><td class="p-3">Short user-data, calling Ansible, one-off glue</td></tr>
+            <tr><td class="p-3 font-medium">cloud-init / user-data</td><td class="p-3">Native to EC2 first boot; great launcher</td><td class="p-3">Limited logic; becomes unwieldy if it does too much</td><td class="p-3">Kicking off bootstrap, then handing to Ansible</td></tr>
+            <tr class="bg-gray-50 dark:bg-gray-800/50"><td class="p-3 font-medium">Image Builder components</td><td class="p-3">AWS-native build steps, no extra tooling</td><td class="p-3">AWS-only; less expressive than Ansible</td><td class="p-3">Simple, AWS-native base builds</td></tr>
+            <tr><td class="p-3 font-medium">Chef / Puppet</td><td class="p-3">Mature, strong drift control</td><td class="p-3">Agent/server overhead; steeper learning curve</td><td class="p-3">Shops already standardized on them</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-gray-600 dark:text-gray-400"><strong>Recommended pattern:</strong> a minimal shell/cloud-init bootstrap in user-data that pulls and runs <strong>Ansible roles</strong> (the same roles used in the AMI build, gated by tags) — shell for the launch, Ansible for the work.</p>
+      <button onclick="openModal('m-twopipe')" class="mt-3 inline-flex items-center gap-2 text-ibmblue hover:text-ibmblued font-medium text-sm">More Details →</button>
+    </section>
+
     <!-- 13-14 Manual/Emergency -->
     <section id="manual" class="mt-12 fade-up">
       <h2 class="text-2xl font-bold border-b-2 border-ibmblue pb-2 mb-4">13–14. Manual &amp; Emergency Operations</h2>
@@ -552,7 +714,7 @@ function changeFont(d){
 /* ---------- TOC build ---------- */
 const tocItems = [
   ['goal','1 · Goal'],['amis','2–6 · AMIs'],['launch','AMI → Running Service'],['diagram','Architecture'],
-  ['ansible','7–8 · Ansible'],['ssm','9–10 · Systems Manager'],['cicd','11–12 · IaC & CI/CD'],
+  ['ansible','7–8 · Ansible'],['ssm','9–10 · Systems Manager'],['cicd','11–12 · IaC & CI/CD'],['twopipe','Two Pipelines / Repos'],
   ['manual','13–14 · Manual/Emergency'],['backup','15 · Backups'],['ha','16–18 · HA & Multi-AZ'],
   ['lb','19 · Load Balancing'],['scaling','20 · Scaling'],['matrix','21–22 · Decision Matrix'],
   ['refs','23 · References']
@@ -572,6 +734,7 @@ const modals = {
   'm-ansible':['Bake vs. Runtime Decision Guide','Ask three questions: (1) Is it identical on every instance? If yes, bake it. (2) Does it change more often than you want to rebuild images? If yes, runtime. (3) Is it a secret or environment endpoint? Always runtime, pulled from Parameter Store/Secrets Manager at boot. Reuse the same Ansible roles in both contexts by gating tasks with tags (e.g. --tags baseline for the AMI build, --tags runtime for first-boot via SSM). This avoids two divergent codebases.'],
   'm-ssm':['Systems Manager Operating Model','Treat SSM as the control plane: no inbound SSH, all access via Session Manager with full session logging to S3/CloudWatch. Patch Manager runs on maintenance windows with patch baselines per environment (more aggressive in dev, conservative in prod). State Manager continuously reapplies critical config so drift self-heals. Parameter Store holds the authoritative "latest approved AMI" pointers that IaC consumes — this decouples image promotion from infrastructure code changes.'],
   'm-cicd':['Pipeline Stage Reference','A representative GitLab pipeline: validate (lint, terraform validate, ansible-lint) → security (SAST, secret scan, dependency scan) → build-ami (Image Builder/Packer) → test-ami (boot + smoke test) → publish (write AMI ID to Parameter Store) → deploy-dev → deploy-stage (manual approval) → deploy-prod (manual approval + change record). OIDC means the runner exchanges a short-lived token for an IAM role per job, scoped to only what that stage needs. Protected branches ensure only reviewed code reaches the deploy stages.'],
+  'm-twopipe':['Why Two Repos and How They Connect','Splitting the base AMI and the service/deploy work into separate repositories follows the principle of separating things that change at different rates and have different owners. The base/golden image changes slowly (patch cycles, baseline policy) and is usually owned by a platform or security team; the service definition and infrastructure change far more often and are owned by the data platform team. Keeping them apart means a routine base re-bake does not trigger a service redeploy, approvals can be scoped to the right reviewers, and blast radius stays small. The two are joined only by a contract — the base pipeline writes its approved AMI ID to an SSM Parameter Store path, and the service pipeline reads that path as its parent image. To trigger a service rebuild when a new base lands, either run the service pipeline on a schedule that checks the parameter, or have the base pipeline call the service project\'s pipeline trigger API after it publishes. Reuse the same Ansible roles in both repos where possible (for example, shared hardening or agent roles can live in a small common repo or Ansible Galaxy/collection that both pipelines pull in), so you configure once and consume in both the AMI build and the runtime bootstrap.'],
   'm-manual':['Emergency Runbook Discipline','When automation is down and you must act by hand: (1) prefer SSM Automation runbooks over raw console clicks — they log and enforce least privilege; (2) tag anything created manually with owner, reason, and ticket; (3) snapshot before destructive restores; (4) within one business day, reconcile the change back into Git so the pipeline reflects reality. The console and CLI are escape hatches, not the operating model.'],
   'm-backup':['Backup & Restore Testing','Backups you have not restored are hopes, not backups. Schedule periodic restore drills per service: spin up a copy from the latest snapshot in a sandbox and validate data integrity. Define RPO/RTO targets per workload and verify your backup cadence meets them. For distributed systems (Kafka, OpenSearch, NiFi), favor service-native, cluster-aware export/snapshot mechanisms over naive EBS snapshots, which can capture inconsistent state. Store critical backups cross-region and consider Object Lock for ransomware resilience.'],
   'm-ha':['Why Single-Node Fails in Production','A single node concentrates every failure mode: hardware fault, AZ outage, a bad deploy, or an OS patch reboot all cause full downtime, and there is nowhere to fail over. Multi-AZ clustering converts those events into degraded-but-available states. Use odd quorums (3/5) for consensus systems (ZooKeeper, OpenSearch masters) so a majority can still elect a leader. Spread brokers/replicas across AZs and set replication so the loss of one AZ never loses the only copy of data. Test failover regularly — kill a node and confirm the cluster recovers automatically.'],
