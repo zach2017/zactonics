@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraform on AWS — From Zero to EC2 (Beginner to Advanced)</title>
+<style>
+  /* ============ IBM-STYLE DESIGN TOKENS ============ */
+  :root {
+    --blue:       #0f62fe;  /* IBM primary blue */
+    --blue-dark:  #0043ce;
+    --blue-light: #d0e2ff;
+    --black:      #161616;
+    --gray-90:    #262626;
+    --gray-70:    #525252;
+    --gray-50:    #8d8d8d;
+    --gray-30:    #c6c6c6;
+    --gray-10:    #f4f4f4;
+    --white:      #ffffff;
+
+    /* themeable */
+    --bg:         #ffffff;
+    --bg-alt:     #f4f4f4;
+    --bg-card:    #ffffff;
+    --text:       #161616;
+    --text-soft:  #525252;
+    --border:     #c6c6c6;
+    --accent:     #0f62fe;
+    --accent-soft:#d0e2ff;
+    --code-bg:    #f4f4f4;
+    --code-text:  #0043ce;
+    --shadow:     0 2px 6px rgba(0,0,0,0.10);
+    --modal-bg:   #ffffff;
+    --overlay:    rgba(22,22,22,0.55);
+
+    --fontsize:   18px;
+    --fontfamily: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --monofamily: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  }
+
+  [data-theme="dark"] {
+    --bg:         #161616;
+    --bg-alt:     #262626;
+    --bg-card:    #262626;
+    --text:       #f4f4f4;
+    --text-soft:  #c6c6c6;
+    --border:     #525252;
+    --accent:     #78a9ff;
+    --accent-soft:#0043ce;
+    --code-bg:    #000000;
+    --code-text:  #78a9ff;
+    --shadow:     0 2px 8px rgba(0,0,0,0.6);
+    --modal-bg:   #262626;
+    --overlay:    rgba(0,0,0,0.7);
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--fontfamily);
+    font-size: var(--fontsize);
+    line-height: 1.6;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.25s ease, color 0.25s ease;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* ============ TOP HEADER BAR ============ */
+  header.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--black);
+    color: #fff;
+    border-bottom: 3px solid var(--blue);
+    padding: 0.55rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: space-between;
+  }
+  [data-theme="dark"] header.topbar { background: #000; }
+
+  .topbar .brand {
+    display: flex; align-items: center; gap: 0.6rem;
+    font-weight: 700; font-size: 1rem; letter-spacing: 0.02em;
+  }
+  .topbar .brand .logo {
+    width: 26px; height: 26px; flex: 0 0 auto;
+  }
+  .topbar .brand small { color: var(--gray-30); font-weight: 400; display:block; font-size:0.7rem; }
+
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+  .controls button {
+    font-family: var(--fontfamily);
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border-radius: 2px;
+    transition: background 0.15s ease;
+  }
+  .controls button:hover { background: var(--blue-dark); }
+  .controls .grp {
+    display:flex; align-items:center; gap:0.25rem;
+    background: var(--gray-90); padding:0.2rem 0.4rem; border-radius:2px;
+  }
+  .controls .grp span { font-size:0.7rem; color:var(--gray-30); }
+  .controls .fontsz { min-width:34px; text-align:center; }
+
+  /* ============ LAYOUT ============ */
+  .wrap { display: flex; max-width: 1400px; margin: 0 auto; }
+
+  /* Table of contents */
+  nav.toc {
+    flex: 0 0 280px;
+    position: sticky;
+    top: 70px;
+    align-self: flex-start;
+    height: calc(100vh - 70px);
+    overflow-y: auto;
+    padding: 1.2rem 1rem;
+    border-right: 1px solid var(--border);
+    background: var(--bg-alt);
+  }
+  nav.toc h2 {
+    font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-soft); margin-bottom: 0.8rem; border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  nav.toc a {
+    display: block; color: var(--text); text-decoration: none;
+    padding: 0.35rem 0.5rem; font-size: 0.85rem; border-left: 3px solid transparent;
+    border-radius: 0 2px 2px 0;
+  }
+  nav.toc a:hover { background: var(--accent-soft); border-left-color: var(--accent); }
+  nav.toc a.sub { padding-left: 1.4rem; font-size: 0.78rem; color: var(--text-soft); }
+  nav.toc a.active { border-left-color: var(--accent); background: var(--accent-soft); font-weight:600; }
+
+  main { flex: 1 1 auto; padding: 1.5rem clamp(1rem, 4vw, 3rem); min-width: 0; }
+
+  /* ============ HERO ============ */
+  .hero {
+    background: linear-gradient(135deg, var(--blue) 0%, var(--blue-dark) 100%);
+    color: #fff; padding: 2rem 1.5rem; border-radius: 4px; margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+  }
+  .hero h1 { font-size: 1.9rem; line-height: 1.2; margin-bottom: 0.6rem; }
+  .hero p { font-size: 1rem; max-width: 60ch; color: var(--blue-light); }
+  .hero .badges { margin-top: 1rem; display:flex; flex-wrap:wrap; gap:0.5rem; }
+  .hero .badges span {
+    background: rgba(255,255,255,0.18); padding:0.25rem 0.7rem; border-radius:20px; font-size:0.75rem;
+  }
+
+  /* ============ SECTIONS ============ */
+  section.step { margin-bottom: 1.2rem; scroll-margin-top: 80px; }
+
+  .collapsible {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-card);
+    box-shadow: var(--shadow);
+  }
+  .collapsible > .head {
+    display: flex; align-items: center; gap: 0.8rem; cursor: pointer;
+    padding: 1rem 1.2rem; background: var(--bg-card);
+    border-left: 5px solid var(--accent); user-select: none;
+  }
+  .collapsible > .head:hover { background: var(--bg-alt); }
+  .collapsible > .head .num {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); color: #fff; display:flex; align-items:center; justify-content:center;
+    font-weight: 700; font-size: 0.9rem;
+  }
+  .collapsible > .head h3 { font-size: 1.15rem; flex: 1 1 auto; }
+  .collapsible > .head .chev { transition: transform 0.25s ease; flex:0 0 auto; color: var(--accent); font-size:1.2rem; }
+  .collapsible.open > .head .chev { transform: rotate(90deg); }
+
+  .collapsible > .body {
+    display: none; padding: 1.2rem 1.4rem 1.6rem; border-top: 1px solid var(--border);
+  }
+  .collapsible.open > .body { display: block; animation: fade 0.3s ease; }
+  @keyframes fade { from { opacity:0; transform: translateY(-6px);} to {opacity:1; transform:none;} }
+
+  .body h4 { margin: 1.2rem 0 0.5rem; color: var(--accent); font-size: 1rem; }
+  .body p { margin-bottom: 0.8rem; color: var(--text); }
+  .body ul, .body ol { margin: 0.5rem 0 1rem 1.4rem; }
+  .body li { margin-bottom: 0.45rem; }
+
+  /* code blocks */
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 1rem 1.1rem; border-radius: 4px; overflow-x: auto;
+    font-family: var(--monofamily); font-size: 0.85em; line-height: 1.5;
+    border-left: 4px solid var(--accent); margin: 0.6rem 0 1rem; position: relative;
+  }
+  code.inline {
+    font-family: var(--monofamily); background: var(--code-bg); color: var(--code-text);
+    padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.88em;
+  }
+  .copybtn {
+    position:absolute; top:0.4rem; right:0.4rem; background: var(--accent); color:#fff;
+    border:none; font-size:0.65rem; padding:0.2rem 0.5rem; border-radius:2px; cursor:pointer;
+    font-family: var(--fontfamily);
+  }
+  .copybtn:hover { background: var(--blue-dark); }
+
+  /* callouts */
+  .note {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    padding: 0.8rem 1rem; border-radius: 0 4px 4px 0; margin: 1rem 0; font-size: 0.92em;
+  }
+  [data-theme="dark"] .note { background: rgba(120,169,255,0.12); }
+  .note.warn { border-left-color:#da1e28; background:#fff1f1; }
+  [data-theme="dark"] .note.warn { background: rgba(218,30,40,0.15); }
+  .note strong { color: var(--accent); }
+  .note.warn strong { color:#da1e28; }
+
+  /* "More details" buttons */
+  .more-btn {
+    background: transparent; border: 1.5px solid var(--accent); color: var(--accent);
+    padding: 0.3rem 0.7rem; font-size: 0.8rem; border-radius: 20px; cursor: pointer;
+    font-family: var(--fontfamily); margin: 0.2rem 0.3rem 0.2rem 0; transition: all 0.15s;
+    display:inline-flex; align-items:center; gap:0.3rem;
+  }
+  .more-btn:hover { background: var(--accent); color: #fff; }
+  .more-btn::before { content:"ⓘ"; font-size:0.9rem; }
+
+  /* reference links */
+  .reflinks { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px dashed var(--border); }
+  .reflinks h4 { color: var(--text-soft); }
+  .reflinks a {
+    color: var(--accent); text-decoration: none; display:inline-flex; align-items:center; gap:0.3rem;
+    margin-right: 1rem; font-size: 0.85rem;
+  }
+  .reflinks a:hover { text-decoration: underline; }
+  .reflinks a::after { content:"↗"; font-size:0.75em; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85em; }
+  th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; }
+  th { background: var(--accent); color: #fff; }
+  tr:nth-child(even) td { background: var(--bg-alt); }
+
+  /* SVG diagram container */
+  .diagram-wrap { overflow-x:auto; margin: 1rem 0; text-align:center; }
+  .diagram-wrap svg { max-width: 100%; height: auto; }
+
+  /* ============ MODAL ============ */
+  .modal-overlay {
+    position: fixed; inset: 0; background: var(--overlay);
+    display: none; align-items: center; justify-content: center; z-index: 1000;
+    padding: 1rem; animation: fade 0.2s ease;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--modal-bg); color: var(--text); max-width: 560px; width: 100%;
+    max-height: 85vh; overflow-y: auto; border-radius: 4px; box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    border-top: 5px solid var(--accent);
+  }
+  .modal .mhead {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;
+    padding: 1.1rem 1.3rem; border-bottom: 1px solid var(--border);
+  }
+  .modal .mhead h3 { font-size: 1.2rem; color: var(--accent); }
+  .modal .mclose {
+    background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-soft); line-height:1;
+  }
+  .modal .mbody { padding: 1.2rem 1.3rem; }
+  .modal .mbody p { margin-bottom: 0.8rem; }
+  .modal .mbody pre { font-size: 0.8em; }
+
+  /* footer */
+  footer {
+    background: var(--black); color: var(--gray-30); padding: 2rem 1.5rem; margin-top: 2rem;
+    text-align: center; font-size: 0.85rem;
+  }
+  [data-theme="dark"] footer { background:#000; }
+  footer a { color: var(--accent); text-decoration:none; }
+
+  /* mobile TOC toggle */
+  .toc-toggle { display: none; }
+
+  @media (max-width: 900px) {
+    nav.toc {
+      position: fixed; top: 0; left: 0; height: 100vh; z-index: 200;
+      transform: translateX(-100%); transition: transform 0.3s ease; flex-basis: 80%;
+      max-width: 320px; box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+    }
+    nav.toc.open { transform: translateX(0); }
+    .toc-toggle {
+      display: inline-flex; align-items:center; gap:0.3rem;
+      background: var(--blue); color:#fff; border:none; padding:0.4rem 0.7rem;
+      border-radius:2px; cursor:pointer; font-size:0.8rem; font-family:var(--fontfamily);
+    }
+    .hero h1 { font-size: 1.5rem; }
+  }
+  /* TOC scrim for mobile */
+  .toc-scrim {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150;
+  }
+  .toc-scrim.show { display:block; }
+</style>
+</head>
+<body data-theme="light">
+
+<!-- ============ TOP BAR ============ -->
+<header class="topbar">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="3" fill="#0f62fe"/>
+      <path d="M9 22V10l7 12 7-12v12" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+    </svg>
+    <div>Terraform &times; AWS<small>Beginner → Advanced Tutorial</small></div>
+  </div>
+  <div class="controls">
+    <button class="toc-toggle" onclick="toggleTOC()">☰ Contents</button>
+    <div class="grp">
+      <span>Aa</span>
+      <button onclick="changeFont(-2)" title="Smaller text">A−</button>
+      <span class="fontsz" id="fontsizeLabel">18px</span>
+      <button onclick="changeFont(2)" title="Bigger text">A+</button>
+    </div>
+    <button onclick="toggleTheme()" id="themeBtn">🌙 Dark</button>
+  </div>
+</header>
+
+<div class="toc-scrim" id="tocScrim" onclick="toggleTOC()"></div>
+
+<div class="wrap">
+  <!-- ============ TABLE OF CONTENTS ============ -->
+  <nav class="toc" id="toc">
+    <h2>Table of Contents</h2>
+    <a href="#intro" onclick="closeTOC()">Start Here: What &amp; Why</a>
+    <a href="#s1" onclick="closeTOC()">1. Install Terraform (Windows)</a>
+    <a href="#s2" onclick="closeTOC()">2. Set Up an AWS Account</a>
+    <a href="#s3" onclick="closeTOC()">3. Install &amp; Configure AWS CLI</a>
+    <a href="#s4" onclick="closeTOC()">4. Your First Terraform Project</a>
+    <a href="#s5" onclick="closeTOC()">5. The Core Commands</a>
+    <a href="#s6" onclick="closeTOC()">6. Build a Basic EC2 (Amazon Linux)</a>
+    <a href="#s7" onclick="closeTOC()">7. Test &amp; Connect to Your Server</a>
+    <a href="#s8" onclick="closeTOC()">8. Advanced: Security Groups &amp; Ports</a>
+    <a href="#s9" onclick="closeTOC()">9. Advanced: Install Services Automatically</a>
+    <a href="#s10" onclick="closeTOC()">10. Advanced: Variables, Outputs &amp; State</a>
+    <a href="#diagram" onclick="closeTOC()">Architecture Diagram</a>
+    <a href="#cleanup" onclick="closeTOC()">Clean Up (Avoid Charges!)</a>
+    <a href="#refs" onclick="closeTOC()">Official References</a>
+  </nav>
+
+  <main>
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Build a Real Cloud Server with Terraform &amp; AWS</h1>
+    <p>This guide takes you from a fresh Windows computer all the way to running your own
+       Amazon Linux server in the cloud — and then making it do advanced things. Every step
+       is explained in plain language. No experience needed.</p>
+    <div class="badges">
+      <span>🪟 Windows Desktop</span>
+      <span>☁️ AWS EC2</span>
+      <span>🟣 Terraform</span>
+      <span>🐧 Amazon Linux 2023</span>
+      <span>🎓 Beginner Friendly</span>
+    </div>
+  </div>
+
+  <!-- INTRO -->
+  <section class="step" id="intro">
+    <div class="collapsible open">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">★</span>
+        <h3>Start Here: What Is This and Why Should I Care?</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>Imagine you want a computer that lives on the internet — a "server." You could rent one from
+        Amazon (called <strong>AWS</strong>, short for Amazon Web Services). Normally you'd click around
+        dozens of web pages to set it up. That's slow and easy to mess up.</p>
+
+        <p><strong>Terraform</strong> is a tool that lets you <em>write down</em> what you want in a simple
+        text file, then build it all automatically. Think of it like a recipe card: you write the recipe
+        once, and Terraform "cooks" the exact same server every time. This idea is called
+        <strong>Infrastructure as Code</strong> — your cloud setup is just code you can save, share, and reuse.</p>
+
+        <button class="more-btn" onclick="openModal('m-iac')">What is "Infrastructure as Code"?</button>
+        <button class="more-btn" onclick="openModal('m-ec2')">What exactly is an EC2 instance?</button>
+        <button class="more-btn" onclick="openModal('m-ami')">What is an AMI (the Linux "image")?</button>
+
+        <h4>What you'll have by the end</h4>
+        <ul>
+          <li>Terraform installed and working on your Windows PC.</li>
+          <li>An AWS account connected safely to your computer.</li>
+          <li>A live Amazon Linux server you built with a single command.</li>
+          <li>That server set up to run a real web service, with the right network "doors" (ports) open.</li>
+        </ul>
+
+        <div class="note warn">
+          <strong>Money warning:</strong> AWS can charge you for servers. We use the <em>free tier</em>
+          where possible, but always do the <a href="#cleanup">Clean Up step</a> when you're done so you
+          don't get a surprise bill.
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://developer.hashicorp.com/terraform" target="_blank" rel="noopener">Terraform Docs</a>
+          <a href="https://aws.amazon.com/ec2/" target="_blank" rel="noopener">AWS EC2</a>
+          <a href="https://aws.amazon.com/free/" target="_blank" rel="noopener">AWS Free Tier</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 1: INSTALL TERRAFORM -->
+  <section class="step" id="s1">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">1</span>
+        <h3>Install Terraform on Windows</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>There are two easy ways. Pick <strong>Method A</strong> if you want the simplest path. Use
+        <strong>Method B</strong> if you like doing things the manual way and understanding each piece.</p>
+
+        <h4>Method A — The easy way (using a "package manager")</h4>
+        <p>A package manager is an app that installs other apps for you with one command. On Windows the
+        popular one is called <strong>Chocolatey</strong>. First, open <strong>PowerShell as Administrator</strong>
+        (click Start, type "PowerShell", right-click it, choose "Run as administrator").</p>
+
+        <p>Install Chocolatey by pasting this and pressing Enter:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>Set-ExecutionPolicy Bypass -Scope Process -Force; `
+[System.Net.ServicePointManager]::SecurityProtocol = 3072; `
+iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))</pre>
+
+        <p>Now install Terraform with one line:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>choco install terraform -y</pre>
+
+        <button class="more-btn" onclick="openModal('m-choco')">What is Chocolatey doing?</button>
+        <button class="more-btn" onclick="openModal('m-admin')">Why "Run as Administrator"?</button>
+
+        <h4>Method B — The manual way (download the file yourself)</h4>
+        <ol>
+          <li>Go to the official Terraform download page (link below) and download the
+              <strong>Windows AMD64</strong> ZIP file.</li>
+          <li>The ZIP contains one file: <code class="inline">terraform.exe</code>. Unzip it.</li>
+          <li>Make a folder like <code class="inline">C:\terraform</code> and move
+              <code class="inline">terraform.exe</code> into it.</li>
+          <li>Add that folder to your <strong>PATH</strong> so Windows can find it from anywhere
+              (see the pop-up).</li>
+        </ol>
+
+        <button class="more-btn" onclick="openModal('m-path')">What is the "PATH" and how do I edit it?</button>
+
+        <h4>Check that it worked</h4>
+        <p>Close and reopen PowerShell, then type:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform -version</pre>
+        <p>You should see something like <code class="inline">Terraform v1.9.x</code>. If you do — congratulations,
+        Terraform is installed! If you see "not recognized," your PATH isn't set right (revisit the pop-up above).</p>
+
+        <div class="note">
+          <strong>Tip:</strong> You can use Windows PowerShell, Command Prompt, or Windows Terminal — they all work.
+          We'll use PowerShell in this guide.
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://developer.hashicorp.com/terraform/install" target="_blank" rel="noopener">Terraform Install Page</a>
+          <a href="https://chocolatey.org/install" target="_blank" rel="noopener">Chocolatey Install</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: AWS ACCOUNT -->
+  <section class="step" id="s2">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">2</span>
+        <h3>Set Up an AWS Account</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>To rent servers from Amazon, you need an AWS account. It's free to create — you only pay for what
+        you use, and many things are free for the first year.</p>
+
+        <ol>
+          <li>Go to <a href="https://aws.amazon.com/free/" target="_blank" rel="noopener">aws.amazon.com/free</a>
+              and click "Create a Free Account."</li>
+          <li>Enter your email and pick an account name.</li>
+          <li>You'll need a credit/debit card. AWS uses it to verify you and only charges if you go over
+              free limits.</li>
+          <li>Choose the <strong>Basic (Free) support plan</strong>.</li>
+        </ol>
+
+        <button class="more-btn" onclick="openModal('m-root')">What is the "root user" and why be careful with it?</button>
+        <button class="more-btn" onclick="openModal('m-region')">What is an AWS "Region"?</button>
+
+        <h4>Create a safe access key (very important)</h4>
+        <p>Terraform needs permission to act on your behalf. Instead of using your main login, we create a
+        special user with its own "key" — like giving a house-sitter one specific key instead of your
+        master key.</p>
+        <ol>
+          <li>In the AWS console, search for <strong>IAM</strong> (Identity and Access Management).</li>
+          <li>Create a new user, e.g. <code class="inline">terraform-user</code>.</li>
+          <li>Attach a permission policy. For learning, <code class="inline">AdministratorAccess</code> is
+              easiest; for real work, use narrower permissions.</li>
+          <li>Create an <strong>Access Key</strong> for that user. You'll get an
+              <strong>Access Key ID</strong> and a <strong>Secret Access Key</strong>.</li>
+        </ol>
+
+        <div class="note warn">
+          <strong>Guard your secret key!</strong> Treat the Secret Access Key like a password. Never put it
+          on the internet, in screenshots, or in code you share. If it leaks, delete it immediately in IAM.
+        </div>
+
+        <button class="more-btn" onclick="openModal('m-iam')">What is IAM, in simple terms?</button>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html" target="_blank" rel="noopener">Create an IAM User</a>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html" target="_blank" rel="noopener">Managing Access Keys</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: AWS CLI -->
+  <section class="step" id="s3">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">3</span>
+        <h3>Install &amp; Configure the AWS CLI</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>The <strong>AWS CLI</strong> (Command Line Interface) is a tool that lets your computer talk to AWS.
+        Terraform can use the login info that the CLI stores, so this is the cleanest way to connect them.</p>
+
+        <h4>Install it</h4>
+        <p>Easy way with Chocolatey:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>choco install awscli -y</pre>
+        <p>Or download the official Windows installer (.msi) from the link at the bottom and double-click it.</p>
+
+        <p>Check it works (you may need to reopen PowerShell):</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>aws --version</pre>
+
+        <h4>Connect it to your account</h4>
+        <p>Now tell the CLI about the access key you made in Step 2. Run:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>aws configure</pre>
+        <p>It will ask four questions. Paste your keys and choose a region:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>AWS Access Key ID [None]: AKIA................
+AWS Secret Access Key [None]: wJalrXUtnFEMI................
+Default region name [None]: us-east-1
+Default output format [None]: json</pre>
+
+        <button class="more-btn" onclick="openModal('m-credfile')">Where does this info get saved?</button>
+        <button class="more-btn" onclick="openModal('m-whyregion')">Which region should I pick?</button>
+
+        <h4>Test the connection</h4>
+        <p>This command asks AWS "who am I?" If it answers with your account number, everything is wired up:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>aws sts get-caller-identity</pre>
+
+        <div class="note">
+          <strong>Why this matters:</strong> Terraform automatically looks for these saved credentials. So once
+          the CLI works, Terraform "just works" too — you won't paste keys into your Terraform files (which is
+          the safe way to do it).
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html" target="_blank" rel="noopener">Install AWS CLI</a>
+          <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html" target="_blank" rel="noopener">Configure Credentials</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4: FIRST PROJECT -->
+  <section class="step" id="s4">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">4</span>
+        <h3>Create Your First Terraform Project</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>A Terraform "project" is just a folder with one or more text files ending in
+        <code class="inline">.tf</code>. Let's make one.</p>
+
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>mkdir C:\my-first-terraform
+cd C:\my-first-terraform</pre>
+
+        <p>Now create a file named <code class="inline">main.tf</code>. You can use Notepad, VS Code, or any
+        editor. Paste in this starter content:</p>
+
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># main.tf — tells Terraform we want to use AWS
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# The "provider" block configures AWS and the region
+provider "aws" {
+  region = "us-east-1"
+}</pre>
+
+        <h4>What does this mean?</h4>
+        <ul>
+          <li>Lines starting with <code class="inline">#</code> are <strong>comments</strong> — notes for
+              humans that Terraform ignores.</li>
+          <li>The <strong>terraform</strong> block lists the "plugins" (called <strong>providers</strong>) we
+              need. Here, the AWS provider.</li>
+          <li>The <strong>provider "aws"</strong> block says which region to build in.</li>
+        </ul>
+
+        <button class="more-btn" onclick="openModal('m-provider')">What is a "provider"?</button>
+        <button class="more-btn" onclick="openModal('m-hcl')">What language is this? (HCL)</button>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">AWS Provider Docs</a>
+          <a href="https://developer.hashicorp.com/terraform/language" target="_blank" rel="noopener">Terraform Language (HCL)</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 5: CORE COMMANDS -->
+  <section class="step" id="s5">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">5</span>
+        <h3>The Core Terraform Commands</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>Terraform has a small set of commands you'll use over and over. Think of them as the four magic
+        words. Run them from inside your project folder.</p>
+
+        <table>
+          <tr><th>Command</th><th>What it does (in plain words)</th></tr>
+          <tr><td><code class="inline">terraform init</code></td><td>Gets ready: downloads the AWS plugin. Run this first, once per project.</td></tr>
+          <tr><td><code class="inline">terraform plan</code></td><td>A "dry run." Shows what Terraform <em>would</em> build or change — but changes nothing yet.</td></tr>
+          <tr><td><code class="inline">terraform apply</code></td><td>Actually builds it. It shows the plan and asks you to type <code class="inline">yes</code>.</td></tr>
+          <tr><td><code class="inline">terraform destroy</code></td><td>Tears everything down. Use this to avoid charges when you're done.</td></tr>
+        </table>
+
+        <p>Let's run the first one now:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform init</pre>
+        <p>You'll see it download the AWS provider and say "Terraform has been successfully initialized!"</p>
+
+        <p>Two more handy commands:</p>
+        <table>
+          <tr><th>Command</th><th>What it does</th></tr>
+          <tr><td><code class="inline">terraform fmt</code></td><td>Auto-tidies your file's spacing so it looks neat.</td></tr>
+          <tr><td><code class="inline">terraform validate</code></td><td>Checks your file for typos/mistakes before you apply.</td></tr>
+        </table>
+
+        <button class="more-btn" onclick="openModal('m-plan')">Why is "plan" so important?</button>
+        <button class="more-btn" onclick="openModal('m-state')">What is the "state file"?</button>
+
+        <div class="note">
+          <strong>The golden workflow:</strong> <code class="inline">init</code> →
+          <code class="inline">plan</code> → <code class="inline">apply</code>. Always read the plan before
+          you type <code class="inline">yes</code>!
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://developer.hashicorp.com/terraform/cli/commands" target="_blank" rel="noopener">All CLI Commands</a>
+          <a href="https://developer.hashicorp.com/terraform/cli/commands/apply" target="_blank" rel="noopener">terraform apply</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 6: BASIC EC2 -->
+  <section class="step" id="s6">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">6</span>
+        <h3>Build a Basic EC2 Server (Amazon Linux)</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>Now the fun part — let's create a real server. We'll add to <code class="inline">main.tf</code>.
+        Instead of hard-coding which Linux image (AMI) to use, we'll ask AWS for the
+        <strong>latest Amazon Linux 2023</strong> automatically. That way it's always up to date.</p>
+
+        <h4>Step 6a — Find the latest Amazon Linux image</h4>
+        <p>Add this <code class="inline">data</code> block. A "data" block <em>looks up</em> information from
+        AWS instead of creating something.</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># Ask AWS for the newest Amazon Linux 2023 image
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+}</pre>
+
+        <button class="more-btn" onclick="openModal('m-data')">What is a "data source"?</button>
+
+        <h4>Step 6b — Create the EC2 instance</h4>
+        <p>Now add a <code class="inline">resource</code> block. A "resource" is a thing Terraform actually
+        creates. Here it's an EC2 server.</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># Create the EC2 virtual server
+resource "aws_instance" "my_server" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t2.micro"   # free-tier eligible size
+
+  tags = {
+    Name = "MyFirstTerraformServer"
+  }
+}</pre>
+
+        <h4>What do these lines mean?</h4>
+        <ul>
+          <li><code class="inline">ami</code> — which operating system image to use. We point it at the
+              data block we just made, so it's always the newest Amazon Linux.</li>
+          <li><code class="inline">instance_type</code> — the "size" of the computer.
+              <code class="inline">t2.micro</code> is small and free-tier eligible.</li>
+          <li><code class="inline">tags</code> — friendly labels. The "Name" tag is what you'll see in the
+              AWS console.</li>
+        </ul>
+
+        <button class="more-btn" onclick="openModal('m-instancetype')">What are instance types / sizes?</button>
+
+        <h4>Step 6c — Build it!</h4>
+        <p>Run the workflow:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform plan
+terraform apply</pre>
+        <p>Type <code class="inline">yes</code> when asked. In under a minute, you'll have a live server!
+        Open the AWS console → EC2 → Instances to see it running.</p>
+
+        <div class="note">
+          <strong>You just did it.</strong> You described a server in text and Terraform built it in the cloud.
+          That's Infrastructure as Code in action.
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance" target="_blank" rel="noopener">aws_instance Resource</a>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami" target="_blank" rel="noopener">aws_ami Data Source</a>
+          <a href="https://docs.aws.amazon.com/linux/al2023/ug/what-is-amazon-linux.html" target="_blank" rel="noopener">Amazon Linux 2023</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 7: TEST & CONNECT -->
+  <section class="step" id="s7">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">7</span>
+        <h3>Test &amp; Connect to Your Server</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>A server is only useful if you can reach it. To log in over <strong>SSH</strong> (a secure remote
+        connection), you need a <strong>key pair</strong> — like a matching lock and key.</p>
+
+        <h4>Step 7a — Make a key pair</h4>
+        <p>Generate a key on your PC with this command (it creates two files):</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>ssh-keygen -t rsa -b 4096 -f my-key</pre>
+        <p>This makes <code class="inline">my-key</code> (private — keep secret!) and
+        <code class="inline">my-key.pub</code> (public — safe to upload).</p>
+
+        <button class="more-btn" onclick="openModal('m-keypair')">What is a key pair / SSH?</button>
+
+        <h4>Step 7b — Tell Terraform about the key</h4>
+        <p>Add a key-pair resource and attach it to your instance:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>resource "aws_key_pair" "my_key" {
+  key_name   = "my-key"
+  public_key = file("my-key.pub")   # reads your public key file
+}</pre>
+        <p>Then add one line inside your <code class="inline">aws_instance "my_server"</code> block:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>  key_name = aws_key_pair.my_key.key_name</pre>
+
+        <h4>Step 7c — See the server's address (Outputs)</h4>
+        <p>Add an <strong>output</strong> so Terraform prints the public address after building:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>output "public_ip" {
+  value = aws_instance.my_server.public_ip
+}</pre>
+
+        <p>Run <code class="inline">terraform apply</code> again. When it finishes you'll see the IP. Connect:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>ssh -i my-key ec2-user@PASTE_THE_IP_HERE</pre>
+
+        <div class="note warn">
+          <strong>Can't connect yet?</strong> That's expected! By default AWS blocks all incoming traffic.
+          You must open port 22 (SSH) with a <strong>security group</strong> — that's exactly the next step.
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-to-linux-instance.html" target="_blank" rel="noopener">Connect to a Linux Instance</a>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/key_pair" target="_blank" rel="noopener">aws_key_pair Resource</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 8: SECURITY GROUPS & PORTS -->
+  <section class="step" id="s8">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">8</span>
+        <h3>Advanced: Security Groups &amp; Opening Ports</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>A <strong>security group</strong> is like a bouncer for your server. It decides which network
+        "doors" (ports) are open and who's allowed through. By default everything is closed.</p>
+
+        <button class="more-btn" onclick="openModal('m-sg')">What is a security group?</button>
+        <button class="more-btn" onclick="openModal('m-ports')">What are "ports" anyway?</button>
+
+        <h4>Common ports you'll open</h4>
+        <table>
+          <tr><th>Port</th><th>Used for</th></tr>
+          <tr><td>22</td><td>SSH — remote login to the server</td></tr>
+          <tr><td>80</td><td>HTTP — normal websites</td></tr>
+          <tr><td>443</td><td>HTTPS — secure websites</td></tr>
+        </table>
+
+        <h4>Add a security group</h4>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>resource "aws_security_group" "web_sg" {
+  name        = "web-sg"
+  description = "Allow SSH and web traffic"
+
+  # Inbound: SSH (port 22)
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]   # any IP (see warning)
+  }
+
+  # Inbound: HTTP (port 80)
+  ingress {
+    description = "HTTP web traffic"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Outbound: allow the server to reach the internet
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"            # -1 means "all"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}</pre>
+
+        <p>Now attach it to your instance — add this line inside the
+        <code class="inline">aws_instance</code> block:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>  vpc_security_group_ids = [aws_security_group.web_sg.id]</pre>
+
+        <h4>Key words explained</h4>
+        <ul>
+          <li><strong>ingress</strong> = incoming traffic (people connecting TO your server).</li>
+          <li><strong>egress</strong> = outgoing traffic (your server reaching OUT, e.g. to download updates).</li>
+          <li><strong>cidr_blocks</strong> = which IP addresses are allowed.
+              <code class="inline">0.0.0.0/0</code> means "the whole internet."</li>
+          <li><strong>protocol</strong> = usually <code class="inline">tcp</code> for these ports.</li>
+        </ul>
+
+        <div class="note warn">
+          <strong>Security tip:</strong> <code class="inline">0.0.0.0/0</code> on port 22 lets anyone in the
+          world try to log in. For real use, replace it with just <em>your own</em> IP, like
+          <code class="inline">["203.0.113.25/32"]</code>.
+        </div>
+
+        <button class="more-btn" onclick="openModal('m-cidr')">What does "/0" and "/32" mean (CIDR)?</button>
+
+        <p>Run <code class="inline">terraform apply</code> again. Now your SSH connection from Step 7 should work!</p>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group" target="_blank" rel="noopener">aws_security_group</a>
+          <a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html" target="_blank" rel="noopener">Security Groups Guide</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 9: SERVICES / USER DATA -->
+  <section class="step" id="s9">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">9</span>
+        <h3>Advanced: Install Services Automatically (User Data)</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>What if you want your server to set itself up — install a web server, start it, and show a page —
+        the moment it boots? That's what <strong>user data</strong> does. It's a startup script that runs
+        once, automatically, when the server first turns on.</p>
+
+        <button class="more-btn" onclick="openModal('m-userdata')">What is "user data"?</button>
+
+        <h4>Add a startup script to your instance</h4>
+        <p>Put this inside your <code class="inline">aws_instance "my_server"</code> block. It installs the
+        Apache web server and creates a simple home page:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>  user_data = &lt;&lt;-EOF
+    #!/bin/bash
+    # This script runs once when the server boots
+    dnf update -y
+    dnf install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "&lt;h1&gt;Hello from Terraform on Amazon Linux!&lt;/h1&gt;" &gt; /var/www/html/index.html
+  EOF</pre>
+
+        <h4>Line-by-line</h4>
+        <ul>
+          <li><code class="inline">#!/bin/bash</code> — tells Linux this is a bash script.</li>
+          <li><code class="inline">dnf install -y httpd</code> — installs Apache (the
+              <code class="inline">httpd</code> web server). <code class="inline">dnf</code> is Amazon Linux's
+              app installer.</li>
+          <li><code class="inline">systemctl start httpd</code> — turns the web server on now.</li>
+          <li><code class="inline">systemctl enable httpd</code> — makes it auto-start after future reboots.</li>
+          <li>The <code class="inline">echo ... &gt; index.html</code> line writes the web page you'll see.</li>
+        </ul>
+
+        <button class="more-btn" onclick="openModal('m-systemctl')">What is systemctl?</button>
+
+        <div class="note">
+          <strong>Make sure port 80 is open!</strong> The web server uses HTTP on port 80, which you opened
+          in Step 8. After applying, paste your server's public IP into a browser
+          (<code class="inline">http://YOUR_IP</code>) and you'll see your page.
+        </div>
+
+        <p>Apply your changes. Because user data only runs on first boot, you may need to recreate the instance
+        to see it take effect (Terraform will tell you when a change forces a replacement):</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform apply</pre>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html" target="_blank" rel="noopener">EC2 User Data</a>
+          <a href="https://docs.aws.amazon.com/linux/al2023/ug/package-management.html" target="_blank" rel="noopener">Amazon Linux Package Management (dnf)</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 10: VARIABLES, OUTPUTS, STATE -->
+  <section class="step" id="s10">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">10</span>
+        <h3>Advanced: Variables, Outputs &amp; State (Make It Reusable)</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>Right now values like the region are typed directly in your code. <strong>Variables</strong> let
+        you pull those out so your project is flexible and reusable — like fill-in-the-blank slots.</p>
+
+        <h4>Define variables (variables.tf)</h4>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>variable "region" {
+  description = "AWS region to build in"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "instance_type" {
+  description = "Size of the EC2 server"
+  type        = string
+  default     = "t2.micro"
+}</pre>
+
+        <p>Now use them in your code with <code class="inline">var.</code>:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>provider "aws" {
+  region = var.region
+}
+
+resource "aws_instance" "my_server" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+  # ...rest stays the same
+}</pre>
+
+        <button class="more-btn" onclick="openModal('m-variables')">How do I set a variable's value?</button>
+
+        <h4>Outputs (outputs.tf)</h4>
+        <p>Outputs print useful info after a build. Group them in their own file:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>output "public_ip" {
+  description = "The server's public IP address"
+  value       = aws_instance.my_server.public_ip
+}
+
+output "website_url" {
+  value = "http://${aws_instance.my_server.public_ip}"
+}</pre>
+
+        <h4>Understanding the State file</h4>
+        <p>After you apply, Terraform creates a file called
+        <code class="inline">terraform.tfstate</code>. This is Terraform's "memory" — it records what it built
+        so it knows what to change or delete next time.</p>
+        <button class="more-btn" onclick="openModal('m-state2')">Why should I be careful with state?</button>
+        <button class="more-btn" onclick="openModal('m-remote')">What is "remote state" (for teams)?</button>
+
+        <div class="note warn">
+          <strong>Never delete or hand-edit</strong> <code class="inline">terraform.tfstate</code>, and never
+          commit it to public GitHub — it can contain secrets and is what Terraform relies on to manage your
+          servers.
+        </div>
+
+        <h4>A clean project layout</h4>
+        <table>
+          <tr><th>File</th><th>Holds</th></tr>
+          <tr><td><code class="inline">main.tf</code></td><td>Provider + resources (the server, security group)</td></tr>
+          <tr><td><code class="inline">variables.tf</code></td><td>Your fill-in-the-blank inputs</td></tr>
+          <tr><td><code class="inline">outputs.tf</code></td><td>Info to print after building</td></tr>
+          <tr><td><code class="inline">terraform.tfstate</code></td><td>Auto-made memory (don't touch)</td></tr>
+        </table>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://developer.hashicorp.com/terraform/language/values/variables" target="_blank" rel="noopener">Input Variables</a>
+          <a href="https://developer.hashicorp.com/terraform/language/values/outputs" target="_blank" rel="noopener">Output Values</a>
+          <a href="https://developer.hashicorp.com/terraform/language/state" target="_blank" rel="noopener">Terraform State</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE DIAGRAM -->
+  <section class="step" id="diagram">
+    <div class="collapsible open">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">◇</span>
+        <h3>Architecture Diagram — How It All Fits Together</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>Here's the full picture of what you built. Your Windows PC drives Terraform, which talks to AWS and
+        creates everything inside a region.</p>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 860 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture diagram">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 Z" fill="var(--accent)"/>
+              </marker>
+              <style>
+                .lbl { font-family: var(--monofamily); font-size: 13px; fill: var(--text); }
+                .lbl-w { font-family: var(--monofamily); font-size: 13px; fill: #fff; }
+                .ttl { font-family: var(--fontfamily); font-size: 15px; font-weight: 700; }
+                .sub { font-family: var(--fontfamily); font-size: 11px; fill: var(--text-soft); }
+                .flow { stroke: var(--accent); stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+                .flowlbl { font-family: var(--fontfamily); font-size: 11px; fill: var(--accent); font-weight:600;}
+              </style>
+            </defs>
+
+            <!-- Your PC -->
+            <rect x="30" y="40" width="200" height="150" rx="6" fill="var(--bg-card)" stroke="var(--border)" stroke-width="2"/>
+            <text x="130" y="70" text-anchor="middle" class="ttl" fill="var(--text)">🪟 Your Windows PC</text>
+            <rect x="55" y="90" width="150" height="36" rx="4" fill="#7B42BC"/>
+            <text x="130" y="113" text-anchor="middle" class="lbl-w">Terraform CLI</text>
+            <rect x="55" y="135" width="150" height="36" rx="4" fill="var(--gray-70)"/>
+            <text x="130" y="158" text-anchor="middle" class="lbl-w">AWS CLI (keys)</text>
+
+            <!-- Arrow PC -> AWS -->
+            <path class="flow" d="M235 115 L300 115"/>
+            <text x="267" y="105" text-anchor="middle" class="flowlbl">apply</text>
+
+            <!-- AWS Cloud big box -->
+            <rect x="305" y="20" width="530" height="500" rx="8" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="6 4"/>
+            <text x="325" y="45" class="ttl" fill="var(--accent)">☁️ AWS Cloud — Region: us-east-1</text>
+
+            <!-- VPC box -->
+            <rect x="330" y="65" width="480" height="430" rx="6" fill="none" stroke="var(--gray-50)" stroke-width="2"/>
+            <text x="345" y="88" class="sub">VPC (your private network)</text>
+
+            <!-- Security Group box -->
+            <rect x="360" y="105" width="420" height="360" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+            <text x="380" y="130" class="ttl" fill="var(--text)">🛡️ Security Group (the bouncer)</text>
+
+            <!-- port chips -->
+            <rect x="380" y="145" width="90" height="30" rx="15" fill="var(--bg-card)" stroke="var(--accent)"/>
+            <text x="425" y="165" text-anchor="middle" class="lbl">:22 SSH</text>
+            <rect x="480" y="145" width="90" height="30" rx="15" fill="var(--bg-card)" stroke="var(--accent)"/>
+            <text x="525" y="165" text-anchor="middle" class="lbl">:80 HTTP</text>
+            <rect x="580" y="145" width="100" height="30" rx="15" fill="var(--bg-card)" stroke="var(--accent)"/>
+            <text x="630" y="165" text-anchor="middle" class="lbl">:443 HTTPS</text>
+
+            <!-- EC2 instance -->
+            <rect x="410" y="205" width="320" height="230" rx="6" fill="var(--bg-card)" stroke="#FF9900" stroke-width="2.5"/>
+            <text x="570" y="232" text-anchor="middle" class="ttl" fill="#FF9900">🖥️ EC2 Instance (t2.micro)</text>
+            <text x="570" y="252" text-anchor="middle" class="sub">AMI: Amazon Linux 2023 (latest)</text>
+
+            <rect x="440" y="270" width="260" height="34" rx="4" fill="var(--gray-10)" stroke="var(--border)"/>
+            <text x="570" y="292" text-anchor="middle" class="lbl" fill="#161616">User Data startup script</text>
+
+            <rect x="440" y="315" width="260" height="34" rx="4" fill="var(--gray-10)" stroke="var(--border)"/>
+            <text x="570" y="337" text-anchor="middle" class="lbl" fill="#161616">httpd (Apache web server)</text>
+
+            <rect x="440" y="360" width="260" height="34" rx="4" fill="var(--gray-10)" stroke="var(--border)"/>
+            <text x="570" y="382" text-anchor="middle" class="lbl" fill="#161616">Key Pair → SSH login</text>
+
+            <text x="570" y="420" text-anchor="middle" class="sub">Public IP → reachable from internet</text>
+
+            <!-- arrow into EC2 -->
+            <path class="flow" d="M570 175 L570 203"/>
+          </svg>
+        </div>
+        <p class="sub" style="text-align:center">Flow: your PC runs <code class="inline">terraform apply</code> →
+        AWS creates a Security Group + EC2 instance → the instance boots Amazon Linux, runs your startup script,
+        and serves a web page through the open ports.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLEANUP -->
+  <section class="step" id="cleanup">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">⚠</span>
+        <h3>Clean Up — Avoid Surprise Charges</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>When you're done experimenting, tear everything down so you stop using resources. One command
+        removes <em>everything</em> this project created:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform destroy</pre>
+        <p>Terraform shows what it will delete and asks you to type <code class="inline">yes</code>. After it
+        finishes, check the AWS console (EC2 → Instances) to confirm your server is gone.</p>
+
+        <div class="note">
+          <strong>Habit to build:</strong> every time you finish a learning session, run
+          <code class="inline">terraform destroy</code>. A stopped/terminated server can't cost you money.
+        </div>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://developer.hashicorp.com/terraform/cli/commands/destroy" target="_blank" rel="noopener">terraform destroy</a>
+          <a href="https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-managing-costs.html" target="_blank" rel="noopener">AWS Budgets &amp; Alerts</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REFERENCES -->
+  <section class="step" id="refs">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">📚</span>
+        <h3>All Official References</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <h4>Terraform</h4>
+        <div class="reflinks" style="border:none;padding:0;margin:0">
+          <a href="https://developer.hashicorp.com/terraform" target="_blank" rel="noopener">Terraform Documentation Home</a>
+          <a href="https://developer.hashicorp.com/terraform/install" target="_blank" rel="noopener">Install Terraform</a>
+          <a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" target="_blank" rel="noopener">Official AWS Get-Started Tutorial</a>
+          <a href="https://developer.hashicorp.com/terraform/language" target="_blank" rel="noopener">HCL Language Reference</a>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">AWS Provider Registry</a>
+        </div>
+        <h4>AWS</h4>
+        <div class="reflinks" style="border:none;padding:0;margin:0">
+          <a href="https://aws.amazon.com/free/" target="_blank" rel="noopener">AWS Free Tier</a>
+          <a href="https://docs.aws.amazon.com/ec2/" target="_blank" rel="noopener">Amazon EC2 Docs</a>
+          <a href="https://docs.aws.amazon.com/linux/al2023/ug/what-is-amazon-linux.html" target="_blank" rel="noopener">Amazon Linux 2023 Guide</a>
+          <a href="https://docs.aws.amazon.com/cli/" target="_blank" rel="noopener">AWS CLI Docs</a>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/" target="_blank" rel="noopener">IAM User Guide</a>
+          <a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html" target="_blank" rel="noopener">VPC Security Groups</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>Terraform &amp; AWS Tutorial — Beginner to Advanced. Built for learning.</p>
+  <p style="margin-top:0.5rem">Always run <code style="color:var(--accent)">terraform destroy</code> when finished to avoid charges.
+     Official docs: <a href="https://developer.hashicorp.com/terraform" target="_blank" rel="noopener">Terraform</a> ·
+     <a href="https://docs.aws.amazon.com/" target="_blank" rel="noopener">AWS</a></p>
+</footer>
+
+<!-- ============ MODAL (single reusable) ============ -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="mhead">
+      <h3 id="modalTitle">Title</h3>
+      <button class="mclose" onclick="closeModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="mbody" id="modalBody">Content</div>
+  </div>
+</div>
+
+<!-- Hidden modal content store -->
+<div id="modalStore" style="display:none">
+
+  <div data-modal="m-iac" data-title="Infrastructure as Code (IaC)">
+    <p>"Infrastructure" means your servers, networks, and other cloud pieces. Normally you build them by
+    clicking around a website. <strong>Infrastructure as Code</strong> means you write down what you want in
+    a text file instead.</p>
+    <p>Benefits: you can save it, share it, undo it, and rebuild the exact same setup anytime. If your server
+    breaks, you just run the code again and get an identical one.</p>
+  </div>
+
+  <div data-modal="m-ec2" data-title="What is an EC2 instance?">
+    <p><strong>EC2</strong> stands for "Elastic Compute Cloud." An <strong>instance</strong> is one virtual
+    computer you rent from Amazon. "Virtual" means it's a slice of a big real machine in an Amazon data center.</p>
+    <p>You choose its size, its operating system, and how long it runs. You pay only while it's on (and some
+    sizes are free for the first year).</p>
+  </div>
+
+  <div data-modal="m-ami" data-title="What is an AMI?">
+    <p><strong>AMI</strong> = "Amazon Machine Image." It's a snapshot of an operating system that your new
+    server starts from — like choosing which version of Windows or Linux to install, except it's pre-packaged.</p>
+    <p>We use <strong>Amazon Linux 2023</strong>, Amazon's own free Linux made to work smoothly on EC2. Asking
+    for the "latest" one means you always start fresh and secure.</p>
+  </div>
+
+  <div data-modal="m-choco" data-title="What is Chocolatey doing?">
+    <p>Chocolatey is a "package manager" for Windows — an app store you control from the command line. When you
+    type <code>choco install terraform</code>, it downloads the right Terraform file, puts it in the correct
+    folder, and adds it to your PATH automatically.</p>
+    <p>This saves you from doing those steps by hand (which is Method B).</p>
+  </div>
+
+  <div data-modal="m-admin" data-title='Why "Run as Administrator"?'>
+    <p>Installing software changes protected parts of Windows. Running PowerShell "as Administrator" gives it
+    permission to make those changes. Without it, the install may fail with "access denied."</p>
+  </div>
+
+  <div data-modal="m-path" data-title="What is the PATH?">
+    <p>The PATH is a list of folders Windows searches when you type a command. If <code>terraform.exe</code>
+    lives in a folder that's on the PATH, you can type <code>terraform</code> from anywhere.</p>
+    <p><strong>To edit it:</strong> press Start → type "environment variables" → "Edit the system environment
+    variables" → "Environment Variables…" → under <em>System variables</em> select <strong>Path</strong> →
+    Edit → New → add <code>C:\terraform</code> → OK. Reopen PowerShell afterward.</p>
+  </div>
+
+  <div data-modal="m-root" data-title="The root user">
+    <p>The <strong>root user</strong> is the very first login for your AWS account — it can do absolutely
+    anything, including closing the account. Because it's so powerful, you should rarely use it.</p>
+    <p>For everyday work (and for Terraform) you make a limited <strong>IAM user</strong> instead. Turn on
+    multi-factor authentication (MFA) on the root user for safety.</p>
+  </div>
+
+  <div data-modal="m-region" data-title="What is an AWS Region?">
+    <p>AWS has data centers all over the world, grouped into <strong>Regions</strong> like
+    <code>us-east-1</code> (Virginia) or <code>eu-west-1</code> (Ireland). Your servers physically live in the
+    region you pick.</p>
+    <p>Choose one close to you (or your users) for faster speeds. <code>us-east-1</code> is the biggest and a
+    common default.</p>
+  </div>
+
+  <div data-modal="m-iam" data-title="What is IAM?">
+    <p><strong>IAM</strong> = "Identity and Access Management." It's where you create users and decide what each
+    one is allowed to do. Think of it as the security desk that hands out ID badges with different access levels.</p>
+    <p>We make a dedicated user for Terraform so its key can be revoked anytime without touching your main login.</p>
+  </div>
+
+  <div data-modal="m-credfile" data-title="Where are credentials saved?">
+    <p><code>aws configure</code> saves your keys to a hidden file at
+    <code>C:\Users\YourName\.aws\credentials</code> and your region to <code>.aws\config</code>.</p>
+    <p>Terraform automatically reads these files, which is why you never paste keys into your
+    <code>.tf</code> files — keeping secrets out of your code.</p>
+  </div>
+
+  <div data-modal="m-whyregion" data-title="Which region should I pick?">
+    <p>Pick the region nearest you for speed, or stick with <code>us-east-1</code> for the widest service
+    availability and the most tutorials/examples online. Just be consistent — resources in one region can't
+    see resources in another by default.</p>
+  </div>
+
+  <div data-modal="m-provider" data-title="What is a provider?">
+    <p>A <strong>provider</strong> is a plugin that teaches Terraform how to talk to a specific service. The
+    <code>hashicorp/aws</code> provider knows how to create AWS things (servers, networks, etc.).</p>
+    <p>There are providers for Google Cloud, Azure, GitHub, and hundreds more. <code>terraform init</code>
+    downloads the ones your project lists.</p>
+  </div>
+
+  <div data-modal="m-hcl" data-title="What language is this? (HCL)">
+    <p>Terraform files are written in <strong>HCL</strong> — "HashiCorp Configuration Language." It's designed
+    to be easy for humans to read and write. You mostly write <em>blocks</em> like
+    <code>resource "type" "name" { ... }</code> that describe what you want.</p>
+  </div>
+
+  <div data-modal="m-plan" data-title='Why is "plan" important?'>
+    <p><code>terraform plan</code> is a safe preview. It compares what you wrote against what currently exists
+    and lists what it would <strong>add (+)</strong>, <strong>change (~)</strong>, or
+    <strong>destroy (-)</strong> — without doing anything.</p>
+    <p>Always read it. It's how you catch mistakes (like accidentally deleting something) before they happen.</p>
+  </div>
+
+  <div data-modal="m-state" data-title="What is the state file?">
+    <p>Terraform records what it built in a file called <code>terraform.tfstate</code>. This is its "memory."
+    Next time you run a command, it compares your code to this file to figure out what changed.</p>
+    <p>Don't edit or delete it by hand, and keep it private — it can hold sensitive values.</p>
+  </div>
+
+  <div data-modal="m-data" data-title="What is a data source?">
+    <p>A <strong>data block</strong> <em>reads</em> existing information from AWS instead of creating anything.
+    We use one to ask "what's the newest Amazon Linux image ID?" so we never have to hard-code an ID that goes
+    stale.</p>
+    <p>Compare: a <code>resource</code> block <em>creates</em>; a <code>data</code> block <em>looks up</em>.</p>
+  </div>
+
+  <div data-modal="m-instancetype" data-title="Instance types (sizes)">
+    <p>An <strong>instance type</strong> sets how much CPU and memory your server has.
+    <code>t2.micro</code> and <code>t3.micro</code> are tiny and free-tier eligible — perfect for learning.</p>
+    <p>Bigger types like <code>m5.large</code> have more power but cost more. You can change the type anytime by
+    editing one line and re-applying.</p>
+  </div>
+
+  <div data-modal="m-keypair" data-title="Key pairs & SSH">
+    <p><strong>SSH</strong> (Secure Shell) is a way to safely log into a remote Linux machine from your terminal.
+    It uses a <strong>key pair</strong>: a <em>private</em> key that stays secret on your PC and a
+    <em>public</em> key that goes on the server.</p>
+    <p>Only someone holding the matching private key can log in — much safer than a password.</p>
+  </div>
+
+  <div data-modal="m-sg" data-title="What is a security group?">
+    <p>A <strong>security group</strong> is a virtual firewall wrapped around your server. It has rules saying
+    which ports are open and which IP addresses are allowed in (ingress) or out (egress).</p>
+    <p>By default, nothing is allowed in — you must explicitly open what you need.</p>
+  </div>
+
+  <div data-modal="m-ports" data-title="What are ports?">
+    <p>A single server can run many services at once — a website, an email server, etc. <strong>Ports</strong>
+    are numbered doors that keep them separate. Web traffic uses port 80, secure web uses 443, and SSH login
+    uses 22.</p>
+    <p>Opening a port means "allow traffic to knock on this specific door."</p>
+  </div>
+
+  <div data-modal="m-cidr" data-title='What does "/0" and "/32" mean?'>
+    <p>This is <strong>CIDR</strong> notation for describing groups of IP addresses.
+    <code>0.0.0.0/0</code> means "every possible address" (the whole internet).
+    <code>1.2.3.4/32</code> means "exactly this one address."</p>
+    <p>Smaller numbers after the slash = more addresses. For SSH, narrowing to your own
+    <code>/32</code> is much safer.</p>
+  </div>
+
+  <div data-modal="m-userdata" data-title="What is user data?">
+    <p><strong>User data</strong> is a script you hand to the instance. AWS runs it automatically <em>once</em>,
+    the first time the server boots. It's how you make a server set itself up — installing software, starting
+    services, writing files — with no manual login needed.</p>
+  </div>
+
+  <div data-modal="m-systemctl" data-title="What is systemctl?">
+    <p><code>systemctl</code> is the Linux command that controls background services.
+    <code>systemctl start httpd</code> turns the web server on now;
+    <code>systemctl enable httpd</code> makes it start automatically every time the server reboots.</p>
+  </div>
+
+  <div data-modal="m-variables" data-title="Setting variable values">
+    <p>A variable's <code>default</code> is used if you don't override it. To override, you can:</p>
+    <p>1) Pass it on the command line: <code>terraform apply -var="instance_type=t3.small"</code><br>
+    2) Make a file <code>terraform.tfvars</code> with lines like <code>instance_type = "t3.small"</code> —
+    Terraform reads it automatically.</p>
+  </div>
+
+  <div data-modal="m-state2" data-title="Be careful with state">
+    <p>The state file maps your code to the real resources. If you delete it, Terraform "forgets" what it made
+    and may try to create duplicates. If you edit it wrong, you can corrupt your tracking.</p>
+    <p>Keep it safe, keep it private (it may hold secrets), and never commit it to a public repository.</p>
+  </div>
+
+  <div data-modal="m-remote" data-title="Remote state (for teams)">
+    <p>When several people share a project, keeping the state file on one person's laptop is risky. <strong>Remote
+    state</strong> stores it in a shared, locked location — commonly an AWS S3 bucket with DynamoDB locking — so
+    everyone uses the same up-to-date memory and no two people apply at once.</p>
+  </div>
+
+</div>
+
+<script>
+  /* ===== THEME ===== */
+  function toggleTheme(){
+    const b = document.body;
+    const dark = b.getAttribute('data-theme') === 'dark';
+    b.setAttribute('data-theme', dark ? 'light' : 'dark');
+    document.getElementById('themeBtn').textContent = dark ? '🌙 Dark' : '☀️ Light';
+  }
+
+  /* ===== FONT SIZE ===== */
+  let fs = 18;
+  function changeFont(delta){
+    fs = Math.min(36, Math.max(14, fs + delta));
+    document.documentElement.style.setProperty('--fontsize', fs + 'px');
+    document.getElementById('fontsizeLabel').textContent = fs + 'px';
+  }
+
+  /* ===== COLLAPSIBLE SECTIONS ===== */
+  function toggleSection(head){
+    head.parentElement.classList.toggle('open');
+  }
+
+  /* ===== TOC (mobile) ===== */
+  function toggleTOC(){
+    document.getElementById('toc').classList.toggle('open');
+    document.getElementById('tocScrim').classList.toggle('show');
+  }
+  function closeTOC(){
+    document.getElementById('toc').classList.remove('open');
+    document.getElementById('tocScrim').classList.remove('show');
+  }
+
+  /* ===== MODALS ===== */
+  function openModal(key){
+    const src = document.querySelector('[data-modal="'+key+'"]');
+    if(!src) return;
+    document.getElementById('modalTitle').textContent = src.getAttribute('data-title');
+    document.getElementById('modalBody').innerHTML = src.innerHTML;
+    document.getElementById('modalOverlay').classList.add('show');
+  }
+  function closeModal(){
+    document.getElementById('modalOverlay').classList.remove('show');
+  }
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+  /* ===== COPY CODE ===== */
+  function copyCode(btn){
+    const pre = btn.parentElement;
+    const text = pre.innerText.replace(/^Copy\s*/, '');
+    navigator.clipboard.writeText(text).then(()=>{
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(()=> btn.textContent = old, 1400);
+    }).catch(()=>{ btn.textContent='Press Ctrl+C'; });
+  }
+
+  /* ===== TOC ACTIVE HIGHLIGHT ===== */
+  const links = [...document.querySelectorAll('nav.toc a')];
+  const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if(en.isIntersecting){
+        links.forEach(l => l.classList.remove('active'));
+        const id = '#' + en.target.id;
+        const link = links.find(l => l.getAttribute('href') === id);
+        if(link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>
