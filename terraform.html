@@ -394,6 +394,7 @@
     <a href="#s8" onclick="closeTOC()">8. Advanced: Security Groups &amp; Ports</a>
     <a href="#s9" onclick="closeTOC()">9. Advanced: Install Services Automatically</a>
     <a href="#s10" onclick="closeTOC()">10. Advanced: Variables, Outputs &amp; State</a>
+    <a href="#s11" onclick="closeTOC()">11. Advanced: Variables &amp; Environment Vars</a>
     <a href="#diagram" onclick="closeTOC()">Architecture Diagram</a>
     <a href="#cleanup" onclick="closeTOC()">Clean Up (Avoid Charges!)</a>
     <a href="#cmdref" onclick="closeTOC()">📖 Full Command Reference</a>
@@ -1090,6 +1091,211 @@ output "website_url" {
           <a href="https://developer.hashicorp.com/terraform/language/values/variables" target="_blank" rel="noopener">Input Variables</a>
           <a href="https://developer.hashicorp.com/terraform/language/values/outputs" target="_blank" rel="noopener">Output Values</a>
           <a href="https://developer.hashicorp.com/terraform/language/state" target="_blank" rel="noopener">Terraform State</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 11: VARIABLES & ENVIRONMENT VARS (DEEP DIVE) -->
+  <section class="step" id="s11">
+    <div class="collapsible">
+      <div class="head" onclick="toggleSection(this)">
+        <span class="num">11</span>
+        <h3>Advanced: Variables &amp; Environment Variables (Images, Regions &amp; Secrets)</h3>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">
+        <p>In Step 10 you met variables. Now let's go deeper: the different <em>ways</em> to feed values into
+        Terraform, in what order Terraform picks them, and how <strong>environment variables</strong> let you
+        keep things like the AMI image, region, instance size, and secrets <em>out of your code</em>. This is
+        how real teams keep one set of files that works in dev, test, and production.</p>
+
+        <h4>The 6 ways to set a variable (and who wins)</h4>
+        <p>Terraform can get a variable's value from many places. If the same variable is set in more than one
+        place, the one <strong>higher on this list wins</strong> (later sources override earlier ones):</p>
+        <table>
+          <tr><th>#</th><th>Source</th><th>Wins over...</th></tr>
+          <tr><td>1</td><td><code class="inline">-var</code> on the command line</td><td>everything (highest)</td></tr>
+          <tr><td>2</td><td><code class="inline">-var-file</code> on the command line</td><td>all below</td></tr>
+          <tr><td>3</td><td><code class="inline">*.auto.tfvars</code> files (alphabetical)</td><td>all below</td></tr>
+          <tr><td>4</td><td><code class="inline">terraform.tfvars</code> file</td><td>env vars &amp; defaults</td></tr>
+          <tr><td>5</td><td><code class="inline">TF_VAR_*</code> environment variables</td><td>defaults only</td></tr>
+          <tr><td>6</td><td><code class="inline">default</code> in the variable block</td><td>nothing (lowest)</td></tr>
+        </table>
+        <button class="more-btn" onclick="openModal('m-precedence')">Why does order matter?</button>
+
+        <h4>Setup: variables for our image and server</h4>
+        <p>Let's make our EC2 setup fully configurable. Create or update
+        <code class="inline">variables.tf</code>:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># variables.tf
+variable "region" {
+  description = "AWS region to build in"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "instance_type" {
+  description = "Size of the EC2 server"
+  type        = string
+  default     = "t2.micro"
+}
+
+# Which AMI name pattern to search for (the OS image)
+variable "ami_name_filter" {
+  description = "Name pattern used to find the AMI"
+  type        = string
+  default     = "al2023-ami-*-x86_64"
+}
+
+# A whole group of settings bundled together (an object)
+variable "tags" {
+  description = "Tags applied to resources"
+  type        = map(string)
+  default = {
+    Project = "terraform-tutorial"
+    Env     = "dev"
+  }
+}</pre>
+
+        <button class="more-btn" onclick="openModal('m-vartypes')">What are variable types (string, map, list)?</button>
+
+        <p>Now use them. Notice the AMI image is now driven by a variable:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># main.tf (updated pieces)
+provider "aws" {
+  region = var.region
+}
+
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = [var.ami_name_filter]   # &lt;-- image comes from a variable
+  }
+}
+
+resource "aws_instance" "my_server" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+  tags          = var.tags           # &lt;-- the whole tag map
+}</pre>
+
+        <h4>Way 1 &amp; 2 — Command line (<code class="inline">-var</code> and <code class="inline">-var-file</code>)</h4>
+        <p>Override a value just for this one run. Great for quick tests:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform apply -var="instance_type=t3.small" -var="region=us-west-2"</pre>
+        <p>For many values, put them in a file and point to it:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># prod.tfvars
+region        = "us-east-1"
+instance_type = "t3.large"
+ami_name_filter = "al2023-ami-*-arm64"
+tags = {
+  Project = "terraform-tutorial"
+  Env     = "prod"
+}</pre>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform apply -var-file="prod.tfvars"</pre>
+
+        <h4>Way 3 &amp; 4 — Auto-loaded files</h4>
+        <p>Terraform automatically reads <code class="inline">terraform.tfvars</code> and any file ending in
+        <code class="inline">.auto.tfvars</code> — no flag needed. Make a
+        <code class="inline">terraform.tfvars</code>:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># terraform.tfvars  (loaded automatically)
+region        = "us-east-1"
+instance_type = "t2.micro"</pre>
+        <p>Now plain <code class="inline">terraform apply</code> uses those values without you typing anything.</p>
+
+        <button class="more-btn" onclick="openModal('m-tfvars')">terraform.tfvars vs *.auto.tfvars?</button>
+
+        <h4>Way 5 — Environment variables (<code class="inline">TF_VAR_*</code>)</h4>
+        <p>This is the powerful one. Terraform reads any environment variable that starts with
+        <code class="inline">TF_VAR_</code> and matches it to a variable of the same name. So
+        <code class="inline">TF_VAR_region</code> fills the <code class="inline">region</code> variable. The big
+        benefits: you keep values (and secrets) out of your files, and you can switch setups without editing
+        code.</p>
+
+        <p>In <strong>PowerShell</strong> (Windows):</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>$env:TF_VAR_region = "us-west-2"
+$env:TF_VAR_instance_type = "t3.medium"
+$env:TF_VAR_ami_name_filter = "al2023-ami-*-arm64"
+terraform plan</pre>
+
+        <p>In <strong>Command Prompt (cmd)</strong>:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>set TF_VAR_region=us-west-2
+set TF_VAR_instance_type=t3.medium
+terraform plan</pre>
+
+        <p>On <strong>macOS/Linux (bash)</strong>:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>export TF_VAR_region="us-west-2"
+export TF_VAR_instance_type="t3.medium"
+terraform plan</pre>
+
+        <div class="result-label">Expected result</div>
+        <div class="result-box">  # aws_instance.my_server will be updated in-place
+<span class="chg">  ~ instance_type = "t2.micro" -&gt; "t3.medium"</span>
+Plan: 0 to add, 1 to change, 0 to destroy.</div>
+        <p style="font-size:0.85em">Terraform picked up the image filter and size from the environment — your
+        <code class="inline">.tf</code> files never changed.</p>
+
+        <button class="more-btn" onclick="openModal('m-envname')">How does the name mapping work?</button>
+        <button class="more-btn" onclick="openModal('m-envcomplex')">Setting list/map values via env vars</button>
+
+        <h4>AWS's own environment variables (different from <code class="inline">TF_VAR_</code>)</h4>
+        <p>Separately, the AWS provider itself reads standard AWS environment variables. These are handy for CI
+        systems or for switching accounts without editing <code class="inline">aws configure</code>. They are
+        <strong>not</strong> Terraform variables — they're read by the AWS SDK:</p>
+        <table>
+          <tr><th>Variable</th><th>What it sets</th></tr>
+          <tr><td><code class="inline">AWS_ACCESS_KEY_ID</code></td><td>Your access key (instead of the saved credentials file).</td></tr>
+          <tr><td><code class="inline">AWS_SECRET_ACCESS_KEY</code></td><td>Your secret key.</td></tr>
+          <tr><td><code class="inline">AWS_SESSION_TOKEN</code></td><td>Temporary session token (for assumed roles / MFA).</td></tr>
+          <tr><td><code class="inline">AWS_REGION</code></td><td>Default region for the AWS provider.</td></tr>
+          <tr><td><code class="inline">AWS_PROFILE</code></td><td>Which named profile in your credentials file to use.</td></tr>
+        </table>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button># PowerShell: use a specific profile and region for this session
+$env:AWS_PROFILE = "work-account"
+$env:AWS_REGION  = "eu-west-1"
+terraform plan</pre>
+
+        <button class="more-btn" onclick="openModal('m-awsenv')">TF_VAR_ vs AWS_ — which is which?</button>
+
+        <div class="note warn">
+          <strong>Secrets safety:</strong> environment variables are a good place for secrets because they don't
+          get committed to Git like a <code class="inline">.tfvars</code> file might. Still, never
+          <code class="inline">echo</code> them into logs, and add <code class="inline">*.tfvars</code> to your
+          <code class="inline">.gitignore</code>. For real secrets, prefer a secrets manager over typing keys
+          at all.
+        </div>
+
+        <h4>Mark sensitive variables</h4>
+        <p>Add <code class="inline">sensitive = true</code> so Terraform hides the value in
+        <code class="inline">plan</code> and <code class="inline">apply</code> output:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>variable "db_password" {
+  description = "Database password"
+  type        = string
+  sensitive   = true     # value shows as (sensitive) in output
+}</pre>
+        <p>Then supply it via env var so it never sits in a file:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>$env:TF_VAR_db_password = "S3cretP@ss!"
+terraform apply</pre>
+        <div class="result-label">Expected result</div>
+        <div class="result-box">  + db_password = <span style="opacity:0.7">(sensitive value)</span></div>
+
+        <button class="more-btn" onclick="openModal('m-validation')">Bonus: validating &amp; restricting values</button>
+
+        <h4>Putting it together: one codebase, three environments</h4>
+        <p>A common professional pattern — same <code class="inline">.tf</code> files, different
+        <code class="inline">.tfvars</code> per environment:</p>
+        <pre><button class="copybtn" onclick="copyCode(this)">Copy</button>terraform apply -var-file="dev.tfvars"     # tiny, cheap
+terraform apply -var-file="staging.tfvars" # medium
+terraform apply -var-file="prod.tfvars"     # bigger, arm64 image, prod tags</pre>
+        <p>Combine with <a href="#cmd-workspace" style="color:var(--accent)">workspaces</a>
+        (from the command reference) to keep each environment's state separate.</p>
+
+        <div class="reflinks">
+          <h4>Official references</h4>
+          <a href="https://developer.hashicorp.com/terraform/language/values/variables" target="_blank" rel="noopener">Input Variables &amp; Precedence</a>
+          <a href="https://developer.hashicorp.com/terraform/cli/config/environment-variables" target="_blank" rel="noopener">Terraform Environment Variables</a>
+          <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs#environment-variables" target="_blank" rel="noopener">AWS Provider Environment Variables</a>
+          <a href="https://developer.hashicorp.com/terraform/language/values/variables#suppressing-values-in-cli-output" target="_blank" rel="noopener">Sensitive Variables</a>
         </div>
       </div>
     </div>
@@ -2235,6 +2441,83 @@ on windows_amd64</div>
     <p>When several people share a project, keeping the state file on one person's laptop is risky. <strong>Remote
     state</strong> stores it in a shared, locked location — commonly an AWS S3 bucket with DynamoDB locking — so
     everyone uses the same up-to-date memory and no two people apply at once.</p>
+  </div>
+
+  <div data-modal="m-precedence" data-title="Why does precedence order matter?">
+    <p>You'll often set a value in a file for everyday use, then need to override it just once for a quick test.
+    Precedence makes that possible: a <code>-var</code> on the command line beats whatever is in your files, so
+    you don't have to edit (and later un-edit) your code.</p>
+    <p>Rule of thumb: <strong>the more specific and immediate the source, the higher it wins.</strong> A flag you
+    typed just now beats a file, which beats an environment variable, which beats the built-in default.</p>
+  </div>
+
+  <div data-modal="m-vartypes" data-title="Variable types: string, list, map, object">
+    <p>The <code>type</code> tells Terraform what shape a value must be:</p>
+    <p><strong>string</strong> — text, like <code>"us-east-1"</code>.<br>
+    <strong>number</strong> — like <code>3</code>.<br>
+    <strong>bool</strong> — <code>true</code> or <code>false</code>.<br>
+    <strong>list(string)</strong> — an ordered set, like <code>["a", "b"]</code>.<br>
+    <strong>map(string)</strong> — labeled pairs, like our tags <code>{ Env = "dev" }</code>.<br>
+    <strong>object({...})</strong> — a fixed structure with named fields.</p>
+    <p>Declaring a type catches mistakes early — passing text where a number is expected fails at
+    <code>plan</code> instead of breaking later.</p>
+  </div>
+
+  <div data-modal="m-tfvars" data-title="terraform.tfvars vs *.auto.tfvars">
+    <p>Both are loaded automatically with no flag. The differences:</p>
+    <p><code>terraform.tfvars</code> (or <code>terraform.tfvars.json</code>) is the single, default file
+    Terraform looks for.</p>
+    <p><code>*.auto.tfvars</code> lets you have several auto-loaded files, like
+    <code>region.auto.tfvars</code> and <code>sizes.auto.tfvars</code>. They load in alphabetical order, and
+    later ones override earlier ones.</p>
+    <p>Use <code>terraform.tfvars</code> for your normal values, and <code>.auto.tfvars</code> when you want to
+    split settings into themed files.</p>
+  </div>
+
+  <div data-modal="m-envname" data-title="How TF_VAR_ name mapping works">
+    <p>Take the prefix <code>TF_VAR_</code> and add your variable's exact name. So the variable
+    <code>instance_type</code> is filled by the environment variable
+    <code>TF_VAR_instance_type</code>.</p>
+    <p>The name after the prefix is case-sensitive and must match the variable name letter-for-letter, including
+    underscores. If you declare <code>variable "region"</code>, the env var is
+    <code>TF_VAR_region</code> — not <code>TF_VAR_REGION</code>.</p>
+  </div>
+
+  <div data-modal="m-envcomplex" data-title="List & map values in environment variables">
+    <p>Environment variables are always plain text, but Terraform will parse HCL-style values for complex
+    types. Wrap the value to look like the type:</p>
+    <p>A list:</p>
+    <pre>$env:TF_VAR_zones = '["us-east-1a","us-east-1b"]'</pre>
+    <p>A map (like tags):</p>
+    <pre>$env:TF_VAR_tags = '{ Env = "prod", Team = "web" }'</pre>
+    <p>Mind the quoting rules of your shell — in PowerShell, single quotes around the whole value keep the inner
+    double quotes intact.</p>
+  </div>
+
+  <div data-modal="m-awsenv" data-title="TF_VAR_ vs AWS_ environment variables">
+    <p>These look similar but serve different layers:</p>
+    <p><strong>TF_VAR_*</strong> — read by <em>Terraform</em>. They fill the <code>variable</code> blocks you
+    declared. Example: <code>TF_VAR_region</code> fills <code>var.region</code>.</p>
+    <p><strong>AWS_*</strong> (like <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_REGION</code>,
+    <code>AWS_PROFILE</code>) — read by the <em>AWS provider/SDK</em> for authentication and the default region.
+    Terraform never sees them as variables; the AWS plugin uses them directly to log in.</p>
+    <p>So <code>TF_VAR_</code> = "values for my code," and <code>AWS_</code> = "how to connect to AWS."</p>
+  </div>
+
+  <div data-modal="m-validation" data-title="Validating & restricting variable values">
+    <p>You can make a variable reject bad input with a <code>validation</code> block, so mistakes are caught at
+    <code>plan</code> time with a clear message:</p>
+    <pre>variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+
+  validation {
+    condition     = can(regex("^t[23]\\.", var.instance_type))
+    error_message = "Use a t2 or t3 size for the free tier."
+  }
+}</pre>
+    <p>If someone passes <code>m5.large</code>, Terraform stops and prints your message instead of building
+    something expensive by accident.</p>
   </div>
 
 </div>
