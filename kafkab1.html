@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka Best Practices Guide — The Grocery Store Way</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"IBM Plex Sans"', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'monospace'],
+        serif: ['"IBM Plex Serif"', 'serif'],
+      },
+      colors: {
+        ibm: {
+          blue: '#0f62fe',
+          dark: '#0043ce',
+          navy: '#001d6c',
+          ink: '#161616',
+          slate: '#393939',
+          gray: '#525252',
+          line: '#e0e0e0',
+          bg: '#f4f4f4',
+        }
+      }
+    }
+  }
+}
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { background:#ffffff; color:#161616; }
+  .content-scale { font-size: var(--base-font, 16px); }
+  .content-scale h2 { font-size: calc(var(--base-font, 16px) * 1.9); }
+  .content-scale h3 { font-size: calc(var(--base-font, 16px) * 1.4); }
+  .content-scale h4 { font-size: calc(var(--base-font, 16px) * 1.15); }
+  .content-scale .small-note { font-size: calc(var(--base-font, 16px) * 0.85); }
+  .ibm-accent { border-left: 4px solid #0f62fe; }
+  .grocery-box { background:#f4f4f4; border-left:4px solid #001d6c; }
+  .pro-box { background:#f2f8f4; border-left:4px solid #198038; }
+  .con-box { background:#fff1f1; border-left:4px solid #da1e28; }
+  .rec-box { background:#edf5ff; border-left:4px solid #0f62fe; }
+  .tag { font-family:'IBM Plex Mono', monospace; font-size:0.72em; letter-spacing:0.04em; }
+  .nav-link.active { background:#0f62fe; color:#fff; }
+  .info-btn { transition: all .15s ease; }
+  .info-btn:hover { background:#0f62fe; color:#fff; }
+  .modal-backdrop { background:rgba(22,22,22,0.55); }
+  table { border-collapse: collapse; }
+  .fade-in { animation: fadeIn .5s ease both; }
+  @keyframes fadeIn { from {opacity:0; transform:translateY(8px);} to {opacity:1; transform:translateY(0);} }
+  .step-num { font-family:'IBM Plex Mono', monospace; }
+  ::selection { background:#0f62fe; color:#fff; }
+</style>
+</head>
+<body class="font-sans antialiased">
+
+<!-- ============ TOP BAR ============ -->
+<header class="sticky top-0 z-40 bg-white border-b border-ibm-line">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-9 h-9 bg-ibm-navy flex items-center justify-center shrink-0">
+        <span class="text-white font-bold text-lg">K</span>
+      </div>
+      <div class="min-w-0">
+        <h1 class="font-semibold text-ibm-ink truncate text-sm sm:text-base leading-tight">Kafka Best Practices</h1>
+        <p class="text-ibm-gray text-xs truncate">The Grocery Store Way · AWS Edition</p>
+      </div>
+    </div>
+    <!-- Font size controls -->
+    <div class="flex items-center gap-2 shrink-0">
+      <span class="hidden sm:inline tag text-ibm-gray">FONT</span>
+      <button id="font-dec" aria-label="Decrease font size" class="w-9 h-9 border border-ibm-line bg-white hover:bg-ibm-bg text-ibm-ink font-bold text-lg leading-none flex items-center justify-center">A−</button>
+      <span id="font-readout" class="tag text-ibm-blue w-10 text-center">16px</span>
+      <button id="font-inc" aria-label="Increase font size" class="w-9 h-9 border border-ibm-line bg-white hover:bg-ibm-bg text-ibm-ink font-bold text-lg leading-none flex items-center justify-center">A+</button>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-4 lg:flex lg:gap-8">
+
+<!-- ============ SIDEBAR NAV ============ -->
+<aside class="lg:w-60 lg:shrink-0 lg:sticky lg:top-[73px] lg:self-start lg:h-[calc(100vh-73px)] lg:overflow-y-auto py-4">
+  <button id="nav-toggle" class="lg:hidden w-full border border-ibm-line bg-white px-4 py-2 text-left font-medium flex justify-between items-center mb-2">
+    <span>📑 Jump to section</span><span id="nav-caret">▾</span>
+  </button>
+  <nav id="nav-menu" class="hidden lg:block space-y-1 text-sm">
+    <a href="#intro" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">1 · What is Kafka?</a>
+    <a href="#concepts" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">2 · Core Concepts</a>
+    <a href="#setup" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">3 · Step-by-Step Setup</a>
+    <a href="#best" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">4 · Best Practices</a>
+    <a href="#ec2" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">5 · AWS EC2 Config</a>
+    <a href="#eks" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">6 · AWS EKS Config</a>
+    <a href="#compare" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">7 · EC2 vs EKS vs MSK</a>
+    <a href="#cost" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">8 · Cost Saving</a>
+    <a href="#metrics" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">9 · Tracking Metrics</a>
+    <a href="#proactive" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">10 · Catching Errors Early</a>
+    <a href="#checklist" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">11 · Final Checklist</a>
+    <a href="#refs" class="nav-link block px-3 py-2 text-ibm-slate hover:bg-ibm-bg">12 · Official Docs</a>
+  </nav>
+</aside>
+
+<!-- ============ MAIN CONTENT ============ -->
+<main class="content-scale flex-1 py-8 max-w-3xl">
+
+<!-- HERO -->
+<section class="fade-in mb-12">
+  <p class="tag text-ibm-blue mb-3">COMPLETE GUIDE · MIDDLE-SCHOOL FRIENDLY</p>
+  <h2 class="font-serif font-bold text-ibm-navy leading-tight mb-4">Apache Kafka, explained like you run a chain of grocery stores</h2>
+  <p class="text-ibm-slate mb-4">Imagine you own <strong>20 grocery stores</strong>. Every second, things happen: a cashier rings up a sale, a shelf runs low on milk, a vendor truck arrives, a customer returns a item. You want every one of these events recorded instantly, and you want different departments (accounting, inventory, forecasting) to all hear about them without bumping into each other.</p>
+  <p class="text-ibm-slate mb-4">That is exactly what <strong>Apache Kafka</strong> does for software. It is the central <em>"announcement system"</em> that carries a never-ending stream of events from the things that create them to the things that need to react to them.</p>
+  <div class="grocery-box p-5 my-5">
+    <p class="tag text-ibm-navy mb-1">🛒 GROCERY ANALOGY</p>
+    <p class="text-ibm-ink">Kafka is like the <strong>store-wide intercom plus a tape recorder that never stops</strong>. Every "Price check on register 4!" is announced AND saved, so any team can replay it later — even the forecasting team next week.</p>
+  </div>
+  <p class="text-ibm-slate">This guide walks you from zero knowledge all the way to running Kafka cheaply and reliably on Amazon Web Services (AWS). Use the <strong>A+ / A−</strong> buttons at the top to grow the text up to size 36, and tap any <button class="info-btn border border-ibm-blue text-ibm-blue px-2 py-0.5 tag rounded-sm">ⓘ MORE</button> button to open a popup with extra detail.</p>
+</section>
+
+<!-- ============ 1. WHAT IS KAFKA ============ -->
+<section id="intro" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 1</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">What is Kafka, really?</h2>
+  <p class="text-ibm-slate mb-4">Kafka is a <strong>distributed event streaming platform</strong>. Let's break that scary phrase into plain words:</p>
+  <div class="space-y-3 mb-5">
+    <div class="ibm-accent pl-4 py-1"><strong>Event</strong> = something that happened. "Store #7 sold 2 gallons of milk at 3:42pm."</div>
+    <div class="ibm-accent pl-4 py-1"><strong>Streaming</strong> = these events flow continuously, like a river, not once a day in a big batch.</div>
+    <div class="ibm-accent pl-4 py-1"><strong>Distributed</strong> = the work is spread across several computers so it never gets overwhelmed and never fully breaks if one computer dies.</div>
+  </div>
+  <p class="text-ibm-slate mb-4">Before Kafka, companies often connected every system directly to every other system. With 5 systems that's a tangled mess of wires. Kafka sits in the middle so everything talks to <em>one</em> place instead.</p>
+
+  <div class="grid sm:grid-cols-2 gap-4 my-6">
+    <div class="con-box p-4">
+      <p class="font-semibold text-ibm-ink mb-2">❌ Without Kafka</p>
+      <p class="small-note text-ibm-slate">Every cash register calls accounting, inventory, AND forecasting directly. If forecasting is down, the register freezes waiting. Total chaos when you add more stores.</p>
+    </div>
+    <div class="pro-box p-4">
+      <p class="font-semibold text-ibm-ink mb-2">✅ With Kafka</p>
+      <p class="small-note text-ibm-slate">Registers just shout the sale into Kafka and move on. Accounting, inventory, and forecasting each listen at their own pace. Add 100 more stores — no problem.</p>
+    </div>
+  </div>
+
+  <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1.5 tag rounded-sm" data-modal="m-history">ⓘ MORE: Why was Kafka invented?</button>
+</section>
+
+<!-- ============ 2. CORE CONCEPTS ============ -->
+<section id="concepts" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 2</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">The 7 core concepts (with grocery jobs)</h2>
+  <p class="text-ibm-slate mb-6">Learn these seven words and you understand 90% of Kafka. Each one has a matching job in our store chain.</p>
+
+  <div class="space-y-5">
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">1. Event (or "Message" / "Record")</h4>
+      <p class="text-ibm-slate small-note mb-2">A single thing that happened, with a time stamp.</p>
+      <p class="grocery-box p-3 small-note">🛒 One receipt line: <span class="font-mono">{store:7, item:"milk", qty:2, price:6.98, time:15:42}</span></p>
+    </div>
+
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">2. Producer</h4>
+      <p class="text-ibm-slate small-note mb-2">A program that <em>creates and sends</em> events into Kafka.</p>
+      <p class="grocery-box p-3 small-note">🛒 The <strong>cash register</strong> — every scan produces a sale event. Also the receiving dock app that produces a "vendor delivery arrived" event.</p>
+    </div>
+
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">3. Consumer</h4>
+      <p class="text-ibm-slate small-note mb-2">A program that <em>reads and reacts to</em> events.</p>
+      <p class="grocery-box p-3 small-note">🛒 The <strong>inventory system</strong> consumes sale events to subtract from stock. The <strong>forecasting system</strong> consumes the same events to predict next week's milk order.</p>
+    </div>
+
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">4. Topic</h4>
+      <p class="text-ibm-slate small-note mb-2">A named category/folder where related events live. Producers write to a topic; consumers read from it.</p>
+      <p class="grocery-box p-3 small-note">🛒 Separate <strong>labeled bins</strong>: a <span class="font-mono">sales</span> topic, an <span class="font-mono">inventory</span> topic, a <span class="font-mono">vendor-deliveries</span> topic, a <span class="font-mono">staff-clock-in</span> topic.</p>
+    </div>
+
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">5. Partition</h4>
+      <p class="text-ibm-slate small-note mb-2">Each topic is split into pieces called partitions. This lets many computers and consumers work in parallel — the secret to Kafka's speed.</p>
+      <p class="grocery-box p-3 small-note">🛒 Instead of <strong>one</strong> checkout lane for the whole chain, you open <strong>many lanes</strong>. Often you split by store: Store 7's sales always go to the same lane so they stay in order.</p>
+      <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1 tag rounded-sm mt-3" data-modal="m-partition">ⓘ MORE: How to pick partition count</button>
+    </div>
+
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">6. Broker</h4>
+      <p class="text-ibm-slate small-note mb-2">A single Kafka server computer. Several brokers together form a cluster. Brokers store the partitions.</p>
+      <p class="grocery-box p-3 small-note">🛒 Each broker is a <strong>warehouse building</strong>. Your chain uses several warehouses so no single fire wipes out everything, and so they share the load.</p>
+    </div>
+
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">7. Consumer Group + Replication</h4>
+      <p class="text-ibm-slate small-note mb-2">A <strong>consumer group</strong> lets several copies of a consumer split the work. <strong>Replication</strong> means each partition is copied to other brokers as a backup.</p>
+      <p class="grocery-box p-3 small-note">🛒 Three accounting clerks (a group) divide the registers between them. And every ledger has a <strong>photocopy</strong> stored in another warehouse, so losing one warehouse loses no data.</p>
+    </div>
+  </div>
+
+  <div class="rec-box p-5 mt-6">
+    <p class="tag text-ibm-blue mb-1">✅ RECOMMENDATION</p>
+    <p class="text-ibm-ink">Always set <strong>replication factor = 3</strong> in production. That means 3 copies of every event across 3 brokers (warehouses). You can lose a whole broker and still lose zero data.</p>
+  </div>
+</section>
+
+<!-- ============ 3. STEP BY STEP SETUP ============ -->
+<section id="setup" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 3</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Step-by-step: your first store-chain pipeline</h2>
+  <p class="text-ibm-slate mb-6">Here is the whole journey, start to finish, in 7 plain steps. We'll wire up our grocery sales pipeline.</p>
+
+  <div class="space-y-4">
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">01</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">Decide your topics</h4>
+        <p class="text-ibm-slate small-note">Plan the "labeled bins" before writing code. For our chain: <span class="font-mono">sales</span>, <span class="font-mono">inventory-changes</span>, <span class="font-mono">vendor-orders</span>, <span class="font-mono">vendor-deliveries</span>, <span class="font-mono">staff-shifts</span>. One topic per kind of event.</p>
+      </div>
+    </div>
+
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">02</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">Choose a key for ordering</h4>
+        <p class="text-ibm-slate small-note">The <strong>key</strong> decides which partition (lane) an event goes to. Use <span class="font-mono">store_id</span> as the key for sales, so all of Store 7's events stay in order on one lane.</p>
+        <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1 tag rounded-sm mt-2" data-modal="m-key">ⓘ MORE: Why keys matter</button>
+      </div>
+    </div>
+
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">03</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">The register (Producer) sends a sale</h4>
+        <p class="text-ibm-slate small-note mb-2">When a cashier scans milk, the register app sends an event to the <span class="font-mono">sales</span> topic.</p>
+        <pre class="bg-ibm-ink text-white p-3 overflow-x-auto small-note font-mono">producer.send("sales", key="store-7",
+  value={item:"milk", qty:2, price:6.98})</pre>
+      </div>
+    </div>
+
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">04</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">Kafka stores it safely (3 copies)</h4>
+        <p class="text-ibm-slate small-note">The event lands on a partition and is copied to 3 brokers. The producer waits for confirmation (<span class="font-mono">acks=all</span>) so it knows the sale is truly saved before telling the cashier "done."</p>
+      </div>
+    </div>
+
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">05</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">Consumers react — each at its own pace</h4>
+        <p class="text-ibm-slate small-note">The <strong>inventory</strong> consumer subtracts 2 milks from Store 7's stock. The <strong>forecasting</strong> consumer adds it to a running total. The <strong>accounting</strong> consumer records $6.98 revenue. Same event, three readers, zero interference.</p>
+      </div>
+    </div>
+
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">06</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">Track the offset (bookmark)</h4>
+        <p class="text-ibm-slate small-note">Each consumer keeps a <strong>bookmark</strong> (called an <em>offset</em>) of the last event it read. If it crashes and restarts, it picks up right where it left off — no double-counting, no skipped sales.</p>
+        <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1 tag rounded-sm mt-2" data-modal="m-offset">ⓘ MORE: Offsets &amp; "exactly once"</button>
+      </div>
+    </div>
+
+    <div class="flex gap-4 border border-ibm-line p-5">
+      <div class="step-num text-ibm-blue font-bold text-2xl shrink-0">07</div>
+      <div>
+        <h4 class="font-semibold text-ibm-navy mb-1">Replay history for forecasting</h4>
+        <p class="text-ibm-slate small-note">Because Kafka keeps events (e.g., 7 days), the forecasting team can rewind and re-read last week's sales to retrain its "how much milk to order" model. Try doing THAT with a phone intercom!</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. BEST PRACTICES ============ -->
+<section id="best" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 4</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Performance &amp; reliability best practices</h2>
+  <p class="text-ibm-slate mb-6">These are the rules that keep a real production cluster fast, cheap, and safe. Each is a habit, not a one-time setting.</p>
+
+  <div class="space-y-4">
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">① Batch your sends</h4>
+      <p class="small-note text-ibm-slate">Set <span class="font-mono">linger.ms=10</span> and a <span class="font-mono">batch.size</span> of ~64KB so the producer groups many sales into one trip. 🛒 Like the delivery truck waiting to fill up before driving, instead of one box per trip.</p>
+    </div>
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">② Compress messages</h4>
+      <p class="small-note text-ibm-slate">Use <span class="font-mono">compression.type=lz4</span> (or zstd). Shrinks data 3–5×, cutting network and storage cost. 🛒 Flat-packing boxes so more fit per truck.</p>
+    </div>
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">③ Right-size partitions</h4>
+      <p class="small-note text-ibm-slate">More partitions = more parallel lanes, but too many slows the cluster. Start with partitions ≈ your peak consumer count. 🛒 Open enough checkout lanes for the rush, not 500 empty ones.</p>
+    </div>
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">④ Replication factor 3, min in-sync 2</h4>
+      <p class="small-note text-ibm-slate"><span class="font-mono">replication.factor=3</span>, <span class="font-mono">min.insync.replicas=2</span>, <span class="font-mono">acks=all</span>. Survives one broker dying with zero data loss. 🛒 Two clerks must both confirm the ledger before a sale counts.</p>
+    </div>
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">⑤ Set sensible retention</h4>
+      <p class="small-note text-ibm-slate">Keep <span class="font-mono">sales</span> 7–30 days, but maybe <span class="font-mono">staff-clock-in</span> only 2 days. Storage costs money. 🛒 Shred old receipts you no longer need; archive what auditors require.</p>
+    </div>
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">⑥ Spread brokers across Availability Zones</h4>
+      <p class="small-note text-ibm-slate">Put each broker in a different AWS AZ. 🛒 Don't build all your warehouses on the same street — one flood shouldn't close the chain.</p>
+    </div>
+    <div class="rec-box p-4">
+      <h4 class="font-semibold text-ibm-ink mb-1">⑦ Use consumer groups to scale</h4>
+      <p class="small-note text-ibm-slate">Add consumers to a group during peak hours to read faster, remove them at night. 🛒 Call in extra cashiers Saturday afternoon; send them home Tuesday morning.</p>
+    </div>
+  </div>
+
+  <div class="con-box p-5 mt-6">
+    <p class="tag text-ibm-ink mb-1">⚠️ COMMON MISTAKE</p>
+    <p class="text-ibm-ink small-note">Setting <span class="font-mono">acks=0</span> for "speed." This means the register doesn't wait for confirmation — a crash silently loses sales. <strong>Never trade data safety for tiny speed gains on money data.</strong></p>
+  </div>
+</section>
+
+<!-- ============ 5. EC2 CONFIG ============ -->
+<section id="ec2" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 5</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Running Kafka on AWS EC2</h2>
+  <p class="text-ibm-slate mb-4"><strong>EC2</strong> = renting plain virtual computers from Amazon and installing Kafka on them yourself. 🛒 Like <strong>leasing empty warehouse buildings</strong> and fitting out the shelving yourself. Maximum control, maximum responsibility.</p>
+
+  <h3 class="font-serif font-semibold text-ibm-navy mt-6 mb-3">Recommended starting configuration</h3>
+  <div class="overflow-x-auto border border-ibm-line">
+    <table class="w-full small-note">
+      <thead class="bg-ibm-navy text-white text-left">
+        <tr><th class="p-3">Setting</th><th class="p-3">Recommendation</th><th class="p-3">🛒 Why (store terms)</th></tr>
+      </thead>
+      <tbody class="divide-y divide-ibm-line">
+        <tr><td class="p-3 font-mono">Instance type</td><td class="p-3"><strong>r6g / r6i</strong> (memory-optimized, Graviton saves ~20%)</td><td class="p-3 text-ibm-slate">Warehouses with big loading docks &amp; lots of staging room.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-mono">Brokers</td><td class="p-3"><strong>3 minimum</strong>, one per AZ</td><td class="p-3 text-ibm-slate">Three warehouses on three different streets.</td></tr>
+        <tr><td class="p-3 font-mono">Storage</td><td class="p-3"><strong>EBS gp3</strong>, provisioned IOPS, ~1–2 TB/broker</td><td class="p-3 text-ibm-slate">Big, fast shelving you can expand without moving.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-mono">Network</td><td class="p-3">Enhanced networking, 10 Gbps+ instances</td><td class="p-3 text-ibm-slate">Wide warehouse doors so trucks load fast.</td></tr>
+        <tr><td class="p-3 font-mono">Heap (RAM)</td><td class="p-3"><strong>6 GB max</strong> JVM heap; leave rest for OS page cache</td><td class="p-3 text-ibm-slate">Keep the front counter small; let the back room hold stock.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-mono">Buy mode</td><td class="p-3">Reserved / Savings Plans for steady load</td><td class="p-3 text-ibm-slate">Sign a 1-year lease — far cheaper than nightly hotel rates.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4 mt-6">
+    <div class="pro-box p-4">
+      <p class="font-semibold text-ibm-ink mb-2">✅ Pros</p>
+      <ul class="small-note text-ibm-slate space-y-1 list-disc pl-4">
+        <li>Total control over tuning and versions</li>
+        <li>Cheapest raw compute price per hour</li>
+        <li>No Kubernetes learning curve</li>
+        <li>Easy to reason about — one server = one broker</li>
+      </ul>
+    </div>
+    <div class="con-box p-4">
+      <p class="font-semibold text-ibm-ink mb-2">❌ Cons</p>
+      <ul class="small-note text-ibm-slate space-y-1 list-disc pl-4">
+        <li>YOU patch, upgrade, and replace failed brokers</li>
+        <li>Scaling up is manual and slow</li>
+        <li>More on-call work for your team</li>
+        <li>Easy to misconfigure security &amp; backups</li>
+      </ul>
+    </div>
+  </div>
+  <div class="rec-box p-5 mt-4">
+    <p class="tag text-ibm-blue mb-1">✅ RECOMMENDATION</p>
+    <p class="text-ibm-ink small-note">Pick EC2 if you have a strong ops team, steady traffic, and want the lowest compute bill. Otherwise consider EKS or managed MSK (Section 7).</p>
+  </div>
+  <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1.5 tag rounded-sm mt-4" data-modal="m-ec2tips">ⓘ MORE: EC2 fine-tuning tips</button>
+</section>
+
+<!-- ============ 6. EKS CONFIG ============ -->
+<section id="eks" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 6</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Running Kafka on AWS EKS (Kubernetes)</h2>
+  <p class="text-ibm-slate mb-4"><strong>EKS</strong> = Amazon's managed <strong>Kubernetes</strong>, a system that automatically places, heals, and scales software "containers." You typically run Kafka on it using the <strong>Strimzi operator</strong>. 🛒 Like hiring a <strong>smart warehouse-management robot</strong> that automatically rebuilds a collapsed shelf, hires temp staff at rush hour, and rebalances stock between buildings.</p>
+
+  <h3 class="font-serif font-semibold text-ibm-navy mt-6 mb-3">Recommended starting configuration</h3>
+  <div class="overflow-x-auto border border-ibm-line">
+    <table class="w-full small-note">
+      <thead class="bg-ibm-navy text-white text-left">
+        <tr><th class="p-3">Setting</th><th class="p-3">Recommendation</th><th class="p-3">🛒 Why (store terms)</th></tr>
+      </thead>
+      <tbody class="divide-y divide-ibm-line">
+        <tr><td class="p-3 font-mono">Operator</td><td class="p-3"><strong>Strimzi</strong> to manage Kafka</td><td class="p-3 text-ibm-slate">The robot foreman that knows how warehouses work.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-mono">Node group</td><td class="p-3">Dedicated, labeled, memory-optimized nodes</td><td class="p-3 text-ibm-slate">Reserve specific buildings just for Kafka, not shared.</td></tr>
+        <tr><td class="p-3 font-mono">Storage</td><td class="p-3"><strong>EBS via PersistentVolumes</strong>, gp3</td><td class="p-3 text-ibm-slate">Shelving that stays even if the robot rebuilds the building.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-mono">Anti-affinity</td><td class="p-3">One broker per node, spread across AZs</td><td class="p-3 text-ibm-slate">Never stack two warehouses' stock in one room.</td></tr>
+        <tr><td class="p-3 font-mono">Pod Disruption Budget</td><td class="p-3">Allow only 1 broker down at a time</td><td class="p-3 text-ibm-slate">The robot can only close one warehouse for cleaning at once.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-mono">Resources</td><td class="p-3">Set CPU/RAM requests = limits</td><td class="p-3 text-ibm-slate">Guarantee each warehouse its own staff and floor space.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4 mt-6">
+    <div class="pro-box p-4">
+      <p class="font-semibold text-ibm-ink mb-2">✅ Pros</p>
+      <ul class="small-note text-ibm-slate space-y-1 list-disc pl-4">
+        <li>Self-healing — dead broker auto-replaced</li>
+        <li>Rolling upgrades with no downtime</li>
+        <li>Great if you already run other apps on EKS</li>
+        <li>Infrastructure-as-code &amp; repeatable</li>
+      </ul>
+    </div>
+    <div class="con-box p-4">
+      <p class="font-semibold text-ibm-ink mb-2">❌ Cons</p>
+      <ul class="small-note text-ibm-slate space-y-1 list-disc pl-4">
+        <li>Kubernetes is genuinely hard to learn</li>
+        <li>Storage + networking adds complexity</li>
+        <li>EKS control plane &amp; data transfer add cost</li>
+        <li>Harder to debug when things go wrong</li>
+      </ul>
+    </div>
+  </div>
+  <div class="rec-box p-5 mt-4">
+    <p class="tag text-ibm-blue mb-1">✅ RECOMMENDATION</p>
+    <p class="text-ibm-ink small-note">Pick EKS if your company already lives in Kubernetes and wants automation. Use the Strimzi operator — do not hand-roll your own Kafka YAML. Always use stable EBS storage, never the node's local disk.</p>
+  </div>
+  <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1.5 tag rounded-sm mt-4" data-modal="m-strimzi">ⓘ MORE: What is the Strimzi operator?</button>
+</section>
+
+<!-- ============ 7. COMPARE ============ -->
+<section id="compare" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 7</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">EC2 vs EKS vs MSK — which should you choose?</h2>
+  <p class="text-ibm-slate mb-4">There's a third option you should always weigh: <strong>Amazon MSK</strong> (Managed Streaming for Kafka), where AWS runs Kafka FOR you. 🛒 That's like <strong>paying a third-party logistics company to run all your warehouses</strong> — you just send and receive goods.</p>
+
+  <div class="overflow-x-auto border border-ibm-line">
+    <table class="w-full small-note">
+      <thead class="bg-ibm-navy text-white text-left">
+        <tr><th class="p-3">&nbsp;</th><th class="p-3">EC2 (DIY)</th><th class="p-3">EKS (Strimzi)</th><th class="p-3">MSK (Managed)</th></tr>
+      </thead>
+      <tbody class="divide-y divide-ibm-line">
+        <tr><td class="p-3 font-semibold">🛒 Analogy</td><td class="p-3">Lease empty warehouses</td><td class="p-3">Robot warehouse foreman</td><td class="p-3">Hire a 3PL company</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-semibold">Effort to run</td><td class="p-3 text-red-700">High</td><td class="p-3 text-orange-700">Medium-High</td><td class="p-3 text-green-700">Low</td></tr>
+        <tr><td class="p-3 font-semibold">Control</td><td class="p-3 text-green-700">Total</td><td class="p-3 text-green-700">High</td><td class="p-3 text-orange-700">Limited</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-semibold">Raw price</td><td class="p-3 text-green-700">Lowest</td><td class="p-3 text-orange-700">Medium</td><td class="p-3 text-orange-700">Highest /hr</td></tr>
+        <tr><td class="p-3 font-semibold">Auto-healing</td><td class="p-3 text-red-700">Manual</td><td class="p-3 text-green-700">Yes</td><td class="p-3 text-green-700">Yes</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-semibold">Best for</td><td class="p-3">Strong ops team, steady load</td><td class="p-3">K8s-native shops</td><td class="p-3">Small teams, fast start</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="rec-box p-5 mt-6">
+    <p class="tag text-ibm-blue mb-1">✅ OUR OVERALL RECOMMENDATION</p>
+    <p class="text-ibm-ink small-note mb-2"><strong>Start with MSK</strong> if you're new — let AWS handle the hard parts while you learn. <strong>Move to EKS</strong> when you're Kubernetes-fluent and want automation + portability. <strong>Choose EC2</strong> only when you have a seasoned ops team and need the absolute lowest compute cost or special tuning.</p>
+    <p class="text-ibm-ink small-note">🛒 New chain owner? Hire the logistics company first. Once you understand the business, bring it in-house to save money.</p>
+  </div>
+</section>
+
+<!-- ============ 8. COST ============ -->
+<section id="cost" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 8</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Cost-saving playbook</h2>
+  <p class="text-ibm-slate mb-6">A grocery chain lives and dies on margins. Same with cloud bills. Here's where the money leaks and how to plug it.</p>
+
+  <div class="space-y-4">
+    <div class="grocery-box p-4">
+      <h4 class="font-semibold text-ibm-navy mb-1">💰 1. Buy in advance for steady load</h4>
+      <p class="small-note text-ibm-slate">Reserved Instances / Savings Plans cut compute 40–60% vs on-demand. 🛒 Lock in a yearly produce contract instead of buying at daily spot prices.</p>
+    </div>
+    <div class="grocery-box p-4">
+      <h4 class="font-semibold text-ibm-navy mb-1">💰 2. Compress + tier retention</h4>
+      <p class="small-note text-ibm-slate">lz4/zstd compression + shorter retention on low-value topics shrinks storage dramatically. Use <strong>tiered storage</strong> to push old data to cheap S3. 🛒 Keep this week's receipts handy; box last year's in the cheap off-site unit.</p>
+    </div>
+    <div class="grocery-box p-4">
+      <h4 class="font-semibold text-ibm-navy mb-1">💰 3. Kill cross-AZ chatter</h4>
+      <p class="small-note text-ibm-slate">AWS charges for data crossing zones. Use <strong>rack awareness / follower fetching</strong> so consumers read from the nearest broker. 🛒 Don't truck milk across town when the nearby warehouse has it.</p>
+    </div>
+    <div class="grocery-box p-4">
+      <h4 class="font-semibold text-ibm-navy mb-1">💰 4. Right-size, don't over-provision</h4>
+      <p class="small-note text-ibm-slate">Watch real usage and shrink oversized brokers. 🛒 Don't run a 50,000 sq ft warehouse for a corner-store volume.</p>
+    </div>
+    <div class="grocery-box p-4">
+      <h4 class="font-semibold text-ibm-navy mb-1">💰 5. Use Graviton (ARM) instances</h4>
+      <p class="small-note text-ibm-slate">r6g/r7g chips give ~20% better price-performance for Kafka. 🛒 A more fuel-efficient delivery fleet for the same routes.</p>
+    </div>
+  </div>
+  <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1.5 tag rounded-sm mt-5" data-modal="m-tiered">ⓘ MORE: Tiered storage explained</button>
+</section>
+
+<!-- ============ 9. METRICS ============ -->
+<section id="metrics" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 9</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Tracking the metrics that matter</h2>
+  <p class="text-ibm-slate mb-4">A store manager watches a dashboard: sales today, low-stock alerts, lines getting long. Your Kafka cluster needs the same dashboard. The standard tools are <strong>Prometheus</strong> (collects numbers) + <strong>Grafana</strong> (draws charts), fed by the <strong>JMX metrics</strong> Kafka exposes.</p>
+
+  <h3 class="font-serif font-semibold text-ibm-navy mt-6 mb-3">The vital signs to watch</h3>
+  <div class="overflow-x-auto border border-ibm-line">
+    <table class="w-full small-note">
+      <thead class="bg-ibm-navy text-white text-left">
+        <tr><th class="p-3">Metric</th><th class="p-3">What it tells you</th><th class="p-3">🛒 Store version</th></tr>
+      </thead>
+      <tbody class="divide-y divide-ibm-line">
+        <tr><td class="p-3 font-semibold">Consumer Lag</td><td class="p-3">How far behind a reader is. The #1 metric.</td><td class="p-3 text-ibm-slate">How many unscanned items are piling up at the register.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-semibold">Under-Replicated Partitions</td><td class="p-3">Backup copies missing — data at risk.</td><td class="p-3 text-ibm-slate">Ledgers without their photocopy. Fix NOW.</td></tr>
+        <tr><td class="p-3 font-semibold">Broker CPU / Disk</td><td class="p-3">Is a warehouse running hot or full?</td><td class="p-3 text-ibm-slate">Staff exhausted; shelves overflowing.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-semibold">Request latency</td><td class="p-3">How long sends/reads take.</td><td class="p-3 text-ibm-slate">How long customers wait in line.</td></tr>
+        <tr><td class="p-3 font-semibold">Throughput (msgs/sec)</td><td class="p-3">Volume flowing through.</td><td class="p-3 text-ibm-slate">Total items sold per minute, chain-wide.</td></tr>
+        <tr class="bg-ibm-bg"><td class="p-3 font-semibold">Active Controllers</td><td class="p-3">Should always be exactly 1.</td><td class="p-3 text-ibm-slate">Exactly one regional manager in charge — not zero, not two.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="text-ibm-slate mt-6 mb-3">Below is a tiny live mock of a "store-chain Kafka dashboard." Tap a card for the detail popup.</p>
+
+  <!-- mini dashboard -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="dash"></div>
+
+  <button class="info-btn border border-ibm-blue text-ibm-blue px-3 py-1.5 tag rounded-sm mt-5" data-modal="m-tools">ⓘ MORE: Recommended monitoring stack</button>
+</section>
+
+<!-- ============ 10. PROACTIVE ============ -->
+<section id="proactive" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 10</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Being proactive: catch problems before customers do</h2>
+  <p class="text-ibm-slate mb-6">A great manager fixes the leaking freezer <em>before</em> the ice cream melts. Here's how to be proactive, not reactive, with Kafka.</p>
+
+  <div class="space-y-4">
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">① Set alerts on leading indicators</h4>
+      <p class="small-note text-ibm-slate">Page the team when <strong>consumer lag climbs steadily</strong> or <strong>under-replicated partitions &gt; 0</strong> — long before things crash. 🛒 Alert when the checkout line passes 5 people, not when customers walk out angry.</p>
+    </div>
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">② Use a Dead Letter Queue (DLQ)</h4>
+      <p class="small-note text-ibm-slate">When a message can't be processed (bad data), route it to a special <span class="font-mono">dlq</span> topic instead of crashing or losing it. 🛒 A "damaged goods" bin — set aside the dented can, keep the line moving, inspect it later.</p>
+    </div>
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">③ Enforce a Schema Registry</h4>
+      <p class="small-note text-ibm-slate">Define the exact shape of each event; reject malformed ones at the door. 🛒 Every vendor must use your standard order form — no scribbles on napkins.</p>
+    </div>
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">④ Test failure on purpose (game days)</h4>
+      <p class="small-note text-ibm-slate">Deliberately kill a broker in staging and confirm auto-recovery. 🛒 Run a surprise fire drill so staff know the exits before a real fire.</p>
+    </div>
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">⑤ Capacity-plan with forecasts</h4>
+      <p class="small-note text-ibm-slate">Trend your throughput; add brokers before the holiday spike. 🛒 Order extra turkeys and hire seasonal cashiers <em>before</em> Thanksgiving, not during.</p>
+    </div>
+    <div class="border border-ibm-line p-5">
+      <h4 class="font-semibold text-ibm-navy mb-1">⑥ Write runbooks</h4>
+      <p class="small-note text-ibm-slate">A simple "if X alert fires, do Y" document so anyone can respond at 3am. 🛒 The taped-to-the-wall checklist for "what to do if the power goes out."</p>
+    </div>
+  </div>
+
+  <div class="rec-box p-5 mt-6">
+    <p class="tag text-ibm-blue mb-1">✅ RECOMMENDATION</p>
+    <p class="text-ibm-ink small-note">Combine all six: alerts catch it, DLQ contains bad data, schema registry prevents it, game days prove recovery, forecasts prevent overload, runbooks make response fast. This is the difference between a calm ops team and a constant fire drill.</p>
+  </div>
+</section>
+
+<!-- ============ 11. CHECKLIST ============ -->
+<section id="checklist" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 11</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Final production checklist</h2>
+  <p class="text-ibm-slate mb-5">Tap each item to check it off. Your progress is shown below.</p>
+  <div id="checklist-box" class="space-y-2"></div>
+  <div class="mt-5 bg-ibm-bg h-3 w-full overflow-hidden">
+    <div id="check-bar" class="h-3 bg-ibm-blue" style="width:0%"></div>
+  </div>
+  <p id="check-label" class="tag text-ibm-gray mt-2">0 of 0 complete</p>
+</section>
+
+<!-- ============ 12. REFS ============ -->
+<section id="refs" class="mb-14 scroll-mt-24">
+  <p class="tag text-ibm-blue mb-2">SECTION 12</p>
+  <h2 class="font-serif font-bold text-ibm-navy mb-4">Official documentation &amp; references</h2>
+  <p class="text-ibm-slate mb-5">Always confirm details against the official source — versions change. These are the authoritative links.</p>
+  <div class="grid sm:grid-cols-2 gap-3">
+    <a href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener" class="block border border-ibm-line p-4 hover:border-ibm-blue group">
+      <p class="font-semibold text-ibm-navy group-hover:text-ibm-blue">Apache Kafka Docs ↗</p>
+      <p class="small-note text-ibm-gray">The official Kafka manual &amp; configs.</p>
+    </a>
+    <a href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank" rel="noopener" class="block border border-ibm-line p-4 hover:border-ibm-blue group">
+      <p class="font-semibold text-ibm-navy group-hover:text-ibm-blue">Amazon MSK Guide ↗</p>
+      <p class="small-note text-ibm-gray">AWS managed Kafka documentation.</p>
+    </a>
+    <a href="https://strimzi.io/docs/operators/latest/overview" target="_blank" rel="noopener" class="block border border-ibm-line p-4 hover:border-ibm-blue group">
+      <p class="font-semibold text-ibm-navy group-hover:text-ibm-blue">Strimzi (Kafka on K8s) ↗</p>
+      <p class="small-note text-ibm-gray">Running Kafka on EKS / Kubernetes.</p>
+    </a>
+    <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html" target="_blank" rel="noopener" class="block border border-ibm-line p-4 hover:border-ibm-blue group">
+      <p class="font-semibold text-ibm-navy group-hover:text-ibm-blue">AWS EC2 Instance Types ↗</p>
+      <p class="small-note text-ibm-gray">Pick the right server family.</p>
+    </a>
+    <a href="https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html" target="_blank" rel="noopener" class="block border border-ibm-line p-4 hover:border-ibm-blue group">
+      <p class="font-semibold text-ibm-navy group-hover:text-ibm-blue">Amazon EKS Guide ↗</p>
+      <p class="small-note text-ibm-gray">Managed Kubernetes on AWS.</p>
+    </a>
+    <a href="https://prometheus.io/docs/introduction/overview/" target="_blank" rel="noopener" class="block border border-ibm-line p-4 hover:border-ibm-blue group">
+      <p class="font-semibold text-ibm-navy group-hover:text-ibm-blue">Prometheus + Grafana ↗</p>
+      <p class="small-note text-ibm-gray">Metrics collection &amp; dashboards.</p>
+    </a>
+  </div>
+  <p class="small-note text-ibm-gray mt-6 border-t border-ibm-line pt-4">This guide is an educational overview using simplified grocery-store analogies. Configuration values are sensible starting points — always validate against your real workload and the official docs above before production use.</p>
+</section>
+
+</main>
+</div>
+
+<!-- ============ MODAL ROOT ============ -->
+<div id="modal-root" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div id="modal-backdrop" class="modal-backdrop absolute inset-0"></div>
+  <div class="relative bg-white max-w-lg w-full border-t-4 border-ibm-blue shadow-2xl max-h-[85vh] overflow-y-auto">
+    <div class="flex justify-between items-start p-5 border-b border-ibm-line sticky top-0 bg-white">
+      <h3 id="modal-title" class="font-serif font-bold text-ibm-navy pr-4"></h3>
+      <button id="modal-close" class="text-ibm-gray hover:text-ibm-ink text-2xl leading-none shrink-0">×</button>
+    </div>
+    <div id="modal-body" class="p-5 text-ibm-slate space-y-3"></div>
+  </div>
+</div>
+
+<footer class="border-t border-ibm-line py-6 text-center">
+  <p class="tag text-ibm-gray">KAFKA BEST PRACTICES GUIDE · THE GROCERY STORE WAY · IBM-STYLE</p>
+</footer>
+
+<script>
+/* ---------- FONT SIZE 14–36 ---------- */
+const root = document.documentElement;
+const readout = document.getElementById('font-readout');
+let fontSize = 16;
+function applyFont(){
+  root.style.setProperty('--base-font', fontSize + 'px');
+  readout.textContent = fontSize + 'px';
+}
+document.getElementById('font-inc').onclick = () => { fontSize = Math.min(36, fontSize + 2); applyFont(); };
+document.getElementById('font-dec').onclick = () => { fontSize = Math.max(14, fontSize - 2); applyFont(); };
+applyFont();
+
+/* ---------- MOBILE NAV ---------- */
+const navToggle = document.getElementById('nav-toggle');
+const navMenu = document.getElementById('nav-menu');
+const caret = document.getElementById('nav-caret');
+navToggle.onclick = () => {
+  navMenu.classList.toggle('hidden');
+  caret.textContent = navMenu.classList.contains('hidden') ? '▾' : '▴';
+};
+document.querySelectorAll('#nav-menu a').forEach(a => a.addEventListener('click', () => {
+  if(window.innerWidth < 1024){ navMenu.classList.add('hidden'); caret.textContent='▾'; }
+}));
+
+/* ---------- SCROLLSPY ---------- */
+const sections = document.querySelectorAll('main section[id]');
+const navLinks = document.querySelectorAll('#nav-menu a');
+const spy = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if(e.isIntersecting){
+      navLinks.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => spy.observe(s));
+
+/* ---------- MODALS ---------- */
+const modalData = {
+  'm-history': { t:'Why was Kafka invented?', b:[
+    'Kafka was created at LinkedIn around 2011 and later donated to the Apache Software Foundation. They were drowning in connections between systems — every new feature meant new wiring between databases, search, and analytics.',
+    'They needed one central "log" that could absorb a firehose of events and let many teams read it independently and at their own speed. That central log idea is what Kafka still is today.',
+    '🛒 Imagine your chain grew from 1 store to 50. Wiring every register directly to every back-office system became impossible. A central announcement-and-record system solved it.'
+  ]},
+  'm-partition': { t:'How to pick partition count', b:[
+    'Partitions are the unit of parallelism. The max number of useful consumers in a group equals the number of partitions. More partitions = more parallel readers.',
+    'But too many partitions increases memory use, leader-election time, and failover time. A common starting rule: target throughput ÷ per-partition throughput, then round up with a little headroom.',
+    'Practical tip: it is easy to ADD partitions later but you cannot reduce them, and adding them changes key-to-partition mapping. Start modest (e.g. 6–12) and grow deliberately.',
+    '🛒 Open enough checkout lanes for your busiest hour plus a little buffer — but a lane for every single customer would just waste staff.'
+  ]},
+  'm-key': { t:'Why message keys matter', b:[
+    'The key decides the partition. All messages with the same key land on the same partition, and Kafka guarantees order WITHIN a partition.',
+    'So if you key sales by store_id, every event from Store 7 is processed in the exact order it happened. Without a key, events scatter randomly across partitions and order is not guaranteed across them.',
+    'Choose a key with good spread (many distinct values) so load balances evenly. A bad key (e.g. everything keyed "USA") creates a hot partition.',
+    '🛒 Keep each store\'s receipts in one ordered stack, but spread the 50 stacks across many clerks so no clerk is overwhelmed.'
+  ]},
+  'm-offset': { t:'Offsets & "exactly once"', b:[
+    'An offset is just a number — the position of a message in a partition, like a page bookmark. Each consumer group tracks its own offset per partition.',
+    'When a consumer commits its offset, it is saying "I have safely handled everything up to here." On restart it resumes from the last committed offset.',
+    'Commit AFTER you finish processing (not before) to avoid losing messages. For money-critical flows, Kafka offers "exactly once" semantics using transactions so each event is processed once and only once.',
+    '🛒 The bookmark in the ledger. If a clerk faints, the replacement opens to the exact bookmarked line — no sales skipped or double-counted.'
+  ]},
+  'm-ec2tips': { t:'EC2 fine-tuning tips', b:[
+    'OS tuning: raise file-descriptor limits (Kafka opens many files), tune vm.swappiness to ~1, and ensure the OS page cache has plenty of free RAM — Kafka relies on it heavily for read speed.',
+    'Keep the JVM heap small (≈6 GB). A bigger heap does NOT help Kafka and causes long garbage-collection pauses. Let the OS cache use the rest of memory.',
+    'Use separate EBS volumes for Kafka data, and prefer gp3 with provisioned IOPS for predictable performance. Avoid burst-only volumes for busy brokers.',
+    'Automate broker replacement with an Auto Scaling Group + scripts so a dead instance is rebuilt with the same broker ID and storage.'
+  ]},
+  'm-strimzi': { t:'What is the Strimzi operator?', b:[
+    'Strimzi is an open-source "Kubernetes operator" — software that teaches Kubernetes how to run Kafka properly. You describe the cluster you want in a simple YAML file and Strimzi builds and maintains it.',
+    'It handles broker creation, rolling upgrades, certificate/TLS management, scaling, and recovery automatically. This avoids hand-writing fragile Kubernetes manifests.',
+    'It is the de-facto standard for Kafka on Kubernetes/EKS and is well documented.',
+    '🛒 The robot foreman you simply hand a one-page instruction sheet to — and it runs all the warehouses to spec, repairing them as needed.'
+  ]},
+  'm-tiered': { t:'Tiered storage explained', b:[
+    'Normally Kafka keeps all data on the brokers\' fast (expensive) disks. Tiered storage lets older, "cold" data automatically move to cheap object storage like Amazon S3, while recent "hot" data stays on fast local disk.',
+    'This slashes storage cost and lets you keep history far longer (great for forecasting/audits) without paying premium-disk prices for old data.',
+    'Available in modern Kafka and in managed offerings. Consumers can still read the old data transparently — it just loads from S3.',
+    '🛒 This week\'s receipts stay at the front desk; last year\'s go to the cheap off-site storage unit, still retrievable when the auditor asks.'
+  ]},
+  'm-tools': { t:'Recommended monitoring stack', b:[
+    'Core stack: Kafka exposes JMX metrics → a JMX exporter publishes them → Prometheus scrapes & stores them → Grafana draws dashboards → Alertmanager pages you.',
+    'For consumer lag specifically, tools like Burrow or Kafka\'s built-in lag metrics are invaluable — lag is your earliest warning sign.',
+    'On AWS, CloudWatch can also collect MSK metrics out of the box. Managed Grafana (AMG) and managed Prometheus (AMP) reduce your ops load.',
+    '🛒 The wall of screens in the manager\'s office showing every store\'s live sales, line lengths, and low-stock alarms.'
+  ]}
+};
+const modalRoot = document.getElementById('modal-root');
+const modalTitle = document.getElementById('modal-title');
+const modalBody = document.getElementById('modal-body');
+function openModal(id){
+  const d = modalData[id]; if(!d) return;
+  modalTitle.textContent = d.t;
+  modalBody.innerHTML = d.b.map(p => `<p class="small-note">${p}</p>`).join('');
+  modalRoot.classList.remove('hidden'); modalRoot.classList.add('flex');
+  document.body.style.overflow='hidden';
+}
+function closeModal(){ modalRoot.classList.add('hidden'); modalRoot.classList.remove('flex'); document.body.style.overflow=''; }
+document.querySelectorAll('[data-modal]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.modal)));
+document.getElementById('modal-close').onclick = closeModal;
+document.getElementById('modal-backdrop').onclick = closeModal;
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+/* ---------- MINI DASHBOARD ---------- */
+const dashCards = [
+  { label:'Sales / sec', val:'1,284', sub:'chain-wide', color:'text-ibm-blue', m:'m-tools' },
+  { label:'Consumer Lag', val:'312', sub:'msgs behind', color:'text-green-700', m:'m-tools' },
+  { label:'Under-Replicated', val:'0', sub:'partitions', color:'text-green-700', m:'m-tools' },
+  { label:'Broker CPU', val:'47%', sub:'avg of 3', color:'text-ibm-blue', m:'m-tools' },
+  { label:'Latency p99', val:'18ms', sub:'send time', color:'text-ibm-blue', m:'m-tools' },
+  { label:'Controllers', val:'1', sub:'healthy', color:'text-green-700', m:'m-tools' },
+];
+document.getElementById('dash').innerHTML = dashCards.map(c => `
+  <button data-modal="${c.m}" class="text-left border border-ibm-line p-3 hover:border-ibm-blue bg-white">
+    <p class="tag text-ibm-gray">${c.label}</p>
+    <p class="font-mono font-bold ${c.color}" style="font-size:1.6em">${c.val}</p>
+    <p class="tag text-ibm-gray">${c.sub}</p>
+  </button>`).join('');
+document.querySelectorAll('#dash [data-modal]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.modal)));
+
+/* animate sales number a little for life */
+setInterval(() => {
+  const el = document.querySelector('#dash button:first-child p:nth-child(2)');
+  if(el){ el.textContent = (1200 + Math.floor(Math.random()*180)).toLocaleString(); }
+}, 2000);
+
+/* ---------- CHECKLIST ---------- */
+const checks = [
+  'Replication factor = 3, min.insync.replicas = 2',
+  'Brokers spread across 3 Availability Zones',
+  'Producers use acks=all + compression (lz4/zstd)',
+  'Sensible per-topic retention configured',
+  'Prometheus + Grafana dashboards live',
+  'Alerts on consumer lag & under-replicated partitions',
+  'Dead Letter Queue topic for bad messages',
+  'Schema registry enforced on key topics',
+  'Reserved/Savings Plans for steady compute',
+  'Runbooks written & a game-day rehearsed',
+];
+const cbox = document.getElementById('checklist-box');
+const bar = document.getElementById('check-bar');
+const clabel = document.getElementById('check-label');
+let done = new Set();
+function renderChecks(){
+  cbox.innerHTML = checks.map((c,i) => `
+    <button data-i="${i}" class="w-full text-left flex items-center gap-3 border border-ibm-line p-3 hover:bg-ibm-bg ${done.has(i)?'bg-ibm-bg':''}">
+      <span class="w-5 h-5 border-2 ${done.has(i)?'bg-ibm-blue border-ibm-blue text-white':'border-ibm-gray text-transparent'} flex items-center justify-center text-xs shrink-0">✓</span>
+      <span class="small-note ${done.has(i)?'line-through text-ibm-gray':'text-ibm-slate'}">${c}</span>
+    </button>`).join('');
+  cbox.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.i;
+    done.has(i) ? done.delete(i) : done.add(i);
+    renderChecks();
+  }));
+  const pct = Math.round(done.size / checks.length * 100);
+  bar.style.width = pct + '%';
+  clabel.textContent = `${done.size} of ${checks.length} complete`;
+}
+renderChecks();
+</script>
+</body>
+</html>
