@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka on AWS with Terraform — GitOps Guide</title>
+<style>
+/* ============ IBM-style design system ============ */
+:root {
+  --ibm-blue: #0f62fe;
+  --ibm-blue-dark: #0043ce;
+  --ibm-blue-light: #d0e2ff;
+  --white: #ffffff;
+  --black: #161616;
+  --gray-10: #f4f4f4;
+  --gray-20: #e0e0e0;
+  --gray-50: #8d8d8d;
+  --gray-70: #525252;
+  --gray-90: #262626;
+
+  --bg: var(--white);
+  --bg-alt: var(--gray-10);
+  --surface: var(--white);
+  --text: var(--black);
+  --text-soft: var(--gray-70);
+  --border: var(--gray-20);
+  --accent: var(--ibm-blue);
+  --accent-dark: var(--ibm-blue-dark);
+  --code-bg: #f4f4f4;
+  --code-text: #161616;
+  --shadow: 0 2px 6px rgba(0,0,0,.12);
+  --fs: 16px;
+}
+[data-theme="dark"] {
+  --bg: #161616;
+  --bg-alt: #262626;
+  --surface: #262626;
+  --text: #f4f4f4;
+  --text-soft: #c6c6c6;
+  --border: #393939;
+  --accent: #4589ff;
+  --accent-dark: #78a9ff;
+  --code-bg: #000000;
+  --code-text: #f4f4f4;
+  --shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs);
+  line-height: 1.6;
+  transition: background .25s, color .25s;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace; }
+
+/* ============ Top bar ============ */
+header.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--accent);
+  color: #fff;
+  border-bottom: 1px solid var(--accent-dark);
+}
+.topbar-inner {
+  max-width: 1100px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .65rem 1rem; gap: .5rem; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: .55rem; font-weight: 600; letter-spacing: .01em; }
+.brand .mark {
+  width: 26px; height: 26px; border-radius: 3px; background: #fff;
+  display: grid; place-items: center; color: var(--accent); font-weight: 700; font-size: .85rem;
+}
+.brand small { display:block; font-weight:400; opacity:.85; font-size:.7rem; letter-spacing:.04em; text-transform:uppercase;}
+.controls { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.ctrl-btn {
+  background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.35);
+  padding: .35rem .6rem; cursor: pointer; font-size: .8rem; border-radius: 2px;
+  display: inline-flex; align-items: center; gap: .3rem; transition: background .15s;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,.28); }
+.fs-display { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; font-size: .8rem; }
+
+/* ============ Layout ============ */
+.wrap { max-width: 1100px; margin: 0 auto; display: flex; gap: 2rem; padding: 1.5rem 1rem 4rem; }
+nav.toc {
+  flex: 0 0 250px; position: sticky; top: 70px; align-self: flex-start;
+  max-height: calc(100vh - 90px); overflow-y: auto;
+  border-left: 3px solid var(--accent); padding-left: 1rem;
+}
+nav.toc h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-soft); margin-bottom: .6rem; }
+nav.toc a {
+  display: block; color: var(--text-soft); text-decoration: none; padding: .25rem 0;
+  font-size: .9rem; border-left: 2px solid transparent; padding-left: .5rem; margin-left: -.5rem;
+  transition: color .15s, border-color .15s;
+}
+nav.toc a:hover, nav.toc a.active { color: var(--accent); border-left-color: var(--accent); }
+nav.toc a.sub { padding-left: 1.4rem; font-size: .82rem; }
+main { flex: 1 1 auto; min-width: 0; }
+
+/* ============ Hero ============ */
+.hero { border-left: 4px solid var(--accent); padding: .25rem 0 1.5rem 1.25rem; margin-bottom: 2rem; }
+.hero h1 { font-size: 2rem; line-height: 1.15; font-weight: 600; margin-bottom: .6rem; }
+.hero p { color: var(--text-soft); max-width: 60ch; }
+.tags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1rem; }
+.tag { font-size: .72rem; background: var(--bg-alt); border: 1px solid var(--border); padding: .25rem .55rem; border-radius: 2px; color: var(--text-soft); font-family: 'IBM Plex Mono', monospace; }
+
+/* ============ Sections / collapsibles ============ */
+section.block { margin-bottom: 1rem; border: 1px solid var(--border); background: var(--surface); border-radius: 3px; overflow: hidden; }
+.block-head {
+  display: flex; align-items: center; gap: .75rem; cursor: pointer; user-select: none;
+  padding: 1rem 1.1rem; background: var(--surface); transition: background .15s;
+}
+.block-head:hover { background: var(--bg-alt); }
+.block-head .num {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 2px; background: var(--accent); color: #fff;
+  display: grid; place-items: center; font-size: .82rem; font-weight: 600; font-family: 'IBM Plex Mono', monospace;
+}
+.block-head h2 { font-size: 1.12rem; font-weight: 600; flex: 1 1 auto; }
+.chev { transition: transform .2s; color: var(--text-soft); flex: 0 0 auto; }
+section.block.open .chev { transform: rotate(90deg); }
+.block-body {
+  display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease;
+}
+section.block.open .block-body { grid-template-rows: 1fr; }
+.block-body-inner { overflow: hidden; }
+.block-pad { padding: 0 1.1rem 1.3rem; border-top: 1px solid var(--border); }
+.block-pad > *:first-child { margin-top: 1rem; }
+
+h3 { font-size: 1rem; font-weight: 600; margin: 1.4rem 0 .5rem; color: var(--text); }
+h3:first-child { margin-top: 0; }
+p { margin: .6rem 0; }
+ul, ol { margin: .6rem 0 .6rem 1.3rem; }
+li { margin: .3rem 0; }
+a.link { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+a.link:hover { border-bottom-color: var(--accent); }
+
+/* ============ Code blocks ============ */
+.codewrap { position: relative; margin: 1rem 0; }
+.codewrap .lbl {
+  display: inline-block; font-size: .7rem; font-family: 'IBM Plex Mono', monospace;
+  background: var(--accent); color: #fff; padding: .15rem .5rem; border-radius: 2px 2px 0 0;
+}
+pre {
+  background: var(--code-bg); color: var(--code-text); padding: 1rem; overflow-x: auto;
+  border: 1px solid var(--border); border-radius: 0 2px 2px 2px; font-size: .82em; line-height: 1.5;
+}
+pre code { background: none; padding: 0; }
+code { background: var(--code-bg); color: var(--code-text); padding: .1em .35em; border-radius: 2px; font-size: .88em; }
+.copy-btn {
+  position: absolute; top: 0; right: 0; background: var(--gray-70); color: #fff; border: none;
+  font-size: .68rem; padding: .25rem .55rem; cursor: pointer; border-radius: 0 2px 0 2px; opacity: .85;
+}
+.copy-btn:hover { opacity: 1; }
+
+/* ============ Callouts ============ */
+.note { border-left: 4px solid var(--accent); background: var(--bg-alt); padding: .8rem 1rem; margin: 1rem 0; border-radius: 0 3px 3px 0; font-size: .92em; }
+.note.warn { border-left-color: #da1e28; }
+.note strong { color: var(--accent); }
+.note.warn strong { color: #da1e28; }
+
+/* ============ More-details buttons & modal ============ */
+.more-btn {
+  background: none; border: 1px solid var(--accent); color: var(--accent); cursor: pointer;
+  font-size: .78rem; padding: .3rem .7rem; border-radius: 2px; margin: .3rem 0; font-weight: 500;
+  display: inline-flex; align-items: center; gap: .35rem; transition: background .15s, color .15s;
+}
+.more-btn:hover { background: var(--accent); color: #fff; }
+.btn-row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0 .2rem; }
+.more-btn.ref-btn { border-color: var(--gray-50); color: var(--text-soft); }
+.more-btn.ref-btn:hover { background: var(--gray-70); border-color: var(--gray-70); color: #fff; }
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 200;
+  align-items: center; justify-content: center; padding: 1rem;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--surface); color: var(--text); max-width: 600px; width: 100%; max-height: 85vh; overflow-y: auto;
+  border-radius: 4px; border-top: 5px solid var(--accent); box-shadow: 0 10px 40px rgba(0,0,0,.4);
+}
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 1.2rem 1.3rem .5rem; gap: 1rem; }
+.modal-head h3 { margin: 0; font-size: 1.15rem; }
+.modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-soft); line-height: 1; }
+.modal-close:hover { color: var(--accent); }
+.modal-body { padding: 0 1.3rem 1.4rem; }
+.modal-links { margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--border); }
+.modal-links .ml-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-soft); margin-bottom: .45rem; }
+.modal-links a { display: block; color: var(--accent); text-decoration: none; font-size: .85rem; padding: .2rem 0 .2rem 1rem; position: relative; }
+.modal-links a::before { content: "↗"; position: absolute; left: 0; opacity: .7; }
+.modal-links a:hover { text-decoration: underline; }
+
+/* ============ Diagram ============ */
+.diagram-box { border: 1px solid var(--border); border-radius: 3px; padding: 1rem; background: var(--surface); overflow-x: auto; margin: 1rem 0; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.diagram-box:hover, .diagram-box:focus { border-color: var(--accent); box-shadow: var(--shadow); outline: none; }
+.diagram-hint { font-size: .75rem; color: var(--text-soft); text-align: center; margin: -.4rem 0 .6rem; }
+.diagram-box svg { display: block; min-width: 640px; margin: 0 auto; width: 100%; height: auto; }
+
+/* ============ Pipeline stages strip ============ */
+.stages { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+.stage {
+  flex: 1 1 120px; border: 1px solid var(--border); border-top: 3px solid var(--accent);
+  padding: .7rem .8rem; border-radius: 0 0 3px 3px; background: var(--bg-alt); min-width: 120px;
+}
+.stage .s-num { font-family: 'IBM Plex Mono', monospace; font-size: .7rem; color: var(--accent); }
+.stage .s-name { font-weight: 600; font-size: .9rem; }
+.stage .s-desc { font-size: .78rem; color: var(--text-soft); }
+
+/* ============ Reference table ============ */
+table.ref { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .88rem; }
+table.ref th, table.ref td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--border); }
+table.ref th { background: var(--bg-alt); font-weight: 600; }
+table.ref tr:hover td { background: var(--bg-alt); }
+
+/* ============ Footer ============ */
+footer { border-top: 1px solid var(--border); padding: 2rem 1rem; text-align: center; color: var(--text-soft); font-size: .85rem; }
+
+/* ============ TOC mobile toggle ============ */
+.toc-toggle { display: none; }
+
+/* ============ Responsive ============ */
+@media (max-width: 860px) {
+  .wrap { flex-direction: column; gap: 1rem; padding-top: 1rem; }
+  nav.toc {
+    position: static; flex: none; max-height: none; border-left: none;
+    border: 1px solid var(--border); border-radius: 3px; padding: 0;
+  }
+  nav.toc h2 { padding: .8rem 1rem; margin: 0; border-bottom: 1px solid var(--border); cursor: pointer; display:flex; justify-content:space-between; align-items:center;}
+  .toc-list { padding: .6rem 1rem; display: none; }
+  nav.toc.open .toc-list { display: block; }
+  nav.toc a { padding-left: .5rem; }
+  .hero h1 { font-size: 1.55rem; }
+  .topbar-inner { padding: .6rem .75rem; }
+  .brand small { display: none; }
+}
+@media (max-width: 480px) {
+  .ctrl-btn span.txt { display: none; }
+  .stage { flex: 1 1 100%; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="mark">K</span>
+      <span>Kafka on AWS <small>Terraform · GitOps</small></span>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" id="fsDown" title="Decrease font size">A−</button>
+      <span class="fs-display mono" id="fsVal">16px</span>
+      <button class="ctrl-btn" id="fsUp" title="Increase font size">A+</button>
+      <button class="ctrl-btn" id="themeBtn" title="Toggle theme"><span id="themeIcon">🌙</span><span class="txt" id="themeTxt">Dark</span></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc" id="toc">
+    <h2 id="tocTitle">Contents <span style="font-size:.9rem">▾</span></h2>
+    <div class="toc-list" id="tocList">
+      <a class="link" href="#overview">Overview</a>
+      <a class="link" href="#arch">Architecture Diagram</a>
+      <a class="link" href="#prereq">1. Prerequisites</a>
+      <a class="link" href="#repo">2. Repository &amp; State</a>
+      <a class="link" href="#ami">3. AMI with Packer + Ansible</a>
+      <a class="link sub" href="#ami-aws">↳ AWS AMI</a>
+      <a class="link sub" href="#ami-ansible">↳ Ansible</a>
+      <a class="link" href="#tf">4. Terraform Infrastructure</a>
+      <a class="link" href="#ssm">5. SSM &amp; Secrets</a>
+      <a class="link" href="#gha">6. GitHub Actions Pipeline</a>
+      <a class="link" href="#gitlab">7. GitLab CI/CD Pipeline</a>
+      <a class="link" href="#gitops">8. GitOps Flow &amp; Stages</a>
+      <a class="link" href="#verify">9. Verify &amp; Operate</a>
+      <a class="link" href="#security">10. Security Hardening</a>
+      <a class="link" href="#troubleshoot">11. Troubleshooting</a>
+      <a class="link" href="#refs">Reference Links</a>
+    </div>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <h1>Deploying a Kafka Cluster on AWS with Terraform &amp; GitOps</h1>
+      <p>An end-to-end, pipeline-driven tutorial: bake an immutable AMI with Packer + Ansible, provision the cluster with Terraform, manage configuration through SSM, and ship everything through GitHub Actions <em>and</em> GitLab CI/CD across promoted environments.</p>
+      <div class="tags">
+        <span class="tag">AWS EC2 / VPC</span>
+        <span class="tag">Terraform</span>
+        <span class="tag">Packer + Ansible</span>
+        <span class="tag">SSM Parameter Store</span>
+        <span class="tag">GitHub Actions</span>
+        <span class="tag">GitLab CI/CD</span>
+        <span class="tag">KRaft (no ZooKeeper)</span>
+      </div>
+    </div>
+
+    <!-- OVERVIEW -->
+    <section class="block open" id="overview">
+      <div class="block-head"><span class="num">0</span><h2>Overview &amp; what you'll build</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>You'll provision a 3-broker Apache Kafka cluster (KRaft mode, no ZooKeeper) running on EC2 inside a private VPC. The whole lifecycle is GitOps-driven: every change is a Git commit that flows through a pipeline with promotion gates.</p>
+        <h3>Design principles</h3>
+        <ul>
+          <li><strong>Immutable infrastructure</strong> — brokers boot from a pre-baked AMI; no in-place mutation.</li>
+          <li><strong>Declarative everything</strong> — Terraform is the single source of truth for infra.</li>
+          <li><strong>Promotion through stages</strong> — <code>dev → staging → prod</code>, same code, different tfvars/state.</li>
+          <li><strong>No secrets in Git</strong> — SSM Parameter Store + OIDC short-lived credentials.</li>
+        </ul>
+        <div class="btn-row"><button class="more-btn" data-modal="m-why-kraft">▸ Why KRaft instead of ZooKeeper?</button><button class="more-btn ref-btn" data-modal="m-why-kraft" data-jump="refs">↗ Official references</button></div>
+        <div class="note"><strong>Note</strong> &nbsp;This guide assumes Kafka 3.7+ which supports production KRaft mode. ZooKeeper is deprecated and removed in Kafka 4.0.</div>
+      </div></div></div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="block open" id="arch">
+      <div class="block-head"><span class="num">◇</span><h2>Architecture diagram</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>The flow from a developer commit through CI/CD to a running cluster:</p>
+        <div class="diagram-box" id="archDiagram" role="button" tabindex="0" title="Click any part of the diagram for component details">
+          <svg viewBox="0 0 720 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kafka GitOps architecture diagram">
+            <defs>
+              <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)"/>
+              </marker>
+              <style>
+                .lbl{font-family:'IBM Plex Sans',sans-serif;font-size:12px;fill:var(--text);}
+                .lbls{font-family:'IBM Plex Sans',sans-serif;font-size:10px;fill:var(--text-soft);}
+                .bx{fill:var(--surface);stroke:var(--accent);stroke-width:1.5;}
+                .bxd{fill:var(--bg-alt);stroke:var(--border);stroke-width:1;}
+                .ln{stroke:var(--accent);stroke-width:1.6;fill:none;marker-end:url(#arr);}
+                .title{font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:600;fill:var(--accent);}
+              </style>
+            </defs>
+
+            <!-- Dev / Git -->
+            <rect class="bx" x="20" y="20" width="130" height="56" rx="3"/>
+            <text class="title" x="34" y="42">Developer</text>
+            <text class="lbls" x="34" y="60">git push / MR</text>
+
+            <!-- CI/CD -->
+            <rect class="bx" x="20" y="120" width="130" height="80" rx="3"/>
+            <text class="title" x="34" y="142">CI/CD</text>
+            <text class="lbls" x="34" y="160">GitHub Actions</text>
+            <text class="lbls" x="34" y="175">/ GitLab CI</text>
+            <text class="lbls" x="34" y="190">fmt·plan·apply</text>
+
+            <!-- Packer/AMI -->
+            <rect class="bxd" x="210" y="20" width="150" height="80" rx="3"/>
+            <text class="title" x="224" y="42">Packer + Ansible</text>
+            <text class="lbls" x="224" y="60">bakes immutable</text>
+            <text class="lbls" x="224" y="75">Kafka AMI</text>
+            <text class="lbls" x="224" y="90">→ EC2 AMI ID</text>
+
+            <!-- Terraform -->
+            <rect class="bx" x="210" y="140" width="150" height="70" rx="3"/>
+            <text class="title" x="224" y="162">Terraform</text>
+            <text class="lbls" x="224" y="180">VPC · EC2 · SG</text>
+            <text class="lbls" x="224" y="195">S3 state + lock</text>
+
+            <!-- SSM -->
+            <rect class="bxd" x="210" y="250" width="150" height="60" rx="3"/>
+            <text class="title" x="224" y="272">SSM Param Store</text>
+            <text class="lbls" x="224" y="290">config + secrets</text>
+
+            <!-- VPC box -->
+            <rect x="420" y="20" width="280" height="390" rx="6" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text class="lbl" x="436" y="40" font-weight="600">AWS VPC (private subnets, 3 AZ)</text>
+
+            <!-- Brokers -->
+            <rect class="bx" x="450" y="70" width="100" height="64" rx="3"/>
+            <text class="title" x="464" y="92">Broker 1</text>
+            <text class="lbls" x="464" y="110">KRaft</text>
+            <text class="lbls" x="464" y="124">AZ-a</text>
+
+            <rect class="bx" x="450" y="160" width="100" height="64" rx="3"/>
+            <text class="title" x="464" y="182">Broker 2</text>
+            <text class="lbls" x="464" y="200">KRaft</text>
+            <text class="lbls" x="464" y="214">AZ-b</text>
+
+            <rect class="bx" x="450" y="250" width="100" height="64" rx="3"/>
+            <text class="title" x="464" y="272">Broker 3</text>
+            <text class="lbls" x="464" y="290">KRaft</text>
+            <text class="lbls" x="464" y="304">AZ-c</text>
+
+            <!-- NLB -->
+            <rect class="bxd" x="588" y="160" width="96" height="64" rx="3"/>
+            <text class="title" x="600" y="182">NLB</text>
+            <text class="lbls" x="600" y="200">:9092</text>
+            <text class="lbls" x="600" y="214">clients</text>
+
+            <!-- CloudWatch -->
+            <rect class="bxd" x="450" y="340" width="234" height="50" rx="3"/>
+            <text class="title" x="464" y="362">CloudWatch · Metrics · Logs</text>
+            <text class="lbls" x="464" y="378">JMX exporter / agent</text>
+
+            <!-- arrows -->
+            <path class="ln" d="M85,76 L85,118"/>
+            <path class="ln" d="M150,150 L208,70"/>
+            <path class="ln" d="M150,170 L208,170"/>
+            <path class="ln" d="M150,185 L208,275"/>
+            <path class="ln" d="M360,170 L448,110"/>
+            <path class="ln" d="M360,175 L448,190"/>
+            <path class="ln" d="M360,260 L448,275"/>
+            <path class="ln" d="M550,192 L586,192"/>
+            <path class="ln" d="M500,224 L500,338"/>
+          </svg>
+        </div>
+        <div class="diagram-hint">↑ Click the diagram for a breakdown of each component</div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-arch">▸ More details on each component</button><button class="more-btn ref-btn" data-modal="m-arch" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- PREREQ -->
+    <section class="block open" id="prereq">
+      <div class="block-head"><span class="num">1</span><h2>Prerequisites</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <ul>
+          <li>AWS account with an IAM role for OIDC federation (no long-lived keys in CI).</li>
+          <li>Tooling: <code>terraform &gt;= 1.7</code>, <code>packer &gt;= 1.10</code>, <code>ansible &gt;= 2.16</code>, <code>aws-cli v2</code>.</li>
+          <li>An S3 bucket + DynamoDB table for Terraform remote state &amp; locking.</li>
+          <li>A registered domain/Route53 zone (optional, for internal DNS of brokers).</li>
+        </ul>
+        <h3>Bootstrap the state backend (run once)</h3>
+        <div class="codewrap"><span class="lbl">bash</span>
+<pre><code>aws s3api create-bucket --bucket my-kafka-tfstate \
+  --region us-east-1
+
+aws s3api put-bucket-versioning --bucket my-kafka-tfstate \
+  --versioning-configuration Status=Enabled
+
+aws dynamodb create-table \
+  --table-name kafka-tf-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST</code></pre></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-oidc">▸ How OIDC replaces AWS keys in CI</button><button class="more-btn ref-btn" data-modal="m-oidc" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- REPO -->
+    <section class="block open" id="repo">
+      <div class="block-head"><span class="num">2</span><h2>Repository layout &amp; remote state</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>One repo, environment isolation through separate state files and tfvars.</p>
+        <div class="codewrap"><span class="lbl">tree</span>
+<pre><code>kafka-platform/
+├── packer/
+│   ├── kafka.pkr.hcl
+│   └── ansible/
+│       ├── playbook.yml
+│       └── roles/kafka/...
+├── terraform/
+│   ├── modules/kafka-cluster/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── envs/
+│       ├── dev/   (backend.tf, dev.tfvars)
+│       ├── staging/
+│       └── prod/
+├── .github/workflows/kafka.yml
+└── .gitlab-ci.yml</code></pre></div>
+        <div class="codewrap"><span class="lbl">terraform/envs/dev/backend.tf</span>
+<pre><code>terraform {
+  backend "s3" {
+    bucket         = "my-kafka-tfstate"
+    key            = "dev/kafka.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "kafka-tf-locks"
+    encrypt        = true
+  }
+}</code></pre></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-repo">▸ Module &amp; environment isolation</button><button class="more-btn ref-btn" data-modal="m-repo" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- AMI -->
+    <section class="block open" id="ami">
+      <div class="block-head"><span class="num">3</span><h2>Bake the AMI with Packer + Ansible</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>An immutable AMI means brokers boot ready-to-run. Packer launches a temporary EC2 instance, Ansible installs and hardens Kafka, then Packer snapshots it to an AMI.</p>
+        <h3 id="ami-aws" style="scroll-margin-top:80px">AWS AMI — Packer template</h3>
+        <div class="codewrap"><span class="lbl">packer/kafka.pkr.hcl</span>
+<pre><code>packer {
+  required_plugins {
+    amazon = { version = "~> 1.3", source = "github.com/hashicorp/amazon" }
+    ansible = { version = "~> 1.1", source = "github.com/hashicorp/ansible" }
+  }
+}
+
+source "amazon-ebs" "kafka" {
+  region        = "us-east-1"
+  instance_type = "t3.medium"
+  ssh_username  = "ubuntu"
+  ami_name      = "kafka-kraft-{{timestamp}}"
+  source_ami_filter {
+    filters = { name = "ubuntu/images/*ubuntu-jammy-22.04-amd64-server-*" }
+    owners      = ["099720109477"]   # Canonical
+    most_recent = true
+  }
+  tags = { Name = "kafka-kraft", BakedBy = "packer" }
+}
+
+build {
+  sources = ["source.amazon-ebs.kafka"]
+  provisioner "ansible" {
+    playbook_file = "./ansible/playbook.yml"
+  }
+}</code></pre></div>
+        <h3 id="ami-ansible" style="scroll-margin-top:80px">Ansible playbook</h3>
+        <div class="codewrap"><span class="lbl">packer/ansible/playbook.yml</span>
+<pre><code>- hosts: all
+  become: true
+  vars:
+    kafka_version: "3.7.1"
+    scala_version: "2.13"
+  tasks:
+    - name: Install Java 17
+      apt: { name: openjdk-17-jre-headless, update_cache: yes }
+
+    - name: Download Kafka
+      get_url:
+        url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz"
+        dest: /tmp/kafka.tgz
+
+    - name: Unpack to /opt/kafka
+      unarchive:
+        src: /tmp/kafka.tgz
+        dest: /opt/
+        remote_src: yes
+
+    - name: Symlink /opt/kafka
+      file:
+        src: "/opt/kafka_{{ scala_version }}-{{ kafka_version }}"
+        dest: /opt/kafka
+        state: link
+
+    - name: Install systemd unit (config injected at boot via SSM)
+      copy:
+        dest: /etc/systemd/system/kafka.service
+        content: |
+          [Unit]
+          Description=Apache Kafka (KRaft)
+          After=network.target
+          [Service]
+          ExecStartPre=/opt/kafka/bin/render-config.sh
+          ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target</code></pre></div>
+        <div class="note"><strong>Key idea</strong> &nbsp;The AMI is config-agnostic. Broker ID, advertised listeners, and the KRaft quorum are rendered at <em>boot</em> from SSM/instance metadata, so one AMI serves all brokers and all environments.</div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-ami-boot">▸ The boot-time render-config.sh script</button><button class="more-btn ref-btn" data-modal="m-ami-boot" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- TERRAFORM -->
+    <section class="block open" id="tf">
+      <div class="block-head"><span class="num">4</span><h2>Terraform infrastructure module</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>The module looks up the latest AMI by tag, builds the network, and launches brokers across AZs.</p>
+        <div class="codewrap"><span class="lbl">terraform/modules/kafka-cluster/main.tf</span>
+<pre><code>data "aws_ami" "kafka" {
+  most_recent = true
+  owners      = ["self"]
+  filter { name = "name"; values = ["kafka-kraft-*"] }
+}
+
+resource "aws_instance" "broker" {
+  count                  = var.broker_count
+  ami                    = data.aws_ami.kafka.id
+  instance_type          = var.instance_type
+  subnet_id              = element(var.private_subnet_ids, count.index)
+  vpc_security_group_ids = [aws_security_group.kafka.id]
+  iam_instance_profile   = aws_iam_instance_profile.kafka.name
+
+  user_data = templatefile("${path.module}/user_data.tftpl", {
+    node_id      = count.index + 1
+    cluster_name = var.cluster_name
+    env          = var.environment
+  })
+
+  root_block_device { volume_size = var.disk_gb; volume_type = "gp3" }
+  tags = { Name = "kafka-${var.environment}-${count.index + 1}" }
+}</code></pre></div>
+        <div class="codewrap"><span class="lbl">terraform/envs/dev/dev.tfvars</span>
+<pre><code>environment   = "dev"
+broker_count  = 3
+instance_type = "t3.medium"
+disk_gb       = 50
+cluster_name  = "kafka-dev"</code></pre></div>
+        <div class="codewrap"><span class="lbl">commands</span>
+<pre><code>cd terraform/envs/dev
+terraform init
+terraform plan  -var-file=dev.tfvars -out=tfplan
+terraform apply tfplan</code></pre></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-tf-sg">▸ Security group &amp; IAM instance profile</button><button class="more-btn ref-btn" data-modal="m-tf-sg" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- SSM -->
+    <section class="block open" id="ssm">
+      <div class="block-head"><span class="num">5</span><h2>SSM Parameter Store &amp; secrets</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>Brokers read configuration at boot from SSM. Pipelines write non-secret config via Terraform; sensitive values are <code>SecureString</code> parameters seeded out-of-band.</p>
+        <div class="codewrap"><span class="lbl">terraform — config params</span>
+<pre><code>resource "aws_ssm_parameter" "cluster_id" {
+  name  = "/kafka/${var.environment}/cluster-id"
+  type  = "String"
+  value = var.cluster_id
+}
+
+resource "aws_ssm_parameter" "controller_quorum" {
+  name  = "/kafka/${var.environment}/controller-quorum-voters"
+  type  = "String"
+  value = join(",", [for i, ip in aws_instance.broker[*].private_ip :
+            "${i + 1}@${ip}:9093"])
+}</code></pre></div>
+        <div class="codewrap"><span class="lbl">read at boot (on instance)</span>
+<pre><code>aws ssm get-parameter --name "/kafka/${ENV}/controller-quorum-voters" \
+  --query 'Parameter.Value' --output text</code></pre></div>
+        <div class="note warn"><strong>Never</strong> &nbsp;commit SASL passwords, TLS keys, or cluster IDs to Git. Use <code>SecureString</code> + KMS and grant the broker instance role <code>ssm:GetParameter</code> scoped to its env path.</div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-ssm">▸ Seeding SecureString secrets safely</button><button class="more-btn ref-btn" data-modal="m-ssm" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- GITHUB ACTIONS -->
+    <section class="block open" id="gha">
+      <div class="block-head"><span class="num">6</span><h2>GitHub Actions pipeline</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>OIDC-authenticated, with <code>plan</code> on PRs and gated <code>apply</code> on merge to <code>main</code> via environments.</p>
+        <div class="codewrap"><span class="lbl">.github/workflows/kafka.yml</span>
+<pre><code>name: kafka-platform
+on:
+  pull_request: { paths: ['terraform/**','packer/**'] }
+  push: { branches: [main] }
+
+permissions:
+  id-token: write   # OIDC
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=terraform/envs/dev fmt -check
+      - run: terraform -chdir=terraform/envs/dev init
+      - run: terraform -chdir=terraform/envs/dev validate
+
+  plan:
+    needs: validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::ACCT:role/gh-kafka-deploy
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=terraform/envs/dev init
+      - run: terraform -chdir=terraform/envs/dev plan -var-file=dev.tfvars
+
+  apply-dev:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev          # required reviewers / protection rules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::ACCT:role/gh-kafka-deploy
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=terraform/envs/dev init
+      - run: terraform -chdir=terraform/envs/dev apply -auto-approve -var-file=dev.tfvars</code></pre></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-gha-promote">▸ Promoting dev → staging → prod</button><button class="more-btn ref-btn" data-modal="m-gha-promote" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- GITLAB -->
+    <section class="block open" id="gitlab">
+      <div class="block-head"><span class="num">7</span><h2>GitLab CI/CD pipeline</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>The equivalent in GitLab using staged jobs, OIDC (<code>id_tokens</code>), and <code>when: manual</code> gates for promotion.</p>
+        <div class="codewrap"><span class="lbl">.gitlab-ci.yml</span>
+<pre><code>stages: [validate, plan, deploy-dev, deploy-staging, deploy-prod]
+
+variables:
+  AWS_REGION: us-east-1
+  TF_ROOT: terraform/envs
+
+image: hashicorp/terraform:1.7
+
+.aws_oidc: &aws_oidc
+  id_tokens:
+    AWS_TOKEN:
+      aud: https://gitlab.com
+  before_script:
+    - export $(aws-oidc-assume --role arn:aws:iam::ACCT:role/gl-kafka-deploy)
+
+validate:
+  stage: validate
+  script:
+    - cd $TF_ROOT/dev
+    - terraform fmt -check && terraform init -backend=false && terraform validate
+
+plan:
+  stage: plan
+  <<: *aws_oidc
+  script:
+    - cd $TF_ROOT/dev
+    - terraform init && terraform plan -var-file=dev.tfvars -out=plan.cache
+  artifacts: { paths: [terraform/envs/dev/plan.cache] }
+  rules: [{ if: '$CI_PIPELINE_SOURCE == "merge_request_event"' }]
+
+deploy-dev:
+  stage: deploy-dev
+  <<: *aws_oidc
+  environment: { name: dev }
+  script:
+    - cd $TF_ROOT/dev
+    - terraform init && terraform apply -auto-approve -var-file=dev.tfvars
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]
+
+deploy-staging:
+  stage: deploy-staging
+  <<: *aws_oidc
+  environment: { name: staging }
+  when: manual          # promotion gate
+  script:
+    - cd $TF_ROOT/staging
+    - terraform init && terraform apply -auto-approve -var-file=staging.tfvars
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]
+
+deploy-prod:
+  stage: deploy-prod
+  <<: *aws_oidc
+  environment: { name: prod }
+  when: manual          # protected, manual approval
+  script:
+    - cd $TF_ROOT/prod
+    - terraform init && terraform apply -auto-approve -var-file=prod.tfvars
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]</code></pre></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-gitlab-env">▸ Protected environments &amp; approvals in GitLab</button><button class="more-btn ref-btn" data-modal="m-gitlab-env" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- GITOPS -->
+    <section class="block open" id="gitops">
+      <div class="block-head"><span class="num">8</span><h2>GitOps flow &amp; pipeline stages</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>Every environment change is a Git operation. The pipeline enforces the same path on both platforms:</p>
+        <div class="stages">
+          <div class="stage"><div class="s-num">01</div><div class="s-name">Validate</div><div class="s-desc">fmt, init, validate, lint</div></div>
+          <div class="stage"><div class="s-num">02</div><div class="s-name">Plan</div><div class="s-desc">on PR/MR, posted for review</div></div>
+          <div class="stage"><div class="s-num">03</div><div class="s-name">Deploy dev</div><div class="s-desc">auto on merge to main</div></div>
+          <div class="stage"><div class="s-num">04</div><div class="s-name">Deploy staging</div><div class="s-desc">manual gate</div></div>
+          <div class="stage"><div class="s-num">05</div><div class="s-name">Deploy prod</div><div class="s-desc">manual + protected approval</div></div>
+        </div>
+        <h3>The GitOps loop</h3>
+        <ol>
+          <li>Developer opens a PR/MR changing tfvars, module, or Ansible role.</li>
+          <li>Pipeline runs <code>validate</code> + <code>plan</code>; the plan is the reviewable diff.</li>
+          <li>Reviewer approves &amp; merges → <code>main</code> becomes desired state.</li>
+          <li>Merge triggers auto-apply to dev; staging/prod require manual promotion.</li>
+          <li>State in S3 reflects reality; drift is caught by scheduled <code>plan</code> runs.</li>
+        </ol>
+        <div class="btn-row"><button class="more-btn" data-modal="m-drift">▸ Drift detection &amp; scheduled plans</button><button class="more-btn ref-btn" data-modal="m-drift" data-jump="refs">↗ Official references</button></div>
+        <div class="note"><strong>AMI promotion</strong> &nbsp;A new AMI is just a new input. Bump the AMI filter/version in a tfvars commit; the same staged pipeline rolls it through environments with a controlled instance refresh.</div>
+      </div></div></div>
+    </section>
+
+    <!-- VERIFY -->
+    <section class="block open" id="verify">
+      <div class="block-head"><span class="num">9</span><h2>Verify &amp; operate</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>Connect via SSM Session Manager (no SSH bastion needed) and validate the cluster.</p>
+        <div class="codewrap"><span class="lbl">verify</span>
+<pre><code># Open a shell on a broker without SSH
+aws ssm start-session --target i-0abc123...
+
+# On the broker — check KRaft quorum
+/opt/kafka/bin/kafka-metadata-quorum.sh \
+  --bootstrap-server localhost:9092 describe --status
+
+# Create + describe a test topic
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  --create --topic smoke --partitions 3 --replication-factor 3
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  --describe --topic smoke</code></pre></div>
+        <div class="note"><strong>Tip</strong> &nbsp;Wire the smoke-test into a post-apply pipeline job so every deploy is automatically health-checked before promotion.</div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-verify">▸ Full smoke-test &amp; operations</button><button class="more-btn ref-btn" data-modal="m-verify" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="block open" id="security">
+      <div class="block-head"><span class="num">10</span><h2>Security hardening</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>A production Kafka cluster needs encryption in transit, authentication, and authorization. The plaintext listener in earlier examples is for bootstrapping only.</p>
+        <h3>Layered controls</h3>
+        <ul>
+          <li><strong>TLS everywhere</strong> — enable <code>SSL</code> listeners for client and inter-broker traffic; terminate at the broker, not the NLB, so the chain stays encrypted end-to-end.</li>
+          <li><strong>SASL authentication</strong> — <code>SASL_SSL</code> with SCRAM-SHA-512 or mTLS client certs; credentials live in SSM SecureString.</li>
+          <li><strong>ACL authorization</strong> — enable the standard authorizer so each principal only touches its own topics.</li>
+          <li><strong>Network isolation</strong> — brokers in private subnets, no public IPs, access via NLB + VPC peering/PrivateLink only.</li>
+          <li><strong>Encryption at rest</strong> — gp3 volumes encrypted with a customer-managed KMS key.</li>
+        </ul>
+        <div class="codewrap"><span class="lbl">server.properties (hardened)</span>
+<pre><code>listeners=SASL_SSL://:9092,CONTROLLER://:9093
+listener.security.protocol.map=CONTROLLER:SSL,SASL_SSL:SASL_SSL
+sasl.enabled.mechanisms=SCRAM-SHA-512
+ssl.keystore.location=/etc/kafka/ssl/broker.keystore.jks
+ssl.truststore.location=/etc/kafka/ssl/broker.truststore.jks
+ssl.client.auth=required
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+super.users=User:admin</code></pre></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-tls">▸ Generating &amp; distributing TLS material</button><button class="more-btn ref-btn" data-modal="m-tls" data-jump="refs">↗ Official references</button></div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-acl">▸ Configuring SASL/SCRAM users &amp; ACLs</button><button class="more-btn ref-btn" data-modal="m-acl" data-jump="refs">↗ Official references</button></div>
+        <div class="note warn"><strong>Encrypted EBS</strong> &nbsp;Set <code>encrypted = true</code> and a <code>kms_key_id</code> on the <code>root_block_device</code> (and any data volumes) in Terraform — it cannot be toggled on an existing volume without recreating it.</div>
+      </div></div></div>
+    </section>
+
+    <!-- TROUBLESHOOT -->
+    <section class="block open" id="troubleshoot">
+      <div class="block-head"><span class="num">11</span><h2>Troubleshooting &amp; common pitfalls</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <table class="ref">
+          <thead><tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr></thead>
+          <tbody>
+            <tr><td>Clients connect to bootstrap but then time out</td><td><code>advertised.listeners</code> points to an unreachable address. Clients use the advertised host after the initial handshake — it must be routable from the client.</td></tr>
+            <tr><td>Broker won't start: <code>No readable meta.properties</code></td><td>Storage not formatted. The boot script must run <code>kafka-storage.sh format</code> with the shared cluster ID before first start.</td></tr>
+            <tr><td><code>InconsistentClusterIdException</code></td><td>Brokers formatted with different cluster IDs. All nodes must share one ID from <code>/kafka/&lt;env&gt;/cluster-id</code>.</td></tr>
+            <tr><td>Controller quorum never elects a leader</td><td><code>controller.quorum.voters</code> mismatch — IDs/IPs differ across nodes, or :9093 blocked by the security group.</td></tr>
+            <tr><td>Terraform: <code>Error acquiring the state lock</code></td><td>A prior run crashed. Verify no live run, then <code>terraform force-unlock &lt;LOCK_ID&gt;</code>.</td></tr>
+            <tr><td>CI fails assuming the AWS role</td><td>OIDC trust policy <code>sub</code> claim doesn't match the repo/branch/environment. Check the condition in the IAM role trust relationship.</td></tr>
+            <tr><td>AMI data source returns nothing</td><td>Packer build hasn't run yet or the name filter doesn't match. Confirm with <code>aws ec2 describe-images --owners self</code>.</td></tr>
+          </tbody>
+        </table>
+        <div class="btn-row"><button class="more-btn" data-modal="m-debug">▸ Useful diagnostic commands</button><button class="more-btn ref-btn" data-modal="m-debug" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
+    <!-- REFS -->
+    <section class="block open" id="refs">
+      <div class="block-head"><span class="num">↗</span><h2>Official reference links</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <table class="ref">
+          <thead><tr><th>Topic</th><th>Official documentation</th></tr></thead>
+          <tbody>
+            <tr><td>Terraform</td><td><a class="link" href="https://developer.hashicorp.com/terraform/docs" target="_blank" rel="noopener">developer.hashicorp.com/terraform/docs</a></td></tr>
+            <tr><td>Terraform AWS provider</td><td><a class="link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">registry.terraform.io · hashicorp/aws</a></td></tr>
+            <tr><td>AWS AMI / EC2</td><td><a class="link" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html" target="_blank" rel="noopener">docs.aws.amazon.com · AMIs</a></td></tr>
+            <tr><td>HashiCorp Packer</td><td><a class="link" href="https://developer.hashicorp.com/packer/docs" target="_blank" rel="noopener">developer.hashicorp.com/packer/docs</a></td></tr>
+            <tr><td>Ansible</td><td><a class="link" href="https://docs.ansible.com/ansible/latest/" target="_blank" rel="noopener">docs.ansible.com</a></td></tr>
+            <tr><td>AWS Systems Manager (SSM)</td><td><a class="link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/" target="_blank" rel="noopener">docs.aws.amazon.com · Systems Manager</a></td></tr>
+            <tr><td>SSM Parameter Store</td><td><a class="link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html" target="_blank" rel="noopener">docs · Parameter Store</a></td></tr>
+            <tr><td>GitLab CI/CD</td><td><a class="link" href="https://docs.gitlab.com/ee/ci/" target="_blank" rel="noopener">docs.gitlab.com/ee/ci</a></td></tr>
+            <tr><td>GitHub Actions</td><td><a class="link" href="https://docs.github.com/en/actions" target="_blank" rel="noopener">docs.github.com/en/actions</a></td></tr>
+            <tr><td>Apache Kafka (KRaft)</td><td><a class="link" href="https://kafka.apache.org/documentation/#kraft" target="_blank" rel="noopener">kafka.apache.org · KRaft</a></td></tr>
+            <tr><td>AWS OIDC for CI</td><td><a class="link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html" target="_blank" rel="noopener">docs · IAM OIDC providers</a></td></tr>
+          </tbody>
+        </table>
+      </div></div></div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  Kafka on AWS · Terraform · GitOps tutorial — built as a static, offline-friendly reference. Verify versions against official docs before production use.
+</footer>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalCard">
+    <div class="modal-head"><h3 id="modalTitle"></h3><button class="modal-close" id="modalClose">&times;</button></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+/* ---- modal content ---- */
+function links(arr){ return '<div class="modal-links"><div class="ml-title">Official references</div>' +
+  arr.map(([u,n])=>`<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join('') + '</div>'; }
+
+const MODALS = {
+  "m-why-kraft": { t: "Why KRaft instead of ZooKeeper?",
+    h: `<p>KRaft (Kafka Raft) moves cluster metadata management into Kafka itself using an internal Raft quorum, eliminating the separate ZooKeeper ensemble.</p>
+        <ul><li><strong>Fewer moving parts</strong> — no second distributed system to operate, patch, and secure.</li>
+        <li><strong>Faster recovery</strong> — metadata is a Kafka log; controller failover is quicker.</li>
+        <li><strong>Higher scale</strong> — supports millions of partitions per cluster vs. ZooKeeper's tens of thousands.</li>
+        <li><strong>Future-proof</strong> — ZooKeeper mode is deprecated in 3.x and removed in Kafka 4.0.</li></ul>
+        <p>Nodes can run as dedicated <code>controller</code>, dedicated <code>broker</code>, or combined roles via <code>process.roles</code>. This guide uses combined roles for a compact 3-node cluster; for larger clusters separate the controller quorum (typically 3 or 5 dedicated controllers) from the data brokers.</p>
+        <p>The controller quorum elects a leader through Raft; metadata changes are committed as records to an internal <code>__cluster_metadata</code> topic that every node replays.</p>` +
+        links([
+          ["https://kafka.apache.org/documentation/#kraft","Apache Kafka — KRaft documentation"],
+          ["https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready","KIP-833 — KRaft production readiness"],
+          ["https://kafka.apache.org/documentation/#kraft_role","process.roles & node configuration"]
+        ]) },
+  "m-arch": { t: "Architecture components",
+    h: `<ul>
+        <li><strong>Packer + Ansible</strong> — produce a versioned, immutable AMI containing Java 17 + Kafka. Rebuilding the AMI is the only way config in the image changes.</li>
+        <li><strong>Terraform</strong> — declares VPC, subnets, security groups, EC2 brokers, NLB, IAM, KMS, and SSM params. State lives in S3 with DynamoDB locking.</li>
+        <li><strong>SSM Parameter Store</strong> — holds per-environment config and SecureString secrets, read by brokers at boot via the instance role.</li>
+        <li><strong>3 brokers across 3 AZs</strong> — replication factor 3 with <code>min.insync.replicas=2</code> survives a full AZ outage with no data loss.</li>
+        <li><strong>Network Load Balancer on :9092</strong> — stable client endpoint; <code>advertised.listeners</code> still point clients to the specific broker that owns each partition.</li>
+        <li><strong>CloudWatch</strong> — JMX metrics via the agent/exporter plus system logs for alerting and dashboards.</li></ul>
+        <p>The dashed box in the diagram is the VPC boundary; brokers sit in private subnets with no public IPs, reachable only through the NLB or SSM Session Manager.</p>` +
+        links([
+          ["https://docs.aws.amazon.com/whitepapers/latest/best-practices-deploying-amazon-emr/apache-kafka.html","AWS — deploying Kafka on AWS"],
+          ["https://docs.aws.amazon.com/vpc/latest/userguide/vpc-subnets-commands-example.html","AWS VPC — subnets across AZs"],
+          ["https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html","AWS — Network Load Balancer"],
+          ["https://kafka.apache.org/documentation/#basic_ops","Kafka — operations guide"]
+        ]) },
+  "m-oidc": { t: "OIDC instead of AWS keys",
+    h: `<p>Both GitHub Actions and GitLab present a signed OIDC token to AWS STS via <code>AssumeRoleWithWebIdentity</code> and receive <em>short-lived</em> credentials. No static <code>AWS_ACCESS_KEY_ID</code> secrets are stored in the CI system.</p>
+        <p><strong>Setup:</strong></p>
+        <ol>
+          <li>Create an IAM OIDC identity provider for the CI platform (GitHub: <code>token.actions.githubusercontent.com</code>; GitLab: <code>gitlab.com</code> or your instance URL).</li>
+          <li>Create an IAM role whose trust policy restricts the <code>sub</code> (and <code>aud</code>) claim to a specific repo, branch, or environment.</li>
+          <li>The pipeline assumes that role per job and gets temporary credentials.</li>
+        </ol>
+        <pre><code>"Condition": {
+  "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+  "StringLike": { "token.actions.githubusercontent.com:sub": "repo:org/kafka-platform:ref:refs/heads/main" }
+}</code></pre>
+        <p>Benefits: no key rotation, blast radius limited by branch/environment, full CloudTrail attribution per run.</p>` +
+        links([
+          ["https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html","AWS IAM — OIDC identity providers"],
+          ["https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services","GitHub Actions — OIDC with AWS"],
+          ["https://docs.gitlab.com/ee/ci/cloud_services/aws/","GitLab — OIDC to AWS"],
+          ["https://github.com/aws-actions/configure-aws-credentials","aws-actions/configure-aws-credentials"]
+        ]) },
+  "m-ami-boot": { t: "Boot-time render-config.sh",
+    h: `<p>Because one AMI serves every broker and every environment, the actual config is generated on first boot from instance metadata (IMDSv2) + SSM:</p>
+        <pre><code>#!/usr/bin/env bash
+set -euo pipefail
+# IMDSv2 token-based metadata access
+TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \\
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+md(){ curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \\
+  "http://169.254.169.254/latest/meta-data/$1"; }
+
+ENV=$(md "tags/instance/env")
+NODE_ID=$(md "tags/instance/node_id")
+PRIV_IP=$(md "local-ipv4")
+QUORUM=$(aws ssm get-parameter \\
+  --name "/kafka/\${ENV}/controller-quorum-voters" \\
+  --query Parameter.Value --output text)
+
+cat &gt; /opt/kafka/config/server.properties &lt;&lt;EOF
+process.roles=broker,controller
+node.id=\${NODE_ID}
+controller.quorum.voters=\${QUORUM}
+listeners=PLAINTEXT://:9092,CONTROLLER://:9093
+advertised.listeners=PLAINTEXT://\${PRIV_IP}:9092
+log.dirs=/var/lib/kafka
+EOF
+
+# Format storage once with the shared cluster id
+CID=$(aws ssm get-parameter --name "/kafka/\${ENV}/cluster-id" --query Parameter.Value --output text)
+[ -f /var/lib/kafka/meta.properties ] || \\
+  /opt/kafka/bin/kafka-storage.sh format -t "$CID" -c /opt/kafka/config/server.properties</code></pre>
+        <p>Instance tags are exposed through metadata only if you enable <code>InstanceMetadataTags</code> on the instance (Terraform: <code>metadata_options { instance_metadata_tags = "enabled" }</code>).</p>` +
+        links([
+          ["https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html","AWS — IMDSv2"],
+          ["https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#view-access-to-tags-in-IMDS","AWS — instance tags in metadata"],
+          ["https://kafka.apache.org/documentation/#quickstart_startserver","Kafka — kafka-storage format (KRaft)"],
+          ["https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html","AWS — running commands at launch (user data)"]
+        ]) },
+  "m-tf-sg": { t: "Security group & IAM instance profile",
+    h: `<pre><code>resource "aws_security_group" "kafka" {
+  vpc_id = var.vpc_id
+  ingress { from_port=9092 to_port=9092 protocol="tcp" self=true }
+  ingress { from_port=9093 to_port=9093 protocol="tcp" self=true }
+  egress  { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
+}
+
+resource "aws_iam_role" "kafka" {
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
+}
+# Session Manager access (no SSH)
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.kafka.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+# Scoped read of this env's params only
+resource "aws_iam_role_policy" "params" {
+  role = aws_iam_role.kafka.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter","ssm:GetParameters","kms:Decrypt"]
+      Resource = ["arn:aws:ssm:*:*:parameter/kafka/\${var.environment}/*"]
+    }]
+  })
+}
+resource "aws_iam_instance_profile" "kafka" {
+  role = aws_iam_role.kafka.name
+}</code></pre>
+    <p>Inter-broker traffic is allowed only within the SG (<code>self=true</code>); clients reach <code>:9092</code> through the NLB. The instance role can read only its own environment's SSM path.</p>` +
+        links([
+          ["https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group","Terraform — aws_security_group"],
+          ["https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile","Terraform — aws_iam_instance_profile"],
+          ["https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html","AWS — Session Manager"],
+          ["https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html","AWS — scoping IAM by resource ARN"]
+        ]) },
+  "m-ssm": { t: "Seeding SecureString secrets safely",
+    h: `<p>Sensitive values are created <em>outside</em> the pipeline (or in a tightly-scoped admin job) so they never appear in plan output or state diffs:</p>
+        <pre><code>aws ssm put-parameter \\
+  --name "/kafka/prod/cluster-id" \\
+  --type SecureString \\
+  --key-id alias/kafka-kms \\
+  --value "$(/opt/kafka/bin/kafka-storage.sh random-uuid)"</code></pre>
+        <p>Reference them in Terraform with a <code>data</code> block (never a resource that holds the value):</p>
+        <pre><code>data "aws_ssm_parameter" "cid" {
+  name            = "/kafka/\${var.environment}/cluster-id"
+  with_decryption = true
+}</code></pre>
+        <p>Even so, decrypted SSM values pulled into Terraform land in state — keep state in an encrypted, access-controlled S3 bucket. Prefer having the <em>broker</em> read the secret at boot rather than Terraform reading it at all. The broker role gets <code>ssm:GetParameter</code> + <code>kms:Decrypt</code> scoped to <code>/kafka/&lt;env&gt;/*</code> only.</p>` +
+        links([
+          ["https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html","AWS — SSM Parameter Store"],
+          ["https://docs.aws.amazon.com/kms/latest/developerguide/services-parameter-store.html","AWS — SecureString & KMS"],
+          ["https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter","Terraform — aws_ssm_parameter data source"],
+          ["https://developer.hashicorp.com/terraform/language/state/sensitive-data","Terraform — sensitive data in state"]
+        ]) },
+  "m-gha-promote": { t: "Promoting across environments (GitHub)",
+    h: `<p>Add <code>apply-staging</code> and <code>apply-prod</code> jobs that <code>needs:</code> the previous stage and target protected <code>environment:</code> values. GitHub Environments let you require manual reviewers, wait timers, and branch restrictions before the job runs.</p>
+        <pre><code>apply-prod:
+  needs: apply-staging
+  environment: prod        # protection rules enforced in repo settings
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::ACCT:role/gh-kafka-prod
+        aws-region: us-east-1
+    - uses: hashicorp/setup-terraform@v3
+    - run: terraform -chdir=terraform/envs/prod init
+    - run: terraform -chdir=terraform/envs/prod apply \\
+        -auto-approve -var-file=prod.tfvars</code></pre>
+        <p>Each environment uses its own backend key + tfvars + IAM role, so the same code yields fully isolated state and least-privilege per stage. Configure required reviewers under <em>Settings → Environments → prod</em>.</p>` +
+        links([
+          ["https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment","GitHub — deployment environments"],
+          ["https://docs.github.com/en/actions/deployment/protecting-deployments/managing-environments-for-deployment","GitHub — environment protection rules"],
+          ["https://github.com/hashicorp/setup-terraform","hashicorp/setup-terraform action"],
+          ["https://developer.hashicorp.com/terraform/cli/commands/apply","Terraform — apply command"]
+        ]) },
+  "m-gitlab-env": { t: "Protected environments & approvals (GitLab)",
+    h: `<p>In GitLab, mark <code>staging</code>/<code>prod</code> as <strong>protected environments</strong> (Settings → CI/CD → Protected environments) and assign approver groups. Combined with <code>when: manual</code>, a deploy waits for an authorized user to click <em>Play</em>.</p>
+        <pre><code>deploy-prod:
+  stage: deploy-prod
+  environment:
+    name: prod
+    action: start
+  when: manual
+  resource_group: prod        # serialize prod deploys
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'</code></pre>
+        <p>You can require <strong>multiple approvals</strong> and restrict who may run protected-environment jobs, giving prod the same gate quality as GitHub Environments. The <code>resource_group</code> keyword prevents two prod pipelines from applying at once. Artifacts from the <code>plan</code> stage can be passed to <code>deploy</code> so the applied plan is exactly the reviewed one.</p>` +
+        links([
+          ["https://docs.gitlab.com/ee/ci/environments/protected_environments.html","GitLab — protected environments"],
+          ["https://docs.gitlab.com/ee/ci/yaml/#environment","GitLab — environment keyword"],
+          ["https://docs.gitlab.com/ee/ci/resource_groups/","GitLab — resource groups (serialized jobs)"],
+          ["https://docs.gitlab.com/ee/ci/jobs/job_control.html#create-a-job-that-must-be-run-manually","GitLab — manual jobs"]
+        ]) },
+  "m-drift": { t: "Drift detection & scheduled plans",
+    h: `<p>Schedule a nightly pipeline that runs <code>terraform plan -detailed-exitcode</code> against each environment and alerts if reality diverges from Git.</p>
+        <pre><code># exit 0 = no drift, 1 = error, 2 = drift detected
+terraform plan -detailed-exitcode -var-file=prod.tfvars || \\
+  ([ $? -eq 2 ] && notify-slack "Drift detected in prod")</code></pre>
+        <p>GitHub: a <code>schedule:</code> cron trigger. GitLab: pipeline schedules under CI/CD → Schedules.</p>
+        <pre><code># GitHub Actions
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily</code></pre>
+        <p>This catches out-of-band console changes and keeps Git as the trusted source of truth. Pair it with <code>terraform plan</code> output posted to the PR so reviewers always see the diff before merge.</p>` +
+        links([
+          ["https://developer.hashicorp.com/terraform/cli/commands/plan#detailed-exitcode","Terraform — plan -detailed-exitcode"],
+          ["https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule","GitHub — scheduled workflows"],
+          ["https://docs.gitlab.com/ee/ci/pipelines/schedules.html","GitLab — pipeline schedules"],
+          ["https://developer.hashicorp.com/terraform/tutorials/state/resource-drift","Terraform — managing resource drift"]
+        ]) },
+  "m-tls": { t: "Generating & distributing TLS material",
+    h: `<p>Each broker needs a keystore (its identity) and a truststore (the CA it trusts). Generate them from a private CA, then ship them to the broker out of band — never in Git.</p>
+        <pre><code># 1. Create a CA (once)
+openssl req -new -x509 -keyout ca.key -out ca.crt -days 3650 -nodes \\
+  -subj "/CN=kafka-internal-ca"
+
+# 2. Per-broker keystore + CSR signed by the CA
+keytool -genkeypair -alias broker -keyalg RSA -keystore broker.keystore.jks \\
+  -dname "CN=broker1.kafka.internal" -storepass "$PASS" -keypass "$PASS"
+keytool -certreq -alias broker -keystore broker.keystore.jks -file broker.csr -storepass "$PASS"
+openssl x509 -req -CA ca.crt -CAkey ca.key -in broker.csr -out broker.crt -days 365 -CAcreateserial
+
+# 3. Import CA + signed cert back into the keystore; build truststore
+keytool -import -alias ca -file ca.crt -keystore broker.keystore.jks -storepass "$PASS" -noprompt
+keytool -import -alias broker -file broker.crt -keystore broker.keystore.jks -storepass "$PASS" -noprompt
+keytool -import -alias ca -file ca.crt -keystore broker.truststore.jks -storepass "$PASS" -noprompt</code></pre>
+        <p><strong>Distribution:</strong> store the keystore/truststore (or the CA key) as SSM SecureString or in AWS Certificate Manager Private CA, and have the boot script pull them into <code>/etc/kafka/ssl/</code>. ACM Private CA can issue and rotate broker certs automatically, removing the manual CA step.</p>` +
+        links([
+          ["https://kafka.apache.org/documentation/#security_ssl","Kafka — encryption & authentication with SSL"],
+          ["https://docs.aws.amazon.com/privateca/latest/userguide/PcaWelcome.html","AWS — Private Certificate Authority"],
+          ["https://docs.aws.amazon.com/kms/latest/developerguide/services-parameter-store.html","AWS — storing secrets in SSM SecureString"],
+          ["https://docs.aws.amazon.com/AmazonECS/latest/developerguide/specifying-sensitive-data.html","AWS — handling sensitive data"]
+        ]) },
+  "m-acl": { t: "Configuring SASL/SCRAM users & ACLs",
+    h: `<p>With <code>SASL_SSL</code> + SCRAM, credentials are stored in Kafka's metadata and verified per connection. ACLs then restrict what each authenticated principal can do.</p>
+        <pre><code># Create a SCRAM user (run against the cluster)
+/opt/kafka/bin/kafka-configs.sh --bootstrap-server broker1:9092 \\
+  --alter --add-config 'SCRAM-SHA-512=[password=secret]' \\
+  --entity-type users --entity-name app-producer
+
+# Grant that user write access to one topic only
+/opt/kafka/bin/kafka-acls.sh --bootstrap-server broker1:9092 \\
+  --add --allow-principal User:app-producer \\
+  --operation Write --topic orders
+
+# Grant a consumer group read access
+/opt/kafka/bin/kafka-acls.sh --bootstrap-server broker1:9092 \\
+  --add --allow-principal User:app-consumer \\
+  --operation Read --topic orders --group order-processors</code></pre>
+        <p>Set <code>authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer</code> and list cluster admins in <code>super.users</code>. With no matching ALLOW ACL, access is denied by default — exactly what you want in prod.</p>` +
+        links([
+          ["https://kafka.apache.org/documentation/#security_sasl_scram","Kafka — SASL/SCRAM authentication"],
+          ["https://kafka.apache.org/documentation/#security_authz","Kafka — authorization & ACLs"],
+          ["https://kafka.apache.org/documentation/#security_authz_cli","Kafka — kafka-acls.sh reference"],
+          ["https://kafka.apache.org/documentation/#config","Kafka — broker configuration reference"]
+        ]) },
+  "m-debug": { t: "Useful diagnostic commands",
+    h: `<pre><code># Service status & logs on a broker (via Session Manager)
+sudo systemctl status kafka
+sudo journalctl -u kafka -n 200 --no-pager
+
+# KRaft quorum health
+/opt/kafka/bin/kafka-metadata-quorum.sh \\
+  --bootstrap-server localhost:9092 describe --status
+
+# List under-replicated partitions (should be empty)
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \\
+  --describe --under-replicated-partitions
+
+# Inspect a consumer group's lag
+/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \\
+  --describe --group order-processors
+
+# Confirm listener reachability from a client host
+nc -vz broker1.kafka.internal 9092
+
+# Terraform: what does the state think exists?
+terraform state list
+terraform show</code></pre>
+        <p>For deeper analysis, enable JMX and scrape with the Prometheus JMX exporter, then alert on <code>UnderReplicatedPartitions</code>, <code>OfflinePartitionsCount</code>, and request latency percentiles.</p>` +
+        links([
+          ["https://kafka.apache.org/documentation/#monitoring","Kafka — monitoring & JMX metrics"],
+          ["https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html","AWS — Session Manager"],
+          ["https://developer.hashicorp.com/terraform/cli/commands/state/list","Terraform — state list"],
+          ["https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html","AWS — CloudWatch agent install"]
+        ]) },
+  "m-repo": { t: "Repository structure & environment isolation",
+    h: `<p>A single repository holds all environments, but each is isolated through its own Terraform <strong>backend key</strong> and <strong>tfvars</strong> file. The same module code is reused everywhere, so dev, staging, and prod can never drift in shape — only in scale parameters.</p>
+        <ul>
+          <li><strong>modules/</strong> — reusable, environment-agnostic Terraform (the kafka-cluster module).</li>
+          <li><strong>envs/&lt;env&gt;/</strong> — thin wrappers: a <code>backend.tf</code> (unique state key) + a <code>&lt;env&gt;.tfvars</code> (broker count, instance type, disk).</li>
+          <li><strong>packer/</strong> — the AMI build and its Ansible roles, versioned alongside infra.</li>
+        </ul>
+        <p>Each environment's state lives at a distinct S3 key (<code>dev/kafka.tfstate</code>, <code>prod/kafka.tfstate</code>) sharing one bucket and one DynamoDB lock table. This gives blast-radius isolation without duplicating code. An alternative is Terraform <em>workspaces</em>, but separate directories make per-env CI rules and IAM roles far clearer.</p>` +
+        links([
+          ["https://developer.hashicorp.com/terraform/language/modules/develop","Terraform — module development"],
+          ["https://developer.hashicorp.com/terraform/language/backend/s3","Terraform — S3 backend"],
+          ["https://developer.hashicorp.com/terraform/language/state/workspaces","Terraform — workspaces vs. directories"],
+          ["https://developer.hashicorp.com/terraform/tutorials/modules/organize-configuration","Terraform — organizing configuration"]
+        ]) },
+  "m-verify": { t: "Verifying & operating the cluster",
+    h: `<p>Connect without SSH using SSM Session Manager, then confirm the KRaft quorum is healthy and replication is working before promoting a deploy.</p>
+        <pre><code># Open a shell on a broker (no bastion, no SSH key)
+aws ssm start-session --target i-0abc123...
+
+# KRaft quorum status — all nodes should be caught up
+/opt/kafka/bin/kafka-metadata-quorum.sh \\
+  --bootstrap-server localhost:9092 describe --status
+
+# Smoke test: create, write, read, delete a topic
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \\
+  --create --topic smoke --partitions 3 --replication-factor 3
+echo "hello" | /opt/kafka/bin/kafka-console-producer.sh \\
+  --bootstrap-server localhost:9092 --topic smoke
+/opt/kafka/bin/kafka-console-consumer.sh \\
+  --bootstrap-server localhost:9092 --topic smoke --from-beginning --max-messages 1
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic smoke</code></pre>
+        <p><strong>Automate it:</strong> wrap the smoke test in a post-apply CI job so every deploy is health-checked before the pipeline allows promotion to the next environment. Export broker JMX metrics to CloudWatch and alarm on <code>UnderReplicatedPartitions &gt; 0</code> and <code>OfflinePartitionsCount &gt; 0</code>.</p>` +
+        links([
+          ["https://kafka.apache.org/documentation/#basic_ops","Kafka — basic operations"],
+          ["https://kafka.apache.org/documentation/#monitoring","Kafka — monitoring metrics"],
+          ["https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html","AWS — Session Manager"],
+          ["https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_concepts.html","AWS — CloudWatch alarms"]
+        ]) }
+};
+
+/* ---- font size 14 → 36 ---- */
+const SIZES = [14,16,18,20,22,24,28,32,36];
+let sizeIdx = 1;
+const root = document.documentElement, fsVal = document.getElementById('fsVal');
+function applySize(){ root.style.setProperty('--fs', SIZES[sizeIdx]+'px'); fsVal.textContent = SIZES[sizeIdx]+'px'; }
+document.getElementById('fsUp').onclick = ()=>{ if(sizeIdx<SIZES.length-1){sizeIdx++;applySize();} };
+document.getElementById('fsDown').onclick = ()=>{ if(sizeIdx>0){sizeIdx--;applySize();} };
+
+/* ---- theme ---- */
+const themeBtn = document.getElementById('themeBtn');
+const themeIcon = document.getElementById('themeIcon'), themeTxt = document.getElementById('themeTxt');
+themeBtn.onclick = ()=>{
+  const dark = root.getAttribute('data-theme')==='dark';
+  root.setAttribute('data-theme', dark?'light':'dark');
+  themeIcon.textContent = dark?'🌙':'☀️';
+  themeTxt.textContent = dark?'Dark':'Light';
+};
+
+/* ---- collapsibles ---- */
+document.querySelectorAll('.block-head').forEach(h=>{
+  h.onclick = ()=> h.parentElement.classList.toggle('open');
+});
+
+/* ---- modals ---- */
+const overlay = document.getElementById('modalOverlay');
+const modalCard = document.getElementById('modalCard');
+const mTitle = document.getElementById('modalTitle'), mBody = document.getElementById('modalBody');
+function openModal(key, jumpToRefs){
+  const m = MODALS[key]; if(!m) return;
+  mTitle.textContent = m.t; mBody.innerHTML = m.h; overlay.classList.add('show');
+  // reset scroll, then optionally reveal the references block
+  modalCard.scrollTop = 0;
+  if(jumpToRefs){
+    const refs = mBody.querySelector('.modal-links');
+    if(refs) setTimeout(()=> refs.scrollIntoView({behavior:'smooth', block:'start'}), 80);
+  }
+}
+document.querySelectorAll('.more-btn').forEach(b=>{
+  b.onclick = ()=> openModal(b.dataset.modal, b.dataset.jump === 'refs');
+});
+// clickable architecture diagram
+const archDiagram = document.getElementById('archDiagram');
+if(archDiagram){
+  archDiagram.addEventListener('click', ()=> openModal('m-arch', false));
+  archDiagram.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openModal('m-arch', false); } });
+}
+function closeModal(){ overlay.classList.remove('show'); }
+document.getElementById('modalClose').onclick = closeModal;
+overlay.onclick = e=>{ if(e.target===overlay) closeModal(); };
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+/* ---- copy buttons ---- */
+document.querySelectorAll('pre').forEach(pre=>{
+  const wrap = pre.closest('.codewrap'); if(!wrap) return;
+  const btn = document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copy';
+  btn.onclick = ()=>{ navigator.clipboard.writeText(pre.innerText).then(()=>{ btn.textContent='Copied'; setTimeout(()=>btn.textContent='Copy',1400); }); };
+  wrap.appendChild(btn);
+});
+
+/* ---- TOC active highlight + mobile toggle ---- */
+const tocLinks = [...document.querySelectorAll('#tocList a')];
+const observer = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting){
+    const id = e.target.id;
+    tocLinks.forEach(a=> a.classList.toggle('active', a.getAttribute('href')==='#'+id));
+  }});
+},{ rootMargin:'-30% 0px -60% 0px' });
+document.querySelectorAll('section.block, .hero').forEach(s=> s.id && observer.observe(s));
+
+const toc = document.getElementById('toc');
+document.getElementById('tocTitle').onclick = ()=>{ if(window.innerWidth<=860) toc.classList.toggle('open'); };
+tocLinks.forEach(a=> a.onclick = (e)=>{
+  const id = a.getAttribute('href').slice(1);
+  const target = document.getElementById(id);
+  // open the enclosing collapsible section if needed
+  const section = target ? target.closest('section.block') : null;
+  if(section && !section.classList.contains('open')) section.classList.add('open');
+  if(window.innerWidth<=860) toc.classList.remove('open');
+  // let layout settle (grid-rows animation) before the browser jumps to the anchor
+  if(section){
+    e.preventDefault();
+    setTimeout(()=> target.scrollIntoView({behavior:'smooth', block:'start'}), 60);
+  }
+});
+applySize();
+</script>
+</body>
+</html>
