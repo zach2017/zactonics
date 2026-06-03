@@ -215,6 +215,56 @@ table.ref th, table.ref td { text-align: left; padding: .6rem .7rem; border-bott
 table.ref th { background: var(--bg-alt); font-weight: 600; }
 table.ref tr:hover td { background: var(--bg-alt); }
 
+/* ============ Line-by-line explainer ============ */
+.lbl-file {
+  display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: .8rem; font-weight: 600;
+  background: var(--black); color: #fff; padding: .35rem .7rem; border-radius: 3px 3px 0 0; margin-top: 1.2rem;
+}
+[data-theme="dark"] .lbl-file { background: #000; border: 1px solid var(--border); border-bottom: none; }
+.explain {
+  border: 1px solid var(--border); border-radius: 0 3px 3px 3px; overflow: hidden; margin-bottom: 1.2rem;
+}
+.explain .row { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); border-bottom: 1px solid var(--border); }
+.explain .row:last-child { border-bottom: none; }
+.explain .row:nth-child(odd) .en { background: var(--bg-alt); }
+.explain .code {
+  font-family: 'IBM Plex Mono', monospace; font-size: .8em; line-height: 1.5; padding: .55rem .8rem;
+  background: var(--code-bg); color: var(--code-text); white-space: pre-wrap; word-break: break-word;
+  border-right: 2px solid var(--accent); overflow-x: auto;
+}
+.explain .en { padding: .55rem .8rem; font-size: .9em; }
+.explain .en .lead { color: var(--accent); font-weight: 600; }
+.explain .grp {
+  grid-column: 1 / -1; background: var(--accent); color: #fff; font-size: .78rem; font-weight: 600;
+  padding: .35rem .8rem; letter-spacing: .02em;
+}
+[data-theme="dark"] .explain .grp { background: var(--accent-dark); color: #000; }
+@media (max-width: 640px) {
+  .explain .row { grid-template-columns: 1fr; }
+  .explain .code { border-right: none; border-bottom: 2px solid var(--accent); }
+}
+/* glossary chips */
+.gloss { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+.gloss .chip {
+  flex: 1 1 240px; border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 0 3px 3px 0; padding: .6rem .8rem; background: var(--surface); min-width: 220px;
+}
+.gloss .chip .term { font-weight: 600; font-size: .9rem; color: var(--accent); }
+.gloss .chip .def { font-size: .82rem; color: var(--text-soft); margin-top: .2rem; }
+/* numbered flow steps */
+.flow { counter-reset: step; margin: 1rem 0; }
+.flow .fstep {
+  display: flex; gap: .8rem; padding: .7rem 0; border-bottom: 1px dashed var(--border); align-items: flex-start;
+}
+.flow .fstep:last-child { border-bottom: none; }
+.flow .fstep::before {
+  counter-increment: step; content: counter(step);
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: grid; place-items: center; font-size: .82rem; font-weight: 600; font-family: 'IBM Plex Mono', monospace;
+}
+.flow .fstep .ftext { font-size: .92rem; }
+.flow .fstep .ftext b { color: var(--accent); }
+
 /* ============ Footer ============ */
 footer { border-top: 1px solid var(--border); padding: 2rem 1rem; text-align: center; color: var(--text-soft); font-size: .85rem; }
 
@@ -279,6 +329,14 @@ footer { border-top: 1px solid var(--border); padding: 2rem 1rem; text-align: ce
       <a class="link" href="#verify">9. Verify &amp; Operate</a>
       <a class="link" href="#security">10. Security Hardening</a>
       <a class="link" href="#troubleshoot">11. Troubleshooting</a>
+      <a class="link" href="#explain" style="margin-top:.6rem;border-top:1px solid var(--border);padding-top:.6rem">📖 Line-by-Line Explainers</a>
+      <a class="link sub" href="#how-it-fits">↳ How it all fits together</a>
+      <a class="link sub" href="#runners">↳ How GitLab runners work</a>
+      <a class="link sub" href="#explain-ci">↳ .gitlab-ci.yml explained</a>
+      <a class="link sub" href="#explain-versions">↳ versions.tf explained</a>
+      <a class="link sub" href="#explain-vars">↳ variables.tf explained</a>
+      <a class="link sub" href="#explain-main">↳ main.tf explained</a>
+      <a class="link sub" href="#explain-outputs">↳ outputs.tf explained</a>
       <a class="link" href="#refs">Reference Links</a>
     </div>
   </nav>
@@ -848,6 +906,342 @@ super.users=User:admin</code></pre></div>
       </div></div></div>
     </section>
 
+    <!-- ============ LINE-BY-LINE EXPLAINERS ============ -->
+    <section class="block open" id="explain">
+      <div class="block-head"><span class="num">📖</span><h2>Line-by-line explainers — read every file like a story</h2><span class="chev">▶</span></div>
+      <div class="block-body"><div class="block-body-inner"><div class="block-pad">
+        <p>This part explains the GitLab and Terraform files <strong>one line at a time</strong>, in plain language — imagine a friend reading over your shoulder. We also explain <strong>how GitLab runners work</strong>, because that's the piece most people find confusing. The files below are the same ones in the EC2 starter project (a single web server on AWS).</p>
+
+        <h3 id="how-it-fits" style="scroll-margin-top:80px">First, the big picture: how the pieces talk to each other</h3>
+        <p>Think of it like ordering food. <strong>You</strong> write down what you want (the code). <strong>GitLab</strong> is the restaurant that takes your order. The <strong>runner</strong> is the cook who actually makes it. <strong>Terraform</strong> is the recipe-follower, and <strong>AWS</strong> is the kitchen where the real food (servers) gets made.</p>
+        <div class="diagram-box" role="img" aria-label="How code flows from you to AWS through GitLab and a runner">
+          <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)"/></marker>
+              <style>
+                .b{fill:var(--surface);stroke:var(--accent);stroke-width:1.6;}
+                .bd{fill:var(--bg-alt);stroke:var(--border);stroke-width:1;}
+                .t{font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--accent);}
+                .s{font-family:'IBM Plex Sans',sans-serif;font-size:10px;fill:var(--text-soft);}
+                .l{stroke:var(--accent);stroke-width:1.6;fill:none;marker-end:url(#ar2);}
+                .ls{font-family:'IBM Plex Sans',sans-serif;font-size:9px;fill:var(--text-soft);}
+              </style>
+            </defs>
+            <rect class="b" x="15" y="95" width="110" height="60" rx="4"/>
+            <text class="t" x="30" y="120">You</text>
+            <text class="s" x="30" y="138">write code +</text>
+            <text class="s" x="30" y="150">git push</text>
+
+            <rect class="b" x="175" y="95" width="120" height="60" rx="4"/>
+            <text class="t" x="190" y="120">GitLab</text>
+            <text class="s" x="190" y="138">stores code,</text>
+            <text class="s" x="190" y="150">starts pipeline</text>
+
+            <rect class="bd" x="345" y="95" width="120" height="60" rx="4"/>
+            <text class="t" x="360" y="120">Runner</text>
+            <text class="s" x="360" y="138">the "cook" that</text>
+            <text class="s" x="360" y="150">runs each job</text>
+
+            <rect class="b" x="515" y="40" width="120" height="55" rx="4"/>
+            <text class="t" x="530" y="63">Terraform</text>
+            <text class="s" x="530" y="80">reads recipe,</text>
+            <text class="s" x="530" y="92">calls AWS</text>
+
+            <rect class="bd" x="515" y="155" width="120" height="55" rx="4"/>
+            <text class="t" x="530" y="178">AWS</text>
+            <text class="s" x="530" y="195">builds the real</text>
+            <text class="s" x="530" y="207">EC2 server</text>
+
+            <path class="l" d="M125,125 L173,125"/>
+            <text class="ls" x="130" y="118">push</text>
+            <path class="l" d="M295,125 L343,125"/>
+            <text class="ls" x="298" y="118">job</text>
+            <path class="l" d="M465,118 L513,80"/>
+            <text class="ls" x="468" y="100">runs</text>
+            <path class="l" d="M635,95 L635,153"/>
+            <text class="ls" x="640" y="128">API call</text>
+          </svg>
+        </div>
+        <div class="note"><strong>Key idea</strong> &nbsp;You never log into a server to build things by hand. You write files, push them, and robots (the runner + Terraform) do the work the exact same way every time.</div>
+
+        <!-- ============ RUNNERS ============ -->
+        <h3 id="runners" style="scroll-margin-top:80px">How GitLab runners work (the "cook" explained)</h3>
+        <p>A <strong>runner</strong> is just a computer (or a small program on a computer) whose only job is to run the steps in your pipeline. When you push code, GitLab makes a list of jobs to do. A runner raises its hand, says "I'll take that job," does it in a fresh clean workspace, and reports back pass or fail.</p>
+        <div class="diagram-box" role="img" aria-label="The cycle of how a GitLab runner picks up and runs a job">
+          <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)"/></marker>
+              <style>
+                .bx{fill:var(--surface);stroke:var(--accent);stroke-width:1.6;}
+                .bxd{fill:var(--bg-alt);stroke:var(--border);stroke-width:1;}
+                .ti{font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:600;fill:var(--accent);}
+                .su{font-family:'IBM Plex Sans',sans-serif;font-size:9.5px;fill:var(--text-soft);}
+                .ln3{stroke:var(--accent);stroke-width:1.5;fill:none;marker-end:url(#ar3);}
+              </style>
+            </defs>
+            <!-- GitLab server -->
+            <rect class="bx" x="270" y="15" width="180" height="56" rx="4"/>
+            <text class="ti" x="288" y="37">GitLab (the boss)</text>
+            <text class="su" x="288" y="54">keeps a to-do list of jobs</text>
+
+            <!-- Runner -->
+            <rect class="bxd" x="270" y="130" width="180" height="56" rx="4"/>
+            <text class="ti" x="288" y="152">Runner (the cook)</text>
+            <text class="su" x="288" y="169">asks: "any jobs for me?"</text>
+
+            <!-- Container / clean workspace -->
+            <rect class="bx" x="245" y="240" width="230" height="64" rx="4"/>
+            <text class="ti" x="263" y="262">Fresh container</text>
+            <text class="su" x="263" y="279">downloads your code, runs</text>
+            <text class="su" x="263" y="292">the job's commands, then is thrown away</text>
+
+            <!-- arrows -->
+            <path class="ln3" d="M340,71 L340,128"/>
+            <text class="su" x="170" y="105">1. runner keeps asking</text>
+            <path class="ln3" d="M380,186 L380,238"/>
+            <text class="su" x="388" y="215">2. starts a clean box</text>
+            <path class="ln3" d="M270,272 C120,260 120,90 268,55"/>
+            <text class="su" x="40" y="170">3. reports pass / fail</text>
+          </svg>
+        </div>
+        <div class="gloss">
+          <div class="chip"><div class="term">Runner</div><div class="def">The machine/program that actually runs your jobs. You can use GitLab's shared runners (free, already set up) or host your own.</div></div>
+          <div class="chip"><div class="term">Executor</div><div class="def">The <em>way</em> a runner runs a job. The most common is "Docker," which means each job runs inside a fresh, clean container.</div></div>
+          <div class="chip"><div class="term">Container</div><div class="def">A throwaway mini-computer that starts from a clean image every time. Nothing from the last job leaks in.</div></div>
+          <div class="chip"><div class="term">Tags</div><div class="def">Labels you can put on jobs and runners so the right runner picks up the right job (e.g. only a runner tagged <code>aws</code>).</div></div>
+        </div>
+        <div class="flow">
+          <div class="fstep"><div class="ftext">You <b>git push</b> your code. GitLab notices the new commit.</div></div>
+          <div class="fstep"><div class="ftext">GitLab reads <code>.gitlab-ci.yml</code> and builds a <b>to-do list of jobs</b> (validate, plan, apply…).</div></div>
+          <div class="fstep"><div class="ftext">A free runner <b>volunteers</b> for the next job that's ready.</div></div>
+          <div class="fstep"><div class="ftext">The runner starts a <b>fresh container</b> from the image you picked (here, the Terraform image).</div></div>
+          <div class="fstep"><div class="ftext">It <b>downloads your code</b>, then runs the job's commands line by line.</div></div>
+          <div class="fstep"><div class="ftext">It reports <b>pass or fail</b> back to GitLab, saves any artifacts, and <b>deletes the container</b>.</div></div>
+        </div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-runners">▸ Shared vs. your own runners (more detail)</button><button class="more-btn ref-btn" data-modal="m-runners" data-jump="refs">↗ Official references</button></div>
+
+        <!-- ============ .gitlab-ci.yml ============ -->
+        <h3 id="explain-ci" style="scroll-margin-top:80px">File 1: <code>.gitlab-ci.yml</code> — the recipe card for the pipeline</h3>
+        <p>This file lives at the top of your project. GitLab reads it to learn what jobs to run and in what order. YAML is just a way of writing lists and settings using spaces for nesting. Here it is, line by line:</p>
+
+        <span class="lbl-file">.gitlab-ci.yml</span>
+        <div class="explain">
+          <div class="row"><div class="grp">Picking the computer image every job starts from</div></div>
+          <div class="row"><div class="code">image:
+  name: hashicorp/terraform:1.9
+  entrypoint: [""]</div><div class="en"><span class="lead">"Start each job inside this pre-made computer."</span> The <code>hashicorp/terraform:1.9</code> image already has Terraform installed, so we don't have to install it ourselves. <code>entrypoint: [""]</code> turns off the image's auto-start command so GitLab can run our own commands instead.</div></div>
+
+          <div class="row"><div class="grp">Variables = sticky notes the whole pipeline can read</div></div>
+          <div class="row"><div class="code">variables:
+  TF_ROOT: ${CI_PROJECT_DIR}/terraform
+  TF_STATE_NAME: ec2-demo
+  AWS_DEFAULT_REGION: us-east-1</div><div class="en"><span class="lead">Reusable values.</span> <code>TF_ROOT</code> is the folder holding our <code>.tf</code> files. <code>CI_PROJECT_DIR</code> is a built-in GitLab variable meaning "where the code was downloaded." <code>TF_STATE_NAME</code> names our saved state. <code>AWS_DEFAULT_REGION</code> tells AWS which part of the world to build in.</div></div>
+          <div class="row"><div class="code">  TF_ADDRESS: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}</div><div class="en"><span class="lead">The web address where GitLab keeps our Terraform "memory."</span> Terraform needs to remember what it already built; GitLab stores that for us at this URL. <code>CI_API_V4_URL</code> and <code>CI_PROJECT_ID</code> are filled in automatically.</div></div>
+
+          <div class="row"><div class="grp">Cache = keep some files between jobs to go faster</div></div>
+          <div class="row"><div class="code">cache:
+  key: "${TF_STATE_NAME}"
+  paths:
+    - ${TF_ROOT}/.terraform</div><div class="en"><span class="lead">"Save this folder so the next job doesn't re-download everything."</span> The <code>.terraform</code> folder holds downloaded plugins. Re-using it makes later jobs start quicker.</div></div>
+
+          <div class="row"><div class="grp">A reusable block of setup steps (an "anchor")</div></div>
+          <div class="row"><div class="code">.terraform_init: &amp;terraform_init
+  before_script:
+    - cd "${TF_ROOT}"
+    - terraform --version</div><div class="en"><span class="lead">A shortcut we can paste into many jobs.</span> The dot in <code>.terraform_init</code> means "this is a template, don't run it on its own." <code>&amp;terraform_init</code> gives it a nickname. <code>before_script</code> = steps that run before the main job. First we move into the Terraform folder and print the version.</div></div>
+          <div class="row"><div class="code">    - export TF_HTTP_ADDRESS="${TF_ADDRESS}"
+    - export TF_HTTP_USERNAME="gitlab-ci-token"
+    - export TF_HTTP_PASSWORD="${CI_JOB_TOKEN}"
+    - export TF_HTTP_LOCK_METHOD="POST"
+    - export TF_HTTP_UNLOCK_METHOD="DELETE"</div><div class="en"><span class="lead">Tell Terraform how to log into GitLab's memory storage.</span> <code>CI_JOB_TOKEN</code> is a temporary password GitLab makes for each job. We use environment variables (not command flags) on purpose — see the warning below. The lock settings stop two pipelines from editing at the same time.</div></div>
+          <div class="row"><div class="code">    - terraform init -reconfigure</div><div class="en"><span class="lead">"Get ready."</span> <code>init</code> downloads plugins and connects to the saved state. <code>-reconfigure</code> means "use the settings I just gave you, don't trust old ones."</div></div>
+
+          <div class="row"><div class="grp">The order the jobs happen in</div></div>
+          <div class="row"><div class="code">stages:
+  - validate
+  - plan
+  - apply
+  - destroy</div><div class="en"><span class="lead">The four steps, top to bottom.</span> All jobs in <code>validate</code> finish before <code>plan</code> starts, and so on. Think of them as levels in a game you clear in order.</div></div>
+
+          <div class="row"><div class="grp">Job 1 — check the code is written correctly</div></div>
+          <div class="row"><div class="code">validate:
+  stage: validate
+  &lt;&lt;: *terraform_init
+  script:
+    - terraform fmt -check -recursive
+    - terraform validate</div><div class="en"><span class="lead">"Is the code tidy and valid?"</span> <code>&lt;&lt;: *terraform_init</code> pastes in our setup shortcut. <code>fmt -check</code> makes sure the formatting is neat. <code>validate</code> checks for spelling/grammar mistakes in the code. This runs on every push.</div></div>
+
+          <div class="row"><div class="grp">Job 2 — make a preview of the changes</div></div>
+          <div class="row"><div class="code">plan:
+  stage: plan
+  &lt;&lt;: *terraform_init
+  script:
+    - terraform plan -out=plan.cache
+    - terraform show -no-color plan.cache &gt; plan.txt
+  artifacts:
+    paths:
+      - ${TF_ROOT}/plan.cache
+      - ${TF_ROOT}/plan.txt
+    expire_in: 1 week</div><div class="en"><span class="lead">"Show me what WOULD change, but don't change anything yet."</span> <code>plan</code> writes the preview to <code>plan.cache</code>. We also save a readable copy as <code>plan.txt</code>. <code>artifacts</code> = files saved after the job so the next job (and you) can download them. They auto-delete after a week.</div></div>
+
+          <div class="row"><div class="grp">Job 3 — actually build it (only when YOU say go)</div></div>
+          <div class="row"><div class="code">apply:
+  stage: apply
+  &lt;&lt;: *terraform_init
+  script:
+    - terraform apply -auto-approve plan.cache
+    - terraform output
+  dependencies:
+    - plan
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'</div><div class="en"><span class="lead">"Build exactly what the preview showed."</span> <code>apply</code> creates the server. <code>dependencies: plan</code> grabs the saved preview. <code>when: manual</code> means it waits for you to click the ▶ button — nothing builds by surprise. <code>rules</code> only allows this on the main branch, so test branches can't deploy.</div></div>
+
+          <div class="row"><div class="grp">Job 4 — tear it down so you stop paying</div></div>
+          <div class="row"><div class="code">destroy:
+  stage: destroy
+  &lt;&lt;: *terraform_init
+  script:
+    - terraform destroy -auto-approve
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'</div><div class="en"><span class="lead">"Delete everything we made."</span> Also a manual ▶ button so it never deletes by accident. Great for demos so a server isn't left running and charging money.</div></div>
+        </div>
+        <div class="note warn"><strong>Why environment variables and not <code>-backend-config</code> flags?</strong> &nbsp;If you pass the job token as a command flag, Terraform secretly saves it inside <code>plan.cache</code>. That token dies when the job ends, so the later apply job would fail with a "state lock" error. Using <code>TF_HTTP_*</code> variables avoids this because each job reads a fresh token.</div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-ci-deep">▸ YAML rules, anchors &amp; pipeline keywords</button><button class="more-btn ref-btn" data-modal="m-ci-deep" data-jump="refs">↗ Official references</button></div>
+
+        <!-- ============ versions.tf ============ -->
+        <h3 id="explain-versions" style="scroll-margin-top:80px">File 2: <code>versions.tf</code> — which tools and where to save memory</h3>
+        <p>Terraform files end in <code>.tf</code>. Splitting them into several files is just for tidiness — Terraform reads them all together. This one sets up the rules of the game.</p>
+        <span class="lbl-file">terraform/versions.tf</span>
+        <div class="explain">
+          <div class="row"><div class="code">terraform {
+  required_version = "&gt;= 1.5"</div><div class="en"><span class="lead">"You need at least Terraform version 1.5 to run this."</span> Stops someone using a too-old version that might behave differently.</div></div>
+          <div class="row"><div class="code">  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~&gt; 5.0"
+    }
+  }</div><div class="en"><span class="lead">"To talk to AWS, download the official AWS plugin."</span> A <em>provider</em> is a plugin that lets Terraform control a specific service. <code>~&gt; 5.0</code> means "any 5.x version" — safe small updates, no surprise big jumps.</div></div>
+          <div class="row"><div class="code">  backend "http" {}
+}</div><div class="en"><span class="lead">"Save my memory using an internet address."</span> Empty braces because the CI pipeline fills in the real address at run time (that's the <code>TF_HTTP_*</code> stuff from File 1). This is how GitLab stores state for us.</div></div>
+          <div class="row"><div class="code">provider "aws" {
+  region = var.aws_region</div><div class="en"><span class="lead">Set up the AWS connection.</span> <code>region</code> = which AWS data-center region. <code>var.aws_region</code> pulls the value from our variables file, so we don't hard-code it.</div></div>
+          <div class="row"><div class="code">  default_tags {
+    tags = {
+      Project   = "gitlab-ec2-demo"
+      ManagedBy = "terraform"
+    }
+  }
+}</div><div class="en"><span class="lead">Sticky labels on everything we create.</span> <em>Tags</em> are name-tags on AWS resources. Putting <code>ManagedBy = terraform</code> on everything makes it easy to find later and know "a human shouldn't edit this by hand."</div></div>
+        </div>
+        <div class="note"><strong>Where are the AWS passwords?</strong> &nbsp;Notice there's no access key in this file. The AWS plugin automatically reads <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> from the environment — which you set as masked variables in GitLab. Secrets never live in the code.</div>
+
+        <!-- ============ variables.tf ============ -->
+        <h3 id="explain-vars" style="scroll-margin-top:80px">File 3: <code>variables.tf</code> — the knobs you can turn</h3>
+        <p>Variables are like settings on a game before you start — change them without touching the main code.</p>
+        <span class="lbl-file">terraform/variables.tf</span>
+        <div class="explain">
+          <div class="row"><div class="code">variable "aws_region" {
+  description = "AWS region to deploy into."
+  type        = string
+  default     = "us-east-1"
+}</div><div class="en"><span class="lead">A knob named <code>aws_region</code>.</span> <code>description</code> explains it to humans. <code>type = string</code> means it's text. <code>default</code> is the value used if you don't pick one — so this is optional.</div></div>
+          <div class="row"><div class="code">variable "instance_type" {
+  type    = string
+  default = "t3.micro"
+}</div><div class="en"><span class="lead">How big the server is.</span> <code>t3.micro</code> is a tiny, cheap size — perfect for a demo. Change it to <code>t3.small</code> for more power.</div></div>
+          <div class="row"><div class="code">variable "ingress_cidr" {
+  type    = string
+  default = "0.0.0.0/0"
+}</div><div class="en"><span class="lead">Who is allowed to reach the server.</span> <code>0.0.0.0/0</code> means "anyone on the internet" — fine for a quick test, but you should narrow it to your own IP for anything real.</div></div>
+        </div>
+        <div class="note"><strong>Changing a knob from GitLab</strong> &nbsp;Add a CI/CD variable named <code>TF_VAR_instance_type</code> with value <code>t3.small</code>, and Terraform automatically uses it. The <code>TF_VAR_</code> prefix is the magic word.</div>
+
+        <!-- ============ main.tf ============ -->
+        <h3 id="explain-main" style="scroll-margin-top:80px">File 4: <code>main.tf</code> — the actual server, step by step</h3>
+        <p>This is the heart of it. It does three things: find a network to use, make a firewall, and launch the server.</p>
+        <span class="lbl-file">terraform/main.tf</span>
+        <div class="explain">
+          <div class="row"><div class="grp">Part A — borrow the network that already exists</div></div>
+          <div class="row"><div class="code">data "aws_vpc" "default" {
+  default = true
+}</div><div class="en"><span class="lead">"Find the default network AWS already gave me."</span> A <em>data</em> block <strong>looks up</strong> something that exists (it doesn't create anything). A VPC is your private network in AWS. Every account gets a default one.</div></div>
+          <div class="row"><div class="code">data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}</div><div class="en"><span class="lead">"List the smaller sections inside that network."</span> A <em>subnet</em> is a slice of the VPC. We grab them so we can place the server in one.</div></div>
+          <div class="row"><div class="code">data "aws_ami" "al2023" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+}</div><div class="en"><span class="lead">"Find the newest Amazon Linux 2023 disk image."</span> An <em>AMI</em> is like a saved snapshot of an operating system. <code>most_recent</code> + the name filter means we always get the latest one without hard-coding an ID that goes stale.</div></div>
+
+          <div class="row"><div class="grp">Part B — build a firewall (security group)</div></div>
+          <div class="row"><div class="code">resource "aws_security_group" "demo" {
+  name   = "${var.instance_name}-sg"
+  vpc_id = data.aws_vpc.default.id</div><div class="en"><span class="lead">A <em>resource</em> block CREATES something real.</span> A <em>security group</em> is a firewall — a list of who's allowed in and out. We give it a name and attach it to our network.</div></div>
+          <div class="row"><div class="code">  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.ingress_cidr]
+  }</div><div class="en"><span class="lead">"Allow people to connect on port 22."</span> <em>Ingress</em> = traffic coming IN. Port 22 is SSH (the way you remotely log into a Linux server).</div></div>
+          <div class="row"><div class="code">  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [var.ingress_cidr]
+  }</div><div class="en"><span class="lead">"Allow web traffic on port 80."</span> Port 80 is normal websites (HTTP). This lets a browser load the demo page.</div></div>
+          <div class="row"><div class="code">  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}</div><div class="en"><span class="lead">"Let the server reach out anywhere."</span> <em>Egress</em> = traffic going OUT. <code>protocol = "-1"</code> and port 0 mean "all of it" — needed so the server can download updates.</div></div>
+
+          <div class="row"><div class="grp">Part C — launch the actual server</div></div>
+          <div class="row"><div class="code">resource "aws_instance" "demo" {
+  ami                    = data.aws_ami.al2023.id
+  instance_type          = var.instance_type
+  subnet_id              = data.aws_subnets.default.ids[0]
+  vpc_security_group_ids = [aws_security_group.demo.id]</div><div class="en"><span class="lead">Create the EC2 server.</span> It uses the AMI we found, the size from our variable, the first subnet from the list (<code>[0]</code> = first item), and the firewall we just built. Notice how blocks <strong>reference each other</strong> — Terraform figures out the right build order automatically.</div></div>
+          <div class="row"><div class="code">  user_data = &lt;&lt;-EOF
+    #!/bin/bash
+    dnf install -y httpd
+    systemctl enable --now httpd
+    echo "&lt;h1&gt;Hello from GitLab CI&lt;/h1&gt;" &gt; /var/www/html/index.html
+  EOF</div><div class="en"><span class="lead">A startup script the server runs the first time it boots.</span> <code>user_data</code> = "do this on first start." Here it installs a web server (<code>httpd</code>), turns it on, and writes a hello page. The <code>&lt;&lt;-EOF ... EOF</code> is just a way to write several lines of text.</div></div>
+          <div class="row"><div class="code">  tags = { Name = var.instance_name }
+}</div><div class="en"><span class="lead">Give the server a friendly name tag</span> so you can spot it in the AWS console.</div></div>
+        </div>
+
+        <!-- ============ outputs.tf ============ -->
+        <h3 id="explain-outputs" style="scroll-margin-top:80px">File 5: <code>outputs.tf</code> — the answers Terraform hands back</h3>
+        <p>After building, Terraform can print useful facts — like the server's address — so you don't have to go hunting in the AWS console.</p>
+        <span class="lbl-file">terraform/outputs.tf</span>
+        <div class="explain">
+          <div class="row"><div class="code">output "instance_id" {
+  value = aws_instance.demo.id
+}</div><div class="en"><span class="lead">"Print the server's ID number."</span> <code>output</code> = a value shown after <code>apply</code> finishes. <code>aws_instance.demo.id</code> reads the ID from the server we built.</div></div>
+          <div class="row"><div class="code">output "public_ip" {
+  value = aws_instance.demo.public_ip
+}</div><div class="en"><span class="lead">"Print the public IP address."</span> This is the internet address of your server.</div></div>
+          <div class="row"><div class="code">output "web_url" {
+  value = "http://${aws_instance.demo.public_ip}"
+}</div><div class="en"><span class="lead">"Print a ready-to-click link."</span> It glues <code>http://</code> in front of the IP so you can paste it into a browser and see your "Hello" page.</div></div>
+        </div>
+        <div class="note"><strong>Putting it together</strong> &nbsp;Push code → runner starts → <code>validate</code> checks it → <code>plan</code> previews it → you click ▶ on <code>apply</code> → AWS builds the server → outputs show you the <code>web_url</code> → click ▶ on <code>destroy</code> when you're done. Same steps, every time, no surprises.</div>
+        <div class="btn-row"><button class="more-btn" data-modal="m-tf-lang">▸ Terraform building blocks (resource, data, variable, output)</button><button class="more-btn ref-btn" data-modal="m-tf-lang" data-jump="refs">↗ Official references</button></div>
+      </div></div></div>
+    </section>
+
     <!-- REFS -->
     <section class="block open" id="refs">
       <div class="block-head"><span class="num">↗</span><h2>Official reference links</h2><span class="chev">▶</span></div>
@@ -863,6 +1257,10 @@ super.users=User:admin</code></pre></div>
             <tr><td>AWS Systems Manager (SSM)</td><td><a class="link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/" target="_blank" rel="noopener">docs.aws.amazon.com · Systems Manager</a></td></tr>
             <tr><td>SSM Parameter Store</td><td><a class="link" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html" target="_blank" rel="noopener">docs · Parameter Store</a></td></tr>
             <tr><td>GitLab CI/CD</td><td><a class="link" href="https://docs.gitlab.com/ee/ci/" target="_blank" rel="noopener">docs.gitlab.com/ee/ci</a></td></tr>
+            <tr><td>GitLab Runners</td><td><a class="link" href="https://docs.gitlab.com/runner/" target="_blank" rel="noopener">docs.gitlab.com/runner</a></td></tr>
+            <tr><td>GitLab CI YAML reference</td><td><a class="link" href="https://docs.gitlab.com/ee/ci/yaml/" target="_blank" rel="noopener">docs.gitlab.com/ee/ci/yaml</a></td></tr>
+            <tr><td>GitLab — Terraform state</td><td><a class="link" href="https://docs.gitlab.com/ee/user/infrastructure/iac/terraform_state.html" target="_blank" rel="noopener">docs.gitlab.com · Terraform state</a></td></tr>
+            <tr><td>Terraform language</td><td><a class="link" href="https://developer.hashicorp.com/terraform/language" target="_blank" rel="noopener">developer.hashicorp.com/terraform/language</a></td></tr>
             <tr><td>GitHub Actions</td><td><a class="link" href="https://docs.github.com/en/actions" target="_blank" rel="noopener">docs.github.com/en/actions</a></td></tr>
             <tr><td>Apache Kafka (KRaft)</td><td><a class="link" href="https://kafka.apache.org/documentation/#kraft" target="_blank" rel="noopener">kafka.apache.org · KRaft</a></td></tr>
             <tr><td>AWS OIDC for CI</td><td><a class="link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html" target="_blank" rel="noopener">docs · IAM OIDC providers</a></td></tr>
@@ -1204,6 +1602,66 @@ echo "hello" | /opt/kafka/bin/kafka-console-producer.sh \\
           ["https://kafka.apache.org/documentation/#monitoring","Kafka — monitoring metrics"],
           ["https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html","AWS — Session Manager"],
           ["https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_concepts.html","AWS — CloudWatch alarms"]
+        ]) },
+  "m-runners": { t: "Shared runners vs. your own runners",
+    h: `<p>A runner is the machine that runs your pipeline jobs. You have two main choices:</p>
+        <ul>
+          <li><strong>Shared runners</strong> — provided and maintained by GitLab, already turned on for most projects. Zero setup. Great for getting started. On GitLab.com they run your jobs on GitLab's own infrastructure with usage limits.</li>
+          <li><strong>Self-managed (your own) runners</strong> — you install the runner software on a machine you control (a server, a laptop, a Kubernetes cluster). You'd do this when you need access to a private network, special hardware, more speed, or tighter security.</li>
+        </ul>
+        <p><strong>Executors</strong> decide <em>how</em> a job runs. The popular ones:</p>
+        <ul>
+          <li><strong>Docker</strong> — each job runs in a fresh container from the image you pick. Clean and repeatable. (This is what our pipeline uses.)</li>
+          <li><strong>Shell</strong> — jobs run directly on the runner machine. Simple but messier; leftovers can carry between jobs.</li>
+          <li><strong>Kubernetes</strong> — each job becomes a temporary pod in a cluster. Scales to lots of jobs at once.</li>
+        </ul>
+        <p><strong>Tags</strong> connect jobs to runners. If a runner is registered with the tag <code>aws</code>, and a job says <code>tags: [aws]</code>, only that runner will pick it up. Without tags, any eligible runner can take the job.</p>
+        <p>To install your own runner you register it with a token from <em>Settings → CI/CD → Runners</em>, choose an executor, and it starts asking GitLab for jobs.</p>` +
+        links([
+          ["https://docs.gitlab.com/runner/","GitLab — Runner documentation"],
+          ["https://docs.gitlab.com/ee/ci/runners/","GitLab — runners overview"],
+          ["https://docs.gitlab.com/runner/executors/","GitLab — runner executors"],
+          ["https://docs.gitlab.com/ee/ci/runners/configure_runners.html","GitLab — configuring runners & tags"]
+        ]) },
+  "m-ci-deep": { t: "YAML rules, anchors & key pipeline keywords",
+    h: `<p>A few <code>.gitlab-ci.yml</code> ideas worth understanding:</p>
+        <ul>
+          <li><strong>YAML indentation</strong> — spaces (never tabs) show what belongs inside what. Things lined up at the same depth are siblings.</li>
+          <li><strong>Anchors (<code>&amp;name</code>) and aliases (<code>*name</code>)</strong> — write a block once, reuse it many times. <code>.terraform_init: &amp;terraform_init</code> defines it; <code>&lt;&lt;: *terraform_init</code> merges it into a job. The leading dot makes a "hidden" job that never runs by itself.</li>
+          <li><strong><code>stages</code></strong> — the ordered phases. Jobs in the same stage can run at the same time; the next stage waits for the previous one to pass.</li>
+          <li><strong><code>script</code> / <code>before_script</code> / <code>after_script</code></strong> — the commands a job runs. <code>before_script</code> runs first (setup), <code>after_script</code> runs last (cleanup), even if the job failed.</li>
+          <li><strong><code>rules</code></strong> — decide <em>if</em> and <em>when</em> a job runs, using conditions like the branch name. <code>$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH</code> means "only on the main branch."</li>
+          <li><strong><code>when: manual</code></strong> — the job waits for a human to click ▶. Perfect for apply and destroy.</li>
+          <li><strong><code>artifacts</code></strong> — files saved after a job so later jobs (and you) can use them.</li>
+          <li><strong><code>cache</code></strong> — files reused between runs to save time (not for passing results between jobs — that's artifacts).</li>
+          <li><strong>Predefined variables</strong> — GitLab fills in handy values automatically, like <code>CI_PROJECT_DIR</code>, <code>CI_PROJECT_ID</code>, <code>CI_JOB_TOKEN</code>, and <code>CI_COMMIT_BRANCH</code>.</li>
+        </ul>` +
+        links([
+          ["https://docs.gitlab.com/ee/ci/yaml/","GitLab — .gitlab-ci.yml keyword reference"],
+          ["https://docs.gitlab.com/ee/ci/yaml/yaml_optimization.html","GitLab — anchors & YAML optimization"],
+          ["https://docs.gitlab.com/ee/ci/jobs/job_control.html","GitLab — rules & job control"],
+          ["https://docs.gitlab.com/ee/ci/variables/predefined_variables.html","GitLab — predefined variables"]
+        ]) },
+  "m-tf-lang": { t: "Terraform building blocks",
+    h: `<p>Terraform code is made of a few simple block types. Once you know these four, you can read almost any Terraform file:</p>
+        <ul>
+          <li><strong><code>resource</code></strong> — <em>creates</em> something real (a server, a firewall). The most important block. Example: <code>resource "aws_instance" "demo" { ... }</code> — the first quote is the <em>type</em>, the second is your nickname for it.</li>
+          <li><strong><code>data</code></strong> — <em>looks up</em> something that already exists, without creating it (like finding the newest AMI or the default network).</li>
+          <li><strong><code>variable</code></strong> — an input knob you can set from outside (a CI variable, a command flag, or a defaults file).</li>
+          <li><strong><code>output</code></strong> — a value Terraform prints when it's done, like the server's IP address.</li>
+        </ul>
+        <p>Other useful pieces:</p>
+        <ul>
+          <li><strong><code>provider</code></strong> — the plugin for a service (AWS, Google Cloud, etc.) and its settings.</li>
+          <li><strong><code>terraform { }</code></strong> — top-level settings: required version, providers, and where to store state.</li>
+          <li><strong>References</strong> — writing <code>aws_security_group.demo.id</code> inside the instance tells Terraform "build the firewall first, then use its ID here." Terraform reads these links to figure out the correct order by itself.</li>
+          <li><strong>State</strong> — Terraform's memory file of what it already built, so next time it only changes what's different.</li>
+        </ul>` +
+        links([
+          ["https://developer.hashicorp.com/terraform/language","Terraform — language documentation"],
+          ["https://developer.hashicorp.com/terraform/language/resources","Terraform — resources"],
+          ["https://developer.hashicorp.com/terraform/language/data-sources","Terraform — data sources"],
+          ["https://developer.hashicorp.com/terraform/language/state","Terraform — state explained"]
         ]) }
 };
 
