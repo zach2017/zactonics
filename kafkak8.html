@@ -271,9 +271,11 @@
     <a href="#kafka-deploy">6. Deploy Kafka on K8s</a>
     <a href="#workers">7. Brokers, Producers, Consumers</a>
     <a href="#verify">8. Verify & Test</a>
-    <a href="#compare">9. Comparison Table</a>
-    <a href="#bestpractice">10. Best Practices</a>
-    <a href="#refs">11. Reference Links</a>
+    <a href="#kafka-ui">9. Kafka UI</a>
+    <a href="#monitoring">10. Prometheus & Grafana</a>
+    <a href="#compare">11. Comparison Table</a>
+    <a href="#bestpractice">12. Best Practices</a>
+    <a href="#refs">13. Reference Links</a>
   </nav>
 
   <main>
@@ -1035,10 +1037,174 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
       </details>
     </section>
 
+    <!-- KAFKA UI -->
+    <section class="block" id="kafka-ui">
+      <details class="section">
+        <summary>9. Kafka UI — Visual Cluster Management <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>A web UI makes brokers, topics, partitions, consumer groups, and live messages visible without shelling into pods. <strong>Kafka UI</strong> (provectus/kafka-ui) is a popular, lightweight open-source option. It runs as a single Deployment that connects to your bootstrap address.</p>
+
+          <h3>9.1 Deploy Kafka UI</h3>
+          <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata: { name: kafka-ui }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kafka-ui } }
+  template:
+    metadata: { labels: { app: kafka-ui } }
+    spec:
+      containers:
+      - name: kafka-ui
+        image: provectuslabs/kafka-ui:latest
+        ports: [ { containerPort: 8080 } ]
+        env:
+        - { name: KAFKA_CLUSTERS_0_NAME, value: "my-cluster" }
+        # Path A bootstrap (raw StatefulSet):
+        - { name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS, value: "kafka-svc:9092" }
+        # Path B (Strimzi) — use instead:
+        # value: "my-cluster-kafka-bootstrap.kafka.svc:9092"
+        # Optional: wire in JMX/Prometheus metrics (see section 10)
+        - { name: KAFKA_CLUSTERS_0_METRICS_PORT, value: "9404" }
+        - { name: KAFKA_CLUSTERS_0_METRICS_TYPE, value: "PROMETHEUS" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kafka-ui }
+spec:
+  type: NodePort
+  selector: { app: kafka-ui }
+  ports: [ { port: 80, targetPort: 8080, nodePort: 30080 } ]</code></pre>
+          <pre><code>kubectl apply -f kafka-ui.yaml
+kubectl get pods -l app=kafka-ui -w</code></pre>
+
+          <h3>9.2 Access it</h3>
+          <p>Reach the UI on any worker node's public IP at port <code class="inline">30080</code>, or port-forward for a quick local view:</p>
+          <pre><code># Port-forward (no NodePort exposure needed)
+kubectl port-forward svc/kafka-ui 8080:80
+# then open http://localhost:8080</code></pre>
+          <div class="callout warn">A <code class="inline">NodePort</code> exposes the UI on every node. For anything beyond a lab, put it behind an Ingress with TLS and authentication, or keep it private and rely on <code class="inline">port-forward</code>.</div>
+
+          <h3>9.3 What you can do in the UI</h3>
+          <ul>
+            <li>Browse brokers, their config, and partition distribution.</li>
+            <li>Create/inspect topics, view partition offsets, and produce/consume test messages.</li>
+            <li>Monitor consumer groups and their <strong>lag</strong> in real time.</li>
+            <li>Inspect schemas and connectors if you add Schema Registry / Kafka Connect.</li>
+          </ul>
+          <button class="more-btn" data-modal="m-ui">More details: Kafka UI vs other tools</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- MONITORING -->
+    <section class="block" id="monitoring">
+      <details class="section">
+        <summary>10. Monitoring with Prometheus &amp; Grafana <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>Kafka exposes rich metrics over <strong>JMX</strong>. The standard pattern is to attach the <strong>JMX Prometheus Exporter</strong> as a Java agent on each broker so metrics are scraped by Prometheus, then visualized and alerted on in Grafana.</p>
+
+          <h3>10.1 Expose broker metrics (JMX → Prometheus)</h3>
+          <h4>Path B (Strimzi) — built in</h4>
+          <p>Strimzi has first-class metrics support. Add a metrics config to the <code class="inline">Kafka</code> resource and it wires the exporter and a <code class="inline">9404</code> metrics port automatically:</p>
+          <pre><code>spec:
+  kafka:
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: kafka-metrics
+          key: kafka-metrics-config.yml</code></pre>
+          <p>Strimzi ships ready-made example ConfigMaps and Grafana dashboards in its <code class="inline">examples/metrics</code> directory.</p>
+
+          <h4>Path A (raw StatefulSet) — add the agent</h4>
+          <p>Mount the JMX exporter jar + a rules ConfigMap and set <code class="inline">KAFKA_OPTS</code> to load it as a javaagent on port 9404:</p>
+          <pre><code>env:
+- name: KAFKA_OPTS
+  value: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=9404:/opt/jmx/config.yml"
+ports:
+- { containerPort: 9092 }
+- { containerPort: 9404, name: metrics }</code></pre>
+
+          <h3>10.2 Install the kube-prometheus-stack</h3>
+          <p>The simplest route is the community Helm chart, which bundles Prometheus, Grafana, Alertmanager, and the operator:</p>
+          <pre><code>helm repo add prometheus-community \
+  https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace</code></pre>
+
+          <h3>10.3 Tell Prometheus to scrape Kafka</h3>
+          <p>Expose the metrics port via a Service, then create a <code class="inline">ServiceMonitor</code> (a CRD from the Prometheus Operator) so Prometheus auto-discovers the brokers:</p>
+          <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-metrics
+  labels: { app: kafka }
+spec:
+  clusterIP: None
+  selector: { app: kafka }
+  ports: [ { name: metrics, port: 9404 } ]
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kafka
+  labels: { release: monitoring }   # must match the Helm release label
+spec:
+  selector:
+    matchLabels: { app: kafka }
+  endpoints:
+    - port: metrics
+      interval: 30s</code></pre>
+          <pre><code>kubectl apply -f kafka-servicemonitor.yaml
+# confirm the target shows up:
+kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-prometheus 9090
+# open http://localhost:9090/targets → kafka endpoints should be "UP"</code></pre>
+
+          <h3>10.4 View dashboards in Grafana</h3>
+          <pre><code># Get the auto-generated Grafana admin password
+kubectl get secret -n monitoring monitoring-grafana \
+  -o jsonpath='{.data.admin-password}' | base64 -d; echo
+
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+# open http://localhost:3000  (user: admin)</code></pre>
+          <p>Import a community Kafka dashboard by ID under <em>Dashboards → Import</em>. Common choices:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Dashboard</th><th>Grafana ID</th><th>Shows</th></tr></thead>
+              <tbody>
+                <tr><td>Strimzi Kafka</td><td>—  (bundled YAML)</td><td>Brokers, topics, replication, JVM</td></tr>
+                <tr><td>Kafka Exporter Overview</td><td>7589</td><td>Consumer lag, topic offsets</td></tr>
+                <tr><td>JMX / Kafka Cluster</td><td>721</td><td>Broker throughput, request rates</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>10.5 Key metrics &amp; alerts to watch</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Metric</th><th>Why it matters</th><th>Alert when</th></tr></thead>
+              <tbody>
+                <tr><td>UnderReplicatedPartitions</td><td>Replicas falling behind / broker down</td><td>&gt; 0 for several minutes</td></tr>
+                <tr><td>OfflinePartitionsCount</td><td>Partitions with no active leader</td><td>&gt; 0</td></tr>
+                <tr><td>Consumer group lag</td><td>Consumers can't keep up with producers</td><td>Sustained growth</td></tr>
+                <tr><td>ActiveControllerCount</td><td>Exactly one controller should be active</td><td>≠ 1 across cluster</td></tr>
+                <tr><td>RequestHandlerAvgIdlePercent</td><td>Broker thread saturation</td><td>Drops toward 0</td></tr>
+                <tr><td>JVM heap / GC pauses</td><td>Memory pressure stalls the broker</td><td>Heap near max / long GC</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <button class="more-btn" data-modal="m-mon">More details: kafka_exporter for consumer lag</button>
+          <div class="callout"><strong>Tip:</strong> add the separate <code class="inline">kafka_exporter</code> (danielqsj) alongside the JMX exporter — it specializes in per-group, per-topic consumer lag, which the JMX metrics expose less directly. Feed both into the same Prometheus.</div>
+        </div>
+      </details>
+    </section>
+
     <!-- COMPARE -->
     <section class="block" id="compare">
       <details class="section" open>
-        <summary>9. Comparing the Provisioning Options <span class="chev">›</span></summary>
+        <summary>11. Comparing the Provisioning Options <span class="chev">›</span></summary>
         <div class="section-body">
           <div class="table-wrap">
             <table>
@@ -1060,7 +1226,7 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
     <!-- BEST PRACTICES -->
     <section class="block" id="bestpractice">
       <details class="section" open>
-        <summary>10. Best Practices &amp; Other Options <span class="chev">›</span></summary>
+        <summary>12. Best Practices &amp; Other Options <span class="chev">›</span></summary>
         <div class="section-body">
           <h3>Separation of concerns</h3>
           <p>Use the right tool for each layer rather than forcing one to do everything:</p>
@@ -1115,7 +1281,7 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
     <!-- REFERENCES -->
     <section class="block" id="refs">
       <details class="section" open>
-        <summary>11. Official Reference Links <span class="chev">›</span></summary>
+        <summary>13. Official Reference Links <span class="chev">›</span></summary>
         <div class="section-body">
           <div class="ref-grid">
             <a class="ref-card" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener"><span class="rc-t">Apache Kafka Docs</span><span class="rc-d">Core configuration, KRaft, broker reference.</span></a>
@@ -1130,6 +1296,11 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
             <a class="ref-card" href="https://developer.hashicorp.com/packer/docs" target="_blank" rel="noopener"><span class="rc-t">HashiCorp Packer</span><span class="rc-d">Build immutable golden AMIs.</span></a>
             <a class="ref-card" href="https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html" target="_blank" rel="noopener"><span class="rc-t">Amazon EKS</span><span class="rc-d">Managed Kubernetes control plane.</span></a>
             <a class="ref-card" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank" rel="noopener"><span class="rc-t">Amazon MSK</span><span class="rc-d">Fully managed Kafka service.</span></a>
+            <a class="ref-card" href="https://docs.kafka-ui.provectus.io/" target="_blank" rel="noopener"><span class="rc-t">Kafka UI (provectus)</span><span class="rc-d">Open-source web UI for cluster management.</span></a>
+            <a class="ref-card" href="https://github.com/prometheus/jmx_exporter" target="_blank" rel="noopener"><span class="rc-t">JMX Prometheus Exporter</span><span class="rc-d">Expose Kafka JMX metrics to Prometheus.</span></a>
+            <a class="ref-card" href="https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack" target="_blank" rel="noopener"><span class="rc-t">kube-prometheus-stack</span><span class="rc-d">Prometheus + Grafana + Alertmanager Helm chart.</span></a>
+            <a class="ref-card" href="https://grafana.com/docs/grafana/latest/" target="_blank" rel="noopener"><span class="rc-t">Grafana Docs</span><span class="rc-d">Dashboards, datasources, alerting.</span></a>
+            <a class="ref-card" href="https://github.com/danielqsj/kafka_exporter" target="_blank" rel="noopener"><span class="rc-t">kafka_exporter</span><span class="rc-d">Per-group consumer lag metrics.</span></a>
           </div>
         </div>
       </details>
@@ -1161,7 +1332,9 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
     'm-headless': { t: 'Headless Service & broker DNS', h: '<p>Setting <code class="inline">clusterIP: None</code> makes the Service "headless": instead of load-balancing to one virtual IP, Kubernetes publishes a DNS A record per pod, e.g. <code class="inline">kafka-0.kafka-svc.default.svc.cluster.local</code>.</p><p>Kafka clients need to reach <em>specific</em> brokers (the partition leader), so this per-pod addressability is essential for correct routing.</p>' },
     'm-cg': { t: 'Consumer groups & partition assignment', h: '<p>All consumer pods share <code class="inline">--group worker-group</code>, so they form one consumer group. Kafka assigns each of the topic\'s 3 partitions to exactly one consumer in the group, so the two consumer replicas share the load with no duplicate processing.</p><p>Scale consumers up to the partition count (3) for maximum parallelism; beyond that, extra consumers sit idle.</p>' },
     'm-ansible-idem': { t: 'Idempotency & the creates: guard', h: '<p>Ansible aims to be <strong>idempotent</strong>: running the same playbook twice should not change a host that is already in the desired state. Declarative modules (dnf, systemd, sysctl) handle this automatically — they check current state first.</p><p>Raw <code class="inline">command</code>/<code class="inline">shell</code> tasks are <em>not</em> idempotent by default, so we add <code class="inline">args: { creates: /path }</code>. Ansible skips the task if that file already exists — which is why re-running the playbook won\'t try to <code class="inline">kubeadm init</code> a second time or re-join an already-joined worker.</p>' },
-    'm-strimzi': { t: 'What the Strimzi operator does for you', h: '<p>Strimzi watches your <code class="inline">Kafka</code>, <code class="inline">KafkaNodePool</code>, <code class="inline">KafkaTopic</code>, and <code class="inline">KafkaUser</code> custom resources and continuously reconciles the real cluster to match them.</p><p>It generates the StatefulSets and Services, issues and rotates TLS certificates, performs <strong>safe rolling upgrades</strong> (one broker at a time, waiting for in-sync replicas), manages topics and ACLs declaratively, and integrates Cruise Control for partition rebalancing. This replaces a large amount of hand-written YAML and fragile shell scripting, which is why it is the recommended production path.</p>' }
+    'm-strimzi': { t: 'What the Strimzi operator does for you', h: '<p>Strimzi watches your <code class="inline">Kafka</code>, <code class="inline">KafkaNodePool</code>, <code class="inline">KafkaTopic</code>, and <code class="inline">KafkaUser</code> custom resources and continuously reconciles the real cluster to match them.</p><p>It generates the StatefulSets and Services, issues and rotates TLS certificates, performs <strong>safe rolling upgrades</strong> (one broker at a time, waiting for in-sync replicas), manages topics and ACLs declaratively, and integrates Cruise Control for partition rebalancing. This replaces a large amount of hand-written YAML and fragile shell scripting, which is why it is the recommended production path.</p>' },
+    'm-ui': { t: 'Kafka UI vs other tools', h: '<p><strong>Kafka UI</strong> (provectus) is free, lightweight, and read/write capable — great for dev and small clusters. Alternatives include <strong>AKHQ</strong> (similar open-source UI with richer ACL/Connect support), <strong>Redpanda Console</strong> (polished UI, works with Kafka), and commercial <strong>Confluent Control Center</strong> (deep monitoring, part of Confluent Platform).</p><p>For metrics-grade observability the UI is not a replacement for Prometheus + Grafana — use the UI for browsing topics/messages/lag interactively, and the metrics stack for time-series dashboards and alerting.</p>' },
+    'm-mon': { t: 'kafka_exporter for consumer lag', h: '<p>The JMX exporter surfaces broker-side metrics well, but per-consumer-group <strong>lag</strong> is awkward to derive from JMX alone. The standalone <code class="inline">kafka_exporter</code> (danielqsj) connects to the cluster as a client and exposes clean series like <code class="inline">kafka_consumergroup_lag</code> per group and topic.</p><p>Run it as its own Deployment pointed at the bootstrap address, add a ServiceMonitor, and import Grafana dashboard 7589. Lag trending upward means consumers can\'t keep pace — scale consumers up to (but not beyond) the partition count.</p>' }
   };
 
   const overlay = document.getElementById('modalOverlay');
