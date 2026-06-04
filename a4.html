@@ -3,525 +3,1228 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Learn AWS + GitLab Deployments with Terraform</title>
+<title>AWS + GitLab Deployments with Terraform — A Step-by-Step Guide for Windows</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
 <style>
-  /* IBM Plex is IBM's official typeface — fits the "IBM style" request */
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap');
 
   :root {
-    --base-font: 18px;
-    --ibm-blue: #0f62fe;   /* IBM signature blue */
-    --ibm-dark: #161616;   /* IBM near-black */
-    --ibm-navy: #0043ce;
+    --base-font: 17px;
+    --ibm-blue-60: #0f62fe;
+    --ibm-blue-70: #0043ce;
+    --ibm-blue-80: #002d9c;
+    --ibm-blue-10: #edf5ff;
+    --ibm-blue-20: #d0e2ff;
+    --ibm-gray-10: #f4f4f4;
+    --ibm-gray-20: #e0e0e0;
+    --ibm-gray-30: #c6c6c6;
+    --ibm-gray-50: #8d8d8d;
+    --ibm-gray-70: #525252;
+    --ibm-gray-90: #262626;
+    --ibm-gray-100: #161616;
+    --ibm-red: #da1e28;
+    --ibm-green: #198038;
+    --ibm-yellow: #f1c21b;
   }
 
+  * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
 
   body {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: var(--base-font);
     background: #ffffff;
-    color: var(--ibm-dark);
-    line-height: 1.65;
+    color: var(--ibm-gray-100);
+    line-height: 1.6;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
   }
 
-  code, pre, .mono { font-family: 'IBM Plex Mono', monospace; }
+  code, pre, .mono { font-family: 'IBM Plex Mono', monospace; font-feature-settings: "ss01"; }
+
+  h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.02em; color: var(--ibm-gray-100); }
+  h1 { font-size: 2.5em; line-height: 1.1; }
+  h2 { font-size: 1.75em; line-height: 1.2; }
+  h3 { font-size: 1.25em; line-height: 1.3; }
+  h4 { font-size: 1.05em; }
+
+  h2 { scroll-margin-top: 80px; }
+
+  p { margin-bottom: 1em; color: var(--ibm-gray-90); }
 
   /* Code blocks */
   pre {
-    background: #161616;
+    background: var(--ibm-gray-100);
     color: #f4f4f4;
-    border-radius: 0;
-    padding: 1.1rem 1.25rem;
+    padding: 1.25rem 1.5rem;
     overflow-x: auto;
-    font-size: 0.85em;
-    line-height: 1.55;
-    border-left: 4px solid var(--ibm-blue);
+    font-size: 0.82em;
+    line-height: 1.6;
+    border-left: 3px solid var(--ibm-blue-60);
+    margin: 1rem 0;
   }
-  pre .cmt { color: #8d8d8d; }
-  pre .kw  { color: #82cfff; }
+  pre .cmt { color: #8d8d8d; font-style: italic; }
+  pre .kw  { color: #78a9ff; font-weight: 500; }
   pre .str { color: #a7f0ba; }
+  pre .num { color: #ff7eb6; }
+  pre .ps  { color: #d4bbff; }
 
-  /* Inline code */
-  p code, li code, td code {
-    background: #e8e8e8;
-    color: #0043ce;
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-size: 0.85em;
+  p code, li code, td code, h3 code {
+    background: var(--ibm-gray-10);
+    color: var(--ibm-blue-70);
+    padding: 2px 6px;
+    font-size: 0.88em;
+    font-weight: 500;
+    border-radius: 0;
   }
 
-  /* Sidebar nav active state via scroll is optional; basic styling here */
-  .nav-link { transition: all .15s ease; border-left: 3px solid transparent; }
-  .nav-link:hover { border-left-color: var(--ibm-blue); background:#f4f4f4; }
+  /* Top bar */
+  .topbar {
+    background: var(--ibm-gray-100);
+    color: #fff;
+    border-bottom: 1px solid var(--ibm-gray-90);
+  }
+  .topbar .brand { font-weight: 600; letter-spacing: -0.01em; }
+  .font-btn {
+    background: transparent;
+    color: #fff;
+    border: 1px solid var(--ibm-gray-70);
+    padding: 4px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all .12s ease;
+  }
+  .font-btn:hover { background: var(--ibm-blue-60); border-color: var(--ibm-blue-60); }
 
-  /* Info button pill */
+  /* Sidebar */
+  .sidebar {
+    background: var(--ibm-gray-10);
+    border-right: 1px solid var(--ibm-gray-20);
+  }
+  .nav-link {
+    display: block;
+    padding: 0.6rem 1.25rem;
+    color: var(--ibm-gray-90);
+    font-size: 0.92em;
+    border-left: 3px solid transparent;
+    transition: all .12s ease;
+    text-decoration: none;
+  }
+  .nav-link:hover { background: #fff; border-left-color: var(--ibm-blue-60); color: var(--ibm-blue-70); }
+  .nav-link.section-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ibm-gray-50);
+    pointer-events: none;
+    padding-top: 1rem;
+    padding-bottom: 0.25rem;
+  }
+
+  /* Info button */
   .info-btn {
-    display:inline-flex; align-items:center; gap:.35em;
-    background: #edf5ff; color: var(--ibm-navy);
-    border: 1px solid #d0e2ff;
-    padding: .35em .75em; border-radius: 2px;
-    font-size: .8em; font-weight:600; cursor:pointer;
-    transition: background .15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    background: transparent;
+    color: var(--ibm-blue-70);
+    border: 1px solid var(--ibm-blue-20);
+    padding: 2px 10px;
+    font-size: 0.78em;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'IBM Plex Sans', sans-serif;
+    transition: all .12s ease;
+    vertical-align: middle;
+    margin-left: 0.25rem;
   }
-  .info-btn:hover { background:#d0e2ff; }
+  .info-btn:hover { background: var(--ibm-blue-60); color: #fff; border-color: var(--ibm-blue-60); }
+  .info-btn::before { content: "ⓘ"; font-size: 1em; }
+
+  /* Doc link */
+  .doc-link {
+    color: var(--ibm-blue-70);
+    text-decoration: none;
+    border-bottom: 1px solid var(--ibm-blue-20);
+    font-weight: 500;
+    transition: all .12s ease;
+  }
+  .doc-link:hover { color: var(--ibm-blue-60); border-bottom-color: var(--ibm-blue-60); }
+
+  /* Step number */
+  .step-num {
+    background: var(--ibm-blue-60);
+    color: #fff;
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9em;
+    flex-shrink: 0;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Callouts */
+  .callout {
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    border-left: 3px solid;
+    background: var(--ibm-gray-10);
+    font-size: 0.95em;
+  }
+  .callout-info    { border-color: var(--ibm-blue-60); background: var(--ibm-blue-10); }
+  .callout-warn    { border-color: var(--ibm-yellow); background: #fff8e1; }
+  .callout-danger  { border-color: var(--ibm-red); background: #fff1f1; }
+  .callout-success { border-color: var(--ibm-green); background: #defbe6; }
+  .callout-title   { font-weight: 600; margin-bottom: 0.25rem; display: block; text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.08em; }
+
+  /* Tags */
+  .file-tag {
+    display: inline-block;
+    background: var(--ibm-gray-100);
+    color: #a7f0ba;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78em;
+    padding: 3px 10px;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+  }
+  .win-tag {
+    display: inline-block;
+    background: var(--ibm-blue-70);
+    color: #fff;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72em;
+    padding: 2px 8px;
+    margin-left: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+  }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 0.92em; margin: 1rem 0; }
+  table thead { background: var(--ibm-gray-100); color: #fff; }
+  table th, table td { padding: 0.75rem 1rem; text-align: left; }
+  table tbody tr { border-bottom: 1px solid var(--ibm-gray-20); }
+  table tbody tr:nth-child(even) { background: var(--ibm-gray-10); }
+
+  /* Section header */
+  .section-eyebrow {
+    color: var(--ibm-blue-60);
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  section { margin-bottom: 4rem; }
 
   /* Modal */
   .modal-overlay {
-    position: fixed; inset:0; background: rgba(22,22,22,.55);
-    display:none; align-items:center; justify-content:center; z-index:50; padding:1rem;
+    position: fixed; inset: 0;
+    background: rgba(22,22,22,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 60; padding: 1rem;
   }
-  .modal-overlay.open { display:flex; }
+  .modal-overlay.open { display: flex; }
   .modal-box {
-    background:#fff; max-width:640px; width:100%; max-height:85vh; overflow-y:auto;
-    border-top:5px solid var(--ibm-blue); box-shadow:0 20px 50px rgba(0,0,0,.25);
-    padding:2rem; animation: pop .18s ease;
+    background: #fff;
+    max-width: 680px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+    border-top: 4px solid var(--ibm-blue-60);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+    padding: 2rem 2.25rem;
+    animation: slideUp .2s ease;
   }
-  @keyframes pop { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
+  @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-close {
+    background: var(--ibm-gray-100); color: #fff;
+    border: none; padding: 8px 16px;
+    cursor: pointer; font-family: inherit; font-size: 0.9em;
+    transition: background .12s ease;
+  }
+  .modal-close:hover { background: var(--ibm-blue-60); }
 
-  .step-num {
-    background: var(--ibm-blue); color:#fff; width:2.2em; height:2.2em;
-    display:inline-flex; align-items:center; justify-content:center;
-    font-weight:700; border-radius:50%; flex-shrink:0; font-size:.9em;
+  /* Hero */
+  .hero {
+    border-bottom: 1px solid var(--ibm-gray-20);
+    padding-bottom: 2.5rem;
+    margin-bottom: 3rem;
+    position: relative;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 60px; height: 4px;
+    background: var(--ibm-blue-60);
   }
 
-  .doc-link { color: var(--ibm-navy); text-decoration: underline; font-weight:500; }
-  .doc-link:hover { color: var(--ibm-blue); }
-
-  h2 { scroll-margin-top: 90px; }
-
-  .file-tag {
-    display:inline-block; background:#161616; color:#a7f0ba;
-    font-family:'IBM Plex Mono',monospace; font-size:.8em;
-    padding:2px 8px; border-radius:2px; margin-bottom:.4rem;
+  /* File tree */
+  .file-tree {
+    background: var(--ibm-gray-100);
+    color: #f4f4f4;
+    padding: 1.5rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85em;
+    line-height: 1.8;
+    border-left: 3px solid var(--ibm-blue-60);
   }
+  .file-tree .folder { color: #78a9ff; font-weight: 500; }
+  .file-tree .file { color: #f4f4f4; }
+  .file-tree .comment { color: var(--ibm-gray-50); }
 
-  /* Font size controls bar stays on top */
-  .topbar { backdrop-filter: blur(6px); }
+  /* Mobile */
+  @media (max-width: 1024px) {
+    .sidebar-wrapper { display: none; }
+    .main-content { padding: 1.5rem 1.25rem; max-width: 100%; }
+    h1 { font-size: 2em; }
+    h2 { font-size: 1.5em; }
+  }
 </style>
 </head>
 <body>
 
-<!-- ============ TOP BAR with font-size controls ============ -->
-<div class="topbar fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-300 flex items-center justify-between px-4 py-2">
-  <div class="font-bold tracking-tight" style="color:var(--ibm-dark)">
-    <span style="color:var(--ibm-blue)">▮</span> Terraform Deploy Guide
+<!-- ===== TOP BAR ===== -->
+<div class="topbar fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-6 py-3">
+  <div class="flex items-center gap-3">
+    <div class="brand text-base sm:text-lg">
+      <span style="color:var(--ibm-blue-60);font-weight:700">▎</span> Deploying with Terraform
+    </div>
   </div>
   <div class="flex items-center gap-2">
-    <span class="text-xs text-gray-500 hidden sm:inline">Font size</span>
-    <button onclick="changeFont(-2)" class="border border-gray-400 px-3 py-1 font-bold hover:bg-gray-100" aria-label="Decrease font size">A−</button>
-    <span id="fontLabel" class="mono text-sm w-10 text-center">18</span>
-    <button onclick="changeFont(2)" class="border border-gray-400 px-3 py-1 font-bold hover:bg-gray-100" aria-label="Increase font size">A+</button>
+    <span class="text-xs mono hidden sm:inline" style="color:var(--ibm-gray-50)">Text size</span>
+    <button onclick="changeFont(-2)" class="font-btn" aria-label="Decrease font">A−</button>
+    <span id="fontLabel" class="mono text-sm" style="color:#fff;min-width:36px;text-align:center">17</span>
+    <button onclick="changeFont(2)" class="font-btn" aria-label="Increase font">A+</button>
   </div>
 </div>
 
 <div class="flex pt-14 max-w-7xl mx-auto">
 
-  <!-- ============ SIDEBAR NAV ============ -->
-  <aside class="hidden lg:block w-64 flex-shrink-0 sticky top-14 self-start h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-gray-200 py-6">
-    <nav class="text-sm">
-      <p class="px-4 text-xs uppercase tracking-widest text-gray-400 mb-2">Contents</p>
-      <a href="#intro"     class="nav-link block px-4 py-2">0 · Big Picture</a>
-      <a href="#concepts"  class="nav-link block px-4 py-2">1 · Key Concepts</a>
-      <a href="#tools"     class="nav-link block px-4 py-2">2 · Tools to Install</a>
-      <a href="#aws"       class="nav-link block px-4 py-2">3 · Set Up AWS</a>
-      <a href="#tf-files"  class="nav-link block px-4 py-2">4 · Terraform Files</a>
-      <a href="#run"       class="nav-link block px-4 py-2">5 · Run Terraform</a>
-      <a href="#gitlab"    class="nav-link block px-4 py-2">6 · GitLab CI/CD</a>
-      <a href="#backend"   class="nav-link block px-4 py-2">7 · Remote State</a>
-      <a href="#best"      class="nav-link block px-4 py-2">8 · Best Practices</a>
-      <a href="#cleanup"   class="nav-link block px-4 py-2">9 · Clean Up</a>
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar-wrapper hidden lg:block w-64 flex-shrink-0 sticky top-14 self-start h-[calc(100vh-3.5rem)] overflow-y-auto sidebar py-4">
+    <nav>
+      <a class="nav-link section-label">Foundations</a>
+      <a href="#intro"     class="nav-link">00 · Overview</a>
+      <a href="#concepts"  class="nav-link">01 · Key Concepts</a>
+      <a href="#setup"     class="nav-link">02 · Windows Setup</a>
+
+      <a class="nav-link section-label">Cloud Account</a>
+      <a href="#aws"       class="nav-link">03 · AWS &amp; IAM</a>
+      <a href="#security-aws" class="nav-link">04 · AWS Security</a>
+
+      <a class="nav-link section-label">Source Control</a>
+      <a href="#gitlab-setup" class="nav-link">05 · GitLab Repo</a>
+      <a href="#repo-files"   class="nav-link">06 · Repo Files</a>
+
+      <a class="nav-link section-label">Infrastructure</a>
+      <a href="#tf-files"  class="nav-link">07 · Terraform Code</a>
+      <a href="#run"       class="nav-link">08 · Run Locally</a>
+      <a href="#backend"   class="nav-link">09 · Remote State</a>
+
+      <a class="nav-link section-label">Automation</a>
+      <a href="#pipeline"  class="nav-link">10 · CI/CD Pipeline</a>
+      <a href="#environments" class="nav-link">11 · Environments</a>
+
+      <a class="nav-link section-label">Operations</a>
+      <a href="#security"  class="nav-link">12 · Security Best Practices</a>
+      <a href="#troubleshoot" class="nav-link">13 · Troubleshooting</a>
+      <a href="#cleanup"   class="nav-link">14 · Clean Up</a>
     </nav>
   </aside>
 
-  <!-- ============ MAIN CONTENT ============ -->
-  <main class="flex-1 px-5 sm:px-8 py-8 max-w-3xl">
+  <!-- ===== MAIN ===== -->
+  <main class="main-content flex-1 px-5 sm:px-10 py-10 max-w-3xl">
 
-    <!-- HEADER -->
-    <header class="mb-12 border-b-4 pb-6" style="border-color:var(--ibm-blue)">
-      <p class="text-sm uppercase tracking-widest" style="color:var(--ibm-blue)">Beginner Friendly · Step by Step</p>
-      <h1 class="text-3xl sm:text-4xl font-bold mt-2 leading-tight">Deploying to AWS with GitLab &amp; Terraform</h1>
-      <p class="mt-4 text-gray-700">A plain-language guide written so a middle-schooler can follow it. We'll explain <em>every</em> word, <em>every</em> file, and <em>every</em> command — no skipped steps. Tap the blue <strong>info</strong> buttons for extra background, and the links go to the official docs.</p>
+    <header class="hero pt-6">
+      <span class="section-eyebrow">A practical guide · Windows edition</span>
+      <h1>Deploying to AWS with GitLab &amp; Terraform</h1>
+      <p class="mt-5" style="font-size:1.1em;color:var(--ibm-gray-70);max-width:38em">
+        A complete, beginner-friendly walkthrough written for people working on <strong>Windows 10 or Windows 11</strong>.
+        Every file, every command, and every security setting is explained in plain English. Tap the
+        <span class="info-btn" style="cursor:default">info</span> buttons for deeper background, and use the official documentation links at every step.
+      </p>
+      <div class="flex flex-wrap gap-2 mt-6">
+        <span class="file-tag">Windows 10 / 11</span>
+        <span class="file-tag">Terraform 1.9+</span>
+        <span class="file-tag">AWS</span>
+        <span class="file-tag">GitLab CI/CD</span>
+      </div>
     </header>
 
-    <!-- ===== 0 INTRO ===== -->
-    <section id="intro" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">0</span> The Big Picture</h2>
-      <p class="mb-4">Imagine you want to build a LEGO castle, but instead of placing each brick by hand every time, you write down <em>instructions</em>. Then a robot reads your instructions and builds the exact same castle — perfectly — as many times as you want. That is what we're doing here, but the "castle" is a computer server on the internet.</p>
+    <!-- ============================================== -->
+    <!-- 00 OVERVIEW                                     -->
+    <!-- ============================================== -->
+    <section id="intro">
+      <span class="section-eyebrow">Part 00</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">00</span> Overview</h2>
+      <p class="mt-4">Think of building cloud servers the old way like assembling furniture by hand every time — slow, easy to mess up, hard to repeat. The modern way is to write down the instructions in a file, hand them to a robot, and let the robot build it. The instructions are <strong>code</strong>. The robot is <strong>Terraform</strong>. The furniture warehouse is <strong>AWS</strong>. The shared workshop where teams keep their plans (and where the robot lives) is <strong>GitLab</strong>.</p>
 
-      <p class="mb-4">Here are the three main characters in our story:</p>
-      <ul class="space-y-3 mb-4">
-        <li><strong style="color:var(--ibm-blue)">AWS (Amazon Web Services)</strong> — A giant company that rents out computers, storage, and databases over the internet. This is the "cloud." Instead of buying a physical server, you rent one by the hour.
-          <button class="info-btn ml-1" onclick="openModal('m-aws')">ⓘ more</button></li>
-        <li><strong style="color:var(--ibm-blue)">Terraform</strong> — A free tool that lets you describe the servers you want in a text file. It then talks to AWS and builds them for you. This idea is called <em>Infrastructure as Code (IaC)</em>.
-          <button class="info-btn ml-1" onclick="openModal('m-tf')">ⓘ more</button></li>
-        <li><strong style="color:var(--ibm-blue)">GitLab</strong> — A website that stores your code and can <em>automatically</em> run Terraform for you whenever you save changes. The auto-running part is called <em>CI/CD</em>.
-          <button class="info-btn ml-1" onclick="openModal('m-gitlab')">ⓘ more</button></li>
+      <h3 class="mt-6">The three tools, in plain words</h3>
+      <table>
+        <thead><tr><th>Tool</th><th>What it does</th><th>Who makes it</th></tr></thead>
+        <tbody>
+          <tr><td><strong>AWS</strong></td><td>Rents out computers, storage, and databases over the internet.</td><td>Amazon</td></tr>
+          <tr><td><strong>Terraform</strong></td><td>Reads text files describing what you want and builds it on AWS.</td><td>HashiCorp</td></tr>
+          <tr><td><strong>GitLab</strong></td><td>Stores your code and automatically runs Terraform when you change it.</td><td>GitLab Inc.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="mt-6">The complete workflow</h3>
+      <div class="callout callout-info">
+        <span class="callout-title">From keyboard to cloud</span>
+        <p class="m-0"><strong>You</strong> edit Terraform files on your Windows PC →
+        <strong>Git</strong> pushes them to <strong>GitLab</strong> →
+        GitLab's <strong>pipeline</strong> runs <code>terraform plan</code> →
+        you review and approve →
+        GitLab runs <strong><code>terraform apply</code></strong> →
+        <strong>AWS</strong> builds the resources.</p>
+      </div>
+
+      <h3 class="mt-6">What you'll have at the end</h3>
+      <ul class="list-disc ml-6 space-y-1">
+        <li>A working AWS account with a secure non-root user.</li>
+        <li>A GitLab repository with a clean folder structure.</li>
+        <li>Terraform code that creates real AWS resources (an S3 bucket and a small web server).</li>
+        <li>An automated CI/CD pipeline with separate <strong>dev</strong> and <strong>prod</strong> environments.</li>
+        <li>Remote state storage, secrets handled securely, and approval gates before anything ships.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 01 CONCEPTS                                     -->
+    <!-- ============================================== -->
+    <section id="concepts">
+      <span class="section-eyebrow">Part 01</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">01</span> Key Concepts</h2>
+      <p class="mt-4">Learn these words once and the rest of the guide reads easily.</p>
+      <table>
+        <thead><tr><th style="width:30%">Word</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Infrastructure</strong></td><td>The servers, networks, and storage your application runs on.</td></tr>
+          <tr><td><strong>Infrastructure as Code (IaC)</strong></td><td>Describing infrastructure in text files instead of clicking buttons. Easier to review, version, and rebuild.</td></tr>
+          <tr><td><strong>Provider</strong></td><td>A plugin that lets Terraform talk to a service (AWS, Azure, GitLab, etc.).</td></tr>
+          <tr><td><strong>Resource</strong></td><td>One thing you want built — a bucket, a server, a database.</td></tr>
+          <tr><td><strong>State</strong></td><td>Terraform's record of what it has already created. Critical to protect.</td></tr>
+          <tr><td><strong>Plan</strong></td><td>A safe preview showing what will be added, changed, or destroyed.</td></tr>
+          <tr><td><strong>Apply</strong></td><td>The step that actually makes changes happen in AWS.</td></tr>
+          <tr><td><strong>Module</strong></td><td>A reusable bundle of Terraform code — like a function.</td></tr>
+          <tr><td><strong>Pipeline</strong></td><td>An ordered list of automated jobs that GitLab runs for you.</td></tr>
+          <tr><td><strong>Runner</strong></td><td>The machine GitLab uses to execute pipeline jobs.</td></tr>
+          <tr><td><strong>IAM</strong></td><td>"Identity and Access Management" — AWS's permission system.</td></tr>
+          <tr><td><strong>OIDC</strong></td><td>A modern way for GitLab to log in to AWS <em>without</em> long-lived passwords.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 02 WINDOWS SETUP                                -->
+    <!-- ============================================== -->
+    <section id="setup">
+      <span class="section-eyebrow">Part 02</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">02</span> Windows Setup <span class="win-tag">Windows</span></h2>
+      <p class="mt-4">We'll install everything using <strong>winget</strong>, the package manager built into modern Windows. Open <strong>PowerShell as Administrator</strong>: press <kbd>Win</kbd>, type "PowerShell," right-click, and choose <em>Run as administrator</em>.
+        <button class="info-btn" onclick="openModal('m-winget')">what is winget?</button>
+      </p>
+
+      <h3 class="mt-6">Step 1 — Install Git for Windows</h3>
+      <p>Git is the version-control tool that talks to GitLab.</p>
+      <pre><span class="ps">PS&gt;</span> winget install --id Git.Git -e
+<span class="cmt"># Close PowerShell and reopen it, then verify:</span>
+<span class="ps">PS&gt;</span> git --version</pre>
+      <p><a class="doc-link" href="https://git-scm.com/download/win" target="_blank" rel="noopener">→ Official Git for Windows download</a></p>
+
+      <h3 class="mt-6">Step 2 — Install Terraform</h3>
+      <pre><span class="ps">PS&gt;</span> winget install --id HashiCorp.Terraform -e
+<span class="ps">PS&gt;</span> terraform -version</pre>
+      <p class="text-sm" style="color:var(--ibm-gray-70)">If <code>terraform</code> isn't found after install, close and reopen PowerShell so the PATH refreshes.</p>
+      <p><a class="doc-link" href="https://developer.hashicorp.com/terraform/install" target="_blank" rel="noopener">→ Official Terraform install docs</a></p>
+
+      <h3 class="mt-6">Step 3 — Install the AWS CLI</h3>
+      <pre><span class="ps">PS&gt;</span> winget install --id Amazon.AWSCLI -e
+<span class="ps">PS&gt;</span> aws --version</pre>
+      <p><a class="doc-link" href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html" target="_blank" rel="noopener">→ Official AWS CLI for Windows docs</a></p>
+
+      <h3 class="mt-6">Step 4 — Install Visual Studio Code (recommended editor)</h3>
+      <pre><span class="ps">PS&gt;</span> winget install --id Microsoft.VisualStudioCode -e</pre>
+      <p>Inside VS Code, install these extensions for a much nicer experience:</p>
+      <ul class="list-disc ml-6">
+        <li><strong>HashiCorp Terraform</strong> — syntax highlighting and autocomplete.</li>
+        <li><strong>GitLab Workflow</strong> — see pipelines and merge requests in the editor.</li>
+        <li><strong>AWS Toolkit</strong> — browse AWS resources from VS Code.</li>
       </ul>
 
-      <div class="bg-gray-50 border-l-4 p-4 mono text-sm" style="border-color:var(--ibm-blue)">
-        You write code → push to GitLab → GitLab runs Terraform → Terraform builds it on AWS
+      <h3 class="mt-6">Step 5 — Verify everything</h3>
+      <pre><span class="ps">PS&gt;</span> git --version
+<span class="ps">PS&gt;</span> terraform -version
+<span class="ps">PS&gt;</span> aws --version
+<span class="ps">PS&gt;</span> code --version</pre>
+      <div class="callout callout-success">
+        <span class="callout-title">Checkpoint</span>
+        All four commands should print a version number. If any of them say "not recognized," reopen PowerShell or restart Windows so the PATH variable updates.
       </div>
     </section>
 
-    <!-- ===== 1 CONCEPTS ===== -->
-    <section id="concepts" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">1</span> Key Concepts (Vocabulary)</h2>
-      <p class="mb-4">Before touching anything, let's learn the words. Knowing these makes everything else click.</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm border border-gray-300">
-          <thead style="background:var(--ibm-dark);color:#fff">
-            <tr><th class="text-left p-3">Word</th><th class="text-left p-3">What it means (simply)</th></tr>
-          </thead>
-          <tbody>
-            <tr class="border-t border-gray-200"><td class="p-3 font-semibold">Infrastructure</td><td class="p-3">The computers, networks, and storage your app runs on.</td></tr>
-            <tr class="border-t border-gray-200 bg-gray-50"><td class="p-3 font-semibold">Provider</td><td class="p-3">A plugin that lets Terraform talk to a service (like AWS).</td></tr>
-            <tr class="border-t border-gray-200"><td class="p-3 font-semibold">Resource</td><td class="p-3">One thing you want to build (a server, a bucket, etc.).</td></tr>
-            <tr class="border-t border-gray-200 bg-gray-50"><td class="p-3 font-semibold">State</td><td class="p-3">Terraform's memory of what it already built.</td></tr>
-            <tr class="border-t border-gray-200"><td class="p-3 font-semibold">Plan</td><td class="p-3">A preview of what Terraform will change before it does it.</td></tr>
-            <tr class="border-t border-gray-200 bg-gray-50"><td class="p-3 font-semibold">Apply</td><td class="p-3">Actually making the changes happen.</td></tr>
-            <tr class="border-t border-gray-200"><td class="p-3 font-semibold">Pipeline</td><td class="p-3">GitLab's list of automatic jobs (like plan, then apply).</td></tr>
-          </tbody>
-        </table>
+    <!-- ============================================== -->
+    <!-- 03 AWS                                          -->
+    <!-- ============================================== -->
+    <section id="aws">
+      <span class="section-eyebrow">Part 03</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">03</span> AWS Account &amp; IAM Setup</h2>
+
+      <h3 class="mt-6">Step 1 — Create an AWS account</h3>
+      <p>Sign up at <a class="doc-link" href="https://aws.amazon.com/free/" target="_blank" rel="noopener">aws.amazon.com/free</a>. A credit card is required but most learning fits inside the free tier.</p>
+
+      <h3 class="mt-6">Step 2 — Enable MFA on the root account immediately</h3>
+      <p>The root account is the "owner" of everything. Add multi-factor authentication (MFA) <em>before doing anything else</em>: sign in → top-right menu → <em>Security Credentials</em> → "Assign MFA device." Use an authenticator app like Microsoft Authenticator.
+        <button class="info-btn" onclick="openModal('m-mfa')">why MFA matters</button>
+      </p>
+      <div class="callout callout-danger">
+        <span class="callout-title">Critical</span>
+        Never use the root account for daily work. Never create access keys for the root user. Lock it away after setup.
       </div>
-    </section>
 
-    <!-- ===== 2 TOOLS ===== -->
-    <section id="tools" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">2</span> Tools You Need to Install</h2>
-      <p class="mb-4">Install these on your computer first. They're all free.</p>
-
-      <h3 class="font-bold text-lg mt-6 mb-2">a) Terraform</h3>
-      <p class="mb-3 text-sm text-gray-700">The main tool. Check it worked by asking for its version.</p>
-      <pre><span class="cmt"># Mac (using Homebrew)</span>
-brew tap hashicorp/tap
-brew install hashicorp/tap/terraform
-
-<span class="cmt"># Check it installed</span>
-terraform -version</pre>
-      <p class="mt-2"><a class="doc-link" href="https://developer.hashicorp.com/terraform/install" target="_blank" rel="noopener">→ Official Terraform install docs</a></p>
-
-      <h3 class="font-bold text-lg mt-6 mb-2">b) AWS CLI</h3>
-      <p class="mb-3 text-sm text-gray-700">A command-line program to talk to AWS and store your login keys.</p>
-      <pre><span class="cmt"># Mac</span>
-brew install awscli
-aws --version</pre>
-      <p class="mt-2"><a class="doc-link" href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html" target="_blank" rel="noopener">→ Official AWS CLI install docs</a></p>
-
-      <h3 class="font-bold text-lg mt-6 mb-2">c) Git</h3>
-      <p class="mb-3 text-sm text-gray-700">Tracks your code changes and uploads them to GitLab.</p>
-      <pre>git --version
-<span class="cmt"># If missing on Mac:</span>
-brew install git</pre>
-      <p class="mt-2"><a class="doc-link" href="https://git-scm.com/downloads" target="_blank" rel="noopener">→ Git downloads</a></p>
-    </section>
-
-    <!-- ===== 3 AWS ===== -->
-    <section id="aws" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">3</span> Set Up Your AWS Account</h2>
-      <ol class="space-y-4">
-        <li><strong>1. Create a free AWS account</strong> at <a class="doc-link" href="https://aws.amazon.com/free/" target="_blank" rel="noopener">aws.amazon.com/free</a>. You'll need a credit card, but the free tier covers small practice projects.</li>
-        <li><strong>2. Create an IAM user</strong> instead of using your main login. IAM is AWS's "who is allowed to do what" system. Never use the root account for daily work.
-          <button class="info-btn ml-1" onclick="openModal('m-iam')">ⓘ why?</button></li>
-        <li><strong>3. Make an Access Key</strong> for that user. You get two secret strings: an <em>Access Key ID</em> and a <em>Secret Access Key</em>. Treat the secret like a password — never put it in your code.</li>
-        <li><strong>4. Tell the AWS CLI your keys</strong> by running the command below and pasting them in:</li>
+      <h3 class="mt-6">Step 3 — Create an IAM user for yourself</h3>
+      <p>From the AWS console, search <strong>IAM</strong> → <em>Users → Create user</em>:</p>
+      <ol class="list-decimal ml-6 space-y-2">
+        <li>Name it <code>terraform-admin</code> (you can rename later).</li>
+        <li>Enable <strong>console access</strong> with a password.</li>
+        <li>On the permissions screen choose <em>Attach policies directly</em> and pick <code>AdministratorAccess</code> for now. (We'll narrow this later — see Part 04.)</li>
+        <li>Finish and <strong>enable MFA on this user too</strong>.</li>
       </ol>
-      <pre class="mt-4">aws configure
-<span class="cmt"># It will ask for:</span>
-<span class="cmt">#   AWS Access Key ID     -> paste yours</span>
-<span class="cmt">#   AWS Secret Access Key -> paste yours</span>
-<span class="cmt">#   Default region        -> e.g. us-east-1</span>
-<span class="cmt">#   Default output format -> just press Enter</span></pre>
-      <p class="mt-3 text-sm bg-yellow-50 border-l-4 border-yellow-400 p-3">⚠️ <strong>Safety rule:</strong> If a secret key ever ends up on the internet, delete it immediately in AWS and make a new one.</p>
-      <p class="mt-2"><a class="doc-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html" target="_blank" rel="noopener">→ AWS docs on access keys</a></p>
+
+      <h3 class="mt-6">Step 4 — Create access keys for the CLI</h3>
+      <p>From your new IAM user → <em>Security credentials → Create access key → Command Line Interface (CLI)</em>. You'll see two strings:</p>
+      <ul class="list-disc ml-6">
+        <li><strong>Access Key ID</strong> — like a username.</li>
+        <li><strong>Secret Access Key</strong> — like a password. Shown only once. Save it safely (a password manager is ideal).</li>
+      </ul>
+
+      <h3 class="mt-6">Step 5 — Configure the AWS CLI on Windows <span class="win-tag">Windows</span></h3>
+      <pre><span class="ps">PS&gt;</span> aws configure
+AWS Access Key ID [None]:     <span class="cmt">&lt;paste your key id&gt;</span>
+AWS Secret Access Key [None]: <span class="cmt">&lt;paste your secret&gt;</span>
+Default region name [None]:   us-east-1
+Default output format [None]: json</pre>
+      <p>This saves credentials to <code>C:\Users\YourName\.aws\credentials</code>. Verify with:</p>
+      <pre><span class="ps">PS&gt;</span> aws sts get-caller-identity</pre>
+      <p>You should see your user ARN. <a class="doc-link" href="https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html" target="_blank" rel="noopener">→ AWS CLI configuration docs</a></p>
+
+      <div class="callout callout-warn">
+        <span class="callout-title">Heads-up</span>
+        These keys live on your laptop. They are powerful. We will <strong>not</strong> put them in GitLab — we'll use a safer method (OIDC) in Part 10.
+      </div>
     </section>
 
-    <!-- ===== 4 TERRAFORM FILES ===== -->
-    <section id="tf-files" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">4</span> Write Your Terraform Files</h2>
-      <p class="mb-4">Make a new folder, e.g. <code>my-first-infra</code>. Inside it, create these files. Terraform reads every file ending in <code>.tf</code> in the folder. We split them up just to stay organized — Terraform glues them together automatically.</p>
+    <!-- ============================================== -->
+    <!-- 04 AWS SECURITY                                 -->
+    <!-- ============================================== -->
+    <section id="security-aws">
+      <span class="section-eyebrow">Part 04</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">04</span> AWS Security Foundations</h2>
+      <p class="mt-4">Before pushing anything to the cloud, lock down the basics. These are the same rules professionals follow.</p>
 
-      <!-- providers.tf -->
-      <span class="file-tag">providers.tf</span>
-      <p class="mb-2 text-sm text-gray-700">Tells Terraform which cloud we're using and which region. Think of it as "connect to AWS, in Virginia."</p>
-      <pre><span class="kw">terraform</span> {
+      <h3 class="mt-6">1. Least privilege</h3>
+      <p>Give every user and service the smallest set of permissions it needs. Start with <code>AdministratorAccess</code> while learning, then trim it down. Later in this guide, our GitLab role will only get permission to manage S3 and EC2 — nothing else.</p>
+
+      <h3 class="mt-6">2. Set a billing alarm</h3>
+      <p>In <strong>Billing → Budgets</strong>, create a $5 (or any number) monthly alert. You'll get an email if something runs up costs.
+        <a class="doc-link" href="https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-create.html" target="_blank" rel="noopener">→ AWS Budgets docs</a>
+      </p>
+
+      <h3 class="mt-6">3. Turn on CloudTrail</h3>
+      <p>CloudTrail records every action taken in your account — invaluable for spotting trouble. The first trail is free.
+        <a class="doc-link" href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-create-a-trail-using-the-console-first-time.html" target="_blank" rel="noopener">→ CloudTrail docs</a>
+      </p>
+
+      <h3 class="mt-6">4. Rotate or remove access keys often</h3>
+      <p>Every 90 days, generate a new key, update <code>aws configure</code>, then delete the old one. Better still — graduate to OIDC (Part 10) so long-lived keys go away entirely.</p>
+
+      <h3 class="mt-6">5. Never store secrets in code</h3>
+      <p>No passwords, no keys, no certificates in your Terraform files. Use AWS Secrets Manager or GitLab CI/CD variables — both covered later.</p>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 05 GITLAB SETUP                                 -->
+    <!-- ============================================== -->
+    <section id="gitlab-setup">
+      <span class="section-eyebrow">Part 05</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">05</span> Create the GitLab Repository</h2>
+
+      <h3 class="mt-6">Step 1 — Create your GitLab account</h3>
+      <p>Sign up at <a class="doc-link" href="https://gitlab.com/users/sign_up" target="_blank" rel="noopener">gitlab.com</a>. Free tier is plenty for this guide. <strong>Enable 2FA immediately</strong> under <em>User settings → Account</em>.</p>
+
+      <h3 class="mt-6">Step 2 — Add an SSH key from Windows <span class="win-tag">Windows</span></h3>
+      <p>SSH keys let your laptop talk to GitLab without typing a password each time.</p>
+      <pre><span class="cmt"># Generate a key (press Enter at every prompt to accept defaults)</span>
+<span class="ps">PS&gt;</span> ssh-keygen -t ed25519 -C <span class="str">"your-email@example.com"</span>
+
+<span class="cmt"># Copy the public key to your clipboard</span>
+<span class="ps">PS&gt;</span> Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub | Set-Clipboard</pre>
+      <p>In GitLab: <em>Preferences → SSH Keys → Add new key</em> → paste → save. Test it:</p>
+      <pre><span class="ps">PS&gt;</span> ssh -T git@gitlab.com</pre>
+      <p>You should see "Welcome to GitLab, @yourusername!"</p>
+
+      <h3 class="mt-6">Step 3 — Create a new project</h3>
+      <ol class="list-decimal ml-6 space-y-2">
+        <li>Click <em>New project → Create blank project</em>.</li>
+        <li>Name: <code>aws-terraform-demo</code>.</li>
+        <li>Visibility: <strong>Private</strong>.</li>
+        <li><strong>Uncheck</strong> "Initialize repository with a README" — we'll create files locally.</li>
+        <li>Click <em>Create project</em>.</li>
+      </ol>
+
+      <h3 class="mt-6">Step 4 — Set your Git identity</h3>
+      <pre><span class="ps">PS&gt;</span> git config --global user.name <span class="str">"Your Name"</span>
+<span class="ps">PS&gt;</span> git config --global user.email <span class="str">"your-email@example.com"</span></pre>
+
+      <h3 class="mt-6">Step 5 — Clone the empty project locally</h3>
+      <pre><span class="ps">PS&gt;</span> cd $env:USERPROFILE\Documents
+<span class="ps">PS&gt;</span> git clone git@gitlab.com:YOUR-USERNAME/aws-terraform-demo.git
+<span class="ps">PS&gt;</span> cd aws-terraform-demo</pre>
+
+      <h3 class="mt-6">Step 6 — Protect the <code>main</code> branch</h3>
+      <p>In GitLab: <em>Settings → Repository → Protected branches</em>. The <code>main</code> branch should already be protected. Confirm:</p>
+      <ul class="list-disc ml-6">
+        <li><strong>Allowed to push:</strong> No one (or Maintainers only).</li>
+        <li><strong>Allowed to merge:</strong> Maintainers.</li>
+      </ul>
+      <p>This forces every change to go through a Merge Request — your safety net.</p>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 06 REPO FILES                                   -->
+    <!-- ============================================== -->
+    <section id="repo-files">
+      <span class="section-eyebrow">Part 06</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">06</span> Repository Structure, File by File</h2>
+      <p class="mt-4">Here is the exact folder layout we're going to build. Each box below explains what it does and why.</p>
+
+      <div class="file-tree mt-4">
+<span class="folder">aws-terraform-demo/</span>
+├── <span class="file">.gitignore</span>          <span class="comment"># tells Git which files NOT to upload</span>
+├── <span class="file">.gitlab-ci.yml</span>      <span class="comment"># the CI/CD pipeline definition</span>
+├── <span class="file">README.md</span>           <span class="comment"># project docs</span>
+├── <span class="folder">environments/</span>
+│   ├── <span class="folder">dev/</span>
+│   │   └── <span class="file">terraform.tfvars</span>   <span class="comment"># values for the dev environment</span>
+│   └── <span class="folder">prod/</span>
+│       └── <span class="file">terraform.tfvars</span>   <span class="comment"># values for the prod environment</span>
+└── <span class="folder">terraform/</span>
+    ├── <span class="file">providers.tf</span>     <span class="comment"># which clouds + which versions</span>
+    ├── <span class="file">variables.tf</span>     <span class="comment"># inputs (with descriptions and types)</span>
+    ├── <span class="file">main.tf</span>          <span class="comment"># the resources we're creating</span>
+    └── <span class="file">outputs.tf</span>       <span class="comment"># useful values printed after apply</span>
+      </div>
+
+      <h3 class="mt-8">File 1 — <code>.gitignore</code></h3>
+      <p>Tells Git which files <strong>must never</strong> be uploaded. State files contain sensitive info; the <code>.terraform</code> folder is huge and machine-specific.</p>
+      <span class="file-tag">.gitignore</span>
+<pre><span class="cmt"># Local Terraform directories and lock files we don't want shared</span>
+.terraform/
+.terraform.lock.hcl
+
+<span class="cmt"># State files — NEVER commit these (they contain secrets)</span>
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+<span class="cmt"># Variable files that might contain real values</span>
+*.auto.tfvars
+*.tfvars.local
+
+<span class="cmt"># Crash logs</span>
+crash.log
+crash.*.log
+
+<span class="cmt"># OS &amp; editor junk</span>
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/</pre>
+
+      <h3 class="mt-8">File 2 — <code>README.md</code></h3>
+      <p>Documents the project for your future self and teammates.</p>
+      <span class="file-tag">README.md</span>
+<pre># AWS Terraform Demo
+
+Infrastructure as Code for our learning project, deployed via GitLab CI/CD.
+
+## Structure
+- `terraform/`        — Terraform configuration files
+- `environments/`     — per-environment variable values
+- `.gitlab-ci.yml`    — automated pipeline (plan + apply)
+
+## Workflow
+1. Create a feature branch
+2. Open a Merge Request
+3. Review the auto-generated `terraform plan`
+4. Merge to `main`
+5. Approve the manual `apply` job in GitLab</pre>
+
+      <h3 class="mt-8">File 3 — environment tfvars</h3>
+      <p>Each environment gets its own values file so dev and prod can differ without code changes.</p>
+      <span class="file-tag">environments/dev/terraform.tfvars</span>
+<pre>environment   = <span class="str">"dev"</span>
+instance_type = <span class="str">"t3.micro"</span>
+bucket_suffix = <span class="str">"dev-001"</span></pre>
+
+      <span class="file-tag" style="margin-top:1rem">environments/prod/terraform.tfvars</span>
+<pre>environment   = <span class="str">"prod"</span>
+instance_type = <span class="str">"t3.small"</span>
+bucket_suffix = <span class="str">"prod-001"</span></pre>
+
+      <div class="callout callout-info">
+        <span class="callout-title">Why separate folders?</span>
+        Splitting environments physically (in folders) prevents the classic mistake of accidentally applying dev settings to production. The pipeline picks the right file based on the environment.
+      </div>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 07 TERRAFORM CODE                               -->
+    <!-- ============================================== -->
+    <section id="tf-files">
+      <span class="section-eyebrow">Part 07</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">07</span> Terraform Code, File by File</h2>
+      <p class="mt-4">All four files live inside the <code>terraform/</code> folder. Terraform reads <em>every</em> <code>.tf</code> file in the folder as one program — we split them only to stay organized.</p>
+
+      <h3 class="mt-6">File 1 — <code>providers.tf</code></h3>
+      <p>Declares which clouds we use and pins versions so future upgrades don't break us by surprise.</p>
+      <span class="file-tag">terraform/providers.tf</span>
+<pre><span class="kw">terraform</span> {
+  required_version = <span class="str">"&gt;= 1.9.0"</span>
+
   required_providers {
     aws = {
       source  = <span class="str">"hashicorp/aws"</span>
-      version = <span class="str">"~> 5.0"</span>   <span class="cmt"># use any 5.x version</span>
+      version = <span class="str">"~&gt; 5.60"</span>   <span class="cmt"># any 5.60.x or newer in 5.x</span>
     }
   }
 }
 
 <span class="kw">provider</span> <span class="str">"aws"</span> {
-  region = <span class="str">"us-east-1"</span>
-}</pre>
+  region = var.aws_region
 
-      <!-- variables.tf -->
-      <span class="file-tag mt-6 inline-block">variables.tf</span>
-      <p class="mb-2 text-sm text-gray-700">Variables are like blanks you fill in. This keeps values reusable instead of typed everywhere.</p>
-      <pre><span class="kw">variable</span> <span class="str">"bucket_name"</span> {
-  description = <span class="str">"A globally-unique name for our storage bucket"</span>
+  default_tags {
+    tags = {
+      ManagedBy   = <span class="str">"Terraform"</span>
+      Environment = var.environment
+      Project     = <span class="str">"aws-terraform-demo"</span>
+    }
+  }
+}</pre>
+      <p class="text-sm" style="color:var(--ibm-gray-70)"><strong>default_tags</strong> attaches the same labels to <em>every</em> resource — huge time-saver for billing reports and audits.</p>
+
+      <h3 class="mt-6">File 2 — <code>variables.tf</code></h3>
+      <p>Variables turn hard-coded values into inputs. Always give them a <code>description</code> and a <code>type</code>.</p>
+      <span class="file-tag">terraform/variables.tf</span>
+<pre><span class="kw">variable</span> <span class="str">"aws_region"</span> {
+  description = <span class="str">"AWS region to deploy into"</span>
   type        = string
-  default     = <span class="str">"my-first-tf-bucket-change-me-123"</span>
+  default     = <span class="str">"us-east-1"</span>
+}
+
+<span class="kw">variable</span> <span class="str">"environment"</span> {
+  description = <span class="str">"Environment name (dev or prod)"</span>
+  type        = string
+
+  validation {
+    condition     = contains([<span class="str">"dev"</span>, <span class="str">"prod"</span>], var.environment)
+    error_message = <span class="str">"environment must be dev or prod."</span>
+  }
+}
+
+<span class="kw">variable</span> <span class="str">"instance_type"</span> {
+  description = <span class="str">"EC2 instance size"</span>
+  type        = string
+  default     = <span class="str">"t3.micro"</span>
+}
+
+<span class="kw">variable</span> <span class="str">"bucket_suffix"</span> {
+  description = <span class="str">"Suffix to keep bucket name globally unique"</span>
+  type        = string
 }</pre>
 
-      <!-- main.tf -->
-      <span class="file-tag mt-6 inline-block">main.tf</span>
-      <p class="mb-2 text-sm text-gray-700">The actual thing we build. We'll make an <strong>S3 bucket</strong> (a cloud folder for files) because it's simple, cheap, and safe to practice with.
-        <button class="info-btn ml-1" onclick="openModal('m-s3')">ⓘ what's S3?</button></p>
-      <pre><span class="kw">resource</span> <span class="str">"aws_s3_bucket"</span> <span class="str">"my_bucket"</span> {
-  bucket = var.bucket_name
+      <h3 class="mt-6">File 3 — <code>main.tf</code></h3>
+      <p>The actual resources. We'll create two: a private S3 bucket (cloud storage) and a small EC2 instance (a virtual server). Both are great practice resources.
+        <button class="info-btn" onclick="openModal('m-ec2')">what is EC2?</button>
+      </p>
+      <span class="file-tag">terraform/main.tf</span>
+<pre><span class="cmt"># ---------------------------------------------------------------</span>
+<span class="cmt"># A unique S3 bucket for storing files</span>
+<span class="cmt"># ---------------------------------------------------------------</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket"</span> <span class="str">"app_data"</span> {
+  bucket = <span class="str">"my-app-data-${var.environment}-${var.bucket_suffix}"</span>
+}
+
+<span class="cmt"># Block ALL public access — security best practice</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket_public_access_block"</span> <span class="str">"app_data"</span> {
+  bucket                  = aws_s3_bucket.app_data.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+<span class="cmt"># Enable versioning so deleted/overwritten files can be recovered</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket_versioning"</span> <span class="str">"app_data"</span> {
+  bucket = aws_s3_bucket.app_data.id
+  versioning_configuration {
+    status = <span class="str">"Enabled"</span>
+  }
+}
+
+<span class="cmt"># Encrypt every object at rest with AWS-managed keys</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket_server_side_encryption_configuration"</span> <span class="str">"app_data"</span> {
+  bucket = aws_s3_bucket.app_data.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = <span class="str">"AES256"</span>
+    }
+  }
+}
+
+<span class="cmt"># ---------------------------------------------------------------</span>
+<span class="cmt"># A small EC2 server running Amazon Linux</span>
+<span class="cmt"># ---------------------------------------------------------------</span>
+<span class="kw">data</span> <span class="str">"aws_ami"</span> <span class="str">"amazon_linux"</span> {
+  most_recent = true
+  owners      = [<span class="str">"amazon"</span>]
+  filter {
+    name   = <span class="str">"name"</span>
+    values = [<span class="str">"al2023-ami-*-x86_64"</span>]
+  }
+}
+
+<span class="kw">resource</span> <span class="str">"aws_instance"</span> <span class="str">"web"</span> {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
 
   tags = {
-    Name        = <span class="str">"MyFirstBucket"</span>
-    Environment = <span class="str">"Learning"</span>
+    Name = <span class="str">"web-${var.environment}"</span>
   }
 }</pre>
 
-      <!-- outputs.tf -->
-      <span class="file-tag mt-6 inline-block">outputs.tf</span>
-      <p class="mb-2 text-sm text-gray-700">After building, print useful info back to you — here, the bucket's name.</p>
-      <pre><span class="kw">output</span> <span class="str">"bucket_id"</span> {
-  description = <span class="str">"The name of the bucket we created"</span>
-  value       = aws_s3_bucket.my_bucket.id
+      <h3 class="mt-6">File 4 — <code>outputs.tf</code></h3>
+      <p>Outputs print useful values after a successful apply. Great for confirming what was built.</p>
+      <span class="file-tag">terraform/outputs.tf</span>
+<pre><span class="kw">output</span> <span class="str">"bucket_name"</span> {
+  description = <span class="str">"Name of the created S3 bucket"</span>
+  value       = aws_s3_bucket.app_data.id
+}
+
+<span class="kw">output</span> <span class="str">"instance_id"</span> {
+  description = <span class="str">"ID of the EC2 server"</span>
+  value       = aws_instance.web.id
+}
+
+<span class="kw">output</span> <span class="str">"instance_public_ip"</span> {
+  description = <span class="str">"Public IP of the EC2 server"</span>
+  value       = aws_instance.web.public_ip
 }</pre>
     </section>
 
-    <!-- ===== 5 RUN ===== -->
-    <section id="run" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">5</span> Run Terraform (The 4 Magic Commands)</h2>
-      <p class="mb-4">Open your terminal <em>inside</em> the folder and run these in order. Always read what each command prints before continuing.</p>
+    <!-- ============================================== -->
+    <!-- 08 RUN LOCALLY                                  -->
+    <!-- ============================================== -->
+    <section id="run">
+      <span class="section-eyebrow">Part 08</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">08</span> Run Terraform Locally First <span class="win-tag">Windows</span></h2>
+      <p class="mt-4">Always test from your Windows machine before automating. The four commands are <code>init</code>, <code>fmt</code>/<code>validate</code>, <code>plan</code>, and <code>apply</code>.</p>
 
-      <div class="space-y-5">
-        <div>
-          <p class="font-semibold">1. <code>terraform init</code> — Get ready</p>
-          <p class="text-sm text-gray-700 mb-2">Downloads the AWS provider plugin. Run once per project (and again if you change versions).</p>
-          <pre>terraform init</pre>
-        </div>
-        <div>
-          <p class="font-semibold">2. <code>terraform fmt</code> &amp; <code>validate</code> — Tidy &amp; check</p>
-          <p class="text-sm text-gray-700 mb-2">Auto-formats your files and checks for spelling/syntax mistakes.</p>
-          <pre>terraform fmt
-terraform validate</pre>
-        </div>
-        <div>
-          <p class="font-semibold">3. <code>terraform plan</code> — Preview</p>
-          <p class="text-sm text-gray-700 mb-2">Shows exactly what will be created (a <code>+</code>), changed (<code>~</code>), or destroyed (<code>-</code>). Nothing is built yet. This is your safety net — <strong>always read the plan.</strong></p>
-          <pre>terraform plan</pre>
-        </div>
-        <div>
-          <p class="font-semibold">4. <code>terraform apply</code> — Build it</p>
-          <p class="text-sm text-gray-700 mb-2">Does the work. It shows the plan again and asks you to type <code>yes</code> to confirm.</p>
-          <pre>terraform apply</pre>
-        </div>
+      <h3 class="mt-6">1. Initialize the project</h3>
+      <pre><span class="ps">PS&gt;</span> cd $env:USERPROFILE\Documents\aws-terraform-demo\terraform
+<span class="ps">PS&gt;</span> terraform init</pre>
+      <p>Downloads the AWS provider into a hidden <code>.terraform</code> folder. Run again any time you change provider versions.</p>
+
+      <h3 class="mt-6">2. Format and validate</h3>
+      <pre><span class="ps">PS&gt;</span> terraform fmt -recursive
+<span class="ps">PS&gt;</span> terraform validate</pre>
+      <p><code>fmt</code> auto-styles your code; <code>validate</code> checks for syntax errors without contacting AWS.</p>
+
+      <h3 class="mt-6">3. Plan against the dev environment</h3>
+      <pre><span class="ps">PS&gt;</span> terraform plan -var-file=<span class="str">"..\environments\dev\terraform.tfvars"</span> -out=tfplan</pre>
+      <p>Read the output carefully. Look for the summary line: <code>Plan: 5 to add, 0 to change, 0 to destroy.</code></p>
+
+      <h3 class="mt-6">4. Apply</h3>
+      <pre><span class="ps">PS&gt;</span> terraform apply tfplan</pre>
+      <p>This actually creates the resources. After a minute or two, Terraform prints the outputs (bucket name, EC2 ID, public IP). Open the AWS console and verify they exist.</p>
+
+      <div class="callout callout-success">
+        <span class="callout-title">Habit to build</span>
+        Run <code>plan</code> every time, even when you "know" what's going to happen. Surprises in apply are how production outages start.
       </div>
-      <p class="mt-4">🎉 Go check the AWS Console → S3 — your bucket is really there! <a class="doc-link" href="https://developer.hashicorp.com/terraform/cli/commands" target="_blank" rel="noopener">→ All Terraform CLI commands</a></p>
     </section>
 
-    <!-- ===== 6 GITLAB ===== -->
-    <section id="gitlab" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">6</span> Automate It with GitLab CI/CD</h2>
-      <p class="mb-4">Right now you run commands by hand. Let's make GitLab do it automatically every time you push code. GitLab looks for one special file in your project: <code>.gitlab-ci.yml</code>.</p>
+    <!-- ============================================== -->
+    <!-- 09 BACKEND                                      -->
+    <!-- ============================================== -->
+    <section id="backend">
+      <span class="section-eyebrow">Part 09</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">09</span> Remote State with GitLab</h2>
+      <p class="mt-4">Right now your <code>terraform.tfstate</code> lives only on your laptop. That's fine alone but breaks the moment GitLab (or a teammate) runs Terraform — everyone needs the same memory or you'll create duplicates and conflicts.</p>
+      <p>GitLab includes a free, secure place to store this file with built-in locking (so two jobs can't change it at once).</p>
 
-      <h3 class="font-bold text-lg mb-2">Step A — Push your code to GitLab</h3>
-      <pre>git init
-git add .
-git commit -m <span class="str">"My first terraform project"</span>
-<span class="cmt"># Make an empty project on gitlab.com first, then:</span>
-git remote add origin https://gitlab.com/YOUR_USERNAME/my-first-infra.git
-git push -u origin main</pre>
+      <h3 class="mt-6">Update <code>providers.tf</code></h3>
+      <p>Add a <code>backend "http"</code> block. The actual URL is supplied by GitLab at run time.</p>
+      <span class="file-tag">terraform/providers.tf (add this block)</span>
+<pre><span class="kw">terraform</span> {
+  required_version = <span class="str">"&gt;= 1.9.0"</span>
 
-      <h3 class="font-bold text-lg mt-6 mb-2">Step B — Store AWS keys safely in GitLab</h3>
-      <p class="text-sm text-gray-700 mb-2">Go to your project → <em>Settings → CI/CD → Variables</em>. Add two <strong>masked, protected</strong> variables. This keeps secrets out of your code.
-        <button class="info-btn ml-1" onclick="openModal('m-vars')">ⓘ how?</button></p>
-      <ul class="text-sm list-disc ml-6 mb-2">
-        <li><code>AWS_ACCESS_KEY_ID</code></li>
-        <li><code>AWS_SECRET_ACCESS_KEY</code></li>
-      </ul>
+  <span class="kw">backend</span> <span class="str">"http"</span> {}     <span class="cmt"># GitLab provides the address</span>
 
-      <h3 class="font-bold text-lg mt-6 mb-2">Step C — Create <code>.gitlab-ci.yml</code></h3>
-      <p class="text-sm text-gray-700 mb-2">This file defines the <em>pipeline</em>: two stages, <code>plan</code> then <code>apply</code>. The apply only runs when you click a button (manual), so nothing changes by surprise.</p>
-      <span class="file-tag">.gitlab-ci.yml</span>
-      <pre><span class="cmt"># Use the official Terraform image so commands exist</span>
-<span class="kw">image</span>:
+  required_providers {
+    aws = { source = <span class="str">"hashicorp/aws"</span>, version = <span class="str">"~&gt; 5.60"</span> }
+  }
+}</pre>
+
+      <p>GitLab will inject the correct backend configuration during pipeline init. We'll see the exact <code>terraform init</code> command in the pipeline in Part 10.</p>
+      <p><a class="doc-link" href="https://docs.gitlab.com/ee/user/infrastructure/iac/terraform_state.html" target="_blank" rel="noopener">→ GitLab-managed Terraform state docs</a></p>
+
+      <div class="callout callout-warn">
+        <span class="callout-title">Migration note</span>
+        If you ran Terraform locally first (Part 08), running <code>terraform init</code> again with the new backend block will offer to copy your existing local state to the remote backend. Type <code>yes</code> when prompted.
+      </div>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 10 PIPELINE                                     -->
+    <!-- ============================================== -->
+    <section id="pipeline">
+      <span class="section-eyebrow">Part 10</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">10</span> Build the GitLab CI/CD Pipeline</h2>
+      <p class="mt-4">A pipeline is defined in a single file: <code>.gitlab-ci.yml</code> at the root of the repo. GitLab automatically picks it up.</p>
+
+      <h3 class="mt-6">Step 1 — Set up OIDC instead of long-lived keys (recommended)</h3>
+      <p>OIDC lets GitLab prove its identity to AWS and receive temporary credentials — no <code>AWS_SECRET_ACCESS_KEY</code> stored anywhere. Setup is a one-time job in AWS:</p>
+      <ol class="list-decimal ml-6 space-y-2">
+        <li>In AWS IAM → <em>Identity providers → Add provider</em>. Choose OpenID Connect.</li>
+        <li>Provider URL: <code>https://gitlab.com</code>. Audience: <code>https://gitlab.com</code>.</li>
+        <li>Create an IAM Role that trusts that provider, scoped to your project path.</li>
+        <li>Attach a tightly-scoped policy (S3 + EC2 only — not Administrator).</li>
+        <li>Copy the Role ARN into a GitLab CI/CD variable named <code>AWS_ROLE_ARN</code>.</li>
+      </ol>
+      <p><a class="doc-link" href="https://docs.gitlab.com/ee/ci/cloud_services/aws/" target="_blank" rel="noopener">→ GitLab OIDC with AWS — full step-by-step</a></p>
+
+      <div class="callout callout-info">
+        <span class="callout-title">If OIDC feels like too much right now</span>
+        It's fine to start with stored access keys. In GitLab go to <em>Settings → CI/CD → Variables</em> and add <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> — both <strong>Masked</strong> and <strong>Protected</strong>. Plan to upgrade to OIDC once comfortable.
+        <button class="info-btn" onclick="openModal('m-vars')">how to add variables</button>
+      </div>
+
+      <h3 class="mt-6">Step 2 — Create <code>.gitlab-ci.yml</code></h3>
+      <p>This is the heart of the automation. The pipeline has three stages: <strong>validate</strong>, <strong>plan</strong>, <strong>apply</strong>. The apply step is <em>manual</em>, so nothing changes without a human approving it.</p>
+      <span class="file-tag">.gitlab-ci.yml (at the repository root)</span>
+<pre><span class="kw">image</span>:
   name: hashicorp/terraform:1.9
   entrypoint: [<span class="str">""</span>]
 
 <span class="kw">variables</span>:
+  TF_ROOT: <span class="str">"${CI_PROJECT_DIR}/terraform"</span>
+  TF_VAR_FILE: <span class="str">"${CI_PROJECT_DIR}/environments/${ENVIRONMENT}/terraform.tfvars"</span>
+  TF_STATE_NAME: <span class="str">"${ENVIRONMENT}"</span>
   AWS_DEFAULT_REGION: <span class="str">"us-east-1"</span>
 
 <span class="kw">stages</span>:
+  - validate
   - plan
   - apply
 
-<span class="cmt"># Runs before every job: get Terraform ready</span>
-<span class="kw">before_script</span>:
+<span class="cmt"># Reusable block: log in to AWS via OIDC, then init Terraform</span>
+.terraform_setup: &amp;terraform_setup
+  - cd <span class="str">"$TF_ROOT"</span>
+  - export AWS_WEB_IDENTITY_TOKEN_FILE=$(mktemp)
+  - echo <span class="str">"$CI_JOB_JWT_V2"</span> &gt; $AWS_WEB_IDENTITY_TOKEN_FILE
+  - export AWS_ROLE_SESSION_NAME=<span class="str">"gitlab-${CI_PIPELINE_ID}"</span>
   - terraform init
+      -backend-config=<span class="str">"address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"</span>
+      -backend-config=<span class="str">"lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"</span>
+      -backend-config=<span class="str">"username=gitlab-ci-token"</span>
+      -backend-config=<span class="str">"password=${CI_JOB_TOKEN}"</span>
+      -backend-config=<span class="str">"lock_method=POST"</span>
+      -backend-config=<span class="str">"unlock_method=DELETE"</span>
+      -backend-config=<span class="str">"retry_wait_min=5"</span>
 
-<span class="kw">plan</span>:
-  stage: plan
+<span class="cmt"># ----------- VALIDATE ----------- </span>
+validate:
+  stage: validate
   script:
+    - cd <span class="str">"$TF_ROOT"</span>
+    - terraform fmt -check -recursive
+    - terraform init -backend=false
     - terraform validate
-    - terraform plan -out=tfplan
-  artifacts:
-    paths:
-      - tfplan        <span class="cmt"># save the plan for the apply step</span>
 
-<span class="kw">apply</span>:
-  stage: apply
+<span class="cmt"># ----------- PLAN (dev) ----------- </span>
+plan:dev:
+  stage: plan
+  variables:
+    ENVIRONMENT: <span class="str">"dev"</span>
   script:
+    - *terraform_setup
+    - terraform plan -var-file=<span class="str">"$TF_VAR_FILE"</span> -out=tfplan
+  artifacts:
+    paths: [terraform/tfplan]
+    expire_in: 1 week
+
+<span class="cmt"># ----------- APPLY (dev — manual) ----------- </span>
+apply:dev:
+  stage: apply
+  variables:
+    ENVIRONMENT: <span class="str">"dev"</span>
+  needs: [plan:dev]
+  script:
+    - *terraform_setup
     - terraform apply -input=false tfplan
-  when: manual       <span class="cmt"># YOU click to approve</span>
+  when: manual
+  environment:
+    name: dev
   only:
-    - main           <span class="cmt"># only on the main branch</span></pre>
-      <p class="mt-3">Push this file. In GitLab go to <em>Build → Pipelines</em> and watch <code>plan</code> run, then click ▶ on <code>apply</code> to deploy.</p>
-      <p class="mt-2"><a class="doc-link" href="https://docs.gitlab.com/ee/user/infrastructure/iac/" target="_blank" rel="noopener">→ GitLab + Terraform official docs</a></p>
+    - main
+
+<span class="cmt"># ----------- PLAN (prod) ----------- </span>
+plan:prod:
+  stage: plan
+  variables:
+    ENVIRONMENT: <span class="str">"prod"</span>
+  script:
+    - *terraform_setup
+    - terraform plan -var-file=<span class="str">"$TF_VAR_FILE"</span> -out=tfplan
+  artifacts:
+    paths: [terraform/tfplan]
+    expire_in: 1 week
+  only:
+    - main
+
+<span class="cmt"># ----------- APPLY (prod — manual, protected) ----------- </span>
+apply:prod:
+  stage: apply
+  variables:
+    ENVIRONMENT: <span class="str">"prod"</span>
+  needs: [plan:prod]
+  script:
+    - *terraform_setup
+    - terraform apply -input=false tfplan
+  when: manual
+  environment:
+    name: prod
+  only:
+    - main</pre>
+
+      <h3 class="mt-6">Step 3 — Commit and push</h3>
+<pre><span class="ps">PS&gt;</span> cd $env:USERPROFILE\Documents\aws-terraform-demo
+<span class="ps">PS&gt;</span> git add .
+<span class="ps">PS&gt;</span> git commit -m <span class="str">"Initial Terraform project + CI/CD pipeline"</span>
+<span class="ps">PS&gt;</span> git push origin main</pre>
+
+      <h3 class="mt-6">Step 4 — Watch it run</h3>
+      <p>In GitLab → <em>Build → Pipelines</em>. You'll see <code>validate</code> run automatically, then both <code>plan:dev</code> and <code>plan:prod</code>. The two <code>apply</code> jobs wait for you to click ▶.</p>
+      <p><a class="doc-link" href="https://docs.gitlab.com/ee/ci/yaml/" target="_blank" rel="noopener">→ Full <code>.gitlab-ci.yml</code> reference</a></p>
     </section>
 
-    <!-- ===== 7 BACKEND ===== -->
-    <section id="backend" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">7</span> Remote State (Sharing the "Memory")</h2>
-      <p class="mb-4">Remember <strong>state</strong> — Terraform's memory of what it built? By default it's a file on your laptop called <code>terraform.tfstate</code>. That's a problem when GitLab and teammates also run Terraform: everyone needs the <em>same</em> memory, or they'll clash.</p>
-      <p class="mb-4">The fix: store the state file in a shared place. GitLab has a built-in spot for this (no extra AWS setup needed). Add this to <code>providers.tf</code>:</p>
-      <span class="file-tag">providers.tf (add the backend block)</span>
-      <pre><span class="kw">terraform</span> {
-  backend <span class="str">"http"</span> {}   <span class="cmt"># GitLab fills in the details</span>
+    <!-- ============================================== -->
+    <!-- 11 ENVIRONMENTS                                 -->
+    <!-- ============================================== -->
+    <section id="environments">
+      <span class="section-eyebrow">Part 11</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">11</span> Environments &amp; Approval Gates</h2>
+      <p class="mt-4">Production deserves more protection than dev. GitLab gives you several tools for this.</p>
 
-  required_providers {
-    aws = { source = <span class="str">"hashicorp/aws"</span>, version = <span class="str">"~> 5.0"</span> }
-  }
-}</pre>
-      <p class="mt-3 text-sm text-gray-700">Then change <code>terraform init</code> in your pipeline to point at GitLab's state backend.
-        <button class="info-btn ml-1" onclick="openModal('m-state')">ⓘ full init command</button></p>
-      <p class="mt-2"><a class="doc-link" href="https://docs.gitlab.com/ee/user/infrastructure/iac/terraform_state.html" target="_blank" rel="noopener">→ GitLab managed Terraform state docs</a></p>
+      <h3 class="mt-6">Protected environments</h3>
+      <p>In GitLab: <em>Settings → CI/CD → Protected environments</em>. Add <code>prod</code> and restrict "Allowed to deploy" to specific people (Maintainers, a release manager, etc.). Now no one else can press the apply button.</p>
+
+      <h3 class="mt-6">Merge request workflow</h3>
+      <p>Every change should follow this loop:</p>
+      <ol class="list-decimal ml-6 space-y-1">
+        <li>Create a new branch: <code>git checkout -b feature/add-db</code>.</li>
+        <li>Edit files, commit, push.</li>
+        <li>Open a Merge Request in GitLab. The pipeline runs <code>validate</code> and <code>plan:dev</code> automatically — the plan output appears in the MR.</li>
+        <li>A reviewer reads the plan, approves, and merges.</li>
+        <li>On <code>main</code>, the apply jobs become available to click.</li>
+      </ol>
+
+      <h3 class="mt-6">Required approvals</h3>
+      <p>Under <em>Settings → Merge requests → Merge request approvals</em>, require at least one approval before merging. Combined with protected branches, this means no single person can ship to prod alone.</p>
     </section>
 
-    <!-- ===== 8 BEST PRACTICES ===== -->
-    <section id="best" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">8</span> Best Practices</h2>
-      <ul class="space-y-3">
-        <li>🔒 <strong>Never commit secrets.</strong> Use GitLab CI/CD variables or AWS roles — not hard-coded keys. Add <code>*.tfstate</code> and <code>.terraform/</code> to a <code>.gitignore</code> file.</li>
-        <li>👀 <strong>Always review the plan</strong> before apply. Make <code>apply</code> a manual, approved step.</li>
-        <li>🗂️ <strong>Use remote state</strong> (Section 7) so your team shares one source of truth, with locking to prevent two people applying at once.</li>
-        <li>🏷️ <strong>Tag everything</strong> (Name, Environment, Owner) so you can find and bill resources later.</li>
-        <li>📦 <strong>Use modules</strong> once things grow — reusable bundles of Terraform code.
-          <button class="info-btn ml-1" onclick="openModal('m-mod')">ⓘ modules</button></li>
-        <li>🌱 <strong>Separate environments</strong> (dev / staging / prod) so a mistake in testing never touches real users.</li>
-        <li>🔁 <strong>Pin versions</strong> (like <code>~> 5.0</code>) so upgrades don't break things unexpectedly.</li>
-        <li>📖 <strong>Run <code>fmt</code> and <code>validate</code></strong> in your pipeline to keep code clean and catch typos early.</li>
+    <!-- ============================================== -->
+    <!-- 12 SECURITY                                     -->
+    <!-- ============================================== -->
+    <section id="security">
+      <span class="section-eyebrow">Part 12</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">12</span> Security Best Practices</h2>
+      <p class="mt-4">These are the same habits used by mature engineering teams. Adopting them early pays off forever.</p>
+
+      <h3 class="mt-6">A. Identity &amp; credentials</h3>
+      <ul class="list-disc ml-6 space-y-2">
+        <li><strong>MFA everywhere.</strong> Root AWS user, IAM users, GitLab account — no exceptions.</li>
+        <li><strong>OIDC over keys.</strong> Use GitLab → AWS OIDC federation so pipelines get short-lived credentials.</li>
+        <li><strong>Least privilege IAM.</strong> Give roles only the actions they need (<code>s3:PutObject</code>, not <code>s3:*</code>).</li>
+        <li><strong>No keys in code.</strong> Use GitLab CI/CD variables (Masked + Protected) or AWS Secrets Manager.</li>
+        <li><strong>Rotate keys quarterly</strong> if you must use them.</li>
       </ul>
-      <p class="mt-4"><a class="doc-link" href="https://developer.hashicorp.com/terraform/language/style" target="_blank" rel="noopener">→ HashiCorp's official style &amp; best-practice guide</a></p>
+
+      <h3 class="mt-6">B. Repository hygiene</h3>
+      <ul class="list-disc ml-6 space-y-2">
+        <li><strong>Protect <code>main</code>.</strong> Block direct pushes. Force merge requests.</li>
+        <li><strong>Require code review.</strong> Two pairs of eyes catch what one misses.</li>
+        <li><strong>Use a <code>.gitignore</code></strong> that excludes <code>*.tfstate</code>, <code>.terraform/</code>, and any <code>*.local</code> files.</li>
+        <li><strong>Enable secret detection.</strong> GitLab Ultimate scans commits; on Free you can run <code>git-secrets</code> or <code>trufflehog</code> in your pipeline.</li>
+        <li><strong>Sign commits</strong> with a GPG key for proof of authorship.</li>
+      </ul>
+
+      <h3 class="mt-6">C. Pipeline safety</h3>
+      <ul class="list-disc ml-6 space-y-2">
+        <li><strong>Always plan before apply.</strong> Plans are artifacts — reviewers can scrutinize them.</li>
+        <li><strong>Make production apply manual</strong> with protected-environment restrictions.</li>
+        <li><strong>Pin tool versions</strong> (<code>hashicorp/terraform:1.9</code>) so upgrades are intentional.</li>
+        <li><strong>Add scanning jobs:</strong> <code>tfsec</code>, <code>checkov</code>, or <code>terrascan</code> catch misconfigurations.
+          <button class="info-btn" onclick="openModal('m-scan')">example job</button>
+        </li>
+      </ul>
+
+      <h3 class="mt-6">D. Terraform code</h3>
+      <ul class="list-disc ml-6 space-y-2">
+        <li><strong>Pin module &amp; provider versions</strong> with <code>~&gt;</code>.</li>
+        <li><strong>Protect state.</strong> Remote backend with locking + access controls.</li>
+        <li><strong>Encrypt by default.</strong> S3 SSE, EBS encryption, RDS encryption — all on.</li>
+        <li><strong>Block public S3 access</strong> with <code>aws_s3_bucket_public_access_block</code> on every bucket.</li>
+        <li><strong>Tag everything</strong> (Environment, Owner, CostCenter) for traceability.</li>
+        <li><strong>Don't hardcode IDs or ARNs</strong> — use data sources and outputs.</li>
+      </ul>
+
+      <h3 class="mt-6">E. AWS account</h3>
+      <ul class="list-disc ml-6 space-y-2">
+        <li><strong>Enable CloudTrail</strong> in every region.</li>
+        <li><strong>Enable GuardDuty</strong> for automatic threat detection.</li>
+        <li><strong>Set a billing alarm</strong> so a runaway resource doesn't surprise you.</li>
+        <li><strong>Use AWS Organizations</strong> with separate accounts per environment when you grow.</li>
+      </ul>
+
+      <p class="mt-4">
+        <a class="doc-link" href="https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html" target="_blank" rel="noopener">→ AWS Well-Architected: Security Pillar</a> &nbsp;·&nbsp;
+        <a class="doc-link" href="https://docs.gitlab.com/ee/user/application_security/" target="_blank" rel="noopener">→ GitLab Application Security</a>
+      </p>
     </section>
 
-    <!-- ===== 9 CLEANUP ===== -->
-    <section id="cleanup" class="mb-14">
-      <h2 class="text-2xl font-bold mb-4 flex items-center gap-3"><span class="step-num">9</span> Clean Up (Avoid Surprise Bills)</h2>
-      <p class="mb-4">When you're done practicing, delete everything Terraform made so AWS doesn't keep charging you. One command does it:</p>
-      <pre>terraform destroy
-<span class="cmt"># It lists what will be removed, then asks you to type: yes</span></pre>
-      <p class="mt-3 text-sm bg-green-50 border-l-4 border-green-500 p-3">✅ Because Terraform tracks state, <code>destroy</code> knows exactly what to remove — no leftover servers quietly costing money.</p>
+    <!-- ============================================== -->
+    <!-- 13 TROUBLESHOOTING                              -->
+    <!-- ============================================== -->
+    <section id="troubleshoot">
+      <span class="section-eyebrow">Part 13</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">13</span> Troubleshooting</h2>
+      <table class="mt-4">
+        <thead><tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr></thead>
+        <tbody>
+          <tr><td><code>terraform: not recognized</code></td><td>PATH didn't refresh. Close PowerShell, reopen. If still broken, restart Windows.</td></tr>
+          <tr><td><code>InvalidClientTokenId</code></td><td>Wrong/expired AWS keys. Run <code>aws configure</code> again.</td></tr>
+          <tr><td><code>BucketAlreadyExists</code></td><td>S3 names are global. Change <code>bucket_suffix</code> in your tfvars.</td></tr>
+          <tr><td>Pipeline stuck on "pending"</td><td>No runner available. Check <em>Settings → CI/CD → Runners</em>. Free GitLab.com includes shared runners.</td></tr>
+          <tr><td>"Error acquiring state lock"</td><td>Another job is running, or a previous job crashed. Wait, or run <code>terraform force-unlock LOCK_ID</code>.</td></tr>
+          <tr><td>OIDC: "Not authorized to perform sts:AssumeRoleWithWebIdentity"</td><td>The role's trust policy doesn't match your project path. Re-check the <code>sub</code> condition.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- 14 CLEANUP                                      -->
+    <!-- ============================================== -->
+    <section id="cleanup">
+      <span class="section-eyebrow">Part 14</span>
+      <h2 class="flex items-center gap-3"><span class="step-num">14</span> Clean Up</h2>
+      <p class="mt-4">When you're done, destroy everything so nothing keeps billing.</p>
+      <pre><span class="ps">PS&gt;</span> cd $env:USERPROFILE\Documents\aws-terraform-demo\terraform
+<span class="ps">PS&gt;</span> terraform destroy -var-file=<span class="str">"..\environments\dev\terraform.tfvars"</span></pre>
+      <p>Type <code>yes</code> when asked. Repeat for <code>prod</code> if you applied it.</p>
+
+      <div class="callout callout-success">
+        <span class="callout-title">Good practice</span>
+        Add a scheduled <em>nightly</em> destroy job for dev environments. You save money and prove every morning that your code can rebuild from scratch.
+      </div>
     </section>
 
     <!-- FOOTER -->
-    <footer class="border-t border-gray-300 pt-6 mt-10 text-sm text-gray-600">
-      <p class="font-semibold mb-2" style="color:var(--ibm-dark)">Official references</p>
-      <ul class="space-y-1">
+    <footer class="border-t pt-6 mt-12" style="border-color:var(--ibm-gray-20)">
+      <h3 class="text-base mb-3">Official references</h3>
+      <ul class="space-y-1 text-sm">
         <li><a class="doc-link" href="https://developer.hashicorp.com/terraform/docs" target="_blank" rel="noopener">Terraform Documentation</a></li>
         <li><a class="doc-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">Terraform AWS Provider Reference</a></li>
         <li><a class="doc-link" href="https://docs.aws.amazon.com/" target="_blank" rel="noopener">AWS Documentation</a></li>
         <li><a class="doc-link" href="https://docs.gitlab.com/ee/ci/" target="_blank" rel="noopener">GitLab CI/CD Documentation</a></li>
+        <li><a class="doc-link" href="https://docs.gitlab.com/ee/ci/cloud_services/aws/" target="_blank" rel="noopener">GitLab + AWS OIDC Guide</a></li>
+        <li><a class="doc-link" href="https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html" target="_blank" rel="noopener">AWS Well-Architected Framework</a></li>
       </ul>
-      <p class="mt-4 text-xs text-gray-400">Built as a learning guide · IBM-inspired design · Adjust the font size up top for easier reading.</p>
+      <p class="mt-6 text-xs" style="color:var(--ibm-gray-50)">A learning guide for Windows users · IBM-inspired design · Use the A−/A+ controls above to adjust text size.</p>
     </footer>
 
   </main>
 </div>
 
-<!-- ============ MODALS (POPUPS) ============ -->
+<!-- ===== MODALS ===== -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModalBg(event)">
-  <!-- AWS -->
-  <div class="modal-box" id="m-aws" style="display:none">
-    <h3 class="text-xl font-bold mb-3">What is AWS?</h3>
-    <p class="mb-3">AWS (Amazon Web Services) is the world's largest cloud provider. "The cloud" just means computers in someone else's data center that you rent over the internet. Instead of buying a $5,000 server, you can rent computing power for pennies per hour and turn it off when done.</p>
-    <p class="mb-4 text-sm text-gray-700">AWS offers 200+ services — storage (S3), virtual servers (EC2), databases (RDS), and much more.</p>
-    <a class="doc-link" href="https://aws.amazon.com/what-is-aws/" target="_blank" rel="noopener">Read more on AWS →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
+
+  <div class="modal-box" id="m-winget" style="display:none">
+    <h3>What is winget?</h3>
+    <p><strong>winget</strong> is the Windows Package Manager — Microsoft's official tool for installing software from the command line. It ships with Windows 10 (1809+) and Windows 11.</p>
+    <p>Using winget means consistent installs, automatic updates, and no clicking through installer wizards.</p>
+    <p>If <code>winget</code> isn't found, install <a class="doc-link" href="https://apps.microsoft.com/detail/9NBLGGH4NNS1" target="_blank" rel="noopener">App Installer</a> from the Microsoft Store.</p>
+    <div class="text-right mt-4"><button class="modal-close" onclick="closeModal()">Close</button></div>
   </div>
-  <!-- Terraform -->
-  <div class="modal-box" id="m-tf" style="display:none">
-    <h3 class="text-xl font-bold mb-3">What is Terraform?</h3>
-    <p class="mb-3">Terraform, made by HashiCorp, lets you describe infrastructure in simple text files using a language called HCL. You declare <em>what</em> you want ("I want one storage bucket"), and Terraform figures out <em>how</em> to create it and keeps it that way.</p>
-    <p class="mb-4 text-sm text-gray-700">Because it's just text files, you can version it, review it, and reuse it — exactly like normal code. This whole approach is "Infrastructure as Code."</p>
-    <a class="doc-link" href="https://developer.hashicorp.com/terraform/intro" target="_blank" rel="noopener">Intro to Terraform →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
+
+  <div class="modal-box" id="m-mfa" style="display:none">
+    <h3>Why MFA matters</h3>
+    <p>Multi-factor authentication adds a one-time code (from your phone) to your password. Even if your password leaks, an attacker still can't get in without the device in your pocket.</p>
+    <p>For an AWS root account, this is non-negotiable — anyone with root access can delete your entire environment or rack up huge bills with crypto mining.</p>
+    <p><a class="doc-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa.html" target="_blank" rel="noopener">→ AWS MFA docs</a></p>
+    <div class="text-right mt-4"><button class="modal-close" onclick="closeModal()">Close</button></div>
   </div>
-  <!-- GitLab -->
-  <div class="modal-box" id="m-gitlab" style="display:none">
-    <h3 class="text-xl font-bold mb-3">What is GitLab &amp; CI/CD?</h3>
-    <p class="mb-3">GitLab is a website that stores your code (using Git) and adds automation on top. <strong>CI/CD</strong> stands for Continuous Integration / Continuous Delivery — fancy words for "automatically test and ship code whenever it changes."</p>
-    <p class="mb-4 text-sm text-gray-700">You define jobs in a <code>.gitlab-ci.yml</code> file, and GitLab runs them for you on its own servers, called <em>runners</em>.</p>
-    <a class="doc-link" href="https://docs.gitlab.com/ee/ci/introduction/" target="_blank" rel="noopener">GitLab CI/CD intro →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
+
+  <div class="modal-box" id="m-ec2" style="display:none">
+    <h3>What is EC2?</h3>
+    <p><strong>EC2</strong> (Elastic Compute Cloud) is AWS's virtual server service. You pick an operating system, a size (CPU/RAM), and AWS gives you a Linux or Windows machine you can SSH into.</p>
+    <p>We're using <code>t3.micro</code> (free-tier eligible) running Amazon Linux 2023. The data source <code>aws_ami</code> dynamically finds the newest official image so we don't hardcode IDs.</p>
+    <p><a class="doc-link" href="https://docs.aws.amazon.com/ec2/" target="_blank" rel="noopener">→ EC2 documentation</a></p>
+    <div class="text-right mt-4"><button class="modal-close" onclick="closeModal()">Close</button></div>
   </div>
-  <!-- IAM -->
-  <div class="modal-box" id="m-iam" style="display:none">
-    <h3 class="text-xl font-bold mb-3">Why not use the root account?</h3>
-    <p class="mb-3">Your root (main) account can do <em>anything</em>, including closing the account or running up huge bills. If those keys leak, the damage is unlimited.</p>
-    <p class="mb-4 text-sm text-gray-700">An IAM user can be given just the permissions it needs (least privilege). If it's compromised, you simply delete it. This is a core security habit.</p>
-    <a class="doc-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html" target="_blank" rel="noopener">IAM best practices →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
-  </div>
-  <!-- S3 -->
-  <div class="modal-box" id="m-s3" style="display:none">
-    <h3 class="text-xl font-bold mb-3">What is an S3 bucket?</h3>
-    <p class="mb-3">S3 (Simple Storage Service) is AWS's file storage. A "bucket" is like a top-level folder where you put files (called objects). Bucket names must be unique across <em>all</em> of AWS worldwide — that's why we add random numbers.</p>
-    <p class="mb-4 text-sm text-gray-700">We use it for practice because it's cheap, fast to create, and easy to delete.</p>
-    <a class="doc-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" target="_blank" rel="noopener">S3 docs →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
-  </div>
-  <!-- VARS -->
+
   <div class="modal-box" id="m-vars" style="display:none">
-    <h3 class="text-xl font-bold mb-3">Adding masked CI/CD variables</h3>
-    <p class="mb-3">In GitLab: <strong>Settings → CI/CD → Variables → Add variable</strong>. For each key:</p>
-    <ul class="list-disc ml-5 text-sm mb-3 space-y-1">
+    <h3>Adding masked CI/CD variables</h3>
+    <p>In your GitLab project: <em>Settings → CI/CD → Variables → Add variable</em>. For each secret:</p>
+    <ul class="list-disc ml-5 space-y-1 mb-3">
       <li>Set the <strong>Key</strong> (e.g. <code>AWS_ACCESS_KEY_ID</code>) and paste the <strong>Value</strong>.</li>
-      <li>Tick <strong>Mask variable</strong> so it's hidden in logs.</li>
-      <li>Tick <strong>Protect variable</strong> so only protected branches can use it.</li>
+      <li>Tick <strong>Mask variable</strong> — value is hidden in pipeline logs.</li>
+      <li>Tick <strong>Protect variable</strong> — only available on protected branches (like <code>main</code>).</li>
+      <li>Leave "Expand variable reference" on default unless you have a specific reason.</li>
     </ul>
-    <p class="text-sm text-gray-700 mb-4">Terraform's AWS provider automatically reads these standard variable names — no extra code needed.</p>
-    <a class="doc-link" href="https://docs.gitlab.com/ee/ci/variables/" target="_blank" rel="noopener">GitLab variables docs →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
+    <p>Terraform's AWS provider automatically reads <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, and <code>AWS_DEFAULT_REGION</code> — no extra code needed.</p>
+    <p><a class="doc-link" href="https://docs.gitlab.com/ee/ci/variables/" target="_blank" rel="noopener">→ GitLab CI/CD variables docs</a></p>
+    <div class="text-right mt-4"><button class="modal-close" onclick="closeModal()">Close</button></div>
   </div>
-  <!-- STATE INIT -->
-  <div class="modal-box" id="m-state" style="display:none">
-    <h3 class="text-xl font-bold mb-3">Init command for GitLab state</h3>
-    <p class="mb-3 text-sm text-gray-700">Replace the simple <code>terraform init</code> in your pipeline's <code>before_script</code> with this. GitLab provides these variables automatically.</p>
-    <pre class="text-xs"><span class="cmt"># In .gitlab-ci.yml before_script</span>
-- terraform init
-    -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/default"
-    -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/default/lock"
-    -backend-config="username=gitlab-ci-token"
-    -backend-config="password=${CI_JOB_TOKEN}"
-    -backend-config="lock_method=POST"
-    -backend-config="unlock_method=DELETE"</pre>
-    <a class="doc-link" href="https://docs.gitlab.com/ee/user/infrastructure/iac/terraform_state.html" target="_blank" rel="noopener">Full state setup docs →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
+
+  <div class="modal-box" id="m-scan" style="display:none">
+    <h3>Adding a security scan to the pipeline</h3>
+    <p><code>tfsec</code> reads your Terraform files and warns about insecure patterns (public buckets, missing encryption, open security groups).</p>
+<pre>tfsec:
+  stage: validate
+  image: aquasec/tfsec:latest
+  script:
+    - tfsec terraform/ --soft-fail</pre>
+    <p>Use <code>--soft-fail</code> at first so warnings don't block the pipeline; remove it once your code is clean.</p>
+    <p><a class="doc-link" href="https://aquasecurity.github.io/tfsec/" target="_blank" rel="noopener">→ tfsec docs</a></p>
+    <div class="text-right mt-4"><button class="modal-close" onclick="closeModal()">Close</button></div>
   </div>
-  <!-- MODULES -->
-  <div class="modal-box" id="m-mod" style="display:none">
-    <h3 class="text-xl font-bold mb-3">What are modules?</h3>
-    <p class="mb-3">A module is a reusable folder of Terraform files. Instead of copy-pasting the same 50 lines for every server, you write it once as a module and call it with different inputs.</p>
-    <p class="mb-4 text-sm text-gray-700">It's like a recipe you can reuse with different ingredients. The public Terraform Registry has thousands of ready-made modules.</p>
-    <a class="doc-link" href="https://developer.hashicorp.com/terraform/language/modules" target="_blank" rel="noopener">Modules docs →</a>
-    <div class="text-right mt-4"><button onclick="closeModal()" class="info-btn">Close</button></div>
-  </div>
+
 </div>
 
 <script>
-  /* ---------- Font size button (14px to 36px) ---------- */
-  let fontSize = 18;
+  /* Font sizing 14 → 36 */
+  let fontSize = 17;
   const MIN = 14, MAX = 36;
   function changeFont(delta){
     fontSize = Math.min(MAX, Math.max(MIN, fontSize + delta));
@@ -529,10 +1232,11 @@ git push -u origin main</pre>
     document.getElementById('fontLabel').textContent = fontSize;
   }
 
-  /* ---------- Popups / modals ---------- */
+  /* Modals */
   function openModal(id){
     document.querySelectorAll('.modal-box').forEach(b => b.style.display = 'none');
-    document.getElementById(id).style.display = 'block';
+    const target = document.getElementById(id);
+    if (target) target.style.display = 'block';
     document.getElementById('modalOverlay').classList.add('open');
     document.body.style.overflow = 'hidden';
   }
@@ -540,9 +1244,7 @@ git push -u origin main</pre>
     document.getElementById('modalOverlay').classList.remove('open');
     document.body.style.overflow = '';
   }
-  function closeModalBg(e){
-    if(e.target.id === 'modalOverlay') closeModal();
-  }
+  function closeModalBg(e){ if(e.target.id === 'modalOverlay') closeModal(); }
   document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
 </script>
 </body>
