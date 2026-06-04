@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS + GitLab + Terraform Deployment Guide for Windows</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ibm: {
+              blue: '#0f62fe',
+              navy: '#001d6c',
+              black: '#161616',
+              gray: '#f4f4f4',
+              cyan: '#1192e8'
+            }
+          },
+          boxShadow: { soft: '0 8px 24px rgba(0,0,0,0.08)' }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --page-font-size: 16px; }
+    body { font-size: var(--page-font-size); }
+    .codeblock { white-space: pre; overflow-x: auto; tab-size: 2; }
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    .section-card { scroll-margin-top: 90px; }
+  </style>
+</head>
+<body class="bg-white text-ibm-black antialiased">
+  <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <a href="#top" class="flex items-center gap-3 font-bold text-ibm-navy">
+        <span class="grid h-9 w-9 place-items-center rounded bg-ibm-blue text-white">AWS</span>
+        <span>AWS + GitLab + Terraform Guide</span>
+      </a>
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="changeFont(-1)" class="rounded border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">A-</button>
+        <button onclick="resetFont()" class="rounded border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">Reset</button>
+        <button onclick="changeFont(1)" class="rounded border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">A+</button>
+        <button onclick="toggleMenu()" class="rounded bg-ibm-navy px-3 py-2 text-sm font-semibold text-white md:hidden">Menu</button>
+      </div>
+    </div>
+    <nav id="mobileMenu" class="hidden border-t border-slate-200 bg-white md:block">
+      <div class="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-3 text-sm font-semibold text-ibm-navy md:flex-row md:flex-wrap md:gap-4">
+        <a href="#overview" class="hover:text-ibm-blue">Overview</a>
+        <a href="#windows" class="hover:text-ibm-blue">Windows Setup</a>
+        <a href="#aws" class="hover:text-ibm-blue">AWS Setup</a>
+        <a href="#repo" class="hover:text-ibm-blue">Repo Files</a>
+        <a href="#terraform" class="hover:text-ibm-blue">Terraform</a>
+        <a href="#pipeline" class="hover:text-ibm-blue">GitLab Pipeline</a>
+        <a href="#security" class="hover:text-ibm-blue">Security</a>
+        <a href="#runbook" class="hover:text-ibm-blue">Runbook</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top" class="mx-auto max-w-7xl px-4 py-8">
+    <section class="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-blue-50 p-6 shadow-soft md:p-10">
+      <p class="mb-3 inline-flex rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-ibm-navy">Beginner friendly • Windows focused • File-by-file</p>
+      <h1 class="max-w-4xl text-3xl font-extrabold tracking-tight text-ibm-navy md:text-5xl">Step-by-step guide to learn AWS deployments with GitLab CI/CD and Terraform</h1>
+      <p class="mt-5 max-w-4xl text-lg leading-8 text-slate-700">This guide teaches a new learner how cloud deployment works using simple language. You will create a GitLab repository, write Terraform files, connect to AWS, run a safe pipeline, and deploy a small EC2 web server from Windows.</p>
+      <div class="mt-6 grid gap-4 md:grid-cols-3">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5"><strong class="text-ibm-navy">Goal</strong><p class="mt-2 text-slate-700">Build a repeatable deployment, not a one-time click in the AWS console.</p></div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5"><strong class="text-ibm-navy">Audience</strong><p class="mt-2 text-slate-700">New AWS, GitLab, and Terraform users working from Windows.</p></div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5"><strong class="text-ibm-navy">Safety</strong><p class="mt-2 text-slate-700">Use least privilege, protected variables, state locking, scanning, and manual approval.</p></div>
+      </div>
+    </section>
+
+    <section id="overview" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">1. Big picture: what are we building?</h2>
+      <p class="mt-3 leading-8 text-slate-700">Think of this like building with instructions. AWS is the place where the computer server lives. Terraform is the instruction sheet that says what to build. GitLab is the robot helper that reads the instructions and runs them every time you update the project.</p>
+      <div class="mt-5 grid gap-4 md:grid-cols-4">
+        <button onclick="openModal('modal-aws')" class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-left hover:border-ibm-blue"><strong>AWS</strong><p class="text-sm text-slate-700">Cloud services like EC2, VPC, IAM, S3.</p></button>
+        <button onclick="openModal('modal-terraform')" class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-left hover:border-ibm-blue"><strong>Terraform</strong><p class="text-sm text-slate-700">Code that creates cloud resources.</p></button>
+        <button onclick="openModal('modal-gitlab')" class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-left hover:border-ibm-blue"><strong>GitLab CI/CD</strong><p class="text-sm text-slate-700">Pipeline that checks and deploys.</p></button>
+        <button onclick="openModal('modal-state')" class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-left hover:border-ibm-blue"><strong>State</strong><p class="text-sm text-slate-700">Terraform's memory of what exists.</p></button>
+      </div>
+      <div class="mt-6 rounded-2xl bg-slate-50 p-4">
+        <h3 class="font-bold text-ibm-navy">Simple flow</h3>
+        <pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">Windows Laptop
+  ↓ git push
+GitLab Repository
+  ↓ pipeline runs
+Terraform fmt → validate → plan → manual apply
+  ↓ secure AWS access
+AWS creates VPC, Security Group, EC2, and web page</pre>
+      </div>
+    </section>
+
+    <section id="windows" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">2. Windows setup checklist</h2>
+      <p class="mt-3 leading-8 text-slate-700">Install these tools first. Windows Terminal and PowerShell make the commands easier to run.</p>
+      <div class="mt-5 overflow-x-auto">
+        <table class="w-full border-collapse text-left text-sm">
+          <thead class="bg-ibm-navy text-white"><tr><th class="p-3">Tool</th><th class="p-3">Why you need it</th><th class="p-3">Check command</th></tr></thead>
+          <tbody class="divide-y divide-slate-200">
+            <tr><td class="p-3 font-bold">Git for Windows</td><td class="p-3">Uploads your files to GitLab.</td><td class="p-3 font-mono">git --version</td></tr>
+            <tr><td class="p-3 font-bold">Terraform</td><td class="p-3">Creates AWS resources from code.</td><td class="p-3 font-mono">terraform version</td></tr>
+            <tr><td class="p-3 font-bold">AWS CLI v2</td><td class="p-3">Lets Windows talk to AWS from terminal.</td><td class="p-3 font-mono">aws --version</td></tr>
+            <tr><td class="p-3 font-bold">VS Code</td><td class="p-3">Code editor for YAML and Terraform files.</td><td class="p-3">Open the folder and edit files.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3 class="mt-6 font-bold text-ibm-navy">Windows PowerShell setup test</h3>
+      <pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white"># Open Windows Terminal or PowerShell
+mkdir C:\aws-gitlab-terraform-demo
+cd C:\aws-gitlab-terraform-demo
+
+git --version
+terraform version
+aws --version</pre>
+      <p class="mt-3 text-slate-700"><strong>Best practice:</strong> run commands inside a project folder. Do not put AWS secrets in text files, screenshots, commits, or chat messages.</p>
+    </section>
+
+    <section id="aws" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">3. AWS setup before Terraform</h2>
+      <div class="mt-4 grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Step 1: Protect the account</h3><p class="mt-2 text-slate-700">Enable MFA, avoid using the root account, and create roles or users with only the permissions needed.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Step 2: Create a budget</h3><p class="mt-2 text-slate-700">Set a small budget alert before deploying. EC2, NAT Gateway, EBS, and data transfer can cost money.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Step 3: Pick a region</h3><p class="mt-2 text-slate-700">Use one region for learning, such as <code>us-east-1</code>. Keep it consistent in Terraform and GitLab variables.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Step 4: Choose authentication</h3><p class="mt-2 text-slate-700">Best is short-lived access with OIDC role federation. For a beginner lab, protected GitLab variables can work, but rotate keys and use least privilege.</p></div>
+      </div>
+      <button onclick="openModal('modal-iam')" class="mt-5 rounded bg-ibm-blue px-4 py-2 font-bold text-white hover:bg-ibm-navy">More info: AWS security setup</button>
+    </section>
+
+    <section id="repo" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">4. Create the GitLab repository</h2>
+      <ol class="mt-4 list-decimal space-y-3 pl-6 leading-8 text-slate-700">
+        <li>Go to GitLab and create a new blank project named <strong>aws-gitlab-terraform-demo</strong>.</li>
+        <li>Clone it to Windows: <code class="rounded bg-slate-100 px-2 py-1">git clone https://gitlab.com/YOUR-NAME/aws-gitlab-terraform-demo.git</code>.</li>
+        <li>Open the folder in VS Code.</li>
+        <li>Create the files shown below.</li>
+      </ol>
+      <h3 class="mt-6 font-bold text-ibm-navy">Recommended folder structure</h3>
+      <pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">aws-gitlab-terraform-demo/
+├── .gitlab-ci.yml
+├── README.md
+├── .gitignore
+├── terraform/
+│   ├── versions.tf
+│   ├── provider.tf
+│   ├── variables.tf
+│   ├── locals.tf
+│   ├── data.tf
+│   ├── network.tf
+│   ├── security-group.tf
+│   ├── ec2.tf
+│   ├── outputs.tf
+│   └── terraform.tfvars.example
+└── scripts/
+    └── user_data.sh</pre>
+    </section>
+
+    <section id="terraform" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">5. Terraform files, explained file by file</h2>
+      <p class="mt-3 leading-8 text-slate-700">Each file has one job. This makes the project easier to understand and easier to fix when something goes wrong.</p>
+
+      <div class="mt-6 space-y-6">
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">.gitignore</h3><p class="text-slate-700">Stops secret and generated files from being committed.</p><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+crash.*.log
+.terraform.lock.hcl
+.DS_Store
+.vscode/</pre><p class="mt-2 text-sm text-slate-600">Note: some teams commit <code>.terraform.lock.hcl</code> for repeatable provider versions. For a beginner lab, you can ignore it. In a professional team, commit it after review.</p></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/versions.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">terraform {
+  required_version = ">= 1.8.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+
+  # For teams, use a remote backend like S3 + DynamoDB locking.
+  # backend "s3" {}
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/provider.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = local.common_tags
+  }
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/variables.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">variable "aws_region" {
+  description = "AWS region to deploy into."
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "project_name" {
+  description = "Short project name used in resource names."
+  type        = string
+  default     = "gitlab-tf-demo"
+}
+
+variable "environment" {
+  description = "Environment name, such as dev, test, or prod."
+  type        = string
+  default     = "dev"
+}
+
+variable "my_ip_cidr" {
+  description = "Your public IP address with /32 for SSH access, example: 203.0.113.10/32."
+  type        = string
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/locals.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">locals {
+  name_prefix = "${var.project_name}-${var.environment}"
+
+  common_tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+    Owner       = "GitLab-CICD"
+  }
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/data.tf</h3><p class="text-slate-700">Finds the latest Amazon Linux 2023 AMI automatically.</p><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/network.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">resource "aws_vpc" "main" {
+  cidr_block           = "10.10.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = { Name = "${local.name_prefix}-vpc" }
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.10.1.0/24"
+  map_public_ip_on_launch = true
+
+  tags = { Name = "${local.name_prefix}-public-subnet" }
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "${local.name_prefix}-igw" }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = { Name = "${local.name_prefix}-public-rt" }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/security-group.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">resource "aws_security_group" "web" {
+  name        = "${local.name_prefix}-web-sg"
+  description = "Allow HTTP and limited SSH"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP from internet for demo web page"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "SSH only from your IP"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
+  }
+
+  egress {
+    description = "Allow outbound updates"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${local.name_prefix}-web-sg" }
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">scripts/user_data.sh</h3><p class="text-slate-700">Runs when the EC2 starts and installs a tiny web page.</p><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">#!/bin/bash
+set -eux
+
+dnf update -y
+dnf install -y nginx
+systemctl enable nginx
+systemctl start nginx
+
+cat > /usr/share/nginx/html/index.html <<'HTML'
+<!doctype html>
+<html>
+  <head><title>GitLab Terraform AWS Demo</title></head>
+  <body style="font-family: Arial; margin: 40px;">
+    <h1>Hello from AWS EC2</h1>
+    <p>This server was created by Terraform and deployed by GitLab CI/CD.</p>
+  </body>
+</html>
+HTML</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/ec2.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">resource "aws_instance" "web" {
+  ami                    = data.aws_ami.amazon_linux_2023.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.web.id]
+  user_data              = file("${path.module}/../scripts/user_data.sh")
+
+  metadata_options {
+    http_tokens = "required"
+  }
+
+  root_block_device {
+    encrypted = true
+  }
+
+  tags = { Name = "${local.name_prefix}-web" }
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/outputs.tf</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">output "web_public_ip" {
+  description = "Public IP address of the demo web server."
+  value       = aws_instance.web.public_ip
+}
+
+output "web_url" {
+  description = "Open this URL in a browser."
+  value       = "http://${aws_instance.web.public_ip}"
+}</pre></article>
+
+        <article class="rounded-2xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">terraform/terraform.tfvars.example</h3><pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">aws_region   = "us-east-1"
+project_name = "gitlab-tf-demo"
+environment  = "dev"
+my_ip_cidr   = "YOUR.PUBLIC.IP.ADDRESS/32"</pre><p class="mt-2 text-slate-700">Copy this to <code>terraform.tfvars</code> only on your computer. Do not commit <code>terraform.tfvars</code>.</p></article>
+      </div>
+    </section>
+
+    <section id="pipeline" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">6. GitLab CI/CD pipeline setup</h2>
+      <p class="mt-3 leading-8 text-slate-700">A pipeline is a list of jobs. Each job is like a checkpoint. We check formatting, validate Terraform, make a plan, and only apply after a manual button click.</p>
+      <h3 class="mt-6 font-bold text-ibm-navy">GitLab variables to create</h3>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full border-collapse text-left text-sm">
+          <thead class="bg-ibm-navy text-white"><tr><th class="p-3">Variable</th><th class="p-3">Example</th><th class="p-3">Protected / Masked?</th></tr></thead>
+          <tbody class="divide-y divide-slate-200">
+            <tr><td class="p-3 font-mono">AWS_ACCESS_KEY_ID</td><td class="p-3">AKIA...</td><td class="p-3">Masked + Protected</td></tr>
+            <tr><td class="p-3 font-mono">AWS_SECRET_ACCESS_KEY</td><td class="p-3">secret value</td><td class="p-3">Masked + Protected</td></tr>
+            <tr><td class="p-3 font-mono">AWS_DEFAULT_REGION</td><td class="p-3">us-east-1</td><td class="p-3">Protected</td></tr>
+            <tr><td class="p-3 font-mono">TF_VAR_my_ip_cidr</td><td class="p-3">203.0.113.10/32</td><td class="p-3">Protected</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-slate-700"><strong>Better professional option:</strong> configure GitLab OIDC to assume an AWS IAM role so you do not store long-term AWS keys in GitLab.</p>
+
+      <h3 class="mt-6 font-bold text-ibm-navy">.gitlab-ci.yml</h3>
+      <pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">image:
+  name: hashicorp/terraform:1.10
+  entrypoint: [""]
+
+stages:
+  - format
+  - validate
+  - plan
+  - apply
+  - destroy
+
+variables:
+  TF_ROOT: "terraform"
+  TF_IN_AUTOMATION: "true"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}-terraform"
+  paths:
+    - ${TF_ROOT}/.terraform/
+
+before_script:
+  - cd ${TF_ROOT}
+  - terraform --version
+  - terraform init
+
+terraform_fmt:
+  stage: format
+  script:
+    - terraform fmt -check -recursive
+
+terraform_validate:
+  stage: validate
+  script:
+    - terraform validate
+
+terraform_plan:
+  stage: plan
+  script:
+    - terraform plan -out=tfplan
+  artifacts:
+    name: "terraform-plan-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - ${TF_ROOT}/tfplan
+    expire_in: 1 hour
+
+terraform_apply:
+  stage: apply
+  script:
+    - terraform apply -auto-approve tfplan
+  dependencies:
+    - terraform_plan
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+terraform_destroy:
+  stage: destroy
+  script:
+    - terraform destroy -auto-approve
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'</pre>
+      <div class="mt-5 rounded-xl border-l-4 border-amber-500 bg-amber-50 p-4">
+        <strong>Important:</strong> The destroy job is manual so nobody deletes infrastructure by accident. In real production, destroy should be even more restricted or removed.
+      </div>
+
+      <h3 class="mt-6 font-bold text-ibm-navy">Commit and push from Windows</h3>
+      <pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white">git status
+git add .
+git commit -m "Add AWS Terraform GitLab pipeline"
+git push origin main</pre>
+    </section>
+
+    <section id="runbook" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">7. Runbook: how to deploy safely</h2>
+      <ol class="mt-4 list-decimal space-y-3 pl-6 leading-8 text-slate-700">
+        <li>Create or update Terraform files in a feature branch.</li>
+        <li>Run locally: <code>terraform fmt</code>, <code>terraform validate</code>, and <code>terraform plan</code>.</li>
+        <li>Commit and push to GitLab.</li>
+        <li>Open the GitLab pipeline and read the plan output.</li>
+        <li>Confirm the plan only adds or changes what you expect.</li>
+        <li>Merge to <code>main</code> after review.</li>
+        <li>Click the manual <strong>apply</strong> job.</li>
+        <li>Copy the Terraform output URL and test the web page.</li>
+        <li>When finished with the lab, click the manual <strong>destroy</strong> job to avoid charges.</li>
+      </ol>
+      <button onclick="openModal('modal-troubleshooting')" class="mt-5 rounded bg-ibm-blue px-4 py-2 font-bold text-white hover:bg-ibm-navy">Troubleshooting tips</button>
+    </section>
+
+    <section id="security" class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">8. Security best practices</h2>
+      <div class="mt-4 grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Use least privilege</h3><p class="mt-2 text-slate-700">Give the pipeline only the permissions it needs. Do not use administrator access for daily deployments.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Use temporary credentials</h3><p class="mt-2 text-slate-700">Prefer GitLab OIDC to AWS IAM role assumption over long-term access keys.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Protect pipeline variables</h3><p class="mt-2 text-slate-700">Mark secrets as masked and protected. Limit them to protected branches.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Scan infrastructure code</h3><p class="mt-2 text-slate-700">Add tools like Checkov, tfsec/Trivy, GitLab secret detection, and GitLab IaC scanning.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Lock Terraform state</h3><p class="mt-2 text-slate-700">Use remote state, encryption, and locking so two people do not change the same infrastructure at the same time.</p></div>
+        <div class="rounded-xl border border-slate-200 p-4"><h3 class="font-bold text-ibm-navy">Use manual approvals</h3><p class="mt-2 text-slate-700">Plan can run automatically. Apply to production should require review and approval.</p></div>
+      </div>
+
+      <h3 class="mt-6 font-bold text-ibm-navy">Optional security scanning job</h3>
+      <pre class="codeblock mt-3 rounded-xl bg-ibm-black p-4 text-sm text-white"># Add a security stage if your project supports it.
+stages:
+  - format
+  - validate
+  - security
+  - plan
+  - apply
+
+checkov_scan:
+  stage: security
+  image:
+    name: bridgecrew/checkov:latest
+    entrypoint: [""]
+  script:
+    - checkov -d terraform --quiet
+  allow_failure: false</pre>
+    </section>
+
+    <section class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">9. Professional deployment patterns to learn next</h2>
+      <div class="mt-4 grid gap-4 md:grid-cols-3">
+        <div class="rounded-xl bg-slate-50 p-4"><h3 class="font-bold text-ibm-navy">Dev/Test/Prod folders</h3><p class="mt-2 text-slate-700">Use separate folders or workspaces for each environment.</p></div>
+        <div class="rounded-xl bg-slate-50 p-4"><h3 class="font-bold text-ibm-navy">Modules</h3><p class="mt-2 text-slate-700">Put reusable Terraform code in modules like <code>modules/vpc</code> and <code>modules/ec2</code>.</p></div>
+        <div class="rounded-xl bg-slate-50 p-4"><h3 class="font-bold text-ibm-navy">Remote state</h3><p class="mt-2 text-slate-700">Use S3 for state and DynamoDB for locking in team projects.</p></div>
+        <div class="rounded-xl bg-slate-50 p-4"><h3 class="font-bold text-ibm-navy">OIDC role federation</h3><p class="mt-2 text-slate-700">Let GitLab request temporary AWS credentials instead of storing keys.</p></div>
+        <div class="rounded-xl bg-slate-50 p-4"><h3 class="font-bold text-ibm-navy">Blue/green deployment</h3><p class="mt-2 text-slate-700">Run old and new versions side by side, then switch traffic.</p></div>
+        <div class="rounded-xl bg-slate-50 p-4"><h3 class="font-bold text-ibm-navy">ECS or EKS</h3><p class="mt-2 text-slate-700">After EC2, learn container deployments using ECS or Kubernetes.</p></div>
+      </div>
+    </section>
+
+    <section class="section-card mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <h2 class="text-2xl font-bold text-ibm-navy">10. Official references</h2>
+      <ul class="mt-4 list-disc space-y-2 pl-6 leading-8 text-slate-700">
+        <li><a class="font-semibold text-ibm-blue underline" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html" target="_blank" rel="noopener">AWS IAM security best practices</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html" target="_blank" rel="noopener">AWS guidance on access keys and temporary credentials</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://docs.gitlab.com/ci/" target="_blank" rel="noopener">GitLab CI/CD documentation</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://docs.gitlab.com/ci/pipelines/" target="_blank" rel="noopener">GitLab pipeline documentation</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://docs.gitlab.com/ci/cloud_deployment/" target="_blank" rel="noopener">GitLab deploy to AWS documentation</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">Terraform AWS Provider documentation</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-create" target="_blank" rel="noopener">HashiCorp tutorial: create AWS infrastructure</a></li>
+        <li><a class="font-semibold text-ibm-blue underline" href="https://docs.aws.amazon.com/prescriptive-guidance/latest/devops-pipeline-accelerator/using-gitlab-cicd.html" target="_blank" rel="noopener">AWS Prescriptive Guidance: GitLab CI/CD with Terraform</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="mt-10 border-t border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+    <p>Learning lab guide. Always review AWS costs, security controls, and company policy before deploying production systems.</p>
+  </footer>
+
+  <div id="modal-aws" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"><div class="max-w-xl rounded-2xl bg-white p-6 shadow-soft"><h3 class="text-xl font-bold text-ibm-navy">AWS in simple words</h3><p class="mt-3 leading-7 text-slate-700">AWS is like renting computers, storage, databases, and networks from Amazon. You only create what you need, and you should delete lab resources when done.</p><button onclick="closeModal('modal-aws')" class="mt-5 rounded bg-ibm-navy px-4 py-2 text-white">Close</button></div></div>
+  <div id="modal-terraform" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"><div class="max-w-xl rounded-2xl bg-white p-6 shadow-soft"><h3 class="text-xl font-bold text-ibm-navy">Terraform in simple words</h3><p class="mt-3 leading-7 text-slate-700">Terraform turns text files into real cloud resources. The command <code>terraform plan</code> previews changes. The command <code>terraform apply</code> makes the changes.</p><button onclick="closeModal('modal-terraform')" class="mt-5 rounded bg-ibm-navy px-4 py-2 text-white">Close</button></div></div>
+  <div id="modal-gitlab" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"><div class="max-w-xl rounded-2xl bg-white p-6 shadow-soft"><h3 class="text-xl font-bold text-ibm-navy">GitLab CI/CD in simple words</h3><p class="mt-3 leading-7 text-slate-700">GitLab CI/CD is an automatic checklist. When you push code, GitLab runs jobs like format, validate, plan, and apply.</p><button onclick="closeModal('modal-gitlab')" class="mt-5 rounded bg-ibm-navy px-4 py-2 text-white">Close</button></div></div>
+  <div id="modal-state" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"><div class="max-w-xl rounded-2xl bg-white p-6 shadow-soft"><h3 class="text-xl font-bold text-ibm-navy">Terraform state</h3><p class="mt-3 leading-7 text-slate-700">Terraform state is Terraform's memory. It records what resources were created. Protect it because it can contain sensitive information.</p><button onclick="closeModal('modal-state')" class="mt-5 rounded bg-ibm-navy px-4 py-2 text-white">Close</button></div></div>
+  <div id="modal-iam" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"><div class="max-w-2xl rounded-2xl bg-white p-6 shadow-soft"><h3 class="text-xl font-bold text-ibm-navy">AWS security setup</h3><ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-slate-700"><li>Use MFA for accounts.</li><li>Do not use the root account for daily work.</li><li>Use IAM roles and temporary credentials when possible.</li><li>Start with a narrow policy and add permissions only when needed.</li><li>Store secrets in GitLab protected variables or use OIDC.</li></ul><button onclick="closeModal('modal-iam')" class="mt-5 rounded bg-ibm-navy px-4 py-2 text-white">Close</button></div></div>
+  <div id="modal-troubleshooting" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"><div class="max-w-2xl rounded-2xl bg-white p-6 shadow-soft"><h3 class="text-xl font-bold text-ibm-navy">Troubleshooting tips</h3><ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-slate-700"><li><strong>Access denied:</strong> AWS permissions are missing or credentials are wrong.</li><li><strong>Invalid CIDR:</strong> use your public IP with <code>/32</code>.</li><li><strong>Pipeline says no runner:</strong> enable a GitLab shared runner or install a project runner.</li><li><strong>Terraform state locked:</strong> wait for the other job to finish or unlock only if you are sure no job is running.</li><li><strong>Web page not loading:</strong> check security group port 80 and EC2 user data logs.</li></ul><button onclick="closeModal('modal-troubleshooting')" class="mt-5 rounded bg-ibm-navy px-4 py-2 text-white">Close</button></div></div>
+
+  <script>
+    let currentFont = Number(localStorage.getItem('guideFontSize') || 16);
+    function applyFont() {
+      currentFont = Math.max(14, Math.min(36, currentFont));
+      document.documentElement.style.setProperty('--page-font-size', currentFont + 'px');
+      localStorage.setItem('guideFontSize', currentFont);
+    }
+    function changeFont(delta) { currentFont += delta; applyFont(); }
+    function resetFont() { currentFont = 16; applyFont(); }
+    function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('hidden'); }
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    });
+    document.querySelectorAll('.modal').forEach(m => {
+      m.addEventListener('click', function(e) { if (e.target === m) m.classList.remove('active'); });
+    });
+    applyFont();
+  </script>
+</body>
+</html>
