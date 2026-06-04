@@ -267,11 +267,13 @@
     <a href="#opt-manual" class="sub">4a. Manual config</a>
     <a href="#opt-cfn" class="sub">4b. CloudFormation</a>
     <a href="#opt-tf" class="sub">4c. Terraform</a>
-    <a href="#kafka-deploy">5. Deploy Kafka on K8s</a>
-    <a href="#workers">6. Brokers, Producers, Consumers</a>
-    <a href="#verify">7. Verify & Test</a>
-    <a href="#compare">8. Comparison Table</a>
-    <a href="#refs">9. Reference Links</a>
+    <a href="#ansible">5. Configure with Ansible</a>
+    <a href="#kafka-deploy">6. Deploy Kafka on K8s</a>
+    <a href="#workers">7. Brokers, Producers, Consumers</a>
+    <a href="#verify">8. Verify & Test</a>
+    <a href="#compare">9. Comparison Table</a>
+    <a href="#bestpractice">10. Best Practices</a>
+    <a href="#refs">11. Reference Links</a>
   </nav>
 
   <main>
@@ -641,12 +643,154 @@ terraform output control_plane_ip</code></pre>
         </div>
       </details>
     </section>
+<!-- ANSIBLE -->
+    <section class="block" id="ansible">
+      <details class="section">
+        <summary>5. Configure the Cluster with Ansible <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>Once the EC2 instances exist (from any option above, running the <strong>latest Amazon Linux</strong> AMI), the next problem is configuration: installing the container runtime, kubeadm, joining nodes, and applying the CNI — consistently across every host. Doing this by hand via SSH is error-prone. <strong>Ansible</strong> solves this with agentless, idempotent, declarative playbooks executed over SSH.</p>
+
+          <h3>5.1 Inventory</h3>
+          <p>Group the latest-AMI EC2 hosts by role. Replace IPs with the public addresses output by your chosen provisioning option.</p>
+          <pre><code># inventory.ini
+[control_plane]
+cp ansible_host=54.x.x.10
+
+[workers]
+w1 ansible_host=54.x.x.11
+w2 ansible_host=54.x.x.12
+
+[k8s:children]
+control_plane
+workers
+
+[k8s:vars]
+ansible_user=ec2-user
+ansible_ssh_private_key_file=kafka-k8s.pem
+ansible_python_interpreter=/usr/bin/python3</code></pre>
+          <div class="callout">On the latest Amazon Linux AMI the default SSH user is <code class="inline">ec2-user</code>. Ansible needs only Python 3 on the target — already present on AL2023 — so no agent install is required.</div>
+
+          <h3>5.2 Common role — runtime &amp; kubeadm on every node</h3>
+          <pre><code># playbook.yml
+- name: Base Kubernetes prep on all nodes
+  hosts: k8s
+  become: true
+  tasks:
+    - name: Disable swap
+      ansible.builtin.command: swapoff -a
+      changed_when: false
+
+    - name: Enable kernel modules
+      community.general.modprobe:
+        name: "{{ item }}"
+      loop: [ overlay, br_netfilter ]
+
+    - name: Sysctl for k8s networking
+      ansible.posix.sysctl:
+        name: "{{ item }}"
+        value: "1"
+        sysctl_set: true
+      loop:
+        - net.bridge.bridge-nf-call-iptables
+        - net.ipv4.ip_forward
+
+    - name: Install containerd + kube tools
+      ansible.builtin.dnf:
+        name: [ containerd, kubelet, kubeadm, kubectl ]
+        state: present
+
+    - name: Enable services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop: [ containerd, kubelet ]</code></pre>
+
+          <h3>5.3 Control-plane play (init + fetch join command)</h3>
+          <pre><code>- name: Initialize control plane
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: kubeadm init
+      ansible.builtin.command: >
+        kubeadm init --pod-network-cidr=192.168.0.0/16
+      args: { creates: /etc/kubernetes/admin.conf }
+
+    - name: Set up kubeconfig for ec2-user
+      ansible.builtin.shell: |
+        mkdir -p /home/ec2-user/.kube
+        cp /etc/kubernetes/admin.conf /home/ec2-user/.kube/config
+        chown ec2-user:ec2-user /home/ec2-user/.kube/config
+      args: { creates: /home/ec2-user/.kube/config }
+
+    - name: Apply Calico CNI
+      become_user: ec2-user
+      ansible.builtin.command: >
+        kubectl apply -f
+        https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+
+    - name: Generate join command
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: join_cmd
+
+    - name: Stash join command as a fact
+      ansible.builtin.set_fact:
+        join_command: "{{ join_cmd.stdout }}"</code></pre>
+
+          <h3>5.4 Worker play (join the cluster)</h3>
+          <pre><code>- name: Join workers
+  hosts: workers
+  become: true
+  tasks:
+    - name: Run kubeadm join
+      ansible.builtin.command: "{{ hostvars['cp'].join_command }}"
+      args: { creates: /etc/kubernetes/kubelet.conf }</code></pre>
+
+          <h3>5.5 Run it</h3>
+          <pre><code>ansible-galaxy collection install community.general ansible.posix
+ansible all -i inventory.ini -m ping          # connectivity check
+ansible-playbook -i inventory.ini playbook.yml
+# verify from the control plane:
+ansible control_plane -i inventory.ini -a "kubectl get nodes"</code></pre>
+          <button class="more-btn" data-modal="m-ansible-idem">More details: idempotency &amp; the <code>creates:</code> guard</button>
+
+          <h3>Pros &amp; cons of the Ansible approach</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pros</th><th>Cons</th></tr></thead>
+              <tbody>
+                <tr><td>Agentless — only SSH + Python needed on targets</td><td>Procedural; large playbooks get hard to reason about</td></tr>
+                <tr><td>Idempotent re-runs converge to desired state</td><td>No built-in state file; drift detection is weaker than Terraform</td></tr>
+                <tr><td>Separates provisioning (Terraform/CFN) from configuration cleanly</td><td>Slower on many hosts (sequential SSH unless tuned with forks/pipelining)</td></tr>
+                <tr><td>Readable YAML, huge module/collection ecosystem</td><td>Ordering &amp; fact-passing between plays needs care (e.g. join command)</td></tr>
+                <tr><td>Great for config + day-2 ops (patching, upgrades)</td><td>Not ideal for managing cloud resource lifecycle itself</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Where Ansible fits vs other config tools</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tool</th><th>Model</th><th>Best for</th></tr></thead>
+              <tbody>
+                <tr><td>Ansible</td><td>Agentless, push, procedural-ish</td><td>Config + orchestration over SSH, day-2 ops</td></tr>
+                <tr><td>cloud-init / user-data</td><td>Boot-time script</td><td>Simple one-shot bootstrap baked into the launch</td></tr>
+                <tr><td>Packer</td><td>Pre-baked golden AMI</td><td>Immutable images; fastest, most repeatable scaling</td></tr>
+                <tr><td>Chef / Puppet</td><td>Agent-based, pull</td><td>Large fleets with continuous enforcement</td></tr>
+                <tr><td>eksctl / EKS</td><td>Managed control plane</td><td>Skip kubeadm entirely; AWS runs the masters</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout"><strong>Common best-practice pattern:</strong> Terraform (or CloudFormation) provisions the EC2/VPC, then Ansible configures the OS and Kubernetes — each tool doing what it's best at. For maximum repeatability, bake the runtime + kube binaries into a Packer AMI and let Ansible handle only cluster-join and day-2 tasks.</div>
+        </div>
+      </details>
+    </section>
 <!-- KAFKA DEPLOY -->
     <section class="block" id="kafka-deploy">
       <details class="section">
-        <summary>5. Bootstrap Kubernetes &amp; Deploy Kafka <span class="chev">›</span></summary>
+        <summary>6. Bootstrap Kubernetes &amp; Deploy Kafka <span class="chev">›</span></summary>
         <div class="section-body">
-          <h3>5.1 Initialize the cluster with kubeadm</h3>
+          <h3>6.1 Initialize the cluster with kubeadm</h3>
           <p>SSH into the control-plane EC2 instance, install a container runtime + kubeadm, then run the init. Repeat the install steps on each worker and join.</p>
           <pre><code># on every node
 sudo dnf install -y containerd kubelet kubeadm kubectl
@@ -662,7 +806,7 @@ kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/
 # workers: run the kubeadm join command printed by init
 sudo kubeadm join &lt;CP_IP&gt;:6443 --token ... --discovery-token-ca-cert-hash ...</code></pre>
 
-          <h3>5.2 Storage class for EBS</h3>
+          <h3>6.2 Storage class for EBS</h3>
           <pre><code>cat &lt;&lt;EOF | kubectl apply -f -
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -673,7 +817,9 @@ volumeBindingMode: WaitForFirstConsumer
 EOF</code></pre>
           <div class="callout warn">Install the <strong>AWS EBS CSI driver</strong> and attach an IAM policy to the node role so pods can dynamically provision EBS volumes.</div>
 
-          <h3>5.3 Kafka StatefulSet (KRaft, 3 brokers)</h3>
+          <p>You now have two ways to run Kafka itself. <strong>Path A</strong> below is a hand-written StatefulSet — good for understanding the moving parts. <strong>Path B (Strimzi, recommended)</strong> uses an operator that manages all of this for you and is what you'd run in production.</p>
+
+          <h3>6.3 Path A — Raw Kafka StatefulSet (KRaft, 3 brokers)</h3>
           <pre><code>apiVersion: v1
 kind: Service
 metadata: { name: kafka-svc }
@@ -714,6 +860,99 @@ spec:
           <pre><code>kubectl apply -f kafka-statefulset.yaml
 kubectl get pods -l app=kafka -w   # kafka-0, kafka-1, kafka-2 → Running</code></pre>
           <button class="more-btn" data-modal="m-headless">More details: headless Service &amp; broker DNS</button>
+
+          <h3>6.4 Path B — Strimzi Operator (recommended)</h3>
+          <p><strong>Strimzi</strong> is a CNCF project that runs Kafka on Kubernetes through custom resources. Instead of writing StatefulSets, Services, and config by hand, you install the operator once and then declare a <code class="inline">Kafka</code> object; the operator reconciles brokers, controllers, listeners, certificates, storage, rolling upgrades, and more. It also provides CRDs for topics and users.</p>
+
+          <h4>1. Install the operator</h4>
+          <pre><code>kubectl create namespace kafka
+
+# Install the Strimzi Cluster Operator into the 'kafka' namespace
+kubectl create -f \
+  'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+
+kubectl get pods -n kafka -w
+# wait for strimzi-cluster-operator-... → Running</code></pre>
+
+          <h4>2. Declare the Kafka cluster (KRaft, 3 nodes)</h4>
+          <p>Strimzi uses <code class="inline">KafkaNodePool</code> resources (KRaft) plus a <code class="inline">Kafka</code> resource. The pools map directly onto the EBS storage class from step 6.2.</p>
+          <pre><code>apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: pool-a
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles: [ controller, broker ]
+  storage:
+    type: persistent-claim
+    size: 10Gi
+    class: ebs-gp3          # the StorageClass from 6.2
+    deleteClaim: false
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: my-cluster
+  namespace: kafka
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: 3.7.0
+    replicas: 3
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      default.replication.factor: 3
+      min.insync.replicas: 2
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}</code></pre>
+          <pre><code>kubectl apply -f kafka-cluster.yaml
+# Strimzi creates the StatefulSet, services, configmaps, and certs:
+kubectl get kafka -n kafka
+kubectl wait kafka/my-cluster --for=condition=Ready --timeout=300s -n kafka</code></pre>
+
+          <h4>3. Declare a topic the GitOps way</h4>
+          <p>With the Topic Operator running you manage topics as Kubernetes resources instead of <code class="inline">kafka-topics.sh</code>:</p>
+          <pre><code>apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: events
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 3
+  replicas: 3</code></pre>
+          <pre><code>kubectl apply -f topic.yaml
+kubectl get kafkatopic -n kafka</code></pre>
+          <p>The bootstrap address your producers and consumers connect to is <code class="inline">my-cluster-kafka-bootstrap.kafka.svc:9092</code>.</p>
+          <button class="more-btn" data-modal="m-strimzi">More details: what the operator does for you</button>
+
+          <h3>6.5 Which path should I use?</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Aspect</th><th>Path A — Raw StatefulSet</th><th>Path B — Strimzi</th></tr></thead>
+              <tbody>
+                <tr><td>Setup effort</td><td>You write everything</td><td>Install operator, declare CRD</td></tr>
+                <tr><td>Rolling upgrades</td><td>Manual, risky</td><td>Operator-orchestrated, safe</td></tr>
+                <tr><td>TLS / auth</td><td>Hand-managed certs</td><td>Auto-generated &amp; rotated</td></tr>
+                <tr><td>Topic / user mgmt</td><td>CLI scripts</td><td>Declarative CRDs (GitOps)</td></tr>
+                <tr><td>Rebalancing</td><td>Manual</td><td>Cruise Control integration</td></tr>
+                <tr><td>Best for</td><td>Learning the internals</td><td>Production &amp; day-2 ops</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </details>
     </section>
@@ -721,16 +960,20 @@ kubectl get pods -l app=kafka -w   # kafka-0, kafka-1, kafka-2 → Running</code
     <!-- WORKERS -->
     <section class="block" id="workers">
       <details class="section">
-        <summary>6. Brokers, Producer &amp; Consumer Workers <span class="chev">›</span></summary>
+        <summary>7. Brokers, Producer &amp; Consumer Workers <span class="chev">›</span></summary>
         <div class="section-body">
-          <p>The three pods above <em>are</em> the brokers. Now add a producer Deployment that publishes messages and a consumer Deployment that reads them — both scheduled onto the basic EC2 worker nodes.</p>
+          <p>The Kafka pods <em>are</em> the brokers. Now add a producer Deployment that publishes messages and a consumer Deployment that reads them — both scheduled onto the basic EC2 worker nodes.</p>
+          <div class="callout"><strong>Bootstrap address:</strong> if you used <strong>Path A</strong>, connect to <code class="inline">kafka-svc:9092</code>. If you used <strong>Strimzi (Path B)</strong>, connect to <code class="inline">my-cluster-kafka-bootstrap.kafka.svc:9092</code> instead. The examples below use the Path A address — swap it as needed.</div>
 
-          <h3>6.1 Create a topic</h3>
-          <pre><code>kubectl exec -it kafka-0 -- /opt/kafka/bin/kafka-topics.sh \
+          <h3>7.1 Create a topic</h3>
+          <pre><code># Path A:
+kubectl exec -it kafka-0 -- /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server kafka-svc:9092 \
-  --create --topic events --partitions 3 --replication-factor 3</code></pre>
+  --create --topic events --partitions 3 --replication-factor 3
 
-          <h3>6.2 Producer Deployment</h3>
+# Path B (Strimzi): apply the KafkaTopic CR from step 6.4 instead.</code></pre>
+
+          <h3>7.2 Producer Deployment</h3>
           <pre><code>apiVersion: apps/v1
 kind: Deployment
 metadata: { name: producer }
@@ -750,7 +993,7 @@ spec:
             --bootstrap-server kafka-svc:9092 --topic events;
             sleep 2; done</code></pre>
 
-          <h3>6.3 Consumer Deployment</h3>
+          <h3>7.3 Consumer Deployment</h3>
           <pre><code>apiVersion: apps/v1
 kind: Deployment
 metadata: { name: consumer }
@@ -778,7 +1021,7 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
     <!-- VERIFY -->
     <section class="block" id="verify">
       <details class="section">
-        <summary>7. Verify &amp; Test the Pipeline <span class="chev">›</span></summary>
+        <summary>8. Verify &amp; Test the Pipeline <span class="chev">›</span></summary>
         <div class="section-body">
           <h4>Watch consumed messages</h4>
           <pre><code>kubectl logs -f deploy/consumer
@@ -795,7 +1038,7 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
     <!-- COMPARE -->
     <section class="block" id="compare">
       <details class="section" open>
-        <summary>8. Comparing the Three Options <span class="chev">›</span></summary>
+        <summary>9. Comparing the Provisioning Options <span class="chev">›</span></summary>
         <div class="section-body">
           <div class="table-wrap">
             <table>
@@ -814,10 +1057,65 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
       </details>
     </section>
 
+    <!-- BEST PRACTICES -->
+    <section class="block" id="bestpractice">
+      <details class="section" open>
+        <summary>10. Best Practices &amp; Other Options <span class="chev">›</span></summary>
+        <div class="section-body">
+          <h3>Separation of concerns</h3>
+          <p>Use the right tool for each layer rather than forcing one to do everything:</p>
+          <ul>
+            <li><strong>Provisioning</strong> (VPC, EC2, EBS, IAM): Terraform or CloudFormation — declarative, state-tracked.</li>
+            <li><strong>Image baking</strong> (runtime + kube binaries): Packer for immutable golden AMIs, so scaling a node is fast and identical.</li>
+            <li><strong>Configuration / join / day-2</strong>: Ansible for OS tuning, cluster join, patching, and upgrades.</li>
+            <li><strong>Kafka lifecycle</strong>: the Strimzi operator for brokers, topics, users, TLS, and rebalancing.</li>
+          </ul>
+
+          <h3>Infrastructure</h3>
+          <ul>
+            <li>Spread brokers across <strong>Availability Zones</strong> using pod anti-affinity / topology spread so one AZ failure can't take the quorum.</li>
+            <li>Pin <code class="inline">replication.factor=3</code> and <code class="inline">min.insync.replicas=2</code> for durability without blocking on a single broker.</li>
+            <li>Use <strong>gp3</strong> EBS with provisioned IOPS for predictable log throughput; never use instance/ephemeral storage for broker data.</li>
+            <li>Put brokers on dedicated node pools and keep producers/consumers on separate nodes to avoid resource contention.</li>
+          </ul>
+
+          <h3>Security</h3>
+          <ul>
+            <li>Enable TLS for client and inter-broker traffic, plus SASL or mTLS auth — Strimzi automates certificate issuance and rotation.</li>
+            <li>Scope <strong>IAM roles</strong> tightly (e.g. the EBS CSI driver role); prefer IRSA-style least privilege over node-wide credentials.</li>
+            <li>Keep brokers in <strong>private subnets</strong>; expose only what's necessary via a load balancer or bastion.</li>
+            <li>Store secrets in Kubernetes Secrets backed by a KMS-encrypted etcd, or an external secrets manager.</li>
+          </ul>
+
+          <h3>Operations &amp; observability</h3>
+          <ul>
+            <li>Export JMX metrics to Prometheus and dashboard them in Grafana; alert on under-replicated partitions and consumer lag.</li>
+            <li>Use <strong>Cruise Control</strong> (built into Strimzi) for automated partition rebalancing.</li>
+            <li>Always set <strong>PodDisruptionBudgets</strong> so cluster maintenance never evicts a majority of brokers at once.</li>
+            <li>Test failure: kill a broker pod and an entire node, and confirm the consumer keeps receiving with no data loss.</li>
+          </ul>
+
+          <h3>When to skip self-managed entirely</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Option</th><th>Trade-off</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Amazon EKS</strong> + Strimzi</td><td>AWS runs the K8s control plane; you keep operator flexibility. Less node babysitting than kubeadm.</td></tr>
+                <tr><td><strong>Amazon MSK</strong></td><td>Fully managed Kafka, no K8s at all. Least operational effort, least control, higher cost.</td></tr>
+                <tr><td><strong>MSK Serverless</strong></td><td>Pay-per-throughput, auto-scaling. Great for spiky/unknown load; some feature limits.</td></tr>
+                <tr><td><strong>Confluent Cloud</strong></td><td>Managed Kafka with extra tooling (Schema Registry, connectors) across clouds.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout"><strong>Rule of thumb:</strong> self-managed Kafka on kubeadm EC2 maximizes control and learning; <strong>EKS + Strimzi</strong> is the pragmatic production middle ground; <strong>MSK</strong> wins when you'd rather not operate Kafka at all.</div>
+        </div>
+      </details>
+    </section>
+
     <!-- REFERENCES -->
     <section class="block" id="refs">
       <details class="section" open>
-        <summary>9. Official Reference Links <span class="chev">›</span></summary>
+        <summary>11. Official Reference Links <span class="chev">›</span></summary>
         <div class="section-body">
           <div class="ref-grid">
             <a class="ref-card" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener"><span class="rc-t">Apache Kafka Docs</span><span class="rc-d">Core configuration, KRaft, broker reference.</span></a>
@@ -827,7 +1125,11 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
             <a class="ref-card" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener"><span class="rc-t">Terraform AWS Provider</span><span class="rc-d">Resource &amp; data-source documentation.</span></a>
             <a class="ref-card" href="https://github.com/kubernetes-sigs/aws-ebs-csi-driver" target="_blank" rel="noopener"><span class="rc-t">AWS EBS CSI Driver</span><span class="rc-d">Dynamic EBS persistent volumes.</span></a>
             <a class="ref-card" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html" target="_blank" rel="noopener"><span class="rc-t">Amazon EC2</span><span class="rc-d">Instance types, AMIs, networking.</span></a>
-            <a class="ref-card" href="https://strimzi.io/docs/operators/latest/overview" target="_blank" rel="noopener"><span class="rc-t">Strimzi Operator</span><span class="rc-d">Production-grade Kafka-on-K8s alternative.</span></a>
+            <a class="ref-card" href="https://strimzi.io/docs/operators/latest/overview" target="_blank" rel="noopener"><span class="rc-t">Strimzi Operator</span><span class="rc-d">Production-grade Kafka-on-K8s operator &amp; CRDs.</span></a>
+            <a class="ref-card" href="https://docs.ansible.com/ansible/latest/" target="_blank" rel="noopener"><span class="rc-t">Ansible Documentation</span><span class="rc-d">Playbooks, modules, inventory &amp; best practices.</span></a>
+            <a class="ref-card" href="https://developer.hashicorp.com/packer/docs" target="_blank" rel="noopener"><span class="rc-t">HashiCorp Packer</span><span class="rc-d">Build immutable golden AMIs.</span></a>
+            <a class="ref-card" href="https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html" target="_blank" rel="noopener"><span class="rc-t">Amazon EKS</span><span class="rc-d">Managed Kubernetes control plane.</span></a>
+            <a class="ref-card" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank" rel="noopener"><span class="rc-t">Amazon MSK</span><span class="rc-d">Fully managed Kafka service.</span></a>
           </div>
         </div>
       </details>
@@ -857,7 +1159,9 @@ kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
     'm-cfn': { t: 'SSM AMI parameter & drift', h: '<p>Using the SSM public parameter <code class="inline">/aws/service/ami-amazon-linux-latest/...</code> means CloudFormation always resolves the newest Amazon Linux AMI at deploy time — no hardcoded, region-specific AMI IDs.</p><p>Run <code class="inline">aws cloudformation detect-stack-drift</code> to catch manual changes made outside the template, which is a common source of "works on my account" problems.</p>' },
     'm-tf': { t: 'Remote state & for_each', h: '<p>The <code class="inline">for_each</code> over a <code class="inline">locals</code> map creates three instances from one block while keeping each addressable as <code class="inline">aws_instance.node["cp"]</code>. This is cleaner than <code class="inline">count</code> when resources have distinct roles.</p><p>For teams, store <code class="inline">tfstate</code> remotely (e.g. an S3 backend with DynamoDB locking) so state is shared and concurrent applies are prevented.</p>' },
     'm-headless': { t: 'Headless Service & broker DNS', h: '<p>Setting <code class="inline">clusterIP: None</code> makes the Service "headless": instead of load-balancing to one virtual IP, Kubernetes publishes a DNS A record per pod, e.g. <code class="inline">kafka-0.kafka-svc.default.svc.cluster.local</code>.</p><p>Kafka clients need to reach <em>specific</em> brokers (the partition leader), so this per-pod addressability is essential for correct routing.</p>' },
-    'm-cg': { t: 'Consumer groups & partition assignment', h: '<p>All consumer pods share <code class="inline">--group worker-group</code>, so they form one consumer group. Kafka assigns each of the topic\'s 3 partitions to exactly one consumer in the group, so the two consumer replicas share the load with no duplicate processing.</p><p>Scale consumers up to the partition count (3) for maximum parallelism; beyond that, extra consumers sit idle.</p>' }
+    'm-cg': { t: 'Consumer groups & partition assignment', h: '<p>All consumer pods share <code class="inline">--group worker-group</code>, so they form one consumer group. Kafka assigns each of the topic\'s 3 partitions to exactly one consumer in the group, so the two consumer replicas share the load with no duplicate processing.</p><p>Scale consumers up to the partition count (3) for maximum parallelism; beyond that, extra consumers sit idle.</p>' },
+    'm-ansible-idem': { t: 'Idempotency & the creates: guard', h: '<p>Ansible aims to be <strong>idempotent</strong>: running the same playbook twice should not change a host that is already in the desired state. Declarative modules (dnf, systemd, sysctl) handle this automatically — they check current state first.</p><p>Raw <code class="inline">command</code>/<code class="inline">shell</code> tasks are <em>not</em> idempotent by default, so we add <code class="inline">args: { creates: /path }</code>. Ansible skips the task if that file already exists — which is why re-running the playbook won\'t try to <code class="inline">kubeadm init</code> a second time or re-join an already-joined worker.</p>' },
+    'm-strimzi': { t: 'What the Strimzi operator does for you', h: '<p>Strimzi watches your <code class="inline">Kafka</code>, <code class="inline">KafkaNodePool</code>, <code class="inline">KafkaTopic</code>, and <code class="inline">KafkaUser</code> custom resources and continuously reconciles the real cluster to match them.</p><p>It generates the StatefulSets and Services, issues and rotates TLS certificates, performs <strong>safe rolling upgrades</strong> (one broker at a time, waiting for in-sync replicas), manages topics and ACLs declaratively, and integrates Cruise Control for partition rebalancing. This replaces a large amount of hand-written YAML and fragile shell scripting, which is why it is the recommended production path.</p>' }
   };
 
   const overlay = document.getElementById('modalOverlay');
