@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka on Kubernetes (AWS) — Deployment Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+  :root {
+    --blue: #0f62fe;
+    --blue-dark: #002d9c;
+    --blue-hover: #0353e9;
+    --blue-light: #d0e2ff;
+    --bg: #ffffff;
+    --bg-layer: #f4f4f4;
+    --bg-layer-2: #e0e0e0;
+    --text: #161616;
+    --text-soft: #525252;
+    --border: #c6c6c6;
+    --code-bg: #f4f4f4;
+    --code-text: #0043ce;
+    --shadow: 0 2px 6px rgba(0,0,0,0.08);
+    --modal-overlay: rgba(22,22,22,0.55);
+    --fs: 16px;
+    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --blue: #4589ff;
+    --blue-dark: #78a9ff;
+    --blue-hover: #6ea3ff;
+    --blue-light: #1c3a6e;
+    --bg: #161616;
+    --bg-layer: #262626;
+    --bg-layer-2: #393939;
+    --text: #f4f4f4;
+    --text-soft: #c6c6c6;
+    --border: #525252;
+    --code-bg: #262626;
+    --code-text: #82cfff;
+    --shadow: 0 2px 8px rgba(0,0,0,0.5);
+    --modal-overlay: rgba(0,0,0,0.7);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--fs);
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--bg);
+    transition: background .2s, color .2s;
+    -webkit-font-smoothing: antialiased;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+  /* removed dup import */
+
+  /* ---------- Header ---------- */
+  header.topbar {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; height: 56px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+  .brand .bar { width: 4px; height: 28px; background: var(--blue); }
+  .brand .title { font-size: 1rem; letter-spacing: .01em; }
+  .brand .title span { color: var(--text-soft); font-weight: 300; }
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ctrl-btn {
+    font-family: var(--font-sans); font-size: .8rem;
+    background: var(--bg-layer); color: var(--text);
+    border: 1px solid var(--border); padding: 6px 10px;
+    cursor: pointer; transition: background .15s, border-color .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ctrl-btn:hover { background: var(--bg-layer-2); border-color: var(--blue); }
+  .ctrl-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .fs-group { display: inline-flex; border: 1px solid var(--border); }
+  .fs-group button {
+    background: var(--bg-layer); color: var(--text); border: none;
+    border-right: 1px solid var(--border); width: 30px; height: 32px;
+    cursor: pointer; font-size: 1rem; font-weight: 600;
+  }
+  .fs-group button:last-child { border-right: none; }
+  .fs-group button:hover { background: var(--blue); color: #fff; }
+  .fs-label { font-size: .7rem; color: var(--text-soft); padding: 0 6px; align-self: center; min-width: 46px; text-align: center; }
+
+  /* ---------- Layout ---------- */
+  .layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; }
+  nav.toc {
+    position: sticky; top: 56px; align-self: start;
+    height: calc(100vh - 56px); overflow-y: auto;
+    border-right: 1px solid var(--border); padding: 20px 12px;
+    background: var(--bg-layer);
+  }
+  nav.toc h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-soft); margin-bottom: 12px; }
+  nav.toc a {
+    display: block; color: var(--text); text-decoration: none;
+    padding: 6px 10px; font-size: .85rem; border-left: 3px solid transparent;
+    transition: background .12s, border-color .12s;
+  }
+  nav.toc a:hover { background: var(--bg-layer-2); }
+  nav.toc a.active { border-left-color: var(--blue); background: var(--blue-light); font-weight: 600; }
+  nav.toc a.sub { padding-left: 24px; font-size: .8rem; color: var(--text-soft); }
+
+  main { padding: 32px 40px 120px; min-width: 0; }
+  .hero { border-left: 4px solid var(--blue); padding-left: 20px; margin-bottom: 36px; }
+  .hero h1 { font-size: 2.1rem; font-weight: 600; line-height: 1.2; margin-bottom: 10px; }
+  .hero p { color: var(--text-soft); max-width: 70ch; }
+  .tag { display: inline-block; background: var(--blue); color: #fff; font-size: .68rem; font-weight: 600; padding: 3px 8px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
+
+  section.block { margin-bottom: 28px; scroll-margin-top: 72px; }
+  details.section {
+    border: 1px solid var(--border); background: var(--bg);
+    transition: border-color .15s;
+  }
+  details.section[open] { border-color: var(--blue); }
+  details.section > summary {
+    cursor: pointer; list-style: none; padding: 16px 20px;
+    font-size: 1.15rem; font-weight: 600; display: flex; align-items: center;
+    justify-content: space-between; background: var(--bg-layer); user-select: none;
+  }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary .chev { transition: transform .2s; color: var(--blue); font-size: 1.2rem; }
+  details.section[open] > summary .chev { transform: rotate(90deg); }
+  details.section > summary:hover { background: var(--bg-layer-2); }
+  .section-body { padding: 20px 24px 24px; }
+  .section-body h3 { font-size: 1.1rem; margin: 22px 0 10px; color: var(--blue-dark); }
+  .section-body h4 { font-size: .98rem; margin: 18px 0 8px; }
+  .section-body p { margin-bottom: 12px; }
+  .section-body ul, .section-body ol { margin: 0 0 14px 22px; }
+  .section-body li { margin-bottom: 6px; }
+
+  /* ---------- Code ---------- */
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-left: 3px solid var(--blue); padding: 14px 16px;
+    overflow-x: auto; margin: 12px 0; font-family: var(--font-mono);
+    font-size: .85em; line-height: 1.5; position: relative;
+  }
+  pre code { font-family: var(--font-mono); color: var(--text); white-space: pre; }
+  code.inline {
+    background: var(--code-bg); color: var(--code-text);
+    font-family: var(--font-mono); font-size: .88em; padding: 1px 5px; border-radius: 2px;
+  }
+  .copy-btn {
+    position: absolute; top: 6px; right: 6px; font-size: .68rem;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-soft);
+    padding: 3px 8px; cursor: pointer; opacity: .7;
+  }
+  .copy-btn:hover { opacity: 1; border-color: var(--blue); color: var(--blue); }
+
+  /* ---------- Tabs for 3 options ---------- */
+  .tabs { display: flex; border-bottom: 2px solid var(--border); margin: 16px 0 0; flex-wrap: wrap; }
+  .tab-btn {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; padding: 10px 18px; cursor: pointer;
+    font-family: var(--font-sans); font-size: .92rem; font-weight: 600; color: var(--text-soft);
+  }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-btn:hover { color: var(--text); }
+  .tab-panel { display: none; padding-top: 16px; }
+  .tab-panel.active { display: block; }
+
+  /* ---------- More details modal trigger ---------- */
+  .more-btn {
+    background: var(--blue); color: #fff; border: none; font-family: var(--font-sans);
+    font-size: .78rem; font-weight: 600; padding: 5px 12px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; margin: 4px 0;
+  }
+  .more-btn:hover { background: var(--blue-hover); }
+  .more-btn::before { content: "ⓘ"; font-size: .9rem; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: var(--modal-overlay);
+    z-index: 1000; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg); border-top: 4px solid var(--blue);
+    max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto;
+    box-shadow: var(--shadow); animation: pop .18s ease;
+  }
+  @keyframes pop { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .modal-head h3 { font-size: 1.15rem; color: var(--blue-dark); }
+  .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-soft); line-height: 1; }
+  .modal-close:hover { color: var(--blue); }
+  .modal-body { padding: 20px; }
+  .modal-body p { margin-bottom: 12px; }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--border); }
+  table { border-collapse: collapse; width: 100%; min-width: 480px; font-size: .88rem; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { background: var(--blue); color: #fff; font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+  tr:nth-child(even) td { background: var(--bg-layer); }
+
+  /* ---------- Callouts ---------- */
+  .callout { border-left: 4px solid var(--blue); background: var(--bg-layer); padding: 12px 16px; margin: 14px 0; font-size: .9rem; }
+  .callout.warn { border-left-color: #ff832b; }
+  .callout.warn::before { content: "⚠ "; }
+  .callout strong { color: var(--blue-dark); }
+
+  /* ---------- Diagram ---------- */
+  .diagram-wrap { background: var(--bg-layer); border: 1px solid var(--border); padding: 16px; margin: 16px 0; overflow-x: auto; }
+  .diagram-wrap svg { width: 100%; height: auto; min-width: 560px; display: block; }
+
+  /* ---------- Links section ---------- */
+  .ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 12px; margin-top: 12px; }
+  .ref-card { border: 1px solid var(--border); padding: 14px; text-decoration: none; color: var(--text); transition: border-color .15s, transform .15s; display:block; }
+  .ref-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .ref-card .rc-t { font-weight: 600; color: var(--blue); margin-bottom: 4px; display: block; }
+  .ref-card .rc-d { font-size: .82rem; color: var(--text-soft); }
+
+  footer { border-top: 1px solid var(--border); padding: 24px 40px; color: var(--text-soft); font-size: .82rem; max-width: 1400px; margin: 0 auto; }
+
+  /* ---------- Mobile ---------- */
+  .toc-toggle { display: none; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc {
+      position: fixed; top: 56px; left: 0; width: 84%; max-width: 320px;
+      height: calc(100vh - 56px); z-index: 90; transform: translateX(-100%);
+      transition: transform .25s; box-shadow: var(--shadow);
+    }
+    nav.toc.open { transform: translateX(0); }
+    .toc-toggle { display: inline-flex; }
+    main { padding: 24px 18px 100px; }
+    .hero h1 { font-size: 1.6rem; }
+    footer { padding: 20px 18px; }
+    .brand .title { font-size: .85rem; }
+  }
+  .toc-backdrop { display:none; position:fixed; inset:56px 0 0 0; background:rgba(0,0,0,.4); z-index:85; }
+  .toc-backdrop.open { display:block; }
+  @media (min-width: 901px) { .toc-backdrop { display:none !important; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <button class="ctrl-btn toc-toggle" id="tocToggle" aria-label="Toggle menu">☰</button>
+    <span class="bar"></span>
+    <span class="title">Kafka on Kubernetes <span>/ AWS Deployment Guide</span></span>
+  </div>
+  <div class="controls">
+    <div class="fs-group" role="group" aria-label="Font size">
+      <button id="fsDown" aria-label="Decrease font size">A−</button>
+      <span class="fs-label" id="fsLabel">16px</span>
+      <button id="fsUp" aria-label="Increase font size">A+</button>
+    </div>
+    <button class="ctrl-btn" id="themeBtn" aria-label="Toggle theme"><span id="themeIcon">🌙</span> <span id="themeTxt">Dark</span></button>
+  </div>
+</header>
+
+<div class="toc-backdrop" id="tocBackdrop"></div>
+<div class="layout">
+  <nav class="toc" id="toc">
+    <h2>On this page</h2>
+    <a href="#overview" class="active">1. Overview</a>
+    <a href="#architecture">2. Architecture</a>
+    <a href="#prereq">3. Prerequisites</a>
+    <a href="#options" >4. Three Setup Options</a>
+    <a href="#opt-manual" class="sub">4a. Manual config</a>
+    <a href="#opt-cfn" class="sub">4b. CloudFormation</a>
+    <a href="#opt-tf" class="sub">4c. Terraform</a>
+    <a href="#kafka-deploy">5. Deploy Kafka on K8s</a>
+    <a href="#workers">6. Brokers, Producers, Consumers</a>
+    <a href="#verify">7. Verify & Test</a>
+    <a href="#compare">8. Comparison Table</a>
+    <a href="#refs">9. Reference Links</a>
+  </nav>
+
+  <main>
+    <div class="hero" id="overview">
+      <span class="tag">Infrastructure Guide</span>
+      <h1>Running Apache Kafka on a Kubernetes Cluster in AWS</h1>
+      <p>A complete, hands-on tutorial for standing up a Kafka cluster on Kubernetes (self-managed on EC2), with three parallel infrastructure paths — manual, CloudFormation, and Terraform — plus broker, producer, and consumer workloads running on basic EC2 instances.</p>
+    </div>
+<!-- MAIN CONTENT -->
+
+    <section class="block">
+      <details class="section" open>
+        <summary>1. Overview <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>Apache Kafka is a distributed event-streaming platform. Running it on Kubernetes gives you declarative scaling, self-healing pods, and rolling upgrades — but Kafka is stateful, so persistent storage, stable network identity (StatefulSets), and careful broker configuration matter.</p>
+          <p>In this guide the Kubernetes cluster runs on <strong>self-managed EC2 instances</strong> (not EKS-managed nodes), using <code class="inline">kubeadm</code>. This keeps the example portable across the three IaC options and uses only "basic" EC2 instances.</p>
+          <h3>What you'll build</h3>
+          <ul>
+            <li>A VPC with public/private subnets across two Availability Zones.</li>
+            <li>3 EC2 instances forming a kubeadm Kubernetes cluster (1 control-plane, 2 workers).</li>
+            <li>A 3-broker Kafka StatefulSet (KRaft mode — no ZooKeeper) with EBS-backed persistent volumes.</li>
+            <li>Producer and consumer worker Deployments that stream messages through the brokers.</li>
+          </ul>
+          <button class="more-btn" data-modal="m-kraft">More details: KRaft vs ZooKeeper</button>
+          <div class="callout"><strong>Cost note:</strong> Self-managed EC2 + EBS incurs hourly charges. Tear everything down when finished (each option below includes a teardown step).</div>
+        </div>
+      </details>
+    </section>
+
+    <section class="block" id="architecture">
+      <details class="section" open>
+        <summary>2. Architecture <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>The diagram shows the full topology: AWS networking, the kubeadm control plane and worker nodes on EC2, and the Kafka StatefulSet with producer/consumer pods.</p>
+          <div class="diagram-wrap" role="img" aria-label="Kafka on Kubernetes AWS architecture diagram">
+            <svg viewBox="0 0 760 460" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, sans-serif">
+              <defs>
+                <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L7,3 L0,6 Z" fill="var(--blue)"/>
+                </marker>
+              </defs>
+              <!-- AWS Cloud boundary -->
+              <rect x="8" y="8" width="744" height="444" rx="6" fill="none" stroke="var(--border)" stroke-width="2"/>
+              <text x="20" y="28" font-size="13" font-weight="700" fill="var(--text-soft)">AWS Cloud — Region</text>
+              <!-- VPC -->
+              <rect x="24" y="40" width="712" height="400" rx="5" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="5 3"/>
+              <text x="36" y="58" font-size="12" font-weight="700" fill="var(--blue)">VPC 10.0.0.0/16</text>
+
+              <!-- AZ A -->
+              <rect x="40" y="68" width="338" height="356" rx="4" fill="var(--bg-layer)" stroke="var(--border)"/>
+              <text x="52" y="86" font-size="11" font-weight="600" fill="var(--text-soft)">Availability Zone A</text>
+              <!-- AZ B -->
+              <rect x="392" y="68" width="330" height="356" rx="4" fill="var(--bg-layer)" stroke="var(--border)"/>
+              <text x="404" y="86" font-size="11" font-weight="600" fill="var(--text-soft)">Availability Zone B</text>
+
+              <!-- Control plane node -->
+              <rect x="56" y="100" width="150" height="58" rx="4" fill="var(--blue)"/>
+              <text x="131" y="124" font-size="11.5" font-weight="700" fill="#fff" text-anchor="middle">EC2 — Control Plane</text>
+              <text x="131" y="142" font-size="10" fill="#d0e2ff" text-anchor="middle">kubeadm / API server</text>
+
+              <!-- Worker node A -->
+              <rect x="56" y="180" width="306" height="226" rx="4" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+              <text x="68" y="198" font-size="11" font-weight="600" fill="var(--blue)">EC2 Worker Node 1</text>
+              <rect x="72" y="210" width="130" height="48" rx="3" fill="var(--blue-light)" stroke="var(--blue)"/>
+              <text x="137" y="230" font-size="10.5" font-weight="600" fill="var(--text)" text-anchor="middle">kafka-0 (broker)</text>
+              <text x="137" y="246" font-size="9" fill="var(--text-soft)" text-anchor="middle">EBS PV</text>
+              <rect x="216" y="210" width="130" height="48" rx="3" fill="var(--blue-light)" stroke="var(--blue)"/>
+              <text x="281" y="230" font-size="10.5" font-weight="600" fill="var(--text)" text-anchor="middle">kafka-1 (broker)</text>
+              <text x="281" y="246" font-size="9" fill="var(--text-soft)" text-anchor="middle">EBS PV</text>
+              <rect x="72" y="280" width="130" height="46" rx="3" fill="var(--bg)" stroke="var(--border)"/>
+              <text x="137" y="307" font-size="10.5" font-weight="600" fill="var(--text)" text-anchor="middle">producer pods</text>
+              <rect x="216" y="280" width="130" height="46" rx="3" fill="var(--bg)" stroke="var(--border)"/>
+              <text x="281" y="307" font-size="10.5" font-weight="600" fill="var(--text)" text-anchor="middle">consumer pods</text>
+
+              <!-- Worker node B -->
+              <rect x="404" y="180" width="304" height="226" rx="4" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+              <text x="416" y="198" font-size="11" font-weight="600" fill="var(--blue)">EC2 Worker Node 2</text>
+              <rect x="420" y="210" width="130" height="48" rx="3" fill="var(--blue-light)" stroke="var(--blue)"/>
+              <text x="485" y="230" font-size="10.5" font-weight="600" fill="var(--text)" text-anchor="middle">kafka-2 (broker)</text>
+              <text x="485" y="246" font-size="9" fill="var(--text-soft)" text-anchor="middle">EBS PV</text>
+              <rect x="564" y="210" width="130" height="48" rx="3" fill="var(--bg)" stroke="var(--border)"/>
+              <text x="629" y="237" font-size="10" font-weight="600" fill="var(--text)" text-anchor="middle">kafka-svc</text>
+              <rect x="420" y="280" width="274" height="46" rx="3" fill="var(--bg)" stroke="var(--border)"/>
+              <text x="557" y="307" font-size="10.5" font-weight="600" fill="var(--text)" text-anchor="middle">more producer / consumer pods</text>
+
+              <!-- arrows -->
+              <line x1="137" y1="280" x2="137" y2="260" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#arr)"/>
+              <line x1="281" y1="280" x2="281" y2="260" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#arr)"/>
+              <line x1="206" y1="129" x2="216" y2="180" stroke="var(--text-soft)" stroke-width="1" stroke-dasharray="3 2"/>
+
+              <text x="384" y="430" font-size="9" fill="var(--text-soft)" text-anchor="middle">Internet Gateway · NAT · Security Groups omitted for clarity</text>
+            </svg>
+          </div>
+          <button class="more-btn" data-modal="m-arch">More details: why StatefulSet + EBS</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="block" id="prereq">
+      <details class="section">
+        <summary>3. Prerequisites <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>Install and configure the following on your workstation before starting any option.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tool</th><th>Version (min)</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td>AWS CLI</td><td>v2.x</td><td>Authenticate &amp; provision AWS resources</td></tr>
+                <tr><td>kubectl</td><td>1.29+</td><td>Talk to the Kubernetes API</td></tr>
+                <tr><td>Terraform</td><td>1.6+</td><td>Option C only</td></tr>
+                <tr><td>SSH key pair</td><td>—</td><td>Access EC2 instances</td></tr>
+                <tr><td>Helm (optional)</td><td>3.x</td><td>Alternative Kafka install path</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h4>Configure AWS credentials</h4>
+          <pre><code>aws configure
+# AWS Access Key ID, Secret, default region (e.g. us-east-1), output json
+aws sts get-caller-identity   # verify</code></pre>
+          <h4>Create an EC2 key pair</h4>
+          <pre><code>aws ec2 create-key-pair --key-name kafka-k8s \
+  --query 'KeyMaterial' --output text > kafka-k8s.pem
+chmod 400 kafka-k8s.pem</code></pre>
+        </div>
+      </details>
+    </section>
+<!-- OPTIONS -->
+    <section class="block" id="options">
+      <details class="section" open>
+        <summary>4. Three Ways to Provision the Infrastructure <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>All three options build the same target: a VPC, a security group, and 3 EC2 instances ready for kubeadm. Pick the tab that fits your workflow.</p>
+
+          <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-tab="manual">A · Manual (CLI)</button>
+            <button class="tab-btn" data-tab="cfn">B · CloudFormation</button>
+            <button class="tab-btn" data-tab="tf">C · Terraform</button>
+          </div>
+
+          <!-- MANUAL -->
+          <div class="tab-panel active" id="manual">
+            <span id="opt-manual"></span>
+            <h3>Option A — Manual setup with the AWS CLI</h3>
+            <p>Best for learning exactly what each resource is. You run discrete commands and wire IDs together yourself.</p>
+            <h4>1. Create the VPC and subnet</h4>
+            <pre><code>VPC_ID=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 \
+  --query 'Vpc.VpcId' --output text)
+aws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-hostnames
+
+SUBNET_ID=$(aws ec2 create-subnet --vpc-id $VPC_ID \
+  --cidr-block 10.0.1.0/24 --availability-zone us-east-1a \
+  --query 'Subnet.SubnetId' --output text)</code></pre>
+            <h4>2. Internet gateway + route</h4>
+            <pre><code>IGW_ID=$(aws ec2 create-internet-gateway \
+  --query 'InternetGateway.InternetGatewayId' --output text)
+aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway-id $IGW_ID
+
+RT_ID=$(aws ec2 create-route-table --vpc-id $VPC_ID \
+  --query 'RouteTable.RouteTableId' --output text)
+aws ec2 create-route --route-table-id $RT_ID \
+  --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW_ID
+aws ec2 associate-route-table --subnet-id $SUBNET_ID --route-table-id $RT_ID</code></pre>
+            <h4>3. Security group (Kafka + k8s ports)</h4>
+            <pre><code>SG_ID=$(aws ec2 create-security-group --group-name kafka-k8s-sg \
+  --description "Kafka k8s" --vpc-id $VPC_ID --query 'GroupId' --output text)
+# SSH, k8s API, kubelet, Kafka, NodePorts
+for P in 22 6443 10250 2379-2380 9092-9094 30000-32767; do
+  aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+    --protocol tcp --port $P --cidr 10.0.0.0/16; done
+aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+  --protocol tcp --port 22 --cidr 0.0.0.0/0</code></pre>
+            <h4>4. Launch 3 EC2 instances</h4>
+            <pre><code># Amazon Linux 2023 AMI, t3.medium (basic, 2 vCPU / 4 GiB)
+AMI=$(aws ec2 describe-images --owners amazon \
+  --filters "Name=name,Values=al2023-ami-*-x86_64" \
+  --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text)
+
+aws ec2 run-instances --image-id $AMI --count 3 \
+  --instance-type t3.medium --key-name kafka-k8s \
+  --security-group-ids $SG_ID --subnet-id $SUBNET_ID \
+  --associate-public-ip-address \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Project,Value=kafka-k8s}]'</code></pre>
+            <button class="more-btn" data-modal="m-manual">More details: tagging control-plane vs workers</button>
+            <h4>Teardown</h4>
+            <pre><code>aws ec2 describe-instances --filters Name=tag:Project,Values=kafka-k8s \
+  --query 'Reservations[].Instances[].InstanceId' --output text \
+  | xargs aws ec2 terminate-instances --instance-ids
+# then delete SG, subnet, IGW, VPC in reverse order</code></pre>
+          </div>
+
+          <!-- CLOUDFORMATION -->
+          <div class="tab-panel" id="cfn">
+            <span id="opt-cfn"></span>
+            <h3>Option B — AWS CloudFormation</h3>
+            <p>Declarative AWS-native IaC. One template, one <code class="inline">create-stack</code> call, full rollback on failure.</p>
+            <h4>1. Save the template as <code class="inline">kafka-k8s.yaml</code></h4>
+            <pre><code>AWSTemplateFormatVersion: '2010-09-09'
+Description: Kafka K8s cluster - 3 EC2 nodes
+Parameters:
+  KeyName: { Type: AWS::EC2::KeyPair::KeyName }
+  InstanceType: { Type: String, Default: t3.medium }
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties: { CidrBlock: 10.0.0.0/16, EnableDnsHostnames: true }
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+  Igw: { Type: AWS::EC2::InternetGateway }
+  Attach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw }
+  Rt:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc }
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: Attach
+    Properties:
+      RouteTableId: !Ref Rt
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+  RtAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref Subnet, RouteTableId: !Ref Rt }
+  Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: kafka-k8s
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22,   ToPort: 22,   CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 6443, ToPort: 6443, CidrIp: 10.0.0.0/16 }
+        - { IpProtocol: tcp, FromPort: 9092, ToPort: 9094, CidrIp: 10.0.0.0/16 }
+        - { IpProtocol: tcp, FromPort: 30000,ToPort: 32767,CidrIp: 10.0.0.0/16 }
+  ControlPlane:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [ !Ref Sg ]
+      Tags: [ { Key: Role, Value: control-plane } ]
+  Worker1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [ !Ref Sg ]
+      Tags: [ { Key: Role, Value: worker } ]
+  Worker2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [ !Ref Sg ]
+      Tags: [ { Key: Role, Value: worker } ]
+Outputs:
+  ControlPlaneIp:
+    Value: !GetAtt ControlPlane.PublicIp</code></pre>
+            <h4>2. Deploy the stack</h4>
+            <pre><code>aws cloudformation create-stack \
+  --stack-name kafka-k8s \
+  --template-body file://kafka-k8s.yaml \
+  --parameters ParameterKey=KeyName,ParameterValue=kafka-k8s \
+  --capabilities CAPABILITY_NAMED_IAM
+
+aws cloudformation wait stack-create-complete --stack-name kafka-k8s
+aws cloudformation describe-stacks --stack-name kafka-k8s \
+  --query 'Stacks[0].Outputs'</code></pre>
+            <button class="more-btn" data-modal="m-cfn">More details: SSM AMI parameter &amp; drift</button>
+            <h4>Teardown</h4>
+            <pre><code>aws cloudformation delete-stack --stack-name kafka-k8s
+aws cloudformation wait stack-delete-complete --stack-name kafka-k8s</code></pre>
+          </div>
+
+          <!-- TERRAFORM -->
+          <div class="tab-panel" id="tf">
+            <span id="opt-tf"></span>
+            <h3>Option C — Terraform</h3>
+            <p>Cloud-agnostic IaC with a rich provider ecosystem and a plan/apply workflow. Save as <code class="inline">main.tf</code>.</p>
+            <pre><code>terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+  }
+}
+provider "aws" { region = "us-east-1" }
+
+variable "key_name"      { default = "kafka-k8s" }
+variable "instance_type" { default = "t3.medium" }
+
+data "aws_ssm_parameter" "ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  tags = { Name = "kafka-k8s" }
+}
+
+resource "aws_subnet" "main" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_internet_gateway" "igw" { vpc_id = aws_vpc.main.id }
+
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+}
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.main.id
+  route_table_id = aws_route_table.rt.id
+}
+
+resource "aws_security_group" "sg" {
+  name   = "kafka-k8s-sg"
+  vpc_id = aws_vpc.main.id
+  ingress { from_port = 22   to_port = 22   protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
+  ingress { from_port = 6443 to_port = 6443 protocol = "tcp" cidr_blocks = ["10.0.0.0/16"] }
+  ingress { from_port = 9092 to_port = 9094 protocol = "tcp" cidr_blocks = ["10.0.0.0/16"] }
+  ingress { from_port = 30000 to_port = 32767 protocol = "tcp" cidr_blocks = ["10.0.0.0/16"] }
+  egress  { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+}
+
+locals { roles = { cp = "control-plane", w1 = "worker", w2 = "worker" } }
+
+resource "aws_instance" "node" {
+  for_each               = local.roles
+  ami                    = data.aws_ssm_parameter.ami.value
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = aws_subnet.main.id
+  vpc_security_group_ids = [aws_security_group.sg.id]
+  tags = { Name = "kafka-${each.key}", Role = each.value }
+}
+
+output "control_plane_ip" {
+  value = aws_instance.node["cp"].public_ip
+}</code></pre>
+            <h4>Run it</h4>
+            <pre><code>terraform init
+terraform plan
+terraform apply -auto-approve
+terraform output control_plane_ip</code></pre>
+            <button class="more-btn" data-modal="m-tf">More details: remote state &amp; for_each</button>
+            <h4>Teardown</h4>
+            <pre><code>terraform destroy -auto-approve</code></pre>
+          </div>
+        </div>
+      </details>
+    </section>
+<!-- KAFKA DEPLOY -->
+    <section class="block" id="kafka-deploy">
+      <details class="section">
+        <summary>5. Bootstrap Kubernetes &amp; Deploy Kafka <span class="chev">›</span></summary>
+        <div class="section-body">
+          <h3>5.1 Initialize the cluster with kubeadm</h3>
+          <p>SSH into the control-plane EC2 instance, install a container runtime + kubeadm, then run the init. Repeat the install steps on each worker and join.</p>
+          <pre><code># on every node
+sudo dnf install -y containerd kubelet kubeadm kubectl
+sudo systemctl enable --now containerd kubelet
+sudo swapoff -a
+
+# control plane only
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+mkdir -p $HOME/.kube && sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+
+# workers: run the kubeadm join command printed by init
+sudo kubeadm join &lt;CP_IP&gt;:6443 --token ... --discovery-token-ca-cert-hash ...</code></pre>
+
+          <h3>5.2 Storage class for EBS</h3>
+          <pre><code>cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata: { name: ebs-gp3 }
+provisioner: ebs.csi.aws.com
+parameters: { type: gp3 }
+volumeBindingMode: WaitForFirstConsumer
+EOF</code></pre>
+          <div class="callout warn">Install the <strong>AWS EBS CSI driver</strong> and attach an IAM policy to the node role so pods can dynamically provision EBS volumes.</div>
+
+          <h3>5.3 Kafka StatefulSet (KRaft, 3 brokers)</h3>
+          <pre><code>apiVersion: v1
+kind: Service
+metadata: { name: kafka-svc }
+spec:
+  clusterIP: None        # headless: stable DNS per broker
+  selector: { app: kafka }
+  ports: [ { port: 9092, name: client } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: kafka }
+spec:
+  serviceName: kafka-svc
+  replicas: 3
+  selector: { matchLabels: { app: kafka } }
+  template:
+    metadata: { labels: { app: kafka } }
+    spec:
+      containers:
+      - name: kafka
+        image: apache/kafka:3.7.0
+        ports: [ { containerPort: 9092 } ]
+        env:
+        - name: KAFKA_NODE_ID
+          valueFrom: { fieldRef: { fieldPath: metadata.name } }
+        - name: KAFKA_PROCESS_ROLES
+          value: "broker,controller"
+        - name: KAFKA_LISTENERS
+          value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+        volumeMounts:
+        - { name: data, mountPath: /var/lib/kafka/data }
+  volumeClaimTemplates:
+  - metadata: { name: data }
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: ebs-gp3
+      resources: { requests: { storage: 10Gi } }</code></pre>
+          <pre><code>kubectl apply -f kafka-statefulset.yaml
+kubectl get pods -l app=kafka -w   # kafka-0, kafka-1, kafka-2 → Running</code></pre>
+          <button class="more-btn" data-modal="m-headless">More details: headless Service &amp; broker DNS</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- WORKERS -->
+    <section class="block" id="workers">
+      <details class="section">
+        <summary>6. Brokers, Producer &amp; Consumer Workers <span class="chev">›</span></summary>
+        <div class="section-body">
+          <p>The three pods above <em>are</em> the brokers. Now add a producer Deployment that publishes messages and a consumer Deployment that reads them — both scheduled onto the basic EC2 worker nodes.</p>
+
+          <h3>6.1 Create a topic</h3>
+          <pre><code>kubectl exec -it kafka-0 -- /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server kafka-svc:9092 \
+  --create --topic events --partitions 3 --replication-factor 3</code></pre>
+
+          <h3>6.2 Producer Deployment</h3>
+          <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata: { name: producer }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: producer } }
+  template:
+    metadata: { labels: { app: producer } }
+    spec:
+      containers:
+      - name: producer
+        image: apache/kafka:3.7.0
+        command: ["/bin/sh","-c"]
+        args:
+        - while true; do echo "msg-$(date +%s)" | \
+            /opt/kafka/bin/kafka-console-producer.sh \
+            --bootstrap-server kafka-svc:9092 --topic events;
+            sleep 2; done</code></pre>
+
+          <h3>6.3 Consumer Deployment</h3>
+          <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata: { name: consumer }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: consumer } }
+  template:
+    metadata: { labels: { app: consumer } }
+    spec:
+      containers:
+      - name: consumer
+        image: apache/kafka:3.7.0
+        command: ["/bin/sh","-c"]
+        args:
+        - /opt/kafka/bin/kafka-console-consumer.sh \
+            --bootstrap-server kafka-svc:9092 \
+            --topic events --group worker-group</code></pre>
+          <pre><code>kubectl apply -f producer.yaml -f consumer.yaml
+kubectl get pods -o wide   # confirm spread across EC2 worker nodes</code></pre>
+          <button class="more-btn" data-modal="m-cg">More details: consumer groups &amp; partition assignment</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- VERIFY -->
+    <section class="block" id="verify">
+      <details class="section">
+        <summary>7. Verify &amp; Test the Pipeline <span class="chev">›</span></summary>
+        <div class="section-body">
+          <h4>Watch consumed messages</h4>
+          <pre><code>kubectl logs -f deploy/consumer
+# expect: msg-1717000000, msg-1717000002, ...</code></pre>
+          <h4>Check broker &amp; topic health</h4>
+          <pre><code>kubectl exec -it kafka-0 -- /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server kafka-svc:9092 --describe --topic events
+# verify Leader, Replicas, Isr columns are populated for all 3 partitions</code></pre>
+          <div class="callout"><strong>Resilience test:</strong> delete <code class="inline">kafka-1</code> with <code class="inline">kubectl delete pod kafka-1</code>; the StatefulSet recreates it, reattaches its EBS volume, and the consumer keeps receiving messages.</div>
+        </div>
+      </details>
+    </section>
+
+    <!-- COMPARE -->
+    <section class="block" id="compare">
+      <details class="section" open>
+        <summary>8. Comparing the Three Options <span class="chev">›</span></summary>
+        <div class="section-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Dimension</th><th>Manual CLI</th><th>CloudFormation</th><th>Terraform</th></tr></thead>
+              <tbody>
+                <tr><td>Learning value</td><td>Highest</td><td>Medium</td><td>Medium</td></tr>
+                <tr><td>Repeatability</td><td>Low</td><td>High</td><td>High</td></tr>
+                <tr><td>Rollback</td><td>Manual</td><td>Automatic</td><td>via destroy/state</td></tr>
+                <tr><td>State tracking</td><td>None</td><td>Managed by AWS</td><td>tfstate file</td></tr>
+                <tr><td>Multi-cloud</td><td>No</td><td>No</td><td>Yes</td></tr>
+                <tr><td>Best for</td><td>Learning / one-off</td><td>AWS-only teams</td><td>Cross-cloud / modules</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- REFERENCES -->
+    <section class="block" id="refs">
+      <details class="section" open>
+        <summary>9. Official Reference Links <span class="chev">›</span></summary>
+        <div class="section-body">
+          <div class="ref-grid">
+            <a class="ref-card" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener"><span class="rc-t">Apache Kafka Docs</span><span class="rc-d">Core configuration, KRaft, broker reference.</span></a>
+            <a class="ref-card" href="https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/" target="_blank" rel="noopener"><span class="rc-t">Kubernetes StatefulSets</span><span class="rc-d">Stateful workload semantics &amp; storage.</span></a>
+            <a class="ref-card" href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/" target="_blank" rel="noopener"><span class="rc-t">kubeadm Setup</span><span class="rc-d">Bootstrapping a cluster step by step.</span></a>
+            <a class="ref-card" href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html" target="_blank" rel="noopener"><span class="rc-t">AWS CloudFormation</span><span class="rc-d">Template reference &amp; stack lifecycle.</span></a>
+            <a class="ref-card" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener"><span class="rc-t">Terraform AWS Provider</span><span class="rc-d">Resource &amp; data-source documentation.</span></a>
+            <a class="ref-card" href="https://github.com/kubernetes-sigs/aws-ebs-csi-driver" target="_blank" rel="noopener"><span class="rc-t">AWS EBS CSI Driver</span><span class="rc-d">Dynamic EBS persistent volumes.</span></a>
+            <a class="ref-card" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html" target="_blank" rel="noopener"><span class="rc-t">Amazon EC2</span><span class="rc-d">Instance types, AMIs, networking.</span></a>
+            <a class="ref-card" href="https://strimzi.io/docs/operators/latest/overview" target="_blank" rel="noopener"><span class="rc-t">Strimzi Operator</span><span class="rc-d">Production-grade Kafka-on-K8s alternative.</span></a>
+          </div>
+        </div>
+      </details>
+    </section>
+<!-- MODALS -->
+  </main>
+</div>
+
+<footer>
+  <p><strong>Kafka on Kubernetes (AWS) Deployment Guide.</strong> Educational reference. Apache Kafka, Kubernetes, Terraform, and AWS are trademarks of their respective owners. Always consult official docs and tear down resources to avoid charges.</p>
+</footer>
+
+<!-- Modal definitions -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h3 id="modalTitle">Title</h3><button class="modal-close" id="modalClose" aria-label="Close">×</button></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+  // ----- Modal content store -----
+  const MODALS = {
+    'm-kraft': { t: 'KRaft vs ZooKeeper', h: '<p>KRaft (Kafka Raft) mode, GA since Kafka 3.3, removes the external ZooKeeper dependency by storing cluster metadata in an internal Raft quorum of controller nodes.</p><p>This means fewer moving parts, faster controller failover, and a single system to operate. In this guide each broker also acts as a controller (<code class="inline">broker,controller</code> roles), which is fine for a small lab cluster. In production you typically dedicate separate controller nodes.</p>' },
+    'm-arch': { t: 'Why StatefulSet + EBS', h: '<p>Kafka brokers need <strong>stable identity</strong> and <strong>durable storage</strong>. A Deployment gives pods random names and ephemeral storage — wrong for Kafka.</p><p>A StatefulSet assigns ordinal, stable names (kafka-0, kafka-1, kafka-2) with matching DNS records, and its <code class="inline">volumeClaimTemplates</code> bind a dedicated EBS volume to each pod. If kafka-1 is rescheduled, it keeps its name <em>and</em> reattaches the same EBS volume, so no data is lost and replication stays intact.</p>' },
+    'm-manual': { t: 'Tagging control-plane vs workers', h: '<p>The manual <code class="inline">run-instances</code> call launches three identical instances. To distinguish roles, either launch the control plane separately or re-tag afterward:</p><pre><code>aws ec2 create-tags --resources i-xxxx \\\n  --tags Key=Role,Value=control-plane</code></pre><p>You then SSH into the control-plane instance to run <code class="inline">kubeadm init</code> and into the others to run <code class="inline">kubeadm join</code>.</p>' },
+    'm-cfn': { t: 'SSM AMI parameter & drift', h: '<p>Using the SSM public parameter <code class="inline">/aws/service/ami-amazon-linux-latest/...</code> means CloudFormation always resolves the newest Amazon Linux AMI at deploy time — no hardcoded, region-specific AMI IDs.</p><p>Run <code class="inline">aws cloudformation detect-stack-drift</code> to catch manual changes made outside the template, which is a common source of "works on my account" problems.</p>' },
+    'm-tf': { t: 'Remote state & for_each', h: '<p>The <code class="inline">for_each</code> over a <code class="inline">locals</code> map creates three instances from one block while keeping each addressable as <code class="inline">aws_instance.node["cp"]</code>. This is cleaner than <code class="inline">count</code> when resources have distinct roles.</p><p>For teams, store <code class="inline">tfstate</code> remotely (e.g. an S3 backend with DynamoDB locking) so state is shared and concurrent applies are prevented.</p>' },
+    'm-headless': { t: 'Headless Service & broker DNS', h: '<p>Setting <code class="inline">clusterIP: None</code> makes the Service "headless": instead of load-balancing to one virtual IP, Kubernetes publishes a DNS A record per pod, e.g. <code class="inline">kafka-0.kafka-svc.default.svc.cluster.local</code>.</p><p>Kafka clients need to reach <em>specific</em> brokers (the partition leader), so this per-pod addressability is essential for correct routing.</p>' },
+    'm-cg': { t: 'Consumer groups & partition assignment', h: '<p>All consumer pods share <code class="inline">--group worker-group</code>, so they form one consumer group. Kafka assigns each of the topic\'s 3 partitions to exactly one consumer in the group, so the two consumer replicas share the load with no duplicate processing.</p><p>Scale consumers up to the partition count (3) for maximum parallelism; beyond that, extra consumers sit idle.</p>' }
+  };
+
+  const overlay = document.getElementById('modalOverlay');
+  const mTitle = document.getElementById('modalTitle');
+  const mBody = document.getElementById('modalBody');
+  document.querySelectorAll('.more-btn').forEach(b => b.addEventListener('click', () => {
+    const m = MODALS[b.dataset.modal]; if (!m) return;
+    mTitle.textContent = m.t; mBody.innerHTML = m.h; overlay.classList.add('open');
+  }));
+  function closeModal(){ overlay.classList.remove('open'); }
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // ----- Theme toggle -----
+  const root = document.documentElement;
+  const themeBtn = document.getElementById('themeBtn');
+  function setTheme(t){
+    root.setAttribute('data-theme', t);
+    document.getElementById('themeIcon').textContent = t === 'dark' ? '☀️' : '🌙';
+    document.getElementById('themeTxt').textContent = t === 'dark' ? 'Light' : 'Dark';
+  }
+  themeBtn.addEventListener('click', () => {
+    setTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) setTheme('dark');
+
+  // ----- Font size 14 → 36 -----
+  let fs = 16;
+  const fsLabel = document.getElementById('fsLabel');
+  function applyFs(){ root.style.setProperty('--fs', fs + 'px'); fsLabel.textContent = fs + 'px'; }
+  document.getElementById('fsUp').addEventListener('click', () => { fs = Math.min(36, fs + 2); applyFs(); });
+  document.getElementById('fsDown').addEventListener('click', () => { fs = Math.max(14, fs - 2); applyFs(); });
+
+  // ----- Tabs -----
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  }));
+
+  // ----- Copy buttons on code blocks -----
+  document.querySelectorAll('pre').forEach(pre => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn'; btn.textContent = 'Copy';
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(pre.querySelector('code').innerText).then(() => {
+        btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy', 1200);
+      });
+    });
+    pre.appendChild(btn);
+  });
+
+  // ----- Mobile TOC -----
+  const toc = document.getElementById('toc');
+  const backdrop = document.getElementById('tocBackdrop');
+  function toggleToc(){ toc.classList.toggle('open'); backdrop.classList.toggle('open'); }
+  document.getElementById('tocToggle').addEventListener('click', toggleToc);
+  backdrop.addEventListener('click', toggleToc);
+
+  // ----- TOC active state + auto-expand target section, close on mobile click -----
+  const links = document.querySelectorAll('nav.toc a');
+  links.forEach(a => a.addEventListener('click', () => {
+    const id = a.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    const det = target && target.closest('details.section');
+    if (det) det.open = true;
+    else { const wrap = document.getElementById(id); const d2 = wrap && wrap.parentElement && wrap.parentElement.closest('details.section'); }
+    if (window.innerWidth <= 900 && toc.classList.contains('open')) toggleToc();
+  }));
+
+  const sections = [...document.querySelectorAll('section.block, .hero')];
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.id;
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  sections.forEach(s => s.id && obs.observe(s));
+</script>
+
+</body>
+</html>
