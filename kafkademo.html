@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka on EKS — Technical Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'monospace'],
+          serif: ['"IBM Plex Serif"', 'serif'],
+        },
+        colors: {
+          ibmblue: '#0f62fe',
+          ibmbluedk: '#0043ce',
+          ibmink: '#161616',
+          ibmgray: '#525252',
+          ibmline: '#e0e0e0',
+          ibmbg: '#f4f4f4',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  /* ---------------------------------------------------------------
+     STRUCTURAL FALLBACK CSS
+     Tailwind (loaded via CDN) handles most styling. But if the CDN is
+     ever blocked or slow, these rules keep the core layout, spacing,
+     and components looking correct and professional on their own.
+     --------------------------------------------------------------- */
+  body { margin: 0; color: #161616; background: #fff; line-height: 1.5; }
+  *, *::before, *::after { box-sizing: border-box; }
+  .layout-row { display: flex; max-width: 1400px; margin: 0 auto; }
+  .main-col { flex: 1; min-width: 0; padding: 2rem 1rem; }
+  @media (min-width: 768px) { .main-col { padding: 3rem 2.5rem; max-width: 56rem; } }
+  .topbar { position: sticky; top: 0; z-index: 40; background:#fff; border-bottom:1px solid #e0e0e0; }
+  .topbar-inner { display:flex; align-items:center; justify-content:space-between; padding: 0 1rem; height: 4rem; }
+  .brand { display:flex; align-items:center; gap:.5rem; }
+  .brand-square { width:1.75rem; height:1.75rem; background:#0f62fe; }
+  .side { width: 18rem; border-right:1px solid #e0e0e0; background:#fff; }
+  .side-sticky { position: sticky; top: 68px; height: calc(100vh - 68px); overflow-y:auto; }
+  @media (max-width: 767px) {
+    .side { position: fixed; top:68px; left:0; z-index:30; height:calc(100vh - 68px); transform: translateX(-100%); transition: transform .2s ease; }
+    .side.side-open { transform: translateX(0); }
+    .main-col { max-width:100%; }
+  }
+  .nav-wrap { padding: 1rem; }
+  .nav-link { display:block; padding:.5rem .75rem; color:#161616; text-decoration:none; }
+  .nav-link:hover { background:#f4f4f4; }
+  .nav-link.active { background:#0f62fe; color:#fff; }
+  .card { border:1px solid #e0e0e0; background:#fff; padding:1rem; }
+  .grid2 { display:grid; grid-template-columns:1fr; gap:1rem; }
+  .grid3 { display:grid; grid-template-columns:1fr; gap:1rem; }
+  @media (min-width: 640px) {
+    .grid2 { grid-template-columns:1fr 1fr; }
+    .grid3 { grid-template-columns:1fr 1fr 1fr; }
+  }
+  .codeblock { background:#161616; color:#fff; padding:1rem; overflow-x:auto; }
+  .codeblock code, .codeblock pre { color:#fff; }
+  h1 { font-family:'IBM Plex Serif', serif; }
+  table { border-collapse: collapse; width:100%; }
+  .fontbtns { display:flex; align-items:center; border:1px solid #e0e0e0; }
+  .fontbtns button { padding:.25rem .75rem; background:#fff; border:none; cursor:pointer; }
+  .fontbtns button:hover { background:#f4f4f4; }
+
+  /* Minimal fallback for the most-used Tailwind utilities, so spacing and
+     color survive even without the CDN. (Tailwind overrides these when present.) */
+  .p-3 { padding:.75rem; } .p-4 { padding:1rem; } .p-5 { padding:1.25rem; } .p-6 { padding:1.5rem; }
+  .mb-2 { margin-bottom:.5rem; } .mb-3 { margin-bottom:.75rem; } .mb-4 { margin-bottom:1rem; }
+  .mb-5 { margin-bottom:1.25rem; } .mb-6 { margin-bottom:1.5rem; } .mb-16 { margin-bottom:4rem; }
+  .mt-4 { margin-top:1rem; } .mt-6 { margin-top:1.5rem; } .mt-8 { margin-top:2rem; }
+  .my-6 { margin-top:1.5rem; margin-bottom:1.5rem; }
+  .space-y-1 > * + * { margin-top:.25rem; } .space-y-2 > * + * { margin-top:.5rem; }
+  .space-y-3 > * + * { margin-top:.75rem; } .space-y-4 > * + * { margin-top:1rem; }
+  .space-y-5 > * + * { margin-top:1.25rem; }
+  .flex { display:flex; } .gap-2 { gap:.5rem; } .gap-3 { gap:.75rem; } .gap-4 { gap:1rem; }
+  .items-center { align-items:center; }
+  .font-semibold { font-weight:600; } .font-bold { font-weight:700; } .font-mono { font-family:'IBM Plex Mono',monospace; }
+  .text-ibmblue { color:#0f62fe; } .text-ibmgray { color:#525252; } .text-white { color:#fff; }
+  .text-center { text-align:center; }
+  .border-b { border-bottom:1px solid #e0e0e0; } .border-ibmline { border-color:#e0e0e0; }
+  .pb-2 { padding-bottom:.5rem; } .pt-6 { padding-top:1.5rem; }
+  .border-b-2 { border-bottom:2px solid #161616; }
+  .underline { text-decoration:underline; }
+  .block { display:block; }
+  .bg-ibmbg { background:#f4f4f4; } .bg-ibmink { background:#161616; }
+  .hover\:bg-ibmbg:hover { background:#f4f4f4; }
+  .overflow-x-auto { overflow-x:auto; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .hidden { display:none !important; }
+  #overlay { position:fixed; inset:0; z-index:20; background:rgba(0,0,0,.4); }
+  html { scroll-behavior: smooth; }
+  body { font-size: var(--base-font); }
+  /* IBM Carbon uses sharp corners and a structured feel */
+  .carbon-card { border: 1px solid #e0e0e0; background: #ffffff; }
+  .carbon-accent { border-left: 4px solid #0f62fe; }
+  .carbon-accent-warn { border-left: 4px solid #da1e28; }
+  .carbon-accent-ok { border-left: 4px solid #198038; }
+  /* Code blocks */
+  pre { font-family: '"IBM Plex Mono"', monospace; overflow-x: auto; }
+  code { font-family: 'IBM Plex Mono', monospace; }
+  /* Smooth font scaling */
+  h1,h2,h3,h4,p,li,td,th,button,a,span,div { transition: font-size 0.15s ease; }
+  /* Active nav link */
+  .nav-link.active { background: #0f62fe; color: #fff; }
+  /* Popup overlay */
+  .popup-overlay { background: rgba(22,22,22,0.55); backdrop-filter: blur(2px); }
+  /* Hide scrollbar on the sidebar but keep scroll */
+  .sidebar-scroll::-webkit-scrollbar { width: 6px; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: #c6c6c6; }
+  /* Reveal on scroll */
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
+  .reveal.shown { opacity: 1; transform: translateY(0); }
+  /* Info dot button */
+  .info-dot { display:inline-flex; align-items:center; justify-content:center; width:1.4em; height:1.4em; border-radius:50%; background:#0f62fe; color:#fff; font-size:0.7em; font-weight:600; cursor:pointer; vertical-align:middle; margin-left:0.3em; line-height:1; }
+  .info-dot:hover { background:#0043ce; }
+</style>
+</head>
+<body class="font-sans text-ibmink bg-white">
+
+<!-- ============ TOP BAR ============ -->
+<header class="topbar sticky top-0 z-40 bg-white border-b border-ibmline">
+  <div class="topbar-inner flex items-center justify-between px-4 md:px-6 h-16">
+    <div class="brand flex items-center gap-3">
+      <button id="menuBtn" class="md:hidden text-ibmink" aria-label="Open menu">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="brand flex items-center gap-2">
+        <div class="brand-square w-7 h-7 bg-ibmblue"></div>
+        <span class="font-semibold tracking-tight" style="font-size:1.05em">Kafka&nbsp;on&nbsp;EKS</span>
+        <span class="hidden sm:inline text-ibmgray" style="font-size:0.8em">Technical Guide</span>
+      </div>
+    </div>
+    <!-- Font size control -->
+    <div class="flex items-center gap-2 md:gap-3">
+      <span class="hidden sm:inline text-ibmgray" style="font-size:0.75em">Text size</span>
+      <div class="fontbtns flex items-center border border-ibmline">
+        <button id="fontDown" class="px-3 py-1 hover:bg-ibmbg border-r border-ibmline" aria-label="Decrease font size" style="font-size:0.85em">A−</button>
+        <span id="fontVal" class="px-2 text-ibmgray tabular-nums" style="font-size:0.75em">18px</span>
+        <button id="fontUp" class="px-3 py-1 hover:bg-ibmbg border-l border-ibmline" aria-label="Increase font size" style="font-size:0.95em">A+</button>
+      </div>
+    </div>
+  </div>
+  <!-- Progress bar -->
+  <div class="h-1 bg-ibmbg">
+    <div id="progress" class="h-1 bg-ibmblue" style="width:0%"></div>
+  </div>
+</header>
+
+<div class="layout-row flex max-w-[1400px] mx-auto">
+
+<!-- ============ SIDEBAR NAV ============ -->
+<aside id="sidebar" class="side side-sticky fixed md:sticky top-[68px] md:top-[68px] left-0 z-30 w-72 h-[calc(100vh-68px)] bg-white border-r border-ibmline overflow-y-auto sidebar-scroll -translate-x-full md:translate-x-0 transition-transform">
+  <nav class="nav-wrap p-4 space-y-1" id="navList" style="font-size:0.85em">
+    <p class="text-ibmgray uppercase tracking-wider mb-2 mt-2" style="font-size:0.7em">Contents</p>
+    <!-- links injected by JS -->
+  </nav>
+</aside>
+<div id="overlay" class="fixed inset-0 z-20 bg-black/40 hidden md:hidden"></div>
+
+<!-- ============ MAIN CONTENT ============ -->
+<main class="main-col flex-1 min-w-0 px-4 md:px-10 py-8 md:py-12 max-w-4xl">
+
+<!-- ===== HERO / INTRO ===== -->
+<section id="intro" class="reveal mb-16 scroll-mt-24">
+  <p class="text-ibmblue font-semibold mb-3" style="font-size:0.8em">TECHNICAL GUIDE · v1.0</p>
+  <h1 class="font-semibold leading-tight mb-6" style="font-size:2.4em">Running Apache Kafka on Amazon EKS</h1>
+  <p class="text-ibmgray mb-6" style="font-size:1.1em; line-height:1.7">
+    This guide explains, in plain language, how this project builds a message-streaming
+    system in the cloud and watches over it. We will start with the big picture, then
+    look inside each piece: the infrastructure code (Terraform), the cluster (EKS),
+    the message system (Kafka), and the monitoring (Prometheus, Grafana, and OpenTelemetry).
+  </p>
+  <div class="carbon-card carbon-accent p-5 mb-4">
+    <p style="font-size:0.95em; line-height:1.6"><strong>Who is this for?</strong> An admin or platform team that needs to run, understand,
+    and keep a Kafka system healthy — even if they are new to some of these tools. No prior
+    Kafka or Kubernetes knowledge is assumed.</p>
+  </div>
+  <div class="grid3 grid sm:grid-cols-3 gap-3 mt-6">
+    <div class="carbon-card p-4"><p class="text-ibmblue font-semibold" style="font-size:1.6em">4</p><p class="text-ibmgray" style="font-size:0.8em">Layers: network, cluster, Kafka, monitoring</p></div>
+    <div class="carbon-card p-4"><p class="text-ibmblue font-semibold" style="font-size:1.6em">100%</p><p class="text-ibmgray" style="font-size:0.8em">Built as code — repeatable and reviewable</p></div>
+    <div class="carbon-card p-4"><p class="text-ibmblue font-semibold" style="font-size:1.6em">3×</p><p class="text-ibmgray" style="font-size:0.8em">Broker replicas for fault tolerance</p></div>
+  </div>
+</section>
+
+<!-- ===== ANALOGY ===== -->
+<section id="bigpicture" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">1. The big picture (a simple analogy)</h2>
+  <p class="mb-4" style="line-height:1.7">
+    Imagine a busy post office. People drop off letters, and other people pick them up.
+    The post office does not force the sender and receiver to be in the same room at the
+    same time — it holds the letters safely until the receiver is ready. That is exactly
+    what <strong>Apache Kafka</strong> does, but for digital messages between computer programs.
+  </p>
+  <div class="grid2 grid sm:grid-cols-2 gap-4 my-6">
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">The post office building</p>
+      <p class="text-ibmgray" style="font-size:0.9em; line-height:1.6">That is <strong>Amazon EKS</strong> — a managed Kubernetes service. It is the building and staff that keep everything running. Kafka lives inside it.</p>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">The blueprint</p>
+      <p class="text-ibmgray" style="font-size:0.9em; line-height:1.6">That is <strong>Terraform</strong> — written instructions that build the whole post office automatically, the same way every time, instead of by hand.</p>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">The security cameras</p>
+      <p class="text-ibmgray" style="font-size:0.9em; line-height:1.6">That is <strong>Prometheus & Grafana</strong> — they record what is happening and show it on dashboards so you can spot trouble early.</p>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">The tracking labels</p>
+      <p class="text-ibmgray" style="font-size:0.9em; line-height:1.6">That is <strong>OpenTelemetry (OTEL)</strong> — it tags each message so you can follow its journey from sender to receiver.</p>
+    </div>
+  </div>
+  <p style="line-height:1.7">
+    The rest of this guide opens up each of these four pieces, one at a time.
+    <button class="info-dot" data-popup="why-stream" aria-label="More info">i</button>
+  </p>
+</section>
+
+<!-- ===== TERRAFORM ===== -->
+<section id="terraform" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">2. Terraform: building infrastructure as code</h2>
+  <p class="mb-4" style="line-height:1.7">
+    <strong>Terraform</strong> is a tool that lets you describe cloud resources in text files.
+    Instead of clicking buttons in the AWS website to create a network, a cluster, and servers,
+    you write what you want, and Terraform makes it real. This is called
+    <em>Infrastructure as Code</em>.
+    <button class="info-dot" data-popup="iac" aria-label="More info">i</button>
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">2.1 Why this matters</h3>
+  <ul class="space-y-2 mb-4" style="line-height:1.6">
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span><strong>Repeatable:</strong> you get the exact same setup every time, in test and in production.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span><strong>Reviewable:</strong> changes go through a pull request, so a teammate can check them before they go live.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span><strong>Reversible:</strong> one command can tear the whole thing down so you stop paying for it.</span></li>
+  </ul>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">2.2 How Terraform works internally (step by step)</h3>
+  <p class="mb-4" style="line-height:1.7">Terraform follows a simple loop. Understanding it removes most of the mystery.</p>
+  <div class="space-y-3 mb-6">
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">1</span><div><p class="font-semibold" style="font-size:0.95em">Write</p><p class="text-ibmgray" style="font-size:0.85em">You write <code>.tf</code> files describing the <em>desired state</em> (what you want to exist).</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">2</span><div><p class="font-semibold" style="font-size:0.95em">Init</p><p class="text-ibmgray" style="font-size:0.85em"><code>terraform init</code> downloads the <em>providers</em> — plugins that know how to talk to AWS, Kubernetes, and Helm.</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">3</span><div><p class="font-semibold" style="font-size:0.95em">Plan</p><p class="text-ibmgray" style="font-size:0.85em"><code>terraform plan</code> compares your desired state against the <em>current state</em> and shows exactly what it will add, change, or destroy. Nothing happens yet.</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">4</span><div><p class="font-semibold" style="font-size:0.95em">Apply</p><p class="text-ibmgray" style="font-size:0.85em"><code>terraform apply</code> makes the changes by calling the cloud APIs in the right order.</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">5</span><div><p class="font-semibold" style="font-size:0.95em">State</p><p class="text-ibmgray" style="font-size:0.85em">Terraform records what it built in a <em>state file</em>, so next time it knows what already exists. <button class="info-dot" data-popup="state" aria-label="More info">i</button></p></div></div>
+  </div>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">2.3 The dependency graph</h3>
+  <p class="mb-4" style="line-height:1.7">
+    Terraform reads all your files and builds a <strong>graph</strong> — a map of what depends on what.
+    For example, the Kafka cluster cannot exist before the EKS cluster, and EKS cannot exist before
+    the network. Terraform works out this order on its own from how resources reference each other,
+    and you can nudge it with <code>depends_on</code> when needed. It then creates independent things
+    in parallel to save time.
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">2.4 How this project is organized (modules)</h3>
+  <p class="mb-4" style="line-height:1.7">
+    A <strong>module</strong> is a reusable folder of Terraform code. This project splits the work
+    into four modules so each piece is small and understandable:
+  </p>
+  <div class="overflow-x-auto mb-4">
+    <table class="w-full border border-ibmline" style="font-size:0.85em">
+      <thead class="bg-ibmbg"><tr>
+        <th class="text-left p-3 border-b border-ibmline font-semibold">Module</th>
+        <th class="text-left p-3 border-b border-ibmline font-semibold">What it builds</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="p-3 border-b border-ibmline font-mono text-ibmblue">vpc</td><td class="p-3 border-b border-ibmline">The private network: subnets, routing, NAT gateways</td></tr>
+        <tr><td class="p-3 border-b border-ibmline font-mono text-ibmblue">eks</td><td class="p-3 border-b border-ibmline">The Kubernetes cluster and its worker machines</td></tr>
+        <tr><td class="p-3 border-b border-ibmline font-mono text-ibmblue">kafka</td><td class="p-3 border-b border-ibmline">The Strimzi operator and the Kafka cluster itself</td></tr>
+        <tr><td class="p-3 border-b border-ibmline font-mono text-ibmblue">monitoring</td><td class="p-3 border-b border-ibmline">Prometheus, Grafana, and the metric scrapers</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">2.5 Remote state and locking</h3>
+  <p class="mb-4" style="line-height:1.7">
+    The state file is stored in an <strong>Amazon S3 bucket</strong> (not on your laptop) so the
+    whole team shares one source of truth. To stop two people from changing things at the same time
+    and corrupting it, Terraform uses <strong>S3-native locking</strong> (a small lock file). Newer
+    Terraform versions do this without needing a separate DynamoDB table.
+    <button class="info-dot" data-popup="lock" aria-label="More info">i</button>
+  </p>
+  <div class="carbon-card codeblock bg-ibmink text-white p-4 mb-4">
+<pre style="font-size:0.8em"><code># versions.tf — where the shared state lives
+backend "s3" {
+  bucket       = "my-tfstate-bucket"
+  key          = "kafka-eks/terraform.tfstate"
+  region       = "us-east-1"
+  encrypt      = true        # state is encrypted at rest
+  use_lockfile = true        # S3-native lock, no DynamoDB
+}</code></pre>
+  </div>
+  <p style="font-size:0.85em" class="text-ibmgray">
+    Reference:
+    <a class="text-ibmblue underline" href="https://developer.hashicorp.com/terraform/docs" target="_blank" rel="noopener">Terraform documentation</a> ·
+    <a class="text-ibmblue underline" href="https://developer.hashicorp.com/terraform/language/backend/s3" target="_blank" rel="noopener">S3 backend</a>
+  </p>
+</section>
+
+<!-- ===== EKS ===== -->
+<section id="eks" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">3. Amazon EKS: the cluster setup</h2>
+  <p class="mb-4" style="line-height:1.7">
+    <strong>Kubernetes</strong> is a system that runs and manages many small programs (called
+    <em>containers</em>) across many machines. <strong>Amazon EKS</strong> (Elastic Kubernetes Service)
+    is Amazon running the hardest, most error-prone part of Kubernetes — the "control plane" — for you,
+    so your team can focus on your applications.
+    <button class="info-dot" data-popup="k8s" aria-label="More info">i</button>
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">3.1 The two halves of a cluster</h3>
+  <div class="grid2 grid sm:grid-cols-2 gap-4 mb-6">
+    <div class="carbon-card carbon-accent p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">Control plane (AWS-managed)</p>
+      <p class="text-ibmgray" style="font-size:0.9em; line-height:1.6">The "brain." It decides where programs run and keeps the desired number alive. AWS runs and patches this for you across multiple data centers.</p>
+    </div>
+    <div class="carbon-card carbon-accent p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">Worker nodes (your machines)</p>
+      <p class="text-ibmgray" style="font-size:0.9em; line-height:1.6">The "muscle." These are EC2 virtual machines where your containers (including Kafka brokers) actually run. This project uses a <em>managed node group</em> of 3–5 nodes.</p>
+    </div>
+  </div>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">3.2 What the EKS module sets up</h3>
+  <ul class="space-y-2 mb-4" style="line-height:1.6">
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>An EKS control plane on a recent Kubernetes version.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>A managed node group whose machines live <strong>only in private subnets</strong> (no direct internet address).</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>A <strong>KMS key</strong> that encrypts Kubernetes secrets.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>Control-plane <strong>audit logs</strong> sent to CloudWatch.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span><strong>IRSA</strong> (IAM Roles for Service Accounts) so each app gets only the cloud permissions it needs. <button class="info-dot" data-popup="irsa" aria-label="More info">i</button></span></li>
+  </ul>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">3.3 EKS best practices used here</h3>
+  <div class="space-y-3 mb-4">
+    <div class="carbon-card carbon-accent-ok p-4"><p style="font-size:0.9em; line-height:1.6"><strong>Spread across Availability Zones.</strong> Nodes run in three separate AWS data centers, so losing one zone does not take everything down.</p></div>
+    <div class="carbon-card carbon-accent-ok p-4"><p style="font-size:0.9em; line-height:1.6"><strong>Private worker nodes.</strong> Workers have no public IP. They reach the internet only outbound, through a NAT gateway, never inbound.</p></div>
+    <div class="carbon-card carbon-accent-ok p-4"><p style="font-size:0.9em; line-height:1.6"><strong>Least-privilege node role.</strong> The worker machines get only the three AWS policies they truly need to join the cluster and pull images.</p></div>
+    <div class="carbon-card carbon-accent-ok p-4"><p style="font-size:0.9em; line-height:1.6"><strong>Rolling updates.</strong> When nodes are upgraded, only one is taken offline at a time, so the cluster keeps serving traffic.</p></div>
+  </div>
+  <p style="font-size:0.85em" class="text-ibmgray">
+    Reference:
+    <a class="text-ibmblue underline" href="https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html" target="_blank" rel="noopener">EKS User Guide</a> ·
+    <a class="text-ibmblue underline" href="https://aws.github.io/aws-eks-best-practices/" target="_blank" rel="noopener">EKS Best Practices Guide</a>
+  </p>
+</section>
+
+<!-- ===== SECURITY ===== -->
+<section id="security" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">4. Security concerns &amp; mitigations</h2>
+  <p class="mb-4" style="line-height:1.7">
+    Security is not one feature; it is many small, careful choices. Below are the main risks and
+    exactly how this project reduces each one. Tap any row for more detail.
+  </p>
+  <div class="overflow-x-auto mb-4">
+    <table class="w-full border border-ibmline" style="font-size:0.85em">
+      <thead class="bg-ibmink text-white"><tr>
+        <th class="text-left p-3 font-semibold">Concern</th>
+        <th class="text-left p-3 font-semibold">Mitigation</th>
+        <th class="p-3"></th>
+      </tr></thead>
+      <tbody>
+        <tr class="border-b border-ibmline"><td class="p-3">Someone reaches Kafka from the internet</td><td class="p-3">Brokers &amp; nodes only in private subnets</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-net">i</button></td></tr>
+        <tr class="border-b border-ibmline"><td class="p-3">Messages read in transit</td><td class="p-3">TLS encryption on all Kafka listeners</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-tls">i</button></td></tr>
+        <tr class="border-b border-ibmline"><td class="p-3">Unknown clients connect</td><td class="p-3">SCRAM-SHA-512 password authentication</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-auth">i</button></td></tr>
+        <tr class="border-b border-ibmline"><td class="p-3">Secrets stolen from disk</td><td class="p-3">KMS envelope encryption of K8s secrets</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-kms">i</button></td></tr>
+        <tr class="border-b border-ibmline"><td class="p-3">Leaked cloud credentials in CI</td><td class="p-3">GitHub OIDC — no stored AWS keys</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-oidc">i</button></td></tr>
+        <tr class="border-b border-ibmline"><td class="p-3">Over-powerful pods</td><td class="p-3">IRSA + restricted Pod Security Standard</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-pss">i</button></td></tr>
+        <tr><td class="p-3">Insecure infrastructure code merged</td><td class="p-3">tfsec + Checkov scans block the pipeline</td><td class="p-3 text-center"><button class="info-dot" data-popup="sec-scan">i</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="carbon-card carbon-accent-warn p-4">
+    <p style="font-size:0.9em; line-height:1.6"><strong>One thing to change before production:</strong> the EKS public API endpoint is open to
+    <code>0.0.0.0/0</code> in the example so CI can reach it. Lock it to your office or CI IP range
+    by editing <code>public_access_cidrs</code> in the EKS module.</p>
+  </div>
+  <p class="mt-4" style="font-size:0.85em" class="text-ibmgray">
+    Reference:
+    <a class="text-ibmblue underline" href="https://aws.github.io/aws-eks-best-practices/security/docs/" target="_blank" rel="noopener">EKS Security Best Practices</a> ·
+    <a class="text-ibmblue underline" href="https://strimzi.io/docs/operators/latest/deploying#assembly-securing-kafka-str" target="_blank" rel="noopener">Securing Kafka with Strimzi</a>
+  </p>
+</section>
+
+<!-- ===== KAFKA ===== -->
+<section id="kafka" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">5. How Apache Kafka works</h2>
+  <p class="mb-4" style="line-height:1.7">
+    Kafka is a <strong>distributed log</strong>. Think of a notebook where you only ever add new lines
+    at the bottom and never erase. Programs that send data are <strong>producers</strong>; programs that
+    read it are <strong>consumers</strong>. Kafka keeps the notebook safe and lets many readers read at
+    their own pace.
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">5.1 The core words, in plain terms</h3>
+  <div class="space-y-3 mb-6">
+    <div class="carbon-card p-4"><p class="font-semibold" style="font-size:0.95em">Topic</p><p class="text-ibmgray" style="font-size:0.85em">A named channel for a kind of message — like a labeled mailbox, e.g. <code>demo-messages</code>.</p></div>
+    <div class="carbon-card p-4"><p class="font-semibold" style="font-size:0.95em">Partition</p><p class="text-ibmgray" style="font-size:0.85em">A topic is split into partitions so the work can be shared across machines. More partitions = more parallel readers. <button class="info-dot" data-popup="partition">i</button></p></div>
+    <div class="carbon-card p-4"><p class="font-semibold" style="font-size:0.95em">Offset</p><p class="text-ibmgray" style="font-size:0.85em">The line number in the notebook. A consumer remembers its offset so it can pick up where it left off.</p></div>
+    <div class="carbon-card p-4"><p class="font-semibold" style="font-size:0.95em">Broker</p><p class="text-ibmgray" style="font-size:0.85em">One Kafka server. A <em>cluster</em> is several brokers working together. This project runs 3.</p></div>
+    <div class="carbon-card p-4"><p class="font-semibold" style="font-size:0.95em">Replica</p><p class="text-ibmgray" style="font-size:0.85em">A backup copy of a partition on another broker. If one broker dies, a replica takes over.</p></div>
+    <div class="carbon-card p-4"><p class="font-semibold" style="font-size:0.95em">Consumer group</p><p class="text-ibmgray" style="font-size:0.85em">A team of consumers sharing the work of one topic. Kafka gives each partition to one member. <button class="info-dot" data-popup="group">i</button></p></div>
+  </div>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">5.2 The journey of one message</h3>
+  <div class="space-y-3 mb-6">
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">1</span><div><p style="font-size:0.9em; line-height:1.6">A <strong>producer</strong> sends a message to a topic. Kafka chooses a partition (by a key, or round-robin).</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">2</span><div><p style="font-size:0.9em; line-height:1.6">The <strong>leader broker</strong> for that partition writes the message and copies it to the replicas.</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">3</span><div><p style="font-size:0.9em; line-height:1.6">Once enough replicas confirm (<code>min.insync.replicas = 2</code> here), Kafka tells the producer "got it."</p></div></div>
+    <div class="carbon-card p-4 flex gap-4"><span class="text-ibmblue font-bold tabular-nums" style="font-size:1.3em">4</span><div><p style="font-size:0.9em; line-height:1.6">A <strong>consumer</strong> reads from its last offset, processes the message, and records the new offset.</p></div></div>
+  </div>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">5.3 KRaft: no more ZooKeeper</h3>
+  <p class="mb-4" style="line-height:1.7">
+    Older Kafka needed a separate helper called ZooKeeper to keep track of the cluster. Modern Kafka
+    (used here) uses <strong>KRaft</strong>, where Kafka manages itself. Fewer moving parts means less
+    to break and less to secure. <button class="info-dot" data-popup="kraft">i</button>
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">5.4 Strimzi: Kafka the Kubernetes way</h3>
+  <p class="mb-4" style="line-height:1.7">
+    Running Kafka by hand on Kubernetes is fiddly. <strong>Strimzi</strong> is an <em>operator</em> — a
+    program that lives in the cluster and manages Kafka for you. You describe the Kafka you want in a
+    short YAML file, and Strimzi creates brokers, certificates, users, and storage, and handles
+    upgrades. <button class="info-dot" data-popup="operator">i</button>
+  </p>
+  <p style="font-size:0.85em" class="text-ibmgray">
+    Reference:
+    <a class="text-ibmblue underline" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener">Apache Kafka docs</a> ·
+    <a class="text-ibmblue underline" href="https://strimzi.io/docs/operators/latest/overview" target="_blank" rel="noopener">Strimzi docs</a> ·
+    <a class="text-ibmblue underline" href="https://kafka.apache.org/documentation/#kraft" target="_blank" rel="noopener">KRaft</a>
+  </p>
+</section>
+
+<!-- ===== FAULT TOLERANCE / HA ===== -->
+<section id="ha" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">6. Fault tolerance &amp; high availability</h2>
+  <p class="mb-4" style="line-height:1.7">
+    "Fault tolerance" means the system keeps working when a part fails. "High availability" (HA) means
+    it is almost always up. Here is how this project achieves both, layer by layer.
+  </p>
+  <div class="space-y-3 mb-6">
+    <div class="carbon-card carbon-accent p-4"><p class="font-semibold" style="font-size:0.95em">Replication factor 3</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">Every partition has 3 copies on 3 different brokers. Two brokers can fail and your data still exists.</p></div>
+    <div class="carbon-card carbon-accent p-4"><p class="font-semibold" style="font-size:0.95em">min.insync.replicas = 2</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">A write is only confirmed once 2 copies are safely stored. This prevents data loss if a single broker dies right after a write.</p></div>
+    <div class="carbon-card carbon-accent p-4"><p class="font-semibold" style="font-size:0.95em">3 brokers across 3 zones</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">Brokers run in separate AWS Availability Zones, so an entire data-center outage loses at most one broker.</p></div>
+    <div class="carbon-card carbon-accent p-4"><p class="font-semibold" style="font-size:0.95em">Persistent storage</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">Each broker stores data on a persistent volume that survives a pod restart, with <code>deleteClaim: false</code> so data is not wiped if the pool is removed.</p></div>
+    <div class="carbon-card carbon-accent p-4"><p class="font-semibold" style="font-size:0.95em">Self-healing Kubernetes</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">If a broker pod crashes, Kubernetes restarts it automatically. Strimzi re-attaches its storage and identity.</p></div>
+    <div class="carbon-card carbon-accent p-4"><p class="font-semibold" style="font-size:0.95em">Node autoscaling range</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">The node group can grow from 3 to 5 machines, giving room to reschedule work when a node is lost.</p></div>
+  </div>
+  <div class="carbon-card carbon-accent-warn p-4 mb-4">
+    <p style="font-size:0.9em; line-height:1.6"><strong>The key trade-off to understand:</strong> with <code>replication=3</code> and
+    <code>min.insync.replicas=2</code>, you can lose <strong>one</strong> broker and still accept writes.
+    If you lose two at once, Kafka will pause writes to that partition rather than risk losing data —
+    a deliberate safety choice. To tolerate two simultaneous failures while still writing, you would
+    move to 5 brokers.</p>
+  </div>
+  <h3 class="font-semibold mt-6 mb-3" style="font-size:1.2em">Admin checklist for HA</h3>
+  <ul class="space-y-2" style="line-height:1.6; font-size:0.9em">
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">✓</span><span>Watch <code>UnderReplicatedPartitions</code> — it should always be 0.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">✓</span><span>Make sure brokers are actually in different zones (check node labels).</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">✓</span><span>Test failure on purpose: delete one broker pod and confirm the cluster recovers.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">✓</span><span>Keep disk usage below ~70% so a failover has room to catch up.</span></li>
+  </ul>
+</section>
+
+<!-- ===== OTEL / MONITORING ===== -->
+<section id="otel" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">7. Monitoring: OpenTelemetry, Prometheus &amp; Grafana</h2>
+  <p class="mb-4" style="line-height:1.7">
+    You cannot fix what you cannot see. This project watches the system in two complementary ways:
+    metrics from <strong>Kafka itself</strong>, and metrics from the <strong>applications</strong> that
+    send and receive messages.
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">7.1 The three tools and their jobs</h3>
+  <div class="grid3 grid sm:grid-cols-3 gap-4 mb-6">
+    <div class="carbon-card p-5"><p class="font-semibold mb-1" style="font-size:1em">OpenTelemetry</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">A standard way for apps to emit <em>metrics</em> and <em>traces</em>. The producer/consumer push their numbers to an OTEL <em>Collector</em>. <button class="info-dot" data-popup="otel">i</button></p></div>
+    <div class="carbon-card p-5"><p class="font-semibold mb-1" style="font-size:1em">Prometheus</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">A database that <em>scrapes</em> (regularly pulls) metrics and stores them over time so you can query them.</p></div>
+    <div class="carbon-card p-5"><p class="font-semibold mb-1" style="font-size:1em">Grafana</p><p class="text-ibmgray" style="font-size:0.85em; line-height:1.6">The dashboard tool that turns Prometheus data into charts a human can read at a glance.</p></div>
+  </div>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">7.2 How the data flows</h3>
+  <div class="carbon-card bg-ibmbg p-5 mb-4">
+    <pre style="font-size:0.78em; line-height:1.5"><code>producer ─┐
+          ├─ OTLP ─▶ OTEL Collector ─(exposes /metrics)─┐
+consumer ─┘                                             ├─▶ Prometheus ─▶ Grafana
+kafka broker ─ JMX agent (port 9404) ───────────────────┘</code></pre>
+  </div>
+  <p class="mb-4" style="line-height:1.7">
+    The Kafka broker exposes its internal Java metrics through a small <strong>JMX Prometheus agent</strong>
+    on port 9404. The apps send their metrics to the <strong>OTEL Collector</strong>, which re-exposes them
+    in Prometheus format. Prometheus scrapes both, and Grafana draws the picture.
+    <button class="info-dot" data-popup="jmx">i</button>
+  </p>
+
+  <h3 class="font-semibold mt-8 mb-3" style="font-size:1.25em">7.3 What the dashboard shows</h3>
+  <ul class="space-y-2 mb-4" style="line-height:1.6; font-size:0.9em">
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>Total messages produced and consumed.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>Produced vs. consumed rate per second (are consumers keeping up?).</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>Kafka broker messages-in per topic, and bytes in/out.</span></li>
+    <li class="flex gap-2"><span class="text-ibmblue font-bold">→</span><span>End-to-end latency (p95): how long from send to receive.</span></li>
+  </ul>
+  <p style="font-size:0.85em" class="text-ibmgray">
+    Reference:
+    <a class="text-ibmblue underline" href="https://opentelemetry.io/docs/" target="_blank" rel="noopener">OpenTelemetry docs</a> ·
+    <a class="text-ibmblue underline" href="https://prometheus.io/docs/introduction/overview/" target="_blank" rel="noopener">Prometheus docs</a> ·
+    <a class="text-ibmblue underline" href="https://grafana.com/docs/" target="_blank" rel="noopener">Grafana docs</a>
+  </p>
+</section>
+
+<!-- ===== PROMQL QUERIES ===== -->
+<section id="queries" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">8. Example Prometheus (PromQL) queries</h2>
+  <p class="mb-4" style="line-height:1.7">
+    Paste these into the Prometheus expression box (<code>http://localhost:9090</code>) or a Grafana panel.
+    A <em>query</em> asks the metrics database a question. <code>rate(...[1m])</code> means "per-second
+    average over the last minute."
+  </p>
+
+  <div class="space-y-5">
+    <div>
+      <p class="font-semibold mb-2" style="font-size:0.95em">Message flow (from the apps)</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-4"><pre style="font-size:0.8em; line-height:1.6"><code># Messages per second being produced
+sum(rate(messages_produced_total[1m]))
+
+# Messages per second being consumed
+sum(rate(messages_consumed_total[1m]))
+
+# Backlog: total produced minus total consumed
+sum(messages_produced_total) - sum(messages_consumed_total)</code></pre></div>
+    </div>
+
+    <div>
+      <p class="font-semibold mb-2" style="font-size:0.95em">End-to-end latency (from the consumer)</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-4"><pre style="font-size:0.8em; line-height:1.6"><code># 95th-percentile latency in milliseconds
+histogram_quantile(0.95,
+  sum(rate(message_latency_ms_bucket[5m])) by (le))
+
+# Average latency
+sum(rate(message_latency_ms_sum[5m]))
+  / sum(rate(message_latency_ms_count[5m]))</code></pre></div>
+    </div>
+
+    <div>
+      <p class="font-semibold mb-2" style="font-size:0.95em">Kafka broker throughput (from JMX)</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-4"><pre style="font-size:0.8em; line-height:1.6"><code># Messages arriving at the broker per topic
+sum by (topic) (
+  rate(kafka_server_brokertopicmetrics_messagesin_total[1m]))
+
+# Bytes in / out across the whole cluster
+sum(rate(kafka_server_brokertopicmetrics_bytesin_total[1m]))
+sum(rate(kafka_server_brokertopicmetrics_bytesout_total[1m]))</code></pre></div>
+    </div>
+
+    <div>
+      <p class="font-semibold mb-2" style="font-size:0.95em">Health checks</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-4"><pre style="font-size:0.8em; line-height:1.6"><code># Under-replicated partitions — should always be 0
+kafka_server_replicamanager_underreplicatedpartitions
+
+# Which scrape targets are alive (1) or down (0)
+up</code></pre></div>
+    </div>
+  </div>
+  <div class="carbon-card carbon-accent p-4 mt-5">
+    <p style="font-size:0.88em; line-height:1.6"><strong>Tip:</strong> if a query returns nothing, the metric name may differ slightly.
+    Type a prefix like <code>kafka_server_</code> in the Prometheus box and use its autocomplete to find
+    the real name. Make the <code>rate()</code> window at least 4× the scrape interval (this stack scrapes
+    every 5 seconds, so <code>[1m]</code> is safe).</p>
+  </div>
+</section>
+
+<!-- ===== USE CASES ===== -->
+<section id="usecases" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">9. Simple use cases for an admin team</h2>
+  <p class="mb-4" style="line-height:1.7">Everyday tasks, in the order you are likely to meet them.</p>
+  <div class="space-y-4">
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">A. "Is the system healthy right now?"</p>
+      <p class="text-ibmgray mb-2" style="font-size:0.88em; line-height:1.6">Open Grafana, check that produced and consumed rates roughly match, and that under-replicated partitions is 0.</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-3"><pre style="font-size:0.78em"><code>kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+# open http://localhost:3000</code></pre></div>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">B. "Are the Kafka brokers running?"</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-3"><pre style="font-size:0.78em"><code>kubectl -n kafka get pods
+kubectl -n kafka get kafka,kafkanodepool</code></pre></div>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">C. "Create a new topic for a new project"</p>
+      <p class="text-ibmgray mb-2" style="font-size:0.88em; line-height:1.6">With Strimzi you declare topics as YAML; the operator creates them. No manual broker commands.</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-3"><pre style="font-size:0.74em"><code>apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: orders
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: demo-kafka
+spec:
+  partitions: 6
+  replicas: 3</code></pre></div>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">D. "A consumer is falling behind"</p>
+      <p class="text-ibmgray" style="font-size:0.88em; line-height:1.6">Check the backlog query in section 8. If it keeps growing, add more consumers to the group (up to the number of partitions) or add partitions to the topic.</p>
+    </div>
+    <div class="carbon-card p-5">
+      <p class="font-semibold mb-2" style="font-size:1.05em">E. "Practice a failure safely"</p>
+      <p class="text-ibmgray mb-2" style="font-size:0.88em; line-height:1.6">Delete one broker pod and watch Kubernetes + Strimzi bring it back. Messages should keep flowing.</p>
+      <div class="carbon-card codeblock bg-ibmink text-white p-3"><pre style="font-size:0.78em"><code>kubectl -n kafka delete pod demo-kafka-pool-0
+kubectl -n kafka get pods -w   # watch it return</code></pre></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== GETTING STARTED ===== -->
+<section id="start" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">10. Getting started, step by step</h2>
+  <h3 class="font-semibold mt-4 mb-3" style="font-size:1.2em">Try it locally first (only Docker needed)</h3>
+  <div class="carbon-card codeblock bg-ibmink text-white p-4 mb-5"><pre style="font-size:0.8em; line-height:1.6"><code>cd local
+./kafka/setup.sh          # one-time: fetch the JMX agent
+docker compose up --build # start Kafka, apps, Prometheus, Grafana
+# Grafana:    http://localhost:3000  (admin / admin)
+# Prometheus: http://localhost:9090</code></pre></div>
+  <h3 class="font-semibold mt-4 mb-3" style="font-size:1.2em">Then deploy to AWS</h3>
+  <div class="carbon-card codeblock bg-ibmink text-white p-4 mb-4"><pre style="font-size:0.8em; line-height:1.6"><code>cd terraform
+export TF_VAR_grafana_admin_password="a-strong-password"
+terraform init
+terraform plan
+terraform apply
+# afterwards:
+aws eks update-kubeconfig --region us-east-1 --name demo-kafka</code></pre></div>
+  <p style="font-size:0.85em" class="text-ibmgray">Full instructions and the one-time AWS OIDC bootstrap are in the project README and <code>docs/AWS_OIDC_SETUP.md</code>.</p>
+</section>
+
+<!-- ===== REFERENCES ===== -->
+<section id="refs" class="reveal mb-16 scroll-mt-24">
+  <h2 class="font-semibold mb-4 pb-2 border-b-2 border-ibmink" style="font-size:1.7em">11. References &amp; official docs</h2>
+  <div class="grid2 grid sm:grid-cols-2 gap-3" style="font-size:0.9em">
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">Apache Kafka →</span><p class="text-ibmgray" style="font-size:0.85em">Official Kafka documentation</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://strimzi.io/documentation/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">Strimzi →</span><p class="text-ibmgray" style="font-size:0.85em">Kafka operator for Kubernetes</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://docs.aws.amazon.com/eks/latest/userguide/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">Amazon EKS →</span><p class="text-ibmgray" style="font-size:0.85em">EKS user guide</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://aws.github.io/aws-eks-best-practices/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">EKS Best Practices →</span><p class="text-ibmgray" style="font-size:0.85em">Security, reliability, networking</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://developer.hashicorp.com/terraform/docs" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">Terraform →</span><p class="text-ibmgray" style="font-size:0.85em">Language and CLI reference</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://opentelemetry.io/docs/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">OpenTelemetry →</span><p class="text-ibmgray" style="font-size:0.85em">Metrics, traces, and the Collector</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://prometheus.io/docs/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">Prometheus →</span><p class="text-ibmgray" style="font-size:0.85em">PromQL and scraping</p></a>
+    <a class="carbon-card p-4 hover:bg-ibmbg block" href="https://grafana.com/docs/" target="_blank" rel="noopener"><span class="text-ibmblue font-semibold">Grafana →</span><p class="text-ibmgray" style="font-size:0.85em">Dashboards and panels</p></a>
+  </div>
+</section>
+
+<footer class="border-t border-ibmline pt-6 mt-12 mb-8">
+  <p class="text-ibmgray" style="font-size:0.8em">Kafka on EKS — Technical Guide. Built for platform &amp; admin teams. This document is informational; verify versions and security settings against the official docs before production use.</p>
+</footer>
+
+</main>
+</div>
+
+<!-- ============ POPUP MODAL ============ -->
+<div id="popup" class="fixed inset-0 z-50 hidden items-center justify-center p-4 popup-overlay">
+  <div class="carbon-card bg-white max-w-lg w-full p-6 relative" style="max-height:80vh; overflow-y:auto">
+    <button id="popupClose" class="absolute top-3 right-3 text-ibmgray hover:text-ibmink" aria-label="Close" style="font-size:1.4em; line-height:1">&times;</button>
+    <h3 id="popupTitle" class="font-semibold mb-3 pr-6 text-ibmblue" style="font-size:1.15em"></h3>
+    <div id="popupBody" style="font-size:0.92em; line-height:1.65"></div>
+  </div>
+</div>
+
+<script>
+// ---------- Popup content library ----------
+const POPUPS = {
+  'why-stream': ['Why use a streaming system?', '<p>Without a system like Kafka, every program would have to talk directly to every other program. If one is slow or offline, messages get lost. Kafka acts as a reliable buffer in the middle, so senders and receivers do not depend on each other being available at the same instant. This is called <em>decoupling</em>.</p>'],
+  'iac': ['Infrastructure as Code (IaC)', '<p>Instead of manually clicking in a cloud console (which is easy to get wrong and impossible to repeat exactly), you describe your infrastructure in text files. Those files can be saved in Git, reviewed by teammates, and replayed to rebuild everything identically. If a server is destroyed, you re-run the code and it comes back the same.</p>'],
+  'state': ['What is the state file?', '<p>Terraform needs to remember what it already created so it does not make duplicates. It writes this memory into a <strong>state file</strong>. This file maps your code to the real resources (their IDs, IPs, etc.). It can contain sensitive values, which is why it is stored encrypted in S3 and never committed to Git.</p>'],
+  'lock': ['Why locking matters', '<p>If two engineers run <code>terraform apply</code> at the same moment, they could both edit the state file and corrupt it. A <strong>lock</strong> ensures only one change happens at a time — the second person simply waits. Modern Terraform does this with a tiny lock object in the same S3 bucket, so no extra database is needed.</p>'],
+  'k8s': ['What is Kubernetes?', '<p>Kubernetes ("K8s") is software that runs your applications inside <em>containers</em> across a fleet of machines. You tell it "I want 3 copies of this app running," and it makes sure 3 are always running — restarting any that crash and moving them if a machine dies. EKS is Amazon running the control part of Kubernetes for you.</p>'],
+  'irsa': ['IRSA — scoped permissions for pods', '<p>IRSA (IAM Roles for Service Accounts) lets each application get its <em>own</em> narrow set of AWS permissions, instead of every app sharing the broad permissions of the machine it runs on. If one app is compromised, the attacker only gets that app\'s limited rights — not the keys to everything.</p>'],
+  'partition': ['Partitions explained', '<p>A partition is a slice of a topic. Splitting a topic into, say, 6 partitions lets 6 consumers read in parallel — 6× the speed. Order is guaranteed <em>within</em> a partition but not across partitions, so you choose a key (like a customer ID) to keep related messages together in one partition.</p>'],
+  'group': ['Consumer groups', '<p>A consumer group is a team of readers sharing one topic. Kafka assigns each partition to exactly one member of the group, so the work is divided with no duplication. If a member dies, Kafka automatically gives its partitions to the others — this is called a <em>rebalance</em>.</p>'],
+  'kraft': ['KRaft mode', '<p>KRaft (Kafka Raft) is how modern Kafka manages its own cluster information using a built-in consensus protocol, removing the old dependency on ZooKeeper. Fewer separate systems means simpler operations, faster recovery, and a smaller security surface.</p>'],
+  'operator': ['What is a Kubernetes operator?', '<p>An operator is a program that runs inside Kubernetes and automates the care of a complex application — doing what a human expert would do. Strimzi is the operator for Kafka: it reads your simple "I want a Kafka cluster" request and handles brokers, TLS certificates, users, storage, and version upgrades for you.</p>'],
+  'otel': ['OpenTelemetry (OTEL)', '<p>OTEL is a vendor-neutral standard for collecting telemetry: <strong>metrics</strong> (numbers over time, like messages/sec), <strong>traces</strong> (the path of one request through the system), and logs. Because it is a standard, you can switch monitoring backends later without rewriting your apps.</p>'],
+  'jmx': ['JMX and the exporter', '<p>Kafka runs on Java, which exposes internal statistics through a mechanism called JMX. The <strong>JMX Prometheus agent</strong> runs inside the broker, reads those statistics, and republishes them on a web port (9404) in the format Prometheus understands. That is how broker-level metrics reach your dashboards.</p>'],
+  'sec-net': ['Network isolation', '<p>The Kafka brokers and worker machines are placed in <strong>private subnets</strong>. A private subnet has no route for inbound traffic from the internet. The machines can still reach out (to pull software updates) through a NAT gateway, but nobody on the internet can open a connection to them directly.</p>'],
+  'sec-tls': ['TLS encryption', '<p>TLS is the same technology that puts the padlock in your browser. With TLS on Kafka listeners, every message travelling between clients and brokers is scrambled, so anyone intercepting the network traffic sees only gibberish.</p>'],
+  'sec-auth': ['SCRAM authentication', '<p>SCRAM-SHA-512 is a secure password method. The password is never sent across the network in readable form; instead a cryptographic proof is exchanged. Only clients with valid credentials, managed by the Strimzi user operator, can connect.</p>'],
+  'sec-kms': ['KMS secret encryption', '<p>Kubernetes stores configuration secrets (passwords, certificates). This project wraps them with a dedicated AWS KMS key so they are encrypted at rest. Even someone who reads the raw storage cannot use the secrets without access to the key, which is separately controlled and auto-rotated.</p>'],
+  'sec-oidc': ['GitHub OIDC — no stored keys', '<p>Normally CI pipelines store long-lived AWS keys, which are a prime target if leaked. OIDC instead lets GitHub prove its identity to AWS for each run and receive a short-lived token that expires quickly. There are no permanent AWS secrets sitting in GitHub at all.</p>'],
+  'sec-pss': ['Pod Security Standards', '<p>The "restricted" Pod Security Standard forbids risky pod settings (like running as the root user or gaining extra system privileges). Combined with IRSA, this limits how much damage a compromised container could do.</p>'],
+  'sec-scan': ['tfsec & Checkov scanning', '<p>These are automated tools that read your Terraform code and flag insecure settings (an open security group, an unencrypted volume, etc.) <em>before</em> the code is ever applied. In this project they run in the pipeline and can block a risky change from merging.</p>'],
+};
+const popup = document.getElementById('popup');
+const popupTitle = document.getElementById('popupTitle');
+const popupBody = document.getElementById('popupBody');
+function openPopup(key){
+  const item = POPUPS[key];
+  if(!item) return;
+  popupTitle.textContent = item[0];
+  popupBody.innerHTML = item[1];
+  popup.classList.remove('hidden');
+  popup.classList.add('flex');
+}
+function closePopup(){ popup.classList.add('hidden'); popup.classList.remove('flex'); }
+document.addEventListener('click', e => {
+  const dot = e.target.closest('[data-popup]');
+  if(dot){ openPopup(dot.getAttribute('data-popup')); }
+});
+document.getElementById('popupClose').addEventListener('click', closePopup);
+popup.addEventListener('click', e => { if(e.target === popup) closePopup(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closePopup(); });
+
+// ---------- Font size control (14px – 36px) ----------
+const root = document.documentElement;
+const fontVal = document.getElementById('fontVal');
+let fontSize = 18;
+const MIN = 14, MAX = 36;
+function applyFont(){
+  root.style.setProperty('--base-font', fontSize + 'px');
+  fontVal.textContent = fontSize + 'px';
+}
+document.getElementById('fontUp').addEventListener('click', () => { fontSize = Math.min(MAX, fontSize + 2); applyFont(); });
+document.getElementById('fontDown').addEventListener('click', () => { fontSize = Math.max(MIN, fontSize - 2); applyFont(); });
+applyFont();
+
+// ---------- Build the nav from sections ----------
+const sections = [
+  ['intro','Overview'],['bigpicture','1. Big picture'],['terraform','2. Terraform'],
+  ['eks','3. Amazon EKS'],['security','4. Security'],['kafka','5. How Kafka works'],
+  ['ha','6. Fault tolerance & HA'],['otel','7. Monitoring'],['queries','8. PromQL queries'],
+  ['usecases','9. Use cases'],['start','10. Getting started'],['refs','11. References'],
+];
+const navList = document.getElementById('navList');
+sections.forEach(([id,label]) => {
+  const a = document.createElement('a');
+  a.href = '#' + id;
+  a.className = 'nav-link block px-3 py-2 hover:bg-ibmbg text-ibmink';
+  a.textContent = label;
+  a.dataset.target = id;
+  navList.appendChild(a);
+});
+
+// ---------- Mobile sidebar toggle ----------
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+function openSidebar(){ sidebar.classList.remove('-translate-x-full'); sidebar.classList.add('side-open'); overlay.classList.remove('hidden'); }
+function closeSidebar(){ sidebar.classList.add('-translate-x-full'); sidebar.classList.remove('side-open'); overlay.classList.add('hidden'); }
+document.getElementById('menuBtn').addEventListener('click', openSidebar);
+overlay.addEventListener('click', closeSidebar);
+navList.addEventListener('click', e => { if(e.target.tagName === 'A' && window.innerWidth < 768) closeSidebar(); });
+
+// ---------- Scroll progress + active link + reveal ----------
+const progress = document.getElementById('progress');
+const navLinks = [...document.querySelectorAll('.nav-link')];
+const sectionEls = sections.map(([id]) => document.getElementById(id));
+function onScroll(){
+  const h = document.documentElement;
+  const scrolled = h.scrollTop / (h.scrollHeight - h.clientHeight);
+  progress.style.width = (scrolled * 100) + '%';
+  // active link
+  let current = sectionEls[0].id;
+  for(const el of sectionEls){
+    if(el.getBoundingClientRect().top <= 120) current = el.id;
+  }
+  navLinks.forEach(a => a.classList.toggle('active', a.dataset.target === current));
+}
+window.addEventListener('scroll', onScroll, {passive:true});
+onScroll();
+
+// reveal on scroll
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(en => { if(en.isIntersecting){ en.target.classList.add('shown'); io.unobserve(en.target);} });
+}, {threshold: 0.08});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+
+</body>
+</html>
