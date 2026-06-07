@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Building Basics: AWS, GitLab & Terraform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background-color: #ffffff;
+            color: #161616; /* IBM Dark Gray */
+            font-size: 16px;
+            transition: font-size 0.2s ease-in-out;
+            line-height: 1.6;
+        }
+        
+        h1, h2, h3, h4 {
+            color: #001d6c; /* IBM Dark Blue */
+            font-weight: 600;
+        }
+
+        .modal-overlay {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+    <script>
+        let currentFontSize = 16;
+
+        function updateFontSize(step) {
+            currentFontSize += step;
+            if (currentFontSize < 14) currentFontSize = 14;
+            if (currentFontSize > 36) currentFontSize = 36;
+            document.body.style.fontSize = currentFontSize + 'px';
+            document.getElementById('fontSizeDisplay').innerText = currentFontSize + 'px';
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal.classList.contains('active')) {
+                modal.classList.remove('active');
+                setTimeout(() => { modal.style.display = 'none'; }, 300); // Wait for fade out
+            } else {
+                modal.style.display = 'flex';
+                // Small delay to allow display:flex to apply before adding opacity
+                setTimeout(() => { modal.classList.add('active'); }, 10);
+            }
+        }
+    </script>
+</head>
+<body class="antialiased">
+
+    <div class="fixed bottom-4 right-4 md:top-4 md:bottom-auto bg-gray-100 p-2 rounded shadow-md border border-gray-300 z-40 flex items-center gap-3">
+        <span class="text-sm font-semibold hidden md:inline">Text Size:</span>
+        <button onclick="updateFontSize(-2)" class="px-3 py-1 bg-white border border-gray-400 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-600 font-bold" aria-label="Decrease font size">A-</button>
+        <span id="fontSizeDisplay" class="w-12 text-center text-sm font-mono bg-white border border-gray-300 py-1 rounded">16px</span>
+        <button onclick="updateFontSize(2)" class="px-3 py-1 bg-white border border-gray-400 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-600 font-bold" aria-label="Increase font size">A+</button>
+    </div>
+
+    <main class="max-w-4xl mx-auto px-6 py-12 md:py-20">
+        
+        <header class="mb-12 border-b-2 border-blue-900 pb-6">
+            <h1 class="text-3xl md:text-5xl mb-4">Building in the Cloud: A Step-by-Step Guide</h1>
+            <p class="text-gray-700 md:text-lg">Learn how to automatically build a computer in the cloud using AWS, GitLab, and Terraform—explained simply, straight from your Windows PC.</p>
+        </header>
+
+        <section class="mb-12">
+            <h2 class="text-2xl md:text-3xl mb-6">1. What Are We Building? (The Core Concepts)</h2>
+            <p class="mb-4">Instead of clicking buttons on a website to create a computer, we are going to write a "recipe" for a computer. Then, we will give that recipe to a robot helper who will go build it for us. Click the links below to learn about the tools we will use:</p>
+            
+            <div class="flex flex-wrap gap-4 mt-6">
+                <button onclick="toggleModal('awsModal')" class="px-5 py-3 bg-blue-50 text-blue-900 border border-blue-200 rounded shadow-sm hover:bg-blue-100 font-semibold transition">What is AWS?</button>
+                <button onclick="toggleModal('terraformModal')" class="px-5 py-3 bg-blue-50 text-blue-900 border border-blue-200 rounded shadow-sm hover:bg-blue-100 font-semibold transition">What is Terraform?</button>
+                <button onclick="toggleModal('gitlabModal')" class="px-5 py-3 bg-blue-50 text-blue-900 border border-blue-200 rounded shadow-sm hover:bg-blue-100 font-semibold transition">What is GitLab?</button>
+            </div>
+        </section>
+
+        <section class="mb-12">
+            <h2 class="text-2xl md:text-3xl mb-6">2. Getting Ready on Windows</h2>
+            <p class="mb-4">Before we write our recipe, we need some tools on our Windows computer to read it. Think of this as buying your cooking utensils.</p>
+            <ol class="list-decimal pl-6 space-y-3">
+                <li><strong>Download Git for Windows:</strong> This gives you a program called "Git Bash." It's a black window where you can type commands. It speaks the same language as our cloud robots.</li>
+                <li><strong>Download Terraform:</strong> Go to the official website, download the Windows version, and put the <code>.exe</code> file in a special folder on your C: drive so your computer can find it.</li>
+                <li><strong>Download the AWS CLI:</strong> This is a Windows installer that lets your computer talk to AWS securely.</li>
+                <li><strong>Create Accounts:</strong> You will need a free account on <a href="https://aws.amazon.com/" target="_blank" class="text-blue-700 underline hover:text-blue-500">AWS</a> and <a href="https://gitlab.com/" target="_blank" class="text-blue-700 underline hover:text-blue-500">GitLab</a>.</li>
+            </ol>
+        </section>
+
+        <section class="mb-12">
+            <h2 class="text-2xl md:text-3xl mb-6">3. The Terraform Files (The Recipe)</h2>
+            <p class="mb-4">Create a new folder on your computer. Inside, we are going to make three plain text files. These files tell AWS exactly what kind of computer to build.</p>
+
+            <div class="bg-gray-50 border border-gray-200 p-6 rounded mb-6">
+                <h3 class="text-xl mb-2 text-blue-800 border-b pb-2">File 1: <code>main.tf</code> (The Main Instructions)</h3>
+                <p class="mb-3 text-sm">This file says: "I want to use AWS, and I want a small, free computer (EC2 instance)."</p>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm"><code>terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+resource "aws_instance" "my_cool_server" {
+  ami           = "ami-0c55b159cbfafe1f0" # A basic Linux starter pack
+  instance_type = "t2.micro"              # A tiny, free-tier computer
+
+  tags = {
+    Name = "MyMiddleSchoolProject"
+  }
+}</code></pre>
+            </div>
+
+            <div class="bg-gray-50 border border-gray-200 p-6 rounded mb-6">
+                <h3 class="text-xl mb-2 text-blue-800 border-b pb-2">File 2: <code>variables.tf</code> (The Changeable Parts)</h3>
+                <p class="mb-3 text-sm">This file holds things that might change, like which city (region) the computer should be built in.</p>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm"><code>variable "aws_region" {
+  description = "The AWS location to build our computer"
+  type        = string
+  default     = "us-east-1" # This means 'Virginia, USA'
+}</code></pre>
+            </div>
+
+            <div class="bg-gray-50 border border-gray-200 p-6 rounded">
+                <h3 class="text-xl mb-2 text-blue-800 border-b pb-2">File 3: <code>outputs.tf</code> (The Receipt)</h3>
+                <p class="mb-3 text-sm">When the robot finishes building, we want it to hand us the public IP address so we can connect to our new computer.</p>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm"><code>output "server_address" {
+  description = "The public IP of our new computer"
+  value       = aws_instance.my_cool_server.public_ip
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="mb-12">
+            <h2 class="text-2xl md:text-3xl mb-6">4. GitLab Setup & The Robot Helper (Pipeline)</h2>
+            <p class="mb-4">Now, we need to put our files into GitLab (our cloud folder) and give instructions to the GitLab Robot (the CI/CD Pipeline) to read our Terraform recipe and actually build the server.</p>
+            
+            <ol class="list-decimal pl-6 space-y-4 mb-6">
+                <li>Log into GitLab and click <strong>"New Project"</strong>. Create a blank project.</li>
+                <li>Upload your three <code>.tf</code> files to this project.</li>
+                <li>Create one more file in GitLab called exactly: <code>.gitlab-ci.yml</code>. This file is the instruction manual for the GitLab robot.</li>
+            </ol>
+
+            <div class="bg-blue-50 border border-blue-200 p-6 rounded">
+                <h3 class="text-xl mb-2 text-blue-800 border-b pb-2">The Pipeline File: <code>.gitlab-ci.yml</code></h3>
+                <p class="mb-3 text-sm">This tells the robot to do three things: <br>1. <strong>Validate:</strong> Check our spelling.<br>2. <strong>Plan:</strong> Do a practice run and show us what it <em>will</em> build.<br>3. <strong>Apply:</strong> Actually build it on AWS.</p>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm"><code>stages:
+  - validate
+  - plan
+  - apply
+
+image: hashicorp/terraform:latest
+
+before_script:
+  - terraform init # Wakes up Terraform and gets it ready
+
+validate_recipe:
+  stage: validate
+  script:
+    - terraform validate
+
+plan_changes:
+  stage: plan
+  script:
+    - terraform plan -out=myplan
+  artifacts:
+    paths:
+      - myplan # Saves the practice run so the apply stage can use it
+
+build_it_for_real:
+  stage: apply
+  script:
+    - terraform apply -auto-approve myplan
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" # Only build if we save to the main folder
+</code></pre>
+            </div>
+        </section>
+
+        <section class="mb-12">
+            <h2 class="text-2xl md:text-3xl mb-6 text-red-700">5. Security Best Practices (Very Important!)</h2>
+            <p class="mb-4 font-semibold">Never put your passwords or secret keys in your code files!</p>
+            <p class="mb-4">If you put your AWS keys inside <code>main.tf</code>, anyone on the internet could steal them and rent millions of dollars worth of computers on your credit card. Here is how to be safe:</p>
+            
+            <ul class="list-disc pl-6 space-y-4">
+                <li><strong>Use GitLab Variables:</strong> Go to your GitLab project -> <em>Settings</em> -> <em>CI/CD</em> -> <em>Variables</em>. Add your <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> here. Check the <strong>"Mask variable"</strong> box. This hides your keys so the robot can use them, but nobody can read them.</li>
+                <li><strong>Principle of Least Privilege:</strong> Don't give your robot the master key to your whole house. Create a specific AWS user that is <em>only</em> allowed to build EC2 computers, and nothing else.</li>
+                <li><strong>Protect the State File:</strong> Terraform creates a secret diary called a "state file" (<code>.tfstate</code>). Never upload this manually! GitLab has a built-in feature called "Managed Terraform State" that locks this file away safely in a digital vault.</li>
+            </ul>
+        </section>
+
+        <section class="border-t-2 border-gray-200 pt-8 mt-12">
+            <h2 class="text-xl md:text-2xl mb-4">Official References & Further Learning</h2>
+            <ul class="flex flex-col gap-2">
+                <li><a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" target="_blank" class="text-blue-700 underline hover:text-blue-500">Terraform: Getting Started with AWS</a></li>
+                <li><a href="https://docs.gitlab.com/ee/user/infrastructure/iac/" target="_blank" class="text-blue-700 underline hover:text-blue-500">GitLab: Infrastructure as Code (IaC) Guide</a></li>
+                <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html" target="_blank" class="text-blue-700 underline hover:text-blue-500">AWS: Security and Identity Best Practices</a></li>
+            </ul>
+        </section>
+    </main>
+
+    <div id="awsModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-60 z-50 items-center justify-center p-4">
+        <div class="bg-white p-8 max-w-lg rounded-lg shadow-2xl border-t-8 border-blue-700 relative">
+            <h3 class="text-2xl font-bold mb-4">Amazon Web Services (AWS)</h3>
+            <p class="mb-4">Imagine a massive, secure warehouse filled with thousands of super-fast computers. Instead of saving up to buy your own heavy computer to run a website, AWS lets you rent a tiny piece of one of their computers over the internet by the minute.</p>
+            <p class="mb-6 text-sm text-gray-600">Think of it like renting a booth at a giant digital science fair.</p>
+            <button onclick="toggleModal('awsModal')" class="w-full bg-blue-700 text-white px-4 py-3 rounded font-bold hover:bg-blue-800 transition">Got it!</button>
+        </div>
+    </div>
+
+    <div id="terraformModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-60 z-50 items-center justify-center p-4">
+        <div class="bg-white p-8 max-w-lg rounded-lg shadow-2xl border-t-8 border-purple-700 relative">
+            <h3 class="text-2xl font-bold mb-4 text-purple-900">Terraform</h3>
+            <p class="mb-4">Terraform is like a LEGO instruction manual for computers. It is a tool called "Infrastructure as Code" (IaC).</p>
+            <p class="mb-4">Instead of clicking buttons in AWS for an hour to set up a server, you write a text file saying "I want 1 computer with 2GB of memory." Terraform reads your text file and magically builds it for you.</p>
+            <button onclick="toggleModal('terraformModal')" class="w-full bg-purple-700 text-white px-4 py-3 rounded font-bold hover:bg-purple-800 transition">Got it!</button>
+        </div>
+    </div>
+
+    <div id="gitlabModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-60 z-50 items-center justify-center p-4">
+        <div class="bg-white p-8 max-w-lg rounded-lg shadow-2xl border-t-8 border-orange-600 relative">
+            <h3 class="text-2xl font-bold mb-4 text-orange-900">GitLab</h3>
+            <p class="mb-4">GitLab is two things in one:</p>
+            <ul class="list-disc pl-5 mb-4 space-y-2">
+                <li><strong>A Cloud Folder:</strong> A place to safely store your code (like Google Drive, but for programmers).</li>
+                <li><strong>An Assembly Line Robot (CI/CD):</strong> It watches your folder. Whenever you save a new Terraform recipe, the GitLab robot automatically grabs it, checks it for errors, and hands it to AWS to be built.</li>
+            </ul>
+            <button onclick="toggleModal('gitlabModal')" class="w-full bg-orange-600 text-white px-4 py-3 rounded font-bold hover:bg-orange-700 transition">Got it!</button>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,171 @@
+# GitLab × Jira Integration Guide
+
+> **Applies to:** GitLab 17.x / 18.x (Free, Premium, Ultimate) · Jira Cloud, Data Center & Server 6.x–10.x
+
+-----
+
+## Prerequisites
+
+Before you begin, make sure you have the following:
+
+|Requirement              |Jira Cloud                                                                  |Jira Data Center / Server                                      |
+|-------------------------|----------------------------------------------------------------------------|---------------------------------------------------------------|
+|GitLab role              |Maintainer or Owner                                                         |Maintainer or Owner                                            |
+|Jira credential          |API token + email                                                           |Username & password **or** Personal Access Token (GitLab 16.0+)|
+|GitLab URL               |Must **not** use a relative URL                                             |Must **not** use a relative URL                                |
+|IP allowlist (if enabled)|Add [GitLab.com IP range](https://docs.gitlab.com/user/gitlab_com/#ip-range)|Add your GitLab instance IP                                    |
+
+-----
+
+## Part 1 — Generate a Jira API Token (Jira Cloud only)
+
+> Skip to **Part 2** if you are using Jira Data Center or Jira Server.
+
+1. Sign in to [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens) with an account that has **write access** to your Jira projects.
+1. Select **Create API token**.
+1. Give the token a descriptive label (e.g., `GitLab Integration`).
+1. Select **Create**, then **Copy** the token immediately — it will not be shown again.
+1. Note the **email address** associated with this Atlassian account — you will need both.
+
+-----
+
+## Part 2 — Configure the Integration in GitLab
+
+### Step 1 — Open Project Integrations
+
+1. In GitLab, use the top bar to **Search or go to** and open your project.
+1. In the left sidebar, select **Settings → Integrations**.
+1. Scroll down and select **Jira issues**.
+
+### Step 2 — Enable the Integration
+
+1. Under **Enable integration**, tick the **Active** checkbox.
+
+### Step 3 — Enter Connection Details
+
+1. Fill in the connection fields:
+   
+   |Field           |Jira Cloud                       |Jira Data Center / Server                          |
+   |----------------|---------------------------------|---------------------------------------------------|
+   |**Web URL**     |`https://yoursite.atlassian.net` |`https://jira.yourcompany.com`                     |
+   |**Jira API URL**|*(leave blank — Web URL is used)*|`https://jira-api.yourcompany.com` *(if different)*|
+1. Choose your **Authentication method**:
+   
+   **Option A — Basic (Jira Cloud)**
+- **Email or username:** enter the email used to create the API token
+- **API token or password:** paste the API token from Part 1
+   
+   **Option B — Basic (Jira Data Center / Server)**
+- **Email or username:** enter your Jira username
+- **API token or password:** enter your Jira password
+   
+   **Option C — Personal Access Token (Jira Data Center / Server, GitLab 16.0+)**
+- Select **Jira personal access token** and paste your PAT
+
+### Step 4 — Configure Triggers
+
+1. Under trigger settings, choose when GitLab should link to Jira issues:
+- ✅ **Commit** — links are created when a commit message references a Jira issue ID
+- ✅ **Merge request** — links are created when an MR title or description references a Jira issue ID
+- ✅ **Enable comments** — GitLab posts a comment back to the Jira issue with a link to the commit/MR
+- ✅ **Enable Jira transitions** — automatically transitions a Jira issue (e.g., to *Done*) when a GitLab MR is merged
+
+### Step 5 — (Optional) Configure Issue Matching
+
+1. In the **Jira issue matching** section:
+- **Jira issue regex** — enter a custom regex if your issue IDs follow a non-standard format
+- **Jira issue prefix** — add a prefix to match (e.g., `PROJ-`)
+
+### Step 6 — (Optional) View Jira Issues in GitLab
+
+> Requires **Premium or Ultimate** tier.
+
+1. In the **Jira issues** section, tick **View Jira issues**.
+
+> ⚠️ **Warning:** All users with access to your GitLab project will be able to see Jira issues accessible by the API token. To limit exposure, use a Jira account scoped to only the projects you want to expose.
+1. Enter one or more **Jira project keys** (e.g., `PROJ`, `BACKEND`). Leave blank to show all projects the token can access.
+
+### Step 7 — (Optional) Create Jira Issues from GitLab Vulnerabilities
+
+> Available at project and group level only.
+
+1. In the **Jira issues for vulnerabilities** section, tick **Create Jira issues for vulnerabilities**.
+1. Enter a **Jira project key** for where vulnerability issues should be created.
+1. Select **Fetch issue types**, then choose the Jira issue type to use (e.g., *Bug*, *Task*).
+1. Optionally tick **Customize Jira issues** to review/edit details before an issue is created.
+
+### Step 8 — Test & Save
+
+1. Select **Test settings** to verify the connection.
+1. Select **Save changes**.
+
+-----
+
+## Part 3 — Verify the Integration
+
+Once saved, your GitLab project will show a **Jira** link in the left sidebar. To confirm everything is working:
+
+1. Create a commit or merge request with a Jira issue ID in the message (e.g., `fix: resolve login bug PROJ-42`).
+1. Open the corresponding Jira issue — it should now display a **Development** panel showing the GitLab commit or MR.
+1. If you enabled **View Jira issues**, navigate to **Plan → Jira issues** in your GitLab project to browse issues.
+
+-----
+
+## Part 4 — (Optional) Jira Verification Rules
+
+> Available in **GitLab 18.3+** — requires **View Jira issues** to be enabled.
+
+Jira verification lets you enforce rules on push. If a commit references a Jira issue that fails verification, the push is rejected.
+
+1. Go to **Settings → Integrations → Jira issues → Jira verification**.
+1. Enable any combination of checks:
+   
+   |Check                 |What it enforces                                    |
+   |----------------------|----------------------------------------------------|
+   |**Check issue exists**|The referenced Jira issue must exist                |
+   |**Check assignee**    |The committer must be the assignee of the Jira issue|
+   |**Check issue status**|The issue must have one of a set of allowed statuses|
+1. For **Check issue status**, enter a comma-separated list of allowed statuses (e.g., `Ready, In Progress, Review`).
+1. Select **Save changes**.
+
+> **Note:** If a commit references multiple Jira issue keys, only the **first** key is checked.
+
+-----
+
+## Part 5 — Using Smart Commits
+
+Once the integration is active, reference Jira issues directly in GitLab commit messages using [Jira Smart Commits](https://support.atlassian.com/jira-software-cloud/docs/process-issues-with-smart-commits/):
+
+```
+git commit -m "PROJ-42 #comment Fixed the login redirect issue"
+git commit -m "PROJ-42 #time 2h #comment Added unit tests"
+git commit -m "PROJ-42 #done Merged feature branch"
+```
+
+|Syntax                   |Effect in Jira                                 |
+|-------------------------|-----------------------------------------------|
+|`PROJ-42`                |Creates a development link in the Jira issue   |
+|`PROJ-42 #comment <text>`|Adds a comment to the Jira issue               |
+|`PROJ-42 #time <Xh Ym>`  |Logs time against the issue                    |
+|`PROJ-42 #<transition>`  |Moves the issue to a new status (e.g., `#done`)|
+
+-----
+
+## Troubleshooting
+
+|Symptom                        |Likely Cause                            |Fix                                                                 |
+|-------------------------------|----------------------------------------|--------------------------------------------------------------------|
+|`401 Unauthorized` on test     |Wrong credentials or CAPTCHA triggered  |Re-enter credentials; sign in to Jira manually to clear CAPTCHA     |
+|Jira issue list doesn’t load   |Project key contains a reserved JQL word|Rename your Jira project key                                        |
+|Issues not appearing           |IP allowlist blocks GitLab              |Add GitLab.com IP range to Jira’s IP allowlist                      |
+|Transitions not firing         |Transition ID mismatch                  |Check the Jira workflow transition IDs and update the GitLab setting|
+|Integration broken after import|Known GitLab issue for imported projects|Disable, then re-enable the integration                             |
+
+-----
+
+## References
+
+- [GitLab Docs — Jira Issues Integration](https://docs.gitlab.com/integration/jira/configure/)
+- [GitLab Docs — GitLab for Jira Cloud App](https://docs.gitlab.com/integration/jira/connect-app/)
+- [Atlassian — Integrate GitLab with Jira](https://support.atlassian.com/jira-cloud-administration/docs/integrate-gitlab-with-jira/)
+- [Atlassian Marketplace — GitLab for Jira Cloud](https://marketplace.atlassian.com/apps/1221011/gitlab-com-for-jira-cloud)

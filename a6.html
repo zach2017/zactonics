@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS + GitLab + Terraform Deployment Guide • Professional Beginner Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap');
+        
+        :root {
+            --base-font-size: 16px;
+        }
+        
+        body {
+            font-family: 'Inter', system_ui, -apple-system, sans-serif;
+            font-size: var(--base-font-size);
+            line-height: 1.7;
+        }
+        
+        .ibm-heading {
+            font-family: 'IBM Plex Sans', 'Inter', system_ui, sans-serif;
+            font-weight: 600;
+            color: #001D6C;
+        }
+        
+        .section-header {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #001D6C;
+            border-bottom: 3px solid #0F62FE;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, #0F62FE, #001D6C);
+            color: white;
+            width: 2.25rem;
+            height: 2.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        
+        .code-block {
+            background-color: #0F172A;
+            color: #E2E8F0;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            border: 1px solid #334155;
+        }
+        
+        .prose-custom {
+            max-width: 100%;
+        }
+        
+        .prose-custom p {
+            margin-bottom: 1rem;
+        }
+        
+        .info-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .info-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+        }
+        
+        .nav-link {
+            transition: all 0.1s ease;
+        }
+        
+        .nav-link:hover {
+            color: #0F62FE;
+            transform: translateX(2px);
+        }
+        
+        .modal {
+            animation: modalPopIn 0.2s ease-out forwards;
+        }
+        
+        @keyframes modalPopIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .resource-link {
+            color: #0F62FE;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        
+        .resource-link:hover {
+            color: #001D6C;
+        }
+        
+        .file-tab {
+            background: #F8FAFC;
+            border-bottom: 3px solid #0F62FE;
+        }
+        
+        .best-practice {
+            background: linear-gradient(to right, #F0F9FF, white);
+            border-left: 4px solid #0F62FE;
+        }
+        
+        .warning-box {
+            background: #FEF3C7;
+            border-left: 4px solid #D97706;
+        }
+        
+        .success-box {
+            background: #ECFDF5;
+            border-left: 4px solid #059669;
+        }
+        
+        .ibm-blue {
+            color: #0F62FE;
+        }
+        
+        .nav-active {
+            color: #0F62FE;
+            font-weight: 600;
+            border-bottom: 2px solid #0F62FE;
+        }
+        
+        .guide-container {
+            font-size: var(--base-font-size);
+        }
+        
+        .simple-explanation {
+            background: #F8FAFC;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            border: 1px solid #E2E8F0;
+        }
+        
+        pre code {
+            font-size: 0.875rem;
+        }
+        
+        .toc-link {
+            transition: all 0.1s ease;
+        }
+        
+        .toc-link:hover {
+            color: #0F62FE;
+            padding-left: 0.5rem;
+        }
+        
+        .metric {
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-white text-[#161616] antialiased">
+    <!-- Top Navigation -->
+    <nav class="bg-white border-b border-zinc-200 sticky top-0 z-50">
+        <div class="max-w-screen-2xl mx-auto">
+            <div class="px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-x-4">
+                    <div class="flex items-center gap-x-3">
+                        <div class="w-10 h-10 bg-[#0F62FE] rounded-xl flex items-center justify-center">
+                            <i class="fa-solid fa-cloud text-white text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="font-bold text-2xl tracking-tight text-[#001D6C]">Zactonics</span>
+                            <span class="font-semibold text-xl text-[#0F62FE]">Guide</span>
+                        </div>
+                    </div>
+                    <div class="hidden md:block">
+                        <span class="px-3 py-1 text-xs font-medium bg-[#F0F9FF] text-[#0F62FE] rounded-full border border-[#0F62FE]/20">Windows • Beginner Friendly</span>
+                    </div>
+                </div>
+                
+                <!-- Font Size Controls -->
+                <div class="flex items-center gap-x-3 bg-zinc-100 rounded-2xl p-1.5">
+                    <div class="flex items-center gap-x-1 text-sm font-medium text-zinc-600 px-2">
+                        <i class="fa-solid fa-text-height mr-1.5"></i>
+                        <span class="hidden sm:inline">Text Size</span>
+                    </div>
+                    <button onclick="adjustFontSize(-2)" 
+                            class="w-9 h-9 flex items-center justify-center hover:bg-white rounded-xl transition-colors text-[#001D6C] hover:text-[#0F62FE]">
+                        <i class="fa-solid fa-minus text-lg"></i>
+                    </button>
+                    <div class="px-3 py-1 bg-white rounded-xl text-sm font-mono font-semibold text-[#001D6C] min-w-[3.5rem] text-center shadow-sm" id="font-size-value">
+                        16px
+                    </div>
+                    <button onclick="adjustFontSize(2)" 
+                            class="w-9 h-9 flex items-center justify-center hover:bg-white rounded-xl transition-colors text-[#001D6C] hover:text-[#0F62FE]">
+                        <i class="fa-solid fa-plus text-lg"></i>
+                    </button>
+                    <button onclick="resetFontSize()" 
+                            class="px-3 py-1 text-xs font-medium hover:bg-white rounded-xl transition-colors text-zinc-500 hover:text-zinc-700">
+                        Reset
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-x-2">
+                    <button onclick="window.print()" 
+                            class="hidden md:flex items-center gap-x-2 px-4 py-2 text-sm font-medium text-[#001D6C] hover:bg-zinc-100 rounded-2xl transition-colors">
+                        <i class="fa-solid fa-print mr-2"></i>
+                        <span>Print / PDF</span>
+                    </button>
+                    <a href="#quick-start" 
+                       class="px-5 py-2.5 bg-[#0F62FE] hover:bg-[#001D6C] transition-all text-white text-sm font-semibold rounded-2xl flex items-center gap-x-2 shadow-sm">
+                        <i class="fa-solid fa-rocket"></i>
+                        <span class="hidden sm:inline">Jump to Quick Start</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero / Header -->
+    <div class="max-w-screen-2xl mx-auto px-6 pt-10 pb-8">
+        <div class="max-w-4xl">
+            <div class="flex items-center gap-x-3 mb-4">
+                <div class="px-4 py-1.5 bg-[#F0F9FF] text-[#0F62FE] text-xs font-bold tracking-[1px] rounded-full border border-[#0F62FE]/30 flex items-center gap-x-2">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                    <span>MIDDLE SCHOOL LEVEL • STEP-BY-STEP</span>
+                </div>
+                <div class="px-4 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-bold tracking-[1px] rounded-full flex items-center gap-x-2">
+                    <i class="fa-solid fa-check-double"></i>
+                    <span>INCLUDES SECURITY BEST PRACTICES</span>
+                </div>
+            </div>
+            
+            <h1 class="text-5xl md:text-6xl font-bold tracking-tighter text-[#001D6C] leading-[1.05]">
+                Learn to Deploy to AWS<br>Using Terraform + GitLab CI/CD
+            </h1>
+            <p class="mt-6 text-2xl text-zinc-600 max-w-3xl leading-tight">
+                A complete, friendly, professional guide written for Windows users. 
+                We explain everything like you're 12 years old — but with real professional tools and security.
+            </p>
+            
+            <div class="mt-8 flex flex-wrap items-center gap-4">
+                <div class="flex items-center -space-x-2">
+                    <div class="w-8 h-8 bg-zinc-200 rounded-full ring-2 ring-white overflow-hidden"><img src="https://i.pravatar.cc/32?img=47" class="w-full h-full object-cover"></div>
+                    <div class="w-8 h-8 bg-zinc-200 rounded-full ring-2 ring-white overflow-hidden"><img src="https://i.pravatar.cc/32?img=28" class="w-full h-full object-cover"></div>
+                    <div class="w-8 h-8 bg-zinc-200 rounded-full ring-2 ring-white overflow-hidden"><img src="https://i.pravatar.cc/32?img=12" class="w-full h-full object-cover"></div>
+                </div>
+                <p class="text-sm text-zinc-500">Used by hundreds of developers learning Infrastructure as Code</p>
+            </div>
+            
+            <div class="mt-6 flex items-center gap-x-6 text-sm">
+                <div class="flex items-center gap-x-2 text-emerald-600">
+                    <i class="fa-solid fa-check-circle"></i>
+                    <span class="font-medium">100% Free tools (GitLab free tier + AWS free tier)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats / What You'll Build -->
+    <div class="max-w-screen-2xl mx-auto px-6 pb-10">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="metric p-5">
+                <div class="flex items-center gap-x-3">
+                    <i class="fa-solid fa-cube text-3xl text-[#0F62FE]"></i>
+                    <div>
+                        <div class="font-semibold text-lg">What You Will Deploy</div>
+                        <div class="text-sm text-zinc-600">A secure, encrypted, versioned S3 bucket on AWS with professional security settings</div>
+                    </div>
+                </div>
+            </div>
+            <div class="metric p-5">
+                <div class="flex items-center gap-x-3">
+                    <i class="fa-solid fa-robot text-3xl text-[#0F62FE]"></i>
+                    <div>
+                        <div class="font-semibold text-lg">The Magic Robot</div>
+                        <div class="text-sm text-zinc-600">GitLab CI/CD pipeline that automatically plans and deploys your changes safely</div>
+                    </div>
+                </div>
+            </div>
+            <div class="metric p-5">
+                <div class="flex items-center gap-x-3">
+                    <i class="fa-solid fa-shield-halved text-3xl text-[#0F62FE]"></i>
+                    <div>
+                        <div class="font-semibold text-lg">Security First</div>
+                        <div class="text-sm text-zinc-600">IAM least privilege, remote state locking, encrypted everything, no secrets in code</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table of Contents -->
+    <div class="max-w-screen-2xl mx-auto px-6 pb-8">
+        <div class="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-xl text-[#001D6C]">Table of Contents</h2>
+                <span class="text-xs px-3 py-1 bg-zinc-100 rounded-full text-zinc-500">Click any section to jump</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+                <a href="#prerequisites" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">01</span> Prerequisites (Windows Setup)</a>
+                <a href="#understanding-tools" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">02</span> Understanding the Tools (Simple)</a>
+                <a href="#gitlab-repo" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">03</span> Create Your GitLab Repository</a>
+                <a href="#aws-foundation" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">04</span> AWS Security Foundation (IAM + State)</a>
+                <a href="#terraform-files" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">05</span> All Terraform Files Explained</a>
+                <a href="#pipeline" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">06</span> GitLab CI/CD Pipeline (.gitlab-ci.yml)</a>
+                <a href="#running" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">07</span> Run Everything &amp; Verify</a>
+                <a href="#security" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">08</span> Security Best Practices Checklist</a>
+                <a href="#troubleshooting" class="toc-link flex items-center gap-x-2 py-1 text-[#161616] hover:text-[#0F62FE]"><span class="font-mono text-[#0F62FE] w-5">09</span> Troubleshooting &amp; Cleanup</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="guide-content" class="max-w-screen-2xl mx-auto px-6 pb-16 guide-container">
+        
+        <!-- SECTION 1: PREREQUISITES -->
+        <section id="prerequisites" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">1</div>
+                <h2 class="section-header flex-1 mb-0">Prerequisites — Get Your Windows Computer Ready</h2>
+            </div>
+            
+            <div class="prose-custom max-w-none">
+                <p class="text-xl text-zinc-600">Before we write any code, we need to install four free tools on your Windows computer. Think of them as the basic kitchen tools you need before cooking a recipe.</p>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <!-- Git -->
+                    <div class="info-card border border-zinc-200 rounded-3xl p-6">
+                        <div class="flex items-start gap-x-4">
+                            <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-brands fa-git-alt text-3xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-xl">1. Git for Windows</h3>
+                                <p class="text-sm text-zinc-600 mt-1">This lets you talk to GitLab (like saving your school project to Google Drive but for code).</p>
+                                
+                                <div class="mt-4">
+                                    <a href="https://git-scm.com/download/win" target="_blank" class="inline-flex items-center text-sm font-medium text-[#0F62FE]">
+                                        Download Git for Windows <i class="fa-solid fa-external-link-alt ml-1.5 text-xs"></i>
+                                    </a>
+                                </div>
+                                <div class="mt-3 text-xs bg-white border border-zinc-100 p-3 rounded-2xl">
+                                    <strong>Install tip:</strong> During installation, choose <span class="font-mono">"Git from the command line and also from 3rd-party software"</span> and accept all default options.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Terraform -->
+                    <div class="info-card border border-zinc-200 rounded-3xl p-6">
+                        <div class="flex items-start gap-x-4">
+                            <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-cube text-3xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-xl">2. Terraform (by HashiCorp)</h3>
+                                <p class="text-sm text-zinc-600 mt-1">The magic tool that reads your .tf files and builds things in AWS automatically.</p>
+                                
+                                <div class="mt-4">
+                                    <a href="https://developer.hashicorp.com/terraform/downloads" target="_blank" class="inline-flex items-center text-sm font-medium text-[#0F62FE]">
+                                        Download Terraform <i class="fa-solid fa-external-link-alt ml-1.5 text-xs"></i>
+                                    </a>
+                                </div>
+                                <div class="mt-3 text-xs bg-white border border-zinc-100 p-3 rounded-2xl">
+                                    <strong>Windows install:</strong> Download the 64-bit zip. Extract to <span class="font-mono">C:\terraform</span>. Then add that folder to your PATH (search "Environment Variables" in Windows Start menu → Edit the system environment variables → Environment Variables → Path → New → type <span class="font-mono">C:\terraform</span>).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- AWS CLI -->
+                    <div class="info-card border border-zinc-200 rounded-3xl p-6">
+                        <div class="flex items-start gap-x-4">
+                            <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-brands fa-aws text-3xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-xl">3. AWS Command Line Interface (CLI) v2</h3>
+                                <p class="text-sm text-zinc-600 mt-1">Helps you talk to AWS from your computer (we mostly use it once to set up security).</p>
+                                
+                                <div class="mt-4">
+                                    <a href="https://aws.amazon.com/cli/" target="_blank" class="inline-flex items-center text-sm font-medium text-[#0F62FE]">
+                                        Download AWS CLI v2 for Windows <i class="fa-solid fa-external-link-alt ml-1.5 text-xs"></i>
+                                    </a>
+                                </div>
+                                <div class="mt-3 text-xs bg-white border border-zinc-100 p-3 rounded-2xl">
+                                    Just run the installer. After installing, open Command Prompt or Git Bash and type <span class="font-mono">aws --version</span> to check it worked.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Editor -->
+                    <div class="info-card border border-zinc-200 rounded-3xl p-6">
+                        <div class="flex items-start gap-x-4">
+                            <div class="w-12 h-12 bg-sky-100 text-sky-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-file-code text-3xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-xl">4. Visual Studio Code (Recommended)</h3>
+                                <p class="text-sm text-zinc-600 mt-1">A free code editor that makes writing Terraform and YAML files easy with colors and helpful tips.</p>
+                                
+                                <div class="mt-4">
+                                    <a href="https://code.visualstudio.com/" target="_blank" class="inline-flex items-center text-sm font-medium text-[#0F62FE]">
+                                        Download VS Code <i class="fa-solid fa-external-link-alt ml-1.5 text-xs"></i>
+                                    </a>
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <span class="text-[10px] px-2.5 py-1 bg-white border border-zinc-200 rounded-full">Install these extensions:</span>
+                                    <span class="text-[10px] px-2.5 py-1 bg-white border border-zinc-200 rounded-full">HashiCorp Terraform</span>
+                                    <span class="text-[10px] px-2.5 py-1 bg-white border border-zinc-200 rounded-full">GitLab Workflow</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-8 p-5 bg-[#F0F9FF] border border-[#0F62FE]/20 rounded-3xl">
+                    <div class="flex gap-x-3">
+                        <i class="fa-solid fa-lightbulb text-[#0F62FE] mt-1"></i>
+                        <div class="text-sm">
+                            <strong class="font-semibold">Pro tip for Windows users:</strong> After installing everything, open <strong>Git Bash</strong> (installed with Git) and type these commands one by one to check everything works:
+                            <div class="mt-3 font-mono text-xs bg-white/70 p-3 rounded-2xl border border-[#0F62FE]/10">
+                                git --version<br>
+                                terraform --version<br>
+                                aws --version
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 2: UNDERSTANDING THE TOOLS -->
+        <section id="understanding-tools" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">2</div>
+                <h2 class="section-header flex-1 mb-0">Understanding the Tools — Simple Explanations</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Terraform Card -->
+                <div class="border border-zinc-200 rounded-3xl p-6 info-card h-full">
+                    <div class="uppercase text-xs tracking-widest font-bold text-[#0F62FE] mb-3">THE RECIPE WRITER</div>
+                    <h3 class="text-2xl font-semibold text-[#001D6C]">Terraform</h3>
+                    <p class="mt-3 text-sm">Terraform is a tool that lets you describe what your cloud should look like using simple code files (ending in .tf). Instead of clicking around the AWS website, you write "I want an S3 bucket called my-app-bucket with encryption turned on" and Terraform builds it for you — every single time, exactly the same way.</p>
+                    
+                    <button onclick="showInfoModal('What is Infrastructure as Code (IaC)?', 
+                        'Infrastructure as Code means you write code to manage your servers, storage, and networks instead of using mouse clicks. Benefits: <br><br>• <strong>Consistency</strong> — everyone gets the exact same setup<br>• <strong>Speed</strong> — create 50 servers in 2 minutes<br>• <strong>Safety</strong> — you can test changes before applying<br>• <strong>Version control</strong> — see who changed what and when<br><br>This is the professional way companies like Netflix, Airbnb, and banks manage millions of dollars of cloud resources.', 
+                        'https://developer.hashicorp.com/terraform/intro')" 
+                            class="mt-5 text-xs flex items-center gap-x-2 text-[#0F62FE] hover:text-[#001D6C]">
+                        <span>Learn more about Infrastructure as Code</span> <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+                
+                <!-- AWS Card -->
+                <div class="border border-zinc-200 rounded-3xl p-6 info-card h-full">
+                    <div class="uppercase text-xs tracking-widest font-bold text-[#0F62FE] mb-3">THE CLOUD KITCHEN</div>
+                    <h3 class="text-2xl font-semibold text-[#001D6C]">Amazon Web Services (AWS)</h3>
+                    <p class="mt-3 text-sm">AWS is the biggest "cloud" company in the world. Instead of buying and maintaining your own computers (servers), you rent them from Amazon by the hour or minute. They have hundreds of services. In this guide we will mainly use <strong>S3</strong> (simple storage) — think of it like a super-secure, super-reliable Google Drive that you control completely with code.</p>
+                    
+                    <button onclick="showInfoModal('Why start with S3?', 
+                        'S3 is perfect for learning because:<br><br>• It is cheap (often free in the beginning)<br>• It is safe — we will turn on encryption and block public access<br>• It teaches you real security patterns used by every serious company<br>• You can use it later to store website files, backups, or data<br><br>Once you understand Terraform + S3, adding EC2 servers, databases, or Lambda functions becomes much easier.', 
+                        'https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html')" 
+                            class="mt-5 text-xs flex items-center gap-x-2 text-[#0F62FE] hover:text-[#001D6C]">
+                        <span>Why we chose S3 for this guide</span> <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+                
+                <!-- GitLab Card -->
+                <div class="border border-zinc-200 rounded-3xl p-6 info-card h-full">
+                    <div class="uppercase text-xs tracking-widest font-bold text-[#0F62FE] mb-3">THE ROBOT FACTORY</div>
+                    <h3 class="text-2xl font-semibold text-[#001D6C]">GitLab CI/CD</h3>
+                    <p class="mt-3 text-sm">GitLab is a website where you store your code (like GitHub). The "CI/CD" part means Continuous Integration / Continuous Deployment. It has built-in robots (called runners) that watch your code. When you save new code, the robots automatically run tests and deploy your changes to AWS. No more "it works on my computer" problems.</p>
+                    
+                    <button onclick="showInfoModal('How GitLab CI/CD + Terraform work together', 
+                        'Here is the simple flow:<br><br>1. You write Terraform code on your Windows laptop<br>2. You push (save) the code to GitLab<br>3. GitLab sees the new code and starts its robot<br>4. The robot downloads Terraform and your code<br>5. The robot logs into AWS using secret keys you gave it (safely stored in GitLab)<br>6. The robot runs <strong>terraform plan</strong> (shows what will change)<br>7. If you approve, it runs <strong>terraform apply</strong> and builds your S3 bucket in AWS<br><br>This is how real professional teams work every single day.', 
+                        'https://docs.gitlab.com/ee/ci/')" 
+                            class="mt-5 text-xs flex items-center gap-x-2 text-[#0F62FE] hover:text-[#001D6C]">
+                        <span>See the full pipeline flow</span> <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 3: GITLAB REPO SETUP -->
+        <section id="gitlab-repo" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">3</div>
+                <h2 class="section-header flex-1 mb-0">Step-by-Step: Create Your GitLab Repository</h2>
+            </div>
+            
+            <div class="prose-custom">
+                <p>We will create a brand new GitLab project that will hold all our Terraform code and the pipeline instructions.</p>
+                
+                <div class="mt-6 space-y-8">
+                    <div>
+                        <h4 class="font-semibold flex items-center gap-x-2"><span class="text-[#0F62FE]">Step 3.1</span> — Create a GitLab Account &amp; New Project</h4>
+                        <ol class="list-decimal ml-6 mt-3 space-y-2 text-sm">
+                            <li>Go to <a href="https://gitlab.com" target="_blank" class="resource-link">https://gitlab.com</a> and create a free account (or sign in).</li>
+                            <li>Click the big green <strong>+ New project</strong> button.</li>
+                            <li>Choose <strong>Create blank project</strong>.</li>
+                            <li>Project name: <span class="font-mono bg-zinc-100 px-2 py-px rounded">aws-terraform-gitlab-demo</span></li>
+                            <li>Visibility Level: Choose <strong>Private</strong> (recommended for learning).</li>
+                            <li><strong>Uncheck</strong> "Initialize repository with a README" (we will add our own files).</li>
+                            <li>Click <strong>Create project</strong>.</li>
+                        </ol>
+                    </div>
+                    
+                    <div>
+                        <h4 class="font-semibold flex items-center gap-x-2"><span class="text-[#0F62FE]">Step 3.2</span> — Clone the Project to Your Windows Computer</h4>
+                        <div class="simple-explanation mt-3">
+                            <p class="text-sm">Open <strong>Git Bash</strong> (search for it in Windows Start menu). Navigate to a folder where you want to keep your projects (example: <span class="font-mono">cd C:/Users/YourName/Documents/Projects</span>).</p>
+                            
+                            <div class="mt-4">
+                                <div class="text-xs uppercase tracking-widest font-bold mb-1.5 text-zinc-500">Run this command (replace YOUR-USERNAME with your actual GitLab username):</div>
+                                <div class="code-block text-emerald-400">git clone https://gitlab.com/YOUR-USERNAME/aws-terraform-gitlab-demo.git</div>
+                            </div>
+                            
+                            <p class="text-xs mt-3 text-zinc-500">Then type: <span class="font-mono">cd aws-terraform-gitlab-demo</span> to enter the folder.</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4 class="font-semibold flex items-center gap-x-2"><span class="text-[#0F62FE]">Step 3.3</span> — Create the Folder Structure</h4>
+                        <p class="text-sm">Inside your new folder, we will create several files. You can create them using VS Code (recommended) or even Notepad, then save with the correct names.</p>
+                        
+                        <div class="mt-4 p-5 bg-zinc-900 text-white rounded-3xl font-mono text-xs">
+                            aws-terraform-gitlab-demo/<br>
+                            ├── <span class="text-emerald-400">.gitignore</span><br>
+                            ├── <span class="text-emerald-400">README.md</span><br>
+                            ├── <span class="text-emerald-400">versions.tf</span><br>
+                            ├── <span class="text-emerald-400">backend.tf</span><br>
+                            ├── <span class="text-emerald-400">main.tf</span><br>
+                            ├── <span class="text-emerald-400">variables.tf</span><br>
+                            ├── <span class="text-emerald-400">outputs.tf</span><br>
+                            ├── <span class="text-emerald-400">terraform.tfvars.example</span><br>
+                            └── <span class="text-emerald-400">.gitlab-ci.yml</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 4: AWS FOUNDATION -->
+        <section id="aws-foundation" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">4</div>
+                <h2 class="section-header flex-1 mb-0">AWS Security Foundation — IAM User + Terraform State Bucket</h2>
+            </div>
+            
+            <div class="warning-box p-5 rounded-3xl mb-8">
+                <div class="flex gap-x-3">
+                    <i class="fa-solid fa-exclamation-triangle text-amber-600 mt-1"></i>
+                    <div class="text-sm">
+                        <strong class="font-semibold">Important security note:</strong> We will create a special "robot user" in AWS just for GitLab. This user will only have permission to create and manage our demo S3 bucket and the state files. Never use your main AWS account root login for automation.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="space-y-10">
+                <!-- IAM User -->
+                <div>
+                    <h3 class="font-semibold text-xl mb-4 flex items-center gap-x-3"><span class="text-[#0F62FE]">4.1</span> Create a Dedicated IAM User for GitLab</h3>
+                    
+                    <ol class="space-y-4 text-sm ml-1">
+                        <li class="flex gap-x-3"><span class="font-mono w-6 text-[#0F62FE]">1.</span> Log into AWS Console → <a href="https://console.aws.amazon.com/iam/" target="_blank" class="resource-link">IAM</a></li>
+                        <li class="flex gap-x-3"><span class="font-mono w-6 text-[#0F62FE]">2.</span> Click <strong>Users</strong> in left menu → <strong>Create user</strong></li>
+                        <li class="flex gap-x-3"><span class="font-mono w-6 text-[#0F62FE]">3.</span> User name: <span class="font-mono bg-zinc-100 px-2">gitlab-terraform-ci</span></li>
+                        <li class="flex gap-x-3"><span class="font-mono w-6 text-[#0F62FE]">4.</span> Select <strong>Access key - Programmatic access</strong> only</li>
+                        <li class="flex gap-x-3"><span class="font-mono w-6 text-[#0F62FE]">5.</span> Permissions: Click <strong>Attach policies directly</strong>. For learning, attach <strong>AmazonS3FullAccess</strong> and <strong>AmazonDynamoDBFullAccess</strong>. (Later we will make a stricter custom policy)</li>
+                        <li class="flex gap-x-3"><span class="font-mono w-6 text-[#0F62FE]">6.</span> Click through to create the user. <strong>Download the CSV</strong> with Access key ID and Secret access key. Keep this file safe and never share it.</li>
+                    </ol>
+                    
+                    <button onclick="showInfoModal('Why create a separate IAM user?', 
+                        'Security best practice called <strong>least privilege</strong>. If someone steals the keys from GitLab (very unlikely if you mask them), they can only mess with S3 and DynamoDB — not your EC2 instances, databases, or billing. In real companies, every automation tool gets its own limited user.', 
+                        'https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#use-iam-users')" 
+                            class="mt-4 text-xs flex items-center gap-x-2 text-[#0F62FE]">
+                        <span>Learn about least privilege principle</span> <i class="fa-solid fa-arrow-right text-xs ml-1"></i>
+                    </button>
+                </div>
+                
+                <!-- State Bucket -->
+                <div>
+                    <h3 class="font-semibold text-xl mb-4 flex items-center gap-x-3"><span class="text-[#0F62FE]">4.2</span> Create Your Terraform State S3 Bucket + DynamoDB Lock Table (One Time)</h3>
+                    
+                    <div class="simple-explanation">
+                        <p class="text-sm"><strong>Why do we need this?</strong> Terraform needs to remember what it has already created in AWS. It stores this information in a file called <span class="font-mono">terraform.tfstate</span>. If two people (or two pipelines) try to change things at the same time, they can break everything. So we store the state file safely in S3 with locking in DynamoDB.</p>
+                    </div>
+                    
+                    <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <h5 class="font-medium mb-2 text-sm">Create the State S3 Bucket (via Console)</h5>
+                            <ol class="text-xs space-y-1.5 ml-4 list-decimal">
+                                <li>Go to S3 in AWS Console</li>
+                                <li>Click <strong>Create bucket</strong></li>
+                                <li>Bucket name: <span class="font-mono text-emerald-600">yourname-terraform-state-2026</span> (must be globally unique!)</li>
+                                <li>Region: Choose <strong>us-east-1</strong> (or your preferred region)</li>
+                                <li>Block Public Access: Leave all checked (default)</li>
+                                <li>Enable <strong>Bucket Versioning</strong></li>
+                                <li>Enable Default encryption (AES-256)</li>
+                                <li>Create bucket</li>
+                            </ol>
+                        </div>
+                        
+                        <div>
+                            <h5 class="font-medium mb-2 text-sm">Create the DynamoDB Lock Table</h5>
+                            <ol class="text-xs space-y-1.5 ml-4 list-decimal">
+                                <li>Go to DynamoDB → <strong>Create table</strong></li>
+                                <li>Table name: <span class="font-mono text-emerald-600">terraform-state-locks</span></li>
+                                <li>Partition key: <span class="font-mono">LockID</span> (String)</li>
+                                <li>Capacity mode: <strong>On-demand</strong> (cheap for learning)</li>
+                                <li>Leave everything else default</li>
+                                <li>Create table</li>
+                            </ol>
+                            <p class="text-[10px] text-zinc-500 mt-2 ml-4">This table prevents two pipelines from deploying at the exact same moment.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 5: TERRAFORM FILES -->
+        <section id="terraform-files" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">5</div>
+                <h2 class="section-header flex-1 mb-0">All Terraform Files — Complete Code + Explanations</h2>
+            </div>
+            
+            <p class="text-lg text-zinc-600 mb-8">Below are every single file you need. Copy them exactly. We explain what each line does in simple language.</p>
+            
+            <!-- versions.tf -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">versions.tf</span>
+                        <span class="text-xs text-zinc-500">Tells Terraform which tools and versions to use</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code>terraform {
+  required_version = ">= 1.8.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.55"
+    }
+  }
+}</code></pre>
+                <div class="text-xs mt-2 text-zinc-500 px-1">This file makes sure everyone (you and the GitLab robot) uses the same version of Terraform and the AWS plugin so nothing breaks unexpectedly.</div>
+            </div>
+            
+            <!-- backend.tf -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">backend.tf</span>
+                        <span class="text-xs text-zinc-500">Where to store the state file safely</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code>terraform {
+  backend "s3" {
+    bucket         = "yourname-terraform-state-2026"   # ← CHANGE THIS to your bucket name
+    key            = "demo/aws-gitlab-terraform/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-locks"
+    encrypt        = true
+  }
+}</code></pre>
+                <div class="mt-2 text-xs px-1">
+                    <span class="font-semibold text-amber-600">Important:</span> Replace <span class="font-mono">yourname-terraform-state-2026</span> with the exact name you created in Step 4.2. This tells Terraform: "Store my memory file in this S3 bucket and use DynamoDB to stop fights."
+                </div>
+            </div>
+            
+            <!-- variables.tf -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">variables.tf</span>
+                        <span class="text-xs text-zinc-500">Settings you can change without editing main code</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code>variable "aws_region" {
+  description = "Which AWS region to create resources in"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "bucket_name" {
+  description = "Name for the S3 bucket we will create (must be globally unique!)"
+  type        = string
+  # No default — you MUST provide this value
+}
+
+variable "environment" {
+  description = "dev, staging, or production"
+  type        = string
+  default     = "dev"
+}</code></pre>
+            </div>
+            
+            <!-- main.tf -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">main.tf</span>
+                        <span class="text-xs text-zinc-500">The actual instructions for what to build in AWS</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code>provider "aws" {
+  region = var.aws_region
+}
+
+# Create the S3 bucket with best-practice security
+resource "aws_s3_bucket" "demo_bucket" {
+  bucket = var.bucket_name
+
+  tags = {
+    Name        = "GitLab Terraform Demo Bucket"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+    CreatedVia  = "GitLab-CI"
+  }
+}
+
+# Turn on versioning (keeps old versions of files)
+resource "aws_s3_bucket_versioning" "demo_bucket_versioning" {
+  bucket = aws_s3_bucket.demo_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Turn on encryption so files are scrambled and safe
+resource "aws_s3_bucket_server_side_encryption_configuration" "demo_bucket_encryption" {
+  bucket = aws_s3_bucket.demo_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block all public access (very important for security!)
+resource "aws_s3_bucket_public_access_block" "demo_bucket_pab" {
+  bucket = aws_s3_bucket.demo_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Extra security: Force all traffic to use HTTPS (no unencrypted access)
+resource "aws_s3_bucket_policy" "demo_bucket_policy" {
+  bucket = aws_s3_bucket.demo_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnforceHTTPSOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.demo_bucket.arn,
+          "${aws_s3_bucket.demo_bucket.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}</code></pre>
+                
+                <div class="best-practice p-4 rounded-2xl mt-3 text-xs">
+                    <strong class="text-emerald-700">Security features we enabled:</strong> Versioning • AES-256 encryption • Complete public access block • HTTPS-only policy. These are the exact settings professional teams use.
+                </div>
+            </div>
+            
+            <!-- outputs.tf -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">outputs.tf</span>
+                        <span class="text-xs text-zinc-500">Shows you useful information after deployment</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code>output "bucket_name" {
+  description = "The name of the S3 bucket we created"
+  value       = aws_s3_bucket.demo_bucket.id
+}
+
+output "bucket_arn" {
+  description = "The Amazon Resource Name (ARN) of the bucket"
+  value       = aws_s3_bucket.demo_bucket.arn
+}
+
+output "bucket_region" {
+  description = "Region where the bucket lives"
+  value       = aws_s3_bucket.demo_bucket.region
+}</code></pre>
+            </div>
+            
+            <!-- .gitignore -->
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">.gitignore</span>
+                        <span class="text-xs text-zinc-500">Tells Git what files NOT to save in GitLab</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code># Terraform files that should never be committed
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Sensitive variable files
+terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+
+# OS generated files
+.DS_Store
+Thumbs.db</code></pre>
+            </div>
+            
+            <!-- terraform.tfvars.example -->
+            <div>
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-3">
+                        <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">terraform.tfvars.example</span>
+                        <span class="text-xs text-zinc-500">Example values — copy and rename to terraform.tfvars</span>
+                    </div>
+                    <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+                </div>
+                <pre class="code-block"><code>aws_region   = "us-east-1"
+bucket_name  = "your-unique-demo-bucket-name-2026"   # ← MUST BE GLOBALLY UNIQUE
+environment  = "dev"</code></pre>
+                <p class="text-xs mt-2 text-amber-600 px-1">Never commit the real <span class="font-mono">terraform.tfvars</span> file. It may contain secrets later.</p>
+            </div>
+        </section>
+        
+        <!-- SECTION 6: PIPELINE -->
+        <section id="pipeline" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">6</div>
+                <h2 class="section-header flex-1 mb-0">The GitLab Pipeline — .gitlab-ci.yml Explained</h2>
+            </div>
+            
+            <p class="mb-6">This is the most important file. It tells GitLab's robots exactly what to do when you push code.</p>
+            
+            <div class="flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center gap-x-3">
+                    <span class="font-mono text-sm px-3 py-1 bg-zinc-900 text-white rounded-2xl">.gitlab-ci.yml</span>
+                </div>
+                <button onclick="copyCode(this)" class="text-xs flex items-center gap-x-1.5 px-3 py-1 hover:bg-zinc-100 rounded-2xl text-zinc-500"><i class="fa-solid fa-copy"></i> <span>Copy</span></button>
+            </div>
+            
+            <pre class="code-block"><code>stages:
+  - validate
+  - plan
+  - apply
+
+variables:
+  TF_VERSION: "1.9.5"
+  AWS_DEFAULT_REGION: "us-east-1"
+
+# Use the official Terraform Docker image
+image: 
+  name: hashicorp/terraform:1.9.5
+  entrypoint: [""]
+
+cache:
+  paths:
+    - .terraform/
+
+before_script:
+  - terraform --version
+  - echo "AWS Access Key ID length: ${#AWS_ACCESS_KEY_ID}"   # Just to confirm variable exists (never print secret!)
+
+validate:
+  stage: validate
+  script:
+    - terraform fmt -check -recursive
+    - terraform init -backend=false
+    - terraform validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+plan:
+  stage: plan
+  script:
+    - terraform init
+    - terraform plan -out=tfplan
+  artifacts:
+    paths:
+      - tfplan
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+apply:
+  stage: apply
+  needs: ["plan"]
+  when: manual          # ← Very important! You must click to approve
+  environment:
+    name: production
+    url: https://console.aws.amazon.com/s3/buckets/$TF_VAR_bucket_name
+  script:
+    - terraform init
+    - terraform apply tfplan
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH</code></pre>
+            
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="best-practice p-5 rounded-3xl">
+                    <h4 class="font-semibold mb-2 flex items-center gap-x-2"><i class="fa-solid fa-shield-halved text-emerald-600"></i> Security Highlights in This Pipeline</h4>
+                    <ul class="text-sm space-y-1.5">
+                        <li>• <strong>when: manual</strong> — Apply never happens automatically. You must click "Play" in GitLab.</li>
+                        <li>• Variables are masked in GitLab settings (never shown in logs).</li>
+                        <li>• We use <span class="font-mono">terraform plan</span> first so you can review exactly what will change.</li>
+                        <li>• Only runs on protected branches (main) or merge requests.</li>
+                    </ul>
+                </div>
+                
+                <div class="p-5 border border-zinc-200 rounded-3xl text-sm">
+                    <h4 class="font-semibold mb-3">How to Add the AWS Keys to GitLab (Safely)</h4>
+                    <ol class="list-decimal ml-5 space-y-1 text-xs">
+                        <li>Go to your GitLab project → <strong>Settings → CI/CD</strong></li>
+                        <li>Expand <strong>Variables</strong></li>
+                        <li>Add these three (all masked + protected):</li>
+                        <li class="font-mono text-emerald-600">AWS_ACCESS_KEY_ID</li>
+                        <li class="font-mono text-emerald-600">AWS_SECRET_ACCESS_KEY</li>
+                        <li class="font-mono text-emerald-600">TF_VAR_bucket_name</li>
+                        <li class="font-mono text-emerald-600">TF_VAR_aws_region</li>
+                    </ol>
+                    <p class="text-[10px] mt-3 text-amber-600">Never put keys in the .gitlab-ci.yml file itself!</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 7: RUNNING -->
+        <section id="running" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">7</div>
+                <h2 class="section-header flex-1 mb-0">Run Everything — From Your Laptop to AWS</h2>
+            </div>
+            
+            <div class="space-y-8">
+                <div>
+                    <h3 class="font-semibold mb-4">Option A: Test Locally on Windows First (Recommended)</h3>
+                    <div class="simple-explanation">
+                        <ol class="text-sm space-y-2">
+                            <li>1. Copy <span class="font-mono">terraform.tfvars.example</span> to <span class="font-mono">terraform.tfvars</span> and edit the bucket_name to something unique.</li>
+                            <li>2. Open Git Bash in the project folder.</li>
+                            <li>3. Run: <span class="font-mono bg-zinc-100 px-2">aws configure</span> (paste the keys from the CSV you downloaded earlier).</li>
+                            <li>4. Run: <span class="font-mono bg-zinc-100 px-2">terraform init</span></li>
+                            <li>5. Run: <span class="font-mono bg-zinc-100 px-2">terraform plan</span></li>
+                            <li>6. Run: <span class="font-mono bg-zinc-100 px-2">terraform apply</span> and type <span class="font-mono">yes</span> when asked.</li>
+                            <li>7. Go to AWS Console → S3 and see your new bucket!</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-4">Option B: Push to GitLab and Let the Pipeline Deploy</h3>
+                    <div class="simple-explanation">
+                        <ol class="text-sm space-y-2">
+                            <li>1. Make sure you added the CI/CD variables in GitLab (Step 6).</li>
+                            <li>2. In Git Bash: <span class="font-mono bg-zinc-100 px-2">git add .</span></li>
+                            <li>3. <span class="font-mono bg-zinc-100 px-2">git commit -m "Add complete Terraform + GitLab pipeline"</span></li>
+                            <li>4. <span class="font-mono bg-zinc-100 px-2">git push origin main</span></li>
+                            <li>5. Go to your GitLab project → <strong>CI/CD → Pipelines</strong></li>
+                            <li>6. Watch the pipeline run (validate → plan). It will pause at "apply".</li>
+                            <li>7. Click the play button on the apply job to deploy to AWS.</li>
+                            <li>8. Check AWS Console to see your new secure S3 bucket.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="success-box mt-8 p-5 rounded-3xl">
+                <div class="flex items-start gap-x-3">
+                    <i class="fa-solid fa-check-circle text-emerald-600 text-xl mt-0.5"></i>
+                    <div>
+                        <div class="font-semibold">You did it!</div>
+                        <p class="text-sm">You now have a professional-grade deployment pipeline. Every time you change the Terraform code and push, GitLab will show you exactly what will happen before it touches AWS.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 8: SECURITY -->
+        <section id="security" class="mb-16 scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">8</div>
+                <h2 class="section-header flex-1 mb-0">Security Best Practices Checklist</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-5 border border-emerald-200 bg-emerald-50 rounded-3xl">
+                    <h4 class="font-semibold text-emerald-800 mb-3">✅ Do These Things</h4>
+                    <ul class="text-sm space-y-2 text-emerald-700">
+                        <li>• Always use <strong>least privilege</strong> IAM policies</li>
+                        <li>• Mask and protect all CI/CD variables in GitLab</li>
+                        <li>• Require manual approval for production deploys</li>
+                        <li>• Use remote state with encryption + locking</li>
+                        <li>• Block public access on every S3 bucket</li>
+                        <li>• Enable S3 versioning and encryption</li>
+                        <li>• Use <span class="font-mono">terraform plan</span> before every apply</li>
+                        <li>• Protect your main branch in GitLab</li>
+                        <li>• Rotate AWS keys regularly</li>
+                        <li>• Add <span class="font-mono">.tfvars</span> to .gitignore</li>
+                    </ul>
+                </div>
+                
+                <div class="p-5 border border-red-200 bg-red-50 rounded-3xl">
+                    <h4 class="font-semibold text-red-800 mb-3">❌ Never Do These Things</h4>
+                    <ul class="text-sm space-y-2 text-red-700">
+                        <li>• Never commit AWS keys or secrets to Git</li>
+                        <li>• Never give IAM users more permissions than needed</li>
+                        <li>• Never run <span class="font-mono">terraform apply -auto-approve</span> in CI without review</li>
+                        <li>• Never leave S3 buckets publicly readable</li>
+                        <li>• Never skip <span class="font-mono">terraform plan</span></li>
+                        <li>• Never use root AWS account for automation</li>
+                        <li>• Never store state files locally in shared projects</li>
+                        <li>• Never ignore pipeline failures</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION 9: TROUBLESHOOTING -->
+        <section id="troubleshooting" class="scroll-mt-20">
+            <div class="flex items-center gap-x-4 mb-6">
+                <div class="step-number">9</div>
+                <h2 class="section-header flex-1 mb-0">Cleanup, Troubleshooting &amp; Next Steps</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-semibold mb-3">How to Destroy Everything (Stop Paying)</h3>
+                    <div class="simple-explanation text-sm">
+                        <p>When you're done learning:</p>
+                        <div class="font-mono text-xs bg-white p-3 mt-2 rounded-2xl border">terraform destroy</div>
+                        <p class="mt-2 text-xs">Or run the destroy job in GitLab pipeline (add a destroy stage the same way as apply).</p>
+                        <p class="mt-3 text-xs text-amber-600">Also delete the state S3 bucket and DynamoDB table manually if you want everything gone.</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-3">Common Problems &amp; Fixes</h3>
+                    <div class="text-sm space-y-3">
+                        <div class="p-3 bg-white border rounded-2xl"><span class="font-semibold">"S3 bucket name already exists"</span><br><span class="text-xs">→ Change bucket_name in terraform.tfvars or CI variable to something more unique.</span></div>
+                        <div class="p-3 bg-white border rounded-2xl"><span class="font-semibold">"Access Denied"</span><br><span class="text-xs">→ Check that your IAM user has the right policies and that keys are correctly added as masked variables.</span></div>
+                        <div class="p-3 bg-white border rounded-2xl"><span class="font-semibold">" state lock"</span><br><span class="text-xs">→ Someone else is deploying. Wait or force-unlock with <span class="font-mono">terraform force-unlock LOCK-ID</span>.</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-10 p-6 bg-[#001D6C] text-white rounded-3xl">
+                <h3 class="font-semibold text-xl mb-3">What to Learn Next</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div class="bg-white/10 p-3 rounded-2xl">Add an EC2 instance</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Create a VPC + Security Group</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Deploy a static website to S3</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Add GitLab OIDC (no more long-lived keys)</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Use Terraform workspaces for dev/staging/prod</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Add cost estimation with Infracost</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Multi-region deployment</div>
+                    <div class="bg-white/10 p-3 rounded-2xl">Policy as Code with OPA / Sentinel</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Official Resources -->
+        <div class="mt-12 pt-8 border-t">
+            <h3 class="font-semibold mb-4 text-xl">Official Documentation &amp; References</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                <a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" target="_blank" class="resource-link flex items-center gap-x-2 p-3 hover:bg-zinc-50 rounded-2xl border"><i class="fa-solid fa-book text-[#0F62FE]"></i> Terraform AWS Get Started</a>
+                <a href="https://docs.gitlab.com/ee/ci/examples/terraform/" target="_blank" class="resource-link flex items-center gap-x-2 p-3 hover:bg-zinc-50 rounded-2xl border"><i class="fa-solid fa-book text-[#0F62FE]"></i> GitLab Terraform Integration</a>
+                <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" class="resource-link flex items-center gap-x-2 p-3 hover:bg-zinc-50 rounded-2xl border"><i class="fa-solid fa-book text-[#0F62FE]"></i> AWS Provider Documentation</a>
+                <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html" target="_blank" class="resource-link flex items-center gap-x-2 p-3 hover:bg-zinc-50 rounded-2xl border"><i class="fa-solid fa-book text-[#0F62FE]"></i> AWS IAM Best Practices</a>
+                <a href="https://developer.hashicorp.com/terraform/language/state/remote" target="_blank" class="resource-link flex items-center gap-x-2 p-3 hover:bg-zinc-50 rounded-2xl border"><i class="fa-solid fa-book text-[#0F62FE]"></i> Terraform Remote State</a>
+                <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html" target="_blank" class="resource-link flex items-center gap-x-2 p-3 hover:bg-zinc-50 rounded-2xl border"><i class="fa-solid fa-book text-[#0F62FE]"></i> S3 Security Best Practices</a>
+            </div>
+        </div>
+        
+    </div>
+    
+    <footer class="bg-zinc-900 text-white/70 py-8 text-xs">
+        <div class="max-w-screen-2xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-y-3">
+                <div>Professional guide created for learning purposes • Windows focused • Security-first approach</div>
+                <div class="flex items-center gap-x-4">
+                    <span>© 2026 • Inspired by real enterprise patterns</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Modals -->
+    <div id="info-modal" class="hidden fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4" onclick="if (event.target.id === 'info-modal') hideInfoModal()">
+        <div onclick="event.stopImmediatePropagation()" class="modal bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
+            <div class="px-6 py-5 border-b flex items-center justify-between bg-zinc-50">
+                <h3 id="modal-title" class="font-semibold text-xl text-[#001D6C]"></h3>
+                <button onclick="hideInfoModal()" class="text-2xl leading-none text-zinc-400 hover:text-zinc-600">&times;</button>
+            </div>
+            <div id="modal-content" class="p-6 overflow-auto text-sm prose prose-sm max-w-none flex-1"></div>
+            <div id="modal-links" class="px-6 py-4 border-t bg-zinc-50 flex flex-wrap gap-2"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Tailwind script
+        function initializeTailwind() {
+            document.documentElement.style.setProperty('--base-font-size', '16px');
+            
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            'ibm-blue': '#0F62FE',
+                            'ibm-dark': '#001D6C'
+                        }
+                    }
+                }
+            };
+        }
+        
+        // Font size controls
+        let currentFontSize = 16;
+        
+        function adjustFontSize(delta) {
+            currentFontSize = Math.max(14, Math.min(36, currentFontSize + delta));
+            document.getElementById('guide-content').style.fontSize = currentFontSize + 'px';
+            document.getElementById('font-size-value').textContent = currentFontSize + 'px';
+        }
+        
+        function resetFontSize() {
+            currentFontSize = 16;
+            document.getElementById('guide-content').style.fontSize = '16px';
+            document.getElementById('font-size-value').textContent = '16px';
+        }
+        
+        // Copy code function
+        function copyCode(button) {
+            const pre = button.parentElement.nextElementSibling;
+            const code = pre.querySelector('code') || pre;
+            const text = code.innerText;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fa-solid fa-check"></i> <span>Copied!</span>';
+                button.style.color = '#059669';
+                
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.style.color = '';
+                }, 1800);
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fa-solid fa-check"></i> <span>Copied!</span>';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                }, 1800);
+            });
+        }
+        
+        // Modal system
+        function showInfoModal(title, contentHTML, docLink = null) {
+            const modal = document.getElementById('info-modal');
+            const titleEl = document.getElementById('modal-title');
+            const contentEl = document.getElementById('modal-content');
+            const linksEl = document.getElementById('modal-links');
+            
+            titleEl.textContent = title;
+            contentEl.innerHTML = contentHTML;
+            
+            linksEl.innerHTML = '';
+            
+            if (docLink) {
+                const link = document.createElement('a');
+                link.href = docLink;
+                link.target = '_blank';
+                link.className = 'inline-flex items-center gap-x-2 px-4 py-2 bg-white border text-xs font-medium rounded-2xl hover:bg-zinc-50';
+                link.innerHTML = `<i class="fa-solid fa-external-link-alt"></i> <span>Official Documentation</span>`;
+                linksEl.appendChild(link);
+            }
+            
+            // Add close button
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'ml-auto px-4 py-2 text-xs font-medium text-zinc-500 hover:text-zinc-700';
+            closeBtn.textContent = 'Close';
+            closeBtn.onclick = hideInfoModal;
+            linksEl.appendChild(closeBtn);
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function hideInfoModal() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+        
+        // Keyboard support for modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('info-modal');
+                if (!modal.classList.contains('hidden')) {
+                    hideInfoModal();
+                }
+            }
+        });
+        
+        // Initialize everything
+        function initializeGuide() {
+            initializeTailwind();
+            
+            // Set initial font size display
+            document.getElementById('font-size-value').textContent = currentFontSize + 'px';
+            
+            // Make all code blocks have copy buttons if not already (we added manually)
+            console.log('%c[AWS+GitLab+Terraform Guide] Professional guide initialized successfully.', 'color:#0F62FE');
+            
+            // Optional: Add subtle animation to sections when they come into view
+            const sections = document.querySelectorAll('section');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            sections.forEach(section => {
+                section.style.transition = 'opacity 0.4s ease';
+                section.style.opacity = '0.98';
+                observer.observe(section);
+            });
+            
+            // Easter egg: Press "?" to show help
+            document.addEventListener('keypress', function(e) {
+                if (e.key === '?') {
+                    const firstSection = document.getElementById('prerequisites');
+                    firstSection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        }
+        
+        // Boot the guide
+        window.onload = initializeGuide;
+    </script>
+</body>
+</html>
