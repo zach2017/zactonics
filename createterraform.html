@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  TERRAFORM INFRASTRUCTURE GENERATOR
+  ============================================================================
+  A single-file static application for generating Terraform configurations
+  for data-platform infrastructure (Kafka, OpenSearch, Postgres, NiFi, etc.)
+  across local, AWS, Azure, and GCP providers.
+
+  Design language: IBM Carbon Design System (white bg / dark type, dark mode).
+  Persistence: browser localStorage (key: "tfgen.state.v1").
+
+  --------------------------------------------------------------------------
+  SPLITTING THIS INTO MULTIPLE FILES
+  --------------------------------------------------------------------------
+  Everything lives here for portability, but the JS is organized into clearly
+  commented MODULE blocks so you can extract them later:
+
+    *  MODULE: CATALOG          -> catalog.js   (resource definitions/schemas)
+    *  MODULE: STATE            -> state.js      (localStorage + app state)
+    *  MODULE: HCL GENERATOR    -> hcl.js        (Terraform HCL emitter)
+    *  MODULE: HCL IMPORT       -> import.js     (basic .tf parser)
+    *  MODULE: UI               -> ui.js         (rendering + events)
+
+  When you generate Terraform, the output is ALSO split conceptually:
+    - variables.tf   (all variables — shared across a team)
+    - providers.tf   (provider + backend config — shared)
+    - main.tf        (the actual resources)
+    - outputs.tf     (exported endpoints/ids)
+  The exporter can emit these as separate files or one combined main.tf.
+  Look for the "# ==== FILE: xxx.tf ====" markers in generated output.
+  ============================================================================
+-->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraform Infrastructure Generator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: ['class', '[data-theme="dark"]'],
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'monospace'],
+        }
+      }
+    }
+  }
+</script>
+<style>
+  /* ===== IBM CARBON COLOR TOKENS ===== */
+  :root {
+    --cds-background: #ffffff;
+    --cds-layer: #f4f4f4;
+    --cds-layer-accent: #e0e0e0;
+    --cds-field: #f4f4f4;
+    --cds-border-subtle: #e0e0e0;
+    --cds-border-strong: #8d8d8d;
+    --cds-text-primary: #161616;
+    --cds-text-secondary: #525252;
+    --cds-text-placeholder: #a8a8a8;
+    --cds-text-on-color: #ffffff;
+    --cds-link: #0f62fe;
+    --cds-interactive: #0f62fe;
+    --cds-interactive-hover: #0353e9;
+    --cds-support-error: #da1e28;
+    --cds-support-success: #24a148;
+    --cds-support-warning: #f1c21b;
+    --cds-support-info: #4589ff;
+    --cds-overlay: rgba(22,22,22,0.5);
+    --cds-toggle-off: #8d8d8d;
+  }
+  [data-theme="dark"] {
+    --cds-background: #161616;
+    --cds-layer: #262626;
+    --cds-layer-accent: #393939;
+    --cds-field: #262626;
+    --cds-border-subtle: #393939;
+    --cds-border-strong: #6f6f6f;
+    --cds-text-primary: #f4f4f4;
+    --cds-text-secondary: #c6c6c6;
+    --cds-text-placeholder: #6f6f6f;
+    --cds-text-on-color: #ffffff;
+    --cds-link: #78a9ff;
+    --cds-interactive: #4589ff;
+    --cds-interactive-hover: #5596ff;
+    --cds-support-error: #fa4d56;
+    --cds-support-success: #42be65;
+    --cds-support-warning: #f1c21b;
+    --cds-support-info: #4589ff;
+    --cds-overlay: rgba(0,0,0,0.65);
+    --cds-toggle-off: #6f6f6f;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--cds-background);
+    color: var(--cds-text-primary);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: background 120ms linear, color 120ms linear;
+  }
+
+  /* Carbon uses sharp corners — no border radius */
+  .cds-sharp { border-radius: 0; }
+
+  /* ===== FIELDS ===== */
+  .cds-field {
+    background: var(--cds-field);
+    color: var(--cds-text-primary);
+    border: none;
+    border-bottom: 1px solid var(--cds-border-strong);
+    border-radius: 0;
+    height: 40px;
+    padding: 0 12px;
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    transition: outline-color 70ms;
+  }
+  .cds-field:focus {
+    outline: 2px solid var(--cds-interactive);
+  }
+  textarea.cds-field { height: auto; padding: 11px 12px; resize: vertical; }
+  select.cds-field {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6l.7-.7L8 9.6l4.3-4.3.7.7z' fill='%23525252'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+    cursor: pointer;
+  }
+  [data-theme="dark"] select.cds-field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6l.7-.7L8 9.6l4.3-4.3.7.7z' fill='%23c6c6c6'/%3E%3C/svg%3E");
+  }
+  .cds-label {
+    display: block;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--cds-text-secondary);
+    margin-bottom: 6px;
+    letter-spacing: 0.32px;
+  }
+  .cds-helper {
+    font-size: 12px;
+    color: var(--cds-text-placeholder);
+    margin-top: 4px;
+  }
+
+  /* ===== BUTTONS ===== */
+  .cds-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 400;
+    border: 1px solid transparent;
+    border-radius: 0;
+    padding: 10px 60px 10px 14px;
+    cursor: pointer;
+    transition: background 70ms, border-color 70ms;
+    line-height: 1.2;
+    min-height: 40px;
+    position: relative;
+  }
+  .cds-btn--primary { background: var(--cds-interactive); color: #fff; }
+  .cds-btn--primary:hover { background: var(--cds-interactive-hover); }
+  .cds-btn--secondary { background: transparent; color: var(--cds-link); border-color: var(--cds-interactive); }
+  .cds-btn--secondary:hover { background: var(--cds-interactive); color:#fff; }
+  .cds-btn--ghost { background: transparent; color: var(--cds-link); padding: 10px 14px; }
+  .cds-btn--ghost:hover { background: var(--cds-layer); }
+  .cds-btn--danger { background: var(--cds-support-error); color: #fff; }
+  .cds-btn--danger:hover { filter: brightness(0.92); }
+  .cds-btn--compact { padding: 6px 12px; min-height: 32px; font-size: 13px; }
+  .cds-btn:focus-visible { outline: 2px solid var(--cds-interactive); outline-offset: -3px; }
+
+  /* ===== TAGS / PILLS ===== */
+  .cds-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 0;
+    background: var(--cds-layer-accent);
+    color: var(--cds-text-primary);
+    white-space: nowrap;
+  }
+  .cds-tag--blue { background: #d0e2ff; color: #002d9c; }
+  .cds-tag--green { background: #a7f0ba; color: #044317; }
+  .cds-tag--purple { background: #e8daff; color: #491d8b; }
+  .cds-tag--teal { background: #9ef0f0; color: #004144; }
+  .cds-tag--magenta { background: #ffd6e8; color: #740937; }
+  .cds-tag--gray { background: var(--cds-layer-accent); color: var(--cds-text-secondary); }
+  [data-theme="dark"] .cds-tag--blue { background: #002d9c; color: #d0e2ff; }
+  [data-theme="dark"] .cds-tag--green { background: #044317; color: #a7f0ba; }
+  [data-theme="dark"] .cds-tag--purple { background: #491d8b; color: #e8daff; }
+  [data-theme="dark"] .cds-tag--teal { background: #004144; color: #9ef0f0; }
+  [data-theme="dark"] .cds-tag--magenta { background: #740937; color: #ffd6e8; }
+
+  /* ===== TABLE ===== */
+  .cds-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .cds-table thead th {
+    background: var(--cds-layer);
+    color: var(--cds-text-primary);
+    font-weight: 600;
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: none;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .cds-table tbody td {
+    padding: 13px 16px;
+    border-top: 1px solid var(--cds-border-subtle);
+    color: var(--cds-text-secondary);
+    vertical-align: middle;
+  }
+  .cds-table tbody tr { background: var(--cds-background); transition: background 70ms; }
+  .cds-table tbody tr:hover { background: var(--cds-layer); }
+  .cds-table tbody tr.selected { background: var(--cds-layer-accent); }
+
+  /* ===== MODAL ===== */
+  .cds-modal-bg {
+    position: fixed; inset: 0;
+    background: var(--cds-overlay);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 48px 16px;
+    z-index: 50;
+    overflow-y: auto;
+  }
+  .cds-modal {
+    background: var(--cds-background);
+    width: 100%;
+    max-width: 840px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+
+  /* ===== NAV / TABS ===== */
+  .cds-tab {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--cds-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    border-left: none; border-right: none; border-top: none;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .cds-tab:hover { color: var(--cds-text-primary); background: var(--cds-layer); }
+  .cds-tab.active { color: var(--cds-text-primary); border-bottom-color: var(--cds-interactive); font-weight: 500; }
+
+  /* ===== TOGGLE SWITCH ===== */
+  .cds-toggle { position: relative; width: 48px; height: 24px; cursor: pointer; }
+  .cds-toggle input { opacity: 0; width: 0; height: 0; }
+  .cds-toggle-track {
+    position: absolute; inset: 0;
+    background: var(--cds-toggle-off);
+    transition: background 90ms;
+    border-radius: 12px;
+  }
+  .cds-toggle-thumb {
+    position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 90ms;
+  }
+  .cds-toggle input:checked + .cds-toggle-track { background: var(--cds-support-success); }
+  .cds-toggle input:checked + .cds-toggle-track .cds-toggle-thumb { transform: translateX(24px); }
+
+  /* ===== CODE ===== */
+  pre.cds-code {
+    background: var(--cds-layer);
+    color: var(--cds-text-primary);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 16px;
+    overflow: auto;
+    margin: 0;
+    border-left: 3px solid var(--cds-interactive);
+    max-height: 560px;
+  }
+  .tok-key { color: #8a3ffc; }
+  .tok-str { color: #007d79; }
+  .tok-num { color: #1192e8; }
+  .tok-comment { color: #6f6f6f; font-style: italic; }
+  .tok-block { color: #da1e28; }
+  [data-theme="dark"] .tok-key { color: #be95ff; }
+  [data-theme="dark"] .tok-str { color: #3ddbd9; }
+  [data-theme="dark"] .tok-num { color: #82cfff; }
+  [data-theme="dark"] .tok-block { color: #ff8389; }
+
+  /* ===== SECTION HEADERS / CARDS ===== */
+  .cds-card {
+    background: var(--cds-layer);
+    border: 1px solid var(--cds-border-subtle);
+    padding: 20px;
+  }
+  .cds-stat {
+    background: var(--cds-layer);
+    padding: 16px 20px;
+    border-left: 3px solid var(--cds-interactive);
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--cds-border-strong); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* catalog item */
+  .catalog-item {
+    border: 1px solid var(--cds-border-subtle);
+    background: var(--cds-background);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color 70ms, background 70ms;
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+  }
+  .catalog-item:hover { border-color: var(--cds-interactive); background: var(--cds-layer); }
+
+  .fade-in { animation: fadeIn 140ms ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER (Carbon UI Shell) ===== -->
+<header style="background: var(--cds-background); border-bottom: 1px solid var(--cds-border-subtle); position: sticky; top: 0; z-index: 40;">
+  <div style="display:flex; align-items:center; height: 48px; padding: 0 16px; gap: 16px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 2L3 9v14l13 7 13-7V9L16 2z" stroke="var(--cds-interactive)" stroke-width="2" fill="none"/>
+        <path d="M16 2v28M3 9l13 7 13-7" stroke="var(--cds-interactive)" stroke-width="1.5"/>
+      </svg>
+      <span style="font-size:14px; font-weight:600; letter-spacing:0.16px;">Terraform&nbsp;<span style="font-weight:400; color:var(--cds-text-secondary);">Infrastructure Generator</span></span>
+    </div>
+
+    <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <span id="provider-badge" class="cds-tag cds-tag--blue" style="height:26px;">AWS</span>
+      <button id="btn-theme" class="cds-btn cds-btn--ghost cds-btn--compact" aria-label="Toggle theme" title="Toggle light/dark">
+        <svg id="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 .5A5.5 5.5 0 1015.5 10 6 6 0 016 .5z"/></svg>
+        <svg id="icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" hidden><path d="M8 5a3 3 0 100 6 3 3 0 000-6zm0-5h0v2m0 12v2M0 8h2m12 0h2M2.3 2.3l1.4 1.4m8.6 8.6l1.4 1.4M2.3 13.7l1.4-1.4m8.6-8.6l1.4-1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <span id="theme-label" style="font-size:13px;">Dark</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Primary tabs -->
+  <nav style="display:flex; padding:0 8px; border-top:1px solid var(--cds-border-subtle); overflow-x:auto;">
+    <button class="cds-tab active" data-view="dashboard">Dashboard</button>
+    <button class="cds-tab" data-view="resources">Resources</button>
+    <button class="cds-tab" data-view="catalog">Add Infrastructure</button>
+    <button class="cds-tab" data-view="settings">Project &amp; Providers</button>
+    <button class="cds-tab" data-view="output">Terraform Output</button>
+    <button class="cds-tab" data-view="reference">Resource Reference</button>
+  </nav>
+</header>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main style="max-width:1320px; margin:0 auto; padding: 24px 16px 80px;">
+
+  <!-- ============ VIEW: DASHBOARD ============ -->
+  <section id="view-dashboard" class="view fade-in">
+    <h1 style="font-size:28px; font-weight:300; margin:0 0 4px;">Project dashboard</h1>
+    <p style="color:var(--cds-text-secondary); margin:0 0 24px; font-size:14px;">Overview of your declared infrastructure and generation status.</p>
+
+    <div id="dash-stats" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1px; background:var(--cds-border-subtle); margin-bottom:24px;"></div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px;">
+      <div class="cds-card">
+        <h2 style="font-size:16px; font-weight:600; margin:0 0 12px;">Resources by category</h2>
+        <div id="dash-by-category"></div>
+      </div>
+      <div class="cds-card">
+        <h2 style="font-size:16px; font-weight:600; margin:0 0 12px;">Quick actions</h2>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button class="cds-btn cds-btn--primary" data-goto="catalog" style="justify-content:space-between; width:100%;">Add new infrastructure <span>+</span></button>
+          <button class="cds-btn cds-btn--secondary" data-goto="output" style="justify-content:space-between; width:100%;">Generate Terraform <span>→</span></button>
+          <button class="cds-btn cds-btn--ghost" id="dash-import" style="justify-content:space-between; width:100%; border:1px solid var(--cds-border-subtle);">Import .tf file <span>↑</span></button>
+          <button class="cds-btn cds-btn--ghost" id="dash-seed" style="justify-content:space-between; width:100%; border:1px solid var(--cds-border-subtle);">Load Kafka platform example <span>★</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cds-card" style="margin-top:16px;">
+      <h2 style="font-size:16px; font-weight:600; margin:0 0 4px;">Best-practice checks</h2>
+      <p style="color:var(--cds-text-secondary); font-size:13px; margin:0 0 12px;">Heuristic linting based on AWS Well-Architected and Terraform conventions.</p>
+      <div id="dash-lint"></div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: RESOURCES (CRUD TABLE) ============ -->
+  <section id="view-resources" class="view fade-in" hidden>
+    <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+      <div>
+        <h1 style="font-size:28px; font-weight:300; margin:0 0 4px;">Infrastructure resources</h1>
+        <p style="color:var(--cds-text-secondary); margin:0; font-size:14px;">All declared resources. Click a row to view and edit its full configuration.</p>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+        <input id="res-search" class="cds-field" placeholder="Search resources..." style="width:220px;">
+        <select id="res-filter-cat" class="cds-field" style="width:170px;"><option value="">All categories</option></select>
+        <button class="cds-btn cds-btn--primary" data-goto="catalog">Add resource +</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
+      <span style="font-size:13px; color:var(--cds-text-secondary);">Bulk:</span>
+      <button class="cds-btn cds-btn--ghost cds-btn--compact" id="bulk-export" style="border:1px solid var(--cds-border-subtle);">Export selected</button>
+      <button class="cds-btn cds-btn--ghost cds-btn--compact" id="bulk-delete" style="border:1px solid var(--cds-border-subtle); color:var(--cds-support-error);">Delete selected</button>
+      <span id="sel-count" style="font-size:13px; color:var(--cds-text-placeholder);"></span>
+    </div>
+
+    <div style="border:1px solid var(--cds-border-subtle); overflow-x:auto;">
+      <table class="cds-table">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="select-all"></th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Category</th>
+            <th>Provider</th>
+            <th>Key settings</th>
+            <th style="width:160px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="res-tbody"></tbody>
+      </table>
+    </div>
+    <div id="res-empty" style="text-align:center; padding:56px 16px; color:var(--cds-text-secondary);" hidden>
+      <p style="font-size:16px; margin:0 0 12px;">No infrastructure declared yet.</p>
+      <button class="cds-btn cds-btn--primary" data-goto="catalog" style="display:inline-flex;">Add your first resource +</button>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: CATALOG ============ -->
+  <section id="view-catalog" class="view fade-in" hidden>
+    <h1 style="font-size:28px; font-weight:300; margin:0 0 4px;">Add infrastructure</h1>
+    <p style="color:var(--cds-text-secondary); margin:0 0 20px; font-size:14px;">Pick a building block. Data services and their supporting infrastructure are grouped by category.</p>
+
+    <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
+      <input id="catalog-search" class="cds-field" placeholder="Search catalog (e.g. kafka, eks, load balancer)..." style="max-width:380px;">
+      <select id="catalog-provider" class="cds-field" style="width:200px;"></select>
+    </div>
+
+    <div id="catalog-groups"></div>
+  </section>
+
+  <!-- ============ VIEW: SETTINGS ============ -->
+  <section id="view-settings" class="view fade-in" hidden>
+    <h1 style="font-size:28px; font-weight:300; margin:0 0 4px;">Project &amp; providers</h1>
+    <p style="color:var(--cds-text-secondary); margin:0 0 24px; font-size:14px;">Global settings emitted into <code>providers.tf</code> and <code>variables.tf</code>.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:24px; max-width:980px;">
+      <div>
+        <h2 style="font-size:16px; font-weight:600; margin:0 0 16px; padding-bottom:8px; border-bottom:1px solid var(--cds-border-subtle);">General</h2>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div>
+            <label class="cds-label">Project name</label>
+            <input id="set-project" class="cds-field" placeholder="data-platform">
+            <div class="cds-helper">Used as a name prefix and tag across resources.</div>
+          </div>
+          <div>
+            <label class="cds-label">Environment</label>
+            <select id="set-env" class="cds-field">
+              <option value="dev">dev</option>
+              <option value="staging">staging</option>
+              <option value="prod">prod</option>
+            </select>
+          </div>
+          <div>
+            <label class="cds-label">Default cloud provider</label>
+            <select id="set-provider" class="cds-field"></select>
+            <div class="cds-helper">New resources default to this provider.</div>
+          </div>
+          <div>
+            <label class="cds-label">Default region</label>
+            <input id="set-region" class="cds-field" placeholder="us-east-1">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 style="font-size:16px; font-weight:600; margin:0 0 16px; padding-bottom:8px; border-bottom:1px solid var(--cds-border-subtle);">State backend</h2>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div>
+            <label class="cds-label">Backend type</label>
+            <select id="set-backend" class="cds-field">
+              <option value="local">local</option>
+              <option value="s3">s3 (AWS)</option>
+              <option value="azurerm">azurerm (Azure)</option>
+              <option value="gcs">gcs (GCP)</option>
+            </select>
+          </div>
+          <div id="backend-detail-wrap">
+            <label class="cds-label">Backend bucket / container</label>
+            <input id="set-backend-bucket" class="cds-field" placeholder="my-tfstate-bucket">
+            <div class="cds-helper">Remote state location. Recommended for teams.</div>
+          </div>
+          <div>
+            <label class="cds-label">State key / path</label>
+            <input id="set-backend-key" class="cds-field" placeholder="data-platform/terraform.tfstate">
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding-top:8px;">
+            <div>
+              <label class="cds-label" style="margin:0;">Emit as separate files</label>
+              <div class="cds-helper" style="margin-top:2px;">variables.tf / providers.tf / main.tf / outputs.tf</div>
+            </div>
+            <label class="cds-toggle"><input type="checkbox" id="set-split" checked><span class="cds-toggle-track"><span class="cds-toggle-thumb"></span></span></label>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <label class="cds-label" style="margin:0;">Add default tags</label>
+              <div class="cds-helper" style="margin-top:2px;">project / environment / ManagedBy</div>
+            </div>
+            <label class="cds-toggle"><input type="checkbox" id="set-tags" checked><span class="cds-toggle-track"><span class="cds-toggle-thumb"></span></span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px; display:flex; gap:8px;">
+      <button class="cds-btn cds-btn--primary" id="set-save">Save settings</button>
+      <span id="set-saved" style="align-self:center; font-size:13px; color:var(--cds-support-success);" hidden>Saved ✓</span>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: OUTPUT ============ -->
+  <section id="view-output" class="view fade-in" hidden>
+    <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+      <div>
+        <h1 style="font-size:28px; font-weight:300; margin:0 0 4px;">Terraform output</h1>
+        <p style="color:var(--cds-text-secondary); margin:0; font-size:14px;">Generated HCL. Toggle between a combined file or split-file layout for team sharing.</p>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="cds-btn cds-btn--secondary cds-btn--compact" id="out-copy">Copy</button>
+        <button class="cds-btn cds-btn--secondary cds-btn--compact" id="out-download">Download .tf</button>
+        <button class="cds-btn cds-btn--secondary cds-btn--compact" id="out-download-zip">Download all files</button>
+        <button class="cds-btn cds-btn--primary cds-btn--compact" id="out-import">Import .tf</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap;" id="out-filetabs"></div>
+
+    <pre class="cds-code" id="out-code"></pre>
+    <input type="file" id="import-file" accept=".tf,.txt" hidden>
+  </section>
+
+  <!-- ============ VIEW: REFERENCE ============ -->
+  <section id="view-reference" class="view fade-in" hidden>
+    <h1 style="font-size:28px; font-weight:300; margin:0 0 4px;">Resource reference</h1>
+    <p style="color:var(--cds-text-secondary); margin:0 0 24px; font-size:14px;">Full list of supported building blocks, their underlying Terraform resources, and configurable settings.</p>
+    <div id="reference-content"></div>
+  </section>
+
+</main>
+
+<!-- ===== EDIT/DETAIL MODAL ===== -->
+<div id="modal" class="cds-modal-bg" hidden>
+  <div class="cds-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div style="display:flex; align-items:center; padding:20px 24px 16px; border-bottom:1px solid var(--cds-border-subtle);">
+      <div>
+        <div style="font-size:12px; color:var(--cds-text-secondary); letter-spacing:0.32px;" id="modal-eyebrow">CONFIGURE RESOURCE</div>
+        <h2 id="modal-title" style="font-size:20px; font-weight:400; margin:4px 0 0;">Resource</h2>
+      </div>
+      <button id="modal-close" class="cds-btn cds-btn--ghost" style="margin-left:auto; padding:8px;" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M12 4.7L11.3 4 8 7.3 4.7 4 4 4.7 7.3 8 4 11.3l.7.7L8 8.7l3.3 3.3.7-.7L8.7 8z"/></svg>
+      </button>
+    </div>
+
+    <div style="display:flex; border-bottom:1px solid var(--cds-border-subtle);">
+      <button class="cds-tab active" id="mtab-form" data-mtab="form">Form view</button>
+      <button class="cds-tab" id="mtab-raw" data-mtab="raw">Raw HCL</button>
+      <button class="cds-tab" id="mtab-advanced" data-mtab="advanced">Advanced / custom</button>
+    </div>
+
+    <div style="max-height:60vh; overflow-y:auto; padding:24px;">
+      <!-- Form pane -->
+      <div id="mpane-form">
+        <div id="modal-fields" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px;"></div>
+      </div>
+      <!-- Raw pane -->
+      <div id="mpane-raw" hidden>
+        <pre class="cds-code" id="modal-raw" style="max-height:none;"></pre>
+      </div>
+      <!-- Advanced pane: arbitrary key/value Terraform args -->
+      <div id="mpane-advanced" hidden>
+        <p style="font-size:13px; color:var(--cds-text-secondary); margin:0 0 12px;">
+          Add any additional argument that Terraform supports for this resource. These are emitted verbatim into the resource block.
+          Values are written as-is, so quote strings (e.g. <code>"value"</code>) and use HCL syntax for lists/maps.
+        </p>
+        <div id="custom-args" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
+        <button class="cds-btn cds-btn--ghost cds-btn--compact" id="add-custom-arg" style="border:1px solid var(--cds-border-subtle);">+ Add custom argument</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1px; border-top:1px solid var(--cds-border-subtle); background:var(--cds-border-subtle);">
+      <button id="modal-delete" class="cds-btn cds-btn--danger" style="flex:0 0 auto; padding-right:24px;" hidden>Delete</button>
+      <button id="modal-cancel" class="cds-btn cds-btn--ghost" style="flex:1; background:var(--cds-background); justify-content:center;">Cancel</button>
+      <button id="modal-save" class="cds-btn cds-btn--primary" style="flex:1; justify-content:center;">Save resource</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toast" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--cds-text-primary); color:var(--cds-background); padding:14px 20px; font-size:14px; z-index:60; box-shadow:0 2px 8px rgba(0,0,0,0.3); opacity:0; transition:opacity 150ms, transform 150ms; pointer-events:none;"></div>
+
+<script>
+/* ============================================================================
+   TERRAFORM INFRASTRUCTURE GENERATOR — app.js
+   ============================================================================
+   This file is intentionally organized into MODULE blocks. Each block can be
+   lifted into its own file (catalog.js, state.js, hcl.js, import.js, ui.js)
+   with almost no changes — they only depend on the globals defined above them.
+   ============================================================================ */
+
+/* ============================================================================
+   MODULE: CATALOG  ->  catalog.js
+   ----------------------------------------------------------------------------
+   Declarative definitions of every supported building block.
+   Each definition has:
+     id        unique catalog id
+     label     human name
+     category  grouping
+     providers which clouds it applies to ('aws','azure','gcp','local','docker')
+     icon      single-glyph marker
+     tfType    a map of provider -> terraform resource type
+     desc      short description
+     fields[]  schema of editable settings (drives the form + HCL output)
+   field: { key, label, type, default, options?, help?, group?, advanced?,
+            tfArg? (terraform argument name, defaults to key), quote? }
+   type: text | number | select | bool | textarea | list | tags
+   ============================================================================ */
+
+const PROVIDERS = [
+  { id: 'aws',    label: 'AWS',    region: 'us-east-1' },
+  { id: 'azure',  label: 'Azure',  region: 'eastus' },
+  { id: 'gcp',    label: 'GCP',    region: 'us-central1' },
+  { id: 'local',  label: 'Local',  region: 'local' },
+  { id: 'docker', label: 'Docker', region: 'local' },
+];
+
+const CATEGORIES = [
+  { id: 'data-streaming',  label: 'Data streaming',        tag: 'purple' },
+  { id: 'data-storage',    label: 'Data storage & search', tag: 'teal' },
+  { id: 'data-flow',       label: 'Data flow & ingestion', tag: 'magenta' },
+  { id: 'compute',         label: 'Compute & clusters',    tag: 'blue' },
+  { id: 'containers',      label: 'Containers',            tag: 'blue' },
+  { id: 'networking',      label: 'Networking & routing',  tag: 'green' },
+  { id: 'security',        label: 'Security & access',     tag: 'gray' },
+  { id: 'foundation',      label: 'Foundation',            tag: 'gray' },
+];
+
+/* Shared field fragments reused across resources */
+const F_NAME = (def) => ({ key: 'name', label: 'Resource name', type: 'text', default: def, help: 'Logical name; used for the Terraform resource label and Name tag.', tfArg: '__name' });
+const F_INSTANCE_COUNT = { key: 'instance_count', label: 'Instance / node count', type: 'number', default: 3, group: 'Sizing', help: 'Number of nodes in the cluster.' };
+
+const CATALOG = [
+
+  /* ---------------- FOUNDATION ---------------- */
+  {
+    id: 'vpc', label: 'VPC / Network', category: 'foundation', icon: '⬡',
+    providers: ['aws','azure','gcp'],
+    tfType: { aws: 'aws_vpc', azure: 'azurerm_virtual_network', gcp: 'google_compute_network' },
+    desc: 'Isolated virtual network that hosts the rest of your infrastructure.',
+    fields: [
+      F_NAME('main_vpc'),
+      { key: 'cidr_block', label: 'CIDR block', type: 'text', default: '10.0.0.0/16', tfArg: 'cidr_block', help: 'IPv4 address range for the network.' },
+      { key: 'enable_dns', label: 'Enable DNS hostnames', type: 'bool', default: true, tfArg: 'enable_dns_hostnames' },
+      { key: 'azs', label: 'Availability zones', type: 'number', default: 3, group: 'Sizing', help: 'Spread subnets across this many AZs for HA.' },
+    ],
+  },
+  {
+    id: 'subnet', label: 'Subnet', category: 'foundation', icon: '▢',
+    providers: ['aws','azure','gcp'],
+    tfType: { aws: 'aws_subnet', azure: 'azurerm_subnet', gcp: 'google_compute_subnetwork' },
+    desc: 'A subdivision of a VPC, typically one per availability zone.',
+    fields: [
+      F_NAME('private_subnet'),
+      { key: 'cidr_block', label: 'CIDR block', type: 'text', default: '10.0.1.0/24', tfArg: 'cidr_block' },
+      { key: 'tier', label: 'Tier', type: 'select', default: 'private', options: ['public','private','isolated'], help: 'Public subnets get internet gateway routes.' },
+      { key: 'availability_zone', label: 'Availability zone', type: 'text', default: 'us-east-1a' },
+    ],
+  },
+
+  /* ---------------- DATA STREAMING ---------------- */
+  {
+    id: 'kafka-msk', label: 'Kafka (Amazon MSK)', category: 'data-streaming', icon: '⇄',
+    providers: ['aws'],
+    tfType: { aws: 'aws_msk_cluster' },
+    desc: 'Fully managed Apache Kafka. The recommended AWS-native way to run Kafka.',
+    fields: [
+      F_NAME('kafka'),
+      { key: 'kafka_version', label: 'Kafka version', type: 'select', default: '3.6.0', options: ['3.6.0','3.5.1','3.4.0','2.8.1'], tfArg: 'kafka_version' },
+      { key: 'number_of_broker_nodes', label: 'Broker nodes', type: 'number', default: 3, tfArg: 'number_of_broker_nodes', group: 'Sizing', help: 'Must be a multiple of the number of AZs.' },
+      { key: 'instance_type', label: 'Broker instance type', type: 'select', default: 'kafka.m5.large', options: ['kafka.t3.small','kafka.m5.large','kafka.m5.xlarge','kafka.m5.2xlarge','kafka.m5.4xlarge'], tfArg: 'instance_type', group: 'Sizing' },
+      { key: 'ebs_volume_size', label: 'EBS volume size (GiB)', type: 'number', default: 100, group: 'Sizing' },
+      { key: 'encryption_in_transit', label: 'Encryption in transit', type: 'select', default: 'TLS', options: ['TLS','TLS_PLAINTEXT','PLAINTEXT'], group: 'Security', help: 'TLS recommended for production.' },
+      { key: 'enhanced_monitoring', label: 'Enhanced monitoring', type: 'select', default: 'PER_TOPIC_PER_BROKER', options: ['DEFAULT','PER_BROKER','PER_TOPIC_PER_BROKER','PER_TOPIC_PER_PARTITION'], group: 'Observability' },
+      { key: 'auto_create_topics', label: 'Allow auto topic creation', type: 'bool', default: false, group: 'Config', advanced: true },
+    ],
+  },
+  {
+    id: 'kafka-self', label: 'Kafka broker (self-managed)', category: 'data-streaming', icon: '⇄',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'aws_instance', azure: 'azurerm_linux_virtual_machine', gcp: 'google_compute_instance', local: 'null_resource', docker: 'docker_container' },
+    desc: 'Self-managed Kafka brokers on VMs or containers. Pair with Zookeeper or KRaft.',
+    fields: [
+      F_NAME('kafka_broker'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-kafka:7.6.0', help: 'Used for Docker/local deployments.', group: 'Image' },
+      F_INSTANCE_COUNT,
+      { key: 'instance_type', label: 'Instance type', type: 'text', default: 't3.large', group: 'Sizing' },
+      { key: 'mode', label: 'Coordination mode', type: 'select', default: 'kraft', options: ['kraft','zookeeper'], group: 'Config', help: 'KRaft removes the Zookeeper dependency (Kafka 3.3+).' },
+      { key: 'replication_factor', label: 'Default replication factor', type: 'number', default: 3, group: 'Config' },
+      { key: 'storage_gb', label: 'Storage per broker (GB)', type: 'number', default: 200, group: 'Sizing' },
+    ],
+  },
+  {
+    id: 'zookeeper', label: 'Zookeeper ensemble', category: 'data-streaming', icon: '◷',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'aws_instance', azure: 'azurerm_linux_virtual_machine', gcp: 'google_compute_instance', local: 'null_resource', docker: 'docker_container' },
+    desc: 'Coordination service for self-managed Kafka (when not using KRaft).',
+    fields: [
+      F_NAME('zookeeper'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-zookeeper:7.6.0', group: 'Image' },
+      { key: 'ensemble_size', label: 'Ensemble size', type: 'select', default: '3', options: ['1','3','5','7'], group: 'Sizing', help: 'Use an odd number for quorum.' },
+      { key: 'instance_type', label: 'Instance type', type: 'text', default: 't3.medium', group: 'Sizing' },
+    ],
+  },
+  {
+    id: 'schema-registry', label: 'Schema Registry', category: 'data-streaming', icon: '❖',
+    providers: ['aws','gcp','local','docker'],
+    tfType: { aws: 'aws_ecs_service', gcp: 'google_cloud_run_v2_service', local: 'null_resource', docker: 'docker_container' },
+    desc: 'Confluent Schema Registry for Avro/Protobuf/JSON schema governance.',
+    fields: [
+      F_NAME('schema_registry'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-schema-registry:7.6.0', group: 'Image' },
+      { key: 'compatibility', label: 'Compatibility level', type: 'select', default: 'BACKWARD', options: ['BACKWARD','FORWARD','FULL','NONE'], group: 'Config' },
+    ],
+  },
+
+  /* ---------------- DATA STORAGE & SEARCH ---------------- */
+  {
+    id: 'opensearch', label: 'OpenSearch domain', category: 'data-storage', icon: '◎',
+    providers: ['aws'],
+    tfType: { aws: 'aws_opensearch_domain' },
+    desc: 'Managed OpenSearch (Elasticsearch-compatible) for search and analytics.',
+    fields: [
+      F_NAME('opensearch'),
+      { key: 'engine_version', label: 'Engine version', type: 'select', default: 'OpenSearch_2.11', options: ['OpenSearch_2.11','OpenSearch_2.9','OpenSearch_1.3','Elasticsearch_7.10'], tfArg: 'engine_version' },
+      { key: 'instance_type', label: 'Data node type', type: 'select', default: 'r6g.large.search', options: ['t3.small.search','m6g.large.search','r6g.large.search','r6g.xlarge.search','r6g.2xlarge.search'], group: 'Sizing' },
+      { key: 'instance_count', label: 'Data nodes', type: 'number', default: 3, group: 'Sizing' },
+      { key: 'dedicated_master', label: 'Dedicated master nodes', type: 'bool', default: true, group: 'Sizing', help: 'Recommended for production stability.' },
+      { key: 'master_count', label: 'Master node count', type: 'select', default: '3', options: ['3','5'], group: 'Sizing' },
+      { key: 'volume_size', label: 'EBS volume / node (GiB)', type: 'number', default: 100, group: 'Sizing' },
+      { key: 'zone_awareness', label: 'Multi-AZ zone awareness', type: 'bool', default: true, group: 'Resilience' },
+      { key: 'encrypt_at_rest', label: 'Encryption at rest', type: 'bool', default: true, group: 'Security' },
+      { key: 'node_to_node_encryption', label: 'Node-to-node encryption', type: 'bool', default: true, group: 'Security' },
+    ],
+  },
+  {
+    id: 'postgres-rds', label: 'PostgreSQL (RDS)', category: 'data-storage', icon: '⛁',
+    providers: ['aws'],
+    tfType: { aws: 'aws_db_instance' },
+    desc: 'Managed PostgreSQL via Amazon RDS.',
+    fields: [
+      F_NAME('postgres'),
+      { key: 'engine_version', label: 'Postgres version', type: 'select', default: '16.3', options: ['16.3','15.7','14.12','13.15'], tfArg: 'engine_version' },
+      { key: 'instance_class', label: 'Instance class', type: 'select', default: 'db.r6g.large', options: ['db.t3.micro','db.t3.medium','db.r6g.large','db.r6g.xlarge','db.r6g.2xlarge'], tfArg: 'instance_class', group: 'Sizing' },
+      { key: 'allocated_storage', label: 'Allocated storage (GiB)', type: 'number', default: 100, tfArg: 'allocated_storage', group: 'Sizing' },
+      { key: 'max_allocated_storage', label: 'Max autoscale storage (GiB)', type: 'number', default: 500, tfArg: 'max_allocated_storage', group: 'Sizing' },
+      { key: 'multi_az', label: 'Multi-AZ deployment', type: 'bool', default: true, tfArg: 'multi_az', group: 'Resilience', help: 'Synchronous standby in another AZ.' },
+      { key: 'storage_encrypted', label: 'Storage encrypted', type: 'bool', default: true, tfArg: 'storage_encrypted', group: 'Security' },
+      { key: 'backup_retention_period', label: 'Backup retention (days)', type: 'number', default: 7, tfArg: 'backup_retention_period', group: 'Backups' },
+      { key: 'deletion_protection', label: 'Deletion protection', type: 'bool', default: true, tfArg: 'deletion_protection', group: 'Security' },
+      { key: 'db_name', label: 'Initial database name', type: 'text', default: 'appdb', tfArg: 'db_name', group: 'Config' },
+      { key: 'username', label: 'Master username', type: 'text', default: 'dbadmin', tfArg: 'username', group: 'Config' },
+    ],
+  },
+  {
+    id: 'postgres-aurora', label: 'Aurora PostgreSQL cluster', category: 'data-storage', icon: '⛁',
+    providers: ['aws'],
+    tfType: { aws: 'aws_rds_cluster' },
+    desc: 'Aurora PostgreSQL-compatible cluster with reader/writer endpoints.',
+    fields: [
+      F_NAME('aurora_pg'),
+      { key: 'engine_version', label: 'Engine version', type: 'select', default: '16.2', options: ['16.2','15.5','14.10'], tfArg: 'engine_version' },
+      { key: 'instance_count', label: 'Cluster instances', type: 'number', default: 2, group: 'Sizing', help: 'One writer + N readers.' },
+      { key: 'instance_class', label: 'Instance class', type: 'select', default: 'db.r6g.large', options: ['db.t3.medium','db.r6g.large','db.r6g.xlarge','db.serverless'], group: 'Sizing' },
+      { key: 'storage_encrypted', label: 'Storage encrypted', type: 'bool', default: true, tfArg: 'storage_encrypted', group: 'Security' },
+      { key: 'backup_retention_period', label: 'Backup retention (days)', type: 'number', default: 7, tfArg: 'backup_retention_period', group: 'Backups' },
+    ],
+  },
+  {
+    id: 'postgres-container', label: 'PostgreSQL (container)', category: 'data-storage', icon: '⛁',
+    providers: ['local','docker'],
+    tfType: { docker: 'docker_container', local: 'null_resource' },
+    desc: 'PostgreSQL running as a container for local development.',
+    fields: [
+      F_NAME('postgres_local'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'postgres:16', group: 'Image' },
+      { key: 'host_port', label: 'Host port', type: 'number', default: 5432, group: 'Networking' },
+      { key: 'db_name', label: 'Database name', type: 'text', default: 'appdb', group: 'Config' },
+      { key: 'username', label: 'Username', type: 'text', default: 'postgres', group: 'Config' },
+      { key: 'volume', label: 'Named volume', type: 'text', default: 'pgdata', group: 'Storage' },
+    ],
+  },
+  {
+    id: 's3', label: 'S3 bucket (data lake)', category: 'data-storage', icon: '◰',
+    providers: ['aws'],
+    tfType: { aws: 'aws_s3_bucket' },
+    desc: 'Object storage for data lakes, backups, and Kafka tiered storage.',
+    fields: [
+      F_NAME('data_lake'),
+      { key: 'bucket', label: 'Bucket name', type: 'text', default: 'my-data-lake', tfArg: 'bucket', help: 'Must be globally unique.' },
+      { key: 'versioning', label: 'Versioning', type: 'bool', default: true, group: 'Config' },
+      { key: 'encryption', label: 'Server-side encryption', type: 'select', default: 'aws:kms', options: ['AES256','aws:kms'], group: 'Security' },
+      { key: 'block_public', label: 'Block all public access', type: 'bool', default: true, group: 'Security' },
+      { key: 'lifecycle_days', label: 'Transition to Glacier after (days)', type: 'number', default: 90, group: 'Lifecycle', advanced: true },
+    ],
+  },
+
+  /* ---------------- DATA FLOW & INGESTION ---------------- */
+  {
+    id: 'nifi', label: 'Apache NiFi', category: 'data-flow', icon: '⇶',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'aws_ecs_service', azure: 'azurerm_container_group', gcp: 'google_cloud_run_v2_service', local: 'null_resource', docker: 'docker_container' },
+    desc: 'Dataflow automation and ETL. Often clustered behind a load balancer.',
+    fields: [
+      F_NAME('nifi'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'apache/nifi:1.25.0', group: 'Image' },
+      { key: 'cluster_nodes', label: 'Cluster nodes', type: 'number', default: 3, group: 'Sizing', help: 'NiFi forms a cluster coordinated via Zookeeper.' },
+      { key: 'cpu', label: 'CPU units (per node)', type: 'number', default: 2048, group: 'Sizing' },
+      { key: 'memory', label: 'Memory MiB (per node)', type: 'number', default: 8192, group: 'Sizing' },
+      { key: 'host_port', label: 'UI port', type: 'number', default: 8443, group: 'Networking' },
+    ],
+  },
+  {
+    id: 'kafka-connect', label: 'Kafka Connect', category: 'data-flow', icon: '⇶',
+    providers: ['aws','gcp','local','docker'],
+    tfType: { aws: 'aws_ecs_service', gcp: 'google_cloud_run_v2_service', local: 'null_resource', docker: 'docker_container' },
+    desc: 'Connector framework for moving data in and out of Kafka.',
+    fields: [
+      F_NAME('kafka_connect'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-kafka-connect:7.6.0', group: 'Image' },
+      { key: 'workers', label: 'Worker count', type: 'number', default: 3, group: 'Sizing' },
+      { key: 'group_id', label: 'Connect group id', type: 'text', default: 'connect-cluster', group: 'Config' },
+    ],
+  },
+
+  /* ---------------- CONTAINERS ---------------- */
+  {
+    id: 'docker-container', label: 'Docker container', category: 'containers', icon: '⬢',
+    providers: ['docker','local'],
+    tfType: { docker: 'docker_container', local: 'docker_container' },
+    desc: 'A generic Docker container — image, ports, env vars, volumes, and network.',
+    fields: [
+      F_NAME('app'),
+      { key: 'image', label: 'Image', type: 'text', default: 'nginx:latest', help: 'Image reference including tag.', group: 'Image' },
+      { key: 'restart', label: 'Restart policy', type: 'select', default: 'unless-stopped', options: ['no','on-failure','always','unless-stopped'], group: 'Runtime' },
+      { key: 'host_port', label: 'Host port', type: 'number', default: 8080, group: 'Networking' },
+      { key: 'container_port', label: 'Container port', type: 'number', default: 80, group: 'Networking' },
+      { key: 'network', label: 'Network name', type: 'text', default: 'app_net', group: 'Networking', help: 'Attach to a docker_network of this name.' },
+      { key: 'env', label: 'Environment variables', type: 'list', default: ['ENV=production'], group: 'Config', help: 'One KEY=VALUE per line.' },
+      { key: 'volumes', label: 'Volume mounts', type: 'list', default: ['app_data:/data'], group: 'Storage', help: 'One volume:/path per line.' },
+      { key: 'command', label: 'Command override', type: 'text', default: '', group: 'Runtime', advanced: true },
+      { key: 'memory', label: 'Memory limit (MB)', type: 'number', default: 512, group: 'Runtime', advanced: true },
+    ],
+  },
+  {
+    id: 'docker-network', label: 'Docker network', category: 'containers', icon: '⬡',
+    providers: ['docker','local'],
+    tfType: { docker: 'docker_network', local: 'docker_network' },
+    desc: 'A user-defined Docker bridge network so containers can resolve each other by name.',
+    fields: [
+      F_NAME('app_net'),
+      { key: 'driver', label: 'Driver', type: 'select', default: 'bridge', options: ['bridge','host','overlay','macvlan'], group: 'Config' },
+      { key: 'internal', label: 'Internal (no external access)', type: 'bool', default: false, group: 'Config' },
+      { key: 'subnet', label: 'Subnet (optional)', type: 'text', default: '', group: 'Config', advanced: true },
+    ],
+  },
+  {
+    id: 'docker-volume', label: 'Docker volume', category: 'containers', icon: '◰',
+    providers: ['docker','local'],
+    tfType: { docker: 'docker_volume', local: 'docker_volume' },
+    desc: 'A named Docker volume for persistent container data.',
+    fields: [
+      F_NAME('app_data'),
+      { key: 'driver', label: 'Driver', type: 'select', default: 'local', options: ['local'], group: 'Config' },
+    ],
+  },
+  {
+    id: 'docker-image', label: 'Docker image', category: 'containers', icon: '❖',
+    providers: ['docker','local'],
+    tfType: { docker: 'docker_image', local: 'docker_image' },
+    desc: 'Pulls (or builds) a Docker image so it is available for containers.',
+    fields: [
+      F_NAME('app_image'),
+      { key: 'image', label: 'Image name', type: 'text', default: 'nginx:latest', group: 'Image' },
+      { key: 'keep_locally', label: 'Keep locally on destroy', type: 'bool', default: true, group: 'Config' },
+    ],
+  },
+  {
+    id: 'ecs-cluster', label: 'ECS cluster', category: 'containers', icon: '▦',
+    providers: ['aws'],
+    tfType: { aws: 'aws_ecs_cluster' },
+    desc: 'Elastic Container Service cluster (Fargate or EC2 launch type).',
+    fields: [
+      F_NAME('ecs'),
+      { key: 'launch_type', label: 'Launch type', type: 'select', default: 'FARGATE', options: ['FARGATE','EC2'], group: 'Config' },
+      { key: 'container_insights', label: 'Container Insights', type: 'bool', default: true, group: 'Observability' },
+    ],
+  },
+  {
+    id: 'eks-cluster', label: 'EKS cluster', category: 'containers', icon: '▦',
+    providers: ['aws'],
+    tfType: { aws: 'aws_eks_cluster' },
+    desc: 'Managed Kubernetes (EKS). Pair with a managed node group.',
+    fields: [
+      F_NAME('eks'),
+      { key: 'version', label: 'Kubernetes version', type: 'select', default: '1.29', options: ['1.30','1.29','1.28','1.27'], tfArg: 'version' },
+      { key: 'endpoint_private', label: 'Private API endpoint', type: 'bool', default: true, group: 'Networking' },
+      { key: 'endpoint_public', label: 'Public API endpoint', type: 'bool', default: false, group: 'Networking', help: 'Disable for fully private clusters.' },
+    ],
+  },
+  {
+    id: 'eks-nodegroup', label: 'EKS node group', category: 'containers', icon: '▤',
+    providers: ['aws'],
+    tfType: { aws: 'aws_eks_node_group' },
+    desc: 'Managed worker nodes for an EKS cluster, with autoscaling bounds.',
+    fields: [
+      F_NAME('eks_nodes'),
+      { key: 'instance_types', label: 'Instance type', type: 'select', default: 'm5.large', options: ['t3.medium','m5.large','m5.xlarge','m5.2xlarge','c5.2xlarge'], group: 'Sizing' },
+      { key: 'desired_size', label: 'Desired size', type: 'number', default: 3, group: 'Scaling' },
+      { key: 'min_size', label: 'Min size', type: 'number', default: 2, group: 'Scaling' },
+      { key: 'max_size', label: 'Max size', type: 'number', default: 6, group: 'Scaling' },
+      { key: 'capacity_type', label: 'Capacity type', type: 'select', default: 'ON_DEMAND', options: ['ON_DEMAND','SPOT'], group: 'Scaling' },
+    ],
+  },
+
+  /* ---------------- COMPUTE ---------------- */
+  {
+    id: 'ec2', label: 'EC2 instance', category: 'compute', icon: '▣',
+    providers: ['aws'],
+    tfType: { aws: 'aws_instance' },
+    desc: 'A virtual machine. Building block for self-managed services.',
+    fields: [
+      F_NAME('compute'),
+      { key: 'instance_type', label: 'Instance type', type: 'select', default: 't3.large', options: ['t3.micro','t3.medium','t3.large','m5.large','m5.xlarge','c5.2xlarge','r5.2xlarge'], tfArg: 'instance_type', group: 'Sizing' },
+      { key: 'count', label: 'Count', type: 'number', default: 1, group: 'Sizing' },
+      { key: 'ami', label: 'AMI id', type: 'text', default: 'ami-0c7217cdde317cfec', tfArg: 'ami', help: 'Region-specific machine image.' },
+      { key: 'root_volume_size', label: 'Root volume (GiB)', type: 'number', default: 50, group: 'Sizing' },
+      { key: 'monitoring', label: 'Detailed monitoring', type: 'bool', default: true, group: 'Observability' },
+    ],
+  },
+  {
+    id: 'asg', label: 'Auto Scaling group', category: 'compute', icon: '⟳',
+    providers: ['aws'],
+    tfType: { aws: 'aws_autoscaling_group' },
+    desc: 'Horizontally scaling fleet of EC2 instances behind a launch template.',
+    fields: [
+      F_NAME('asg'),
+      { key: 'min_size', label: 'Min size', type: 'number', default: 2, tfArg: 'min_size', group: 'Scaling' },
+      { key: 'max_size', label: 'Max size', type: 'number', default: 6, tfArg: 'max_size', group: 'Scaling' },
+      { key: 'desired_capacity', label: 'Desired capacity', type: 'number', default: 3, tfArg: 'desired_capacity', group: 'Scaling' },
+      { key: 'instance_type', label: 'Instance type', type: 'text', default: 'm5.large', group: 'Sizing' },
+    ],
+  },
+
+  /* ---------------- NETWORKING & ROUTING ---------------- */
+  {
+    id: 'alb', label: 'Application Load Balancer', category: 'networking', icon: '⇋',
+    providers: ['aws'],
+    tfType: { aws: 'aws_lb' },
+    desc: 'Layer-7 load balancer for HTTP/HTTPS services (NiFi UI, dashboards).',
+    fields: [
+      F_NAME('alb'),
+      { key: 'internal', label: 'Internal (private) LB', type: 'bool', default: false, tfArg: 'internal', group: 'Config' },
+      { key: 'idle_timeout', label: 'Idle timeout (s)', type: 'number', default: 60, group: 'Config' },
+      { key: 'enable_deletion_protection', label: 'Deletion protection', type: 'bool', default: true, tfArg: 'enable_deletion_protection', group: 'Security' },
+      { key: 'access_logs', label: 'Enable access logs', type: 'bool', default: true, group: 'Observability' },
+    ],
+  },
+  {
+    id: 'nlb', label: 'Network Load Balancer', category: 'networking', icon: '⇋',
+    providers: ['aws'],
+    tfType: { aws: 'aws_lb' },
+    desc: 'Layer-4 load balancer for TCP traffic (Kafka brokers, databases).',
+    fields: [
+      F_NAME('nlb'),
+      { key: 'internal', label: 'Internal (private) LB', type: 'bool', default: true, tfArg: 'internal', group: 'Config' },
+      { key: 'cross_zone', label: 'Cross-zone load balancing', type: 'bool', default: true, group: 'Config' },
+    ],
+  },
+  {
+    id: 'proxy', label: 'Reverse proxy (Nginx/Envoy)', category: 'networking', icon: '⇄',
+    providers: ['aws','gcp','local','docker'],
+    tfType: { aws: 'aws_ecs_service', gcp: 'google_cloud_run_v2_service', local: 'null_resource', docker: 'docker_container' },
+    desc: 'Reverse proxy / API gateway in front of internal services.',
+    fields: [
+      F_NAME('proxy'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'nginx:1.27', group: 'Image' },
+      { key: 'replicas', label: 'Replicas', type: 'number', default: 2, group: 'Sizing' },
+      { key: 'host_port', label: 'Listen port', type: 'number', default: 80, group: 'Networking' },
+      { key: 'upstream', label: 'Upstream target', type: 'text', default: 'nifi:8443', group: 'Config' },
+    ],
+  },
+  {
+    id: 'security-group', label: 'Security group', category: 'networking', icon: '⛨',
+    providers: ['aws'],
+    tfType: { aws: 'aws_security_group' },
+    desc: 'Stateful firewall rules controlling traffic to resources.',
+    fields: [
+      F_NAME('sg'),
+      { key: 'ingress_ports', label: 'Ingress ports', type: 'list', default: ['9092','2181','8443'], group: 'Rules', help: 'One port (or range) per line.' },
+      { key: 'ingress_cidr', label: 'Ingress CIDR', type: 'text', default: '10.0.0.0/16', group: 'Rules', help: 'Source range allowed inbound.' },
+      { key: 'egress_all', label: 'Allow all egress', type: 'bool', default: true, group: 'Rules' },
+    ],
+  },
+
+  /* ---------------- SECURITY & ACCESS ---------------- */
+  {
+    id: 'iam-role', label: 'IAM role', category: 'security', icon: '⛊',
+    providers: ['aws'],
+    tfType: { aws: 'aws_iam_role' },
+    desc: 'Execution role granting AWS permissions to services (ECS tasks, EKS, etc).',
+    fields: [
+      F_NAME('service_role'),
+      { key: 'service', label: 'Trusted service', type: 'select', default: 'ecs-tasks.amazonaws.com', options: ['ecs-tasks.amazonaws.com','ec2.amazonaws.com','eks.amazonaws.com','lambda.amazonaws.com'], group: 'Trust' },
+      { key: 'managed_policies', label: 'Managed policy ARNs', type: 'list', default: ['arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'], group: 'Permissions' },
+    ],
+  },
+  {
+    id: 'kms', label: 'KMS key', category: 'security', icon: '⚷',
+    providers: ['aws'],
+    tfType: { aws: 'aws_kms_key' },
+    desc: 'Customer-managed encryption key for at-rest encryption.',
+    fields: [
+      F_NAME('data_key'),
+      { key: 'description', label: 'Description', type: 'text', default: 'Data platform encryption key', tfArg: 'description' },
+      { key: 'deletion_window_in_days', label: 'Deletion window (days)', type: 'number', default: 30, tfArg: 'deletion_window_in_days' },
+      { key: 'enable_key_rotation', label: 'Automatic key rotation', type: 'bool', default: true, tfArg: 'enable_key_rotation', group: 'Security' },
+    ],
+  },
+  {
+    id: 'secret', label: 'Secrets Manager secret', category: 'security', icon: '⚷',
+    providers: ['aws'],
+    tfType: { aws: 'aws_secretsmanager_secret' },
+    desc: 'Stores credentials (DB passwords, API keys) with rotation support.',
+    fields: [
+      F_NAME('db_credentials'),
+      { key: 'description', label: 'Description', type: 'text', default: 'Database master credentials', tfArg: 'description' },
+      { key: 'recovery_window', label: 'Recovery window (days)', type: 'number', default: 7, group: 'Config' },
+    ],
+  },
+];
+
+/* lookups */
+const CATALOG_BY_ID = Object.fromEntries(CATALOG.map(c => [c.id, c]));
+const CATEGORY_BY_ID = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+
+/* ============================================================================
+   MODULE: STATE  ->  state.js
+   ----------------------------------------------------------------------------
+   App state persisted to localStorage. Shape:
+   {
+     settings: { project, env, provider, region, backend, backendBucket,
+                 backendKey, split, tags },
+     resources: [ { id, catalogId, provider, values:{}, custom:[{k,v}] } ]
+   }
+   ============================================================================ */
+
+const STORAGE_KEY = 'tfgen.state.v1';
+
+const DEFAULT_STATE = () => ({
+  settings: {
+    project: 'data-platform',
+    env: 'dev',
+    provider: 'aws',
+    region: 'us-east-1',
+    backend: 'local',
+    backendBucket: '',
+    backendKey: 'data-platform/terraform.tfstate',
+    split: true,
+    tags: true,
+  },
+  resources: [],
+});
+
+let STATE = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_STATE();
+    const parsed = JSON.parse(raw);
+    const base = DEFAULT_STATE();
+    return { settings: { ...base.settings, ...(parsed.settings || {}) }, resources: parsed.resources || [] };
+  } catch (e) {
+    console.warn('Failed to load state, starting fresh', e);
+    return DEFAULT_STATE();
+  }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  } catch (e) {
+    console.error('Failed to save state', e);
+  }
+}
+
+function uid() {
+  return 'r_' + Math.random().toString(36).slice(2, 9);
+}
+
+/* Build a resource instance from a catalog id with default values */
+function makeResource(catalogId, provider) {
+  const def = CATALOG_BY_ID[catalogId];
+  const prov = provider || (def.providers.includes(STATE.settings.provider) ? STATE.settings.provider : def.providers[0]);
+  const values = {};
+  def.fields.forEach(f => { values[f.key] = structuredCloneSafe(f.default); });
+  return { id: uid(), catalogId, provider: prov, values, custom: [] };
+}
+
+function structuredCloneSafe(v) {
+  if (Array.isArray(v)) return v.slice();
+  if (v && typeof v === 'object') return JSON.parse(JSON.stringify(v));
+  return v;
+}
+
+/* CRUD operations */
+function addResource(res) { STATE.resources.push(res); saveState(); }
+function updateResource(id, patch) {
+  const r = STATE.resources.find(x => x.id === id);
+  if (r) Object.assign(r, patch);
+  saveState();
+}
+function deleteResource(id) {
+  STATE.resources = STATE.resources.filter(x => x.id !== id);
+  saveState();
+}
+function getResource(id) { return STATE.resources.find(x => x.id === id); }
+/* ============================================================================
+   MODULE: HCL GENERATOR  ->  hcl.js
+   ----------------------------------------------------------------------------
+   Emits Terraform configuration from STATE. Output is organized into the
+   conventional file split:
+       providers.tf   provider blocks + terraform{} backend
+       variables.tf   variable declarations (shared across a team)
+       main.tf        the resources
+       outputs.tf     useful outputs (endpoints / ids)
+   getFiles() returns { 'providers.tf': '...', ... }. The UI lets the user
+   view a combined document or each file separately.
+   ============================================================================ */
+
+const TF_INDENT = '  ';
+
+function sanitizeName(s) {
+  return String(s || 'resource').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'resource';
+}
+function hclString(v) { return '"' + String(v).replace(/"/g, '\\"') + '"'; }
+function hclList(arr) { return '[' + arr.map(x => hclString(x)).join(', ') + ']'; }
+
+/* Default tags block shared by AWS resources */
+function defaultTagsHCL(extraName) {
+  if (!STATE.settings.tags) return extraName ? `${TF_INDENT}tags = {\n${TF_INDENT}${TF_INDENT}Name = ${hclString(extraName)}\n${TF_INDENT}}\n` : '';
+  let t = `${TF_INDENT}tags = {\n`;
+  if (extraName) t += `${TF_INDENT}${TF_INDENT}Name        = ${hclString(extraName)}\n`;
+  t += `${TF_INDENT}${TF_INDENT}project     = var.project\n`;
+  t += `${TF_INDENT}${TF_INDENT}environment = var.environment\n`;
+  t += `${TF_INDENT}${TF_INDENT}ManagedBy   = "terraform"\n`;
+  t += `${TF_INDENT}}\n`;
+  return t;
+}
+
+/* Emit a single resource block. This is deliberately readable rather than
+   exhaustive — it covers the common, best-practice arguments per type and
+   appends any custom arguments the user added in the Advanced tab. */
+function emitResource(res) {
+  const def = CATALOG_BY_ID[res.catalogId];
+  if (!def) return '';
+  const v = res.values;
+  const tfType = def.tfType[res.provider] || Object.values(def.tfType)[0];
+  const label = sanitizeName(v.name || def.id);
+  const name = v.name || def.id;
+  let out = '';
+
+  // helpful header comment
+  out += `# ${def.label} — ${def.desc}\n`;
+
+  const open = `resource ${hclString(tfType)} ${hclString(label)} {\n`;
+  out += open;
+
+  const line = (k, val) => { out += `${TF_INDENT}${k} = ${val}\n`; };
+  const raw = (s) => { out += s; };
+
+  // ---- per-type best-practice emission ----
+  switch (def.id) {
+    case 'kafka-msk':
+      line('cluster_name', `"${'${var.project}'}-${name}"`);
+      line('kafka_version', hclString(v.kafka_version));
+      line('number_of_broker_nodes', v.number_of_broker_nodes);
+      raw(`${TF_INDENT}broker_node_group_info {\n`);
+      raw(`${TF_INDENT}${TF_INDENT}instance_type   = ${hclString(v.instance_type)}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}client_subnets  = var.private_subnet_ids\n`);
+      raw(`${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.kafka.id]\n`);
+      raw(`${TF_INDENT}${TF_INDENT}storage_info {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}ebs_storage_info {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}volume_size = ${v.ebs_volume_size}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}encryption_info {\n${TF_INDENT}${TF_INDENT}encryption_in_transit {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}client_broker = ${hclString(v.encryption_in_transit)}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}in_cluster    = true\n${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}}\n`);
+      line('enhanced_monitoring', hclString(v.enhanced_monitoring));
+      raw(`${TF_INDENT}configuration_info {\n${TF_INDENT}${TF_INDENT}arn      = aws_msk_configuration.this.arn\n${TF_INDENT}${TF_INDENT}revision = aws_msk_configuration.this.latest_revision\n${TF_INDENT}}\n`);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'opensearch':
+      line('domain_name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('engine_version', hclString(v.engine_version));
+      raw(`${TF_INDENT}cluster_config {\n`);
+      raw(`${TF_INDENT}${TF_INDENT}instance_type          = ${hclString(v.instance_type)}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}instance_count         = ${v.instance_count}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}zone_awareness_enabled = ${!!v.zone_awareness}\n`);
+      if (v.dedicated_master) {
+        raw(`${TF_INDENT}${TF_INDENT}dedicated_master_enabled = true\n`);
+        raw(`${TF_INDENT}${TF_INDENT}dedicated_master_type    = ${hclString(v.instance_type)}\n`);
+        raw(`${TF_INDENT}${TF_INDENT}dedicated_master_count   = ${v.master_count}\n`);
+      }
+      raw(`${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}ebs_options {\n${TF_INDENT}${TF_INDENT}ebs_enabled = true\n${TF_INDENT}${TF_INDENT}volume_size = ${v.volume_size}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}encrypt_at_rest {\n${TF_INDENT}${TF_INDENT}enabled = ${!!v.encrypt_at_rest}\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}node_to_node_encryption {\n${TF_INDENT}${TF_INDENT}enabled = ${!!v.node_to_node_encryption}\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}domain_endpoint_options {\n${TF_INDENT}${TF_INDENT}enforce_https       = true\n${TF_INDENT}${TF_INDENT}tls_security_policy = "Policy-Min-TLS-1-2-2019-07"\n${TF_INDENT}}\n`);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'postgres-rds':
+      line('identifier', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('engine', '"postgres"');
+      line('engine_version', hclString(v.engine_version));
+      line('instance_class', hclString(v.instance_class));
+      line('allocated_storage', v.allocated_storage);
+      line('max_allocated_storage', v.max_allocated_storage);
+      line('db_name', hclString(v.db_name));
+      line('username', hclString(v.username));
+      line('manage_master_user_password', 'true'); // best practice: secrets manager
+      line('multi_az', !!v.multi_az);
+      line('storage_encrypted', !!v.storage_encrypted);
+      line('backup_retention_period', v.backup_retention_period);
+      line('deletion_protection', !!v.deletion_protection);
+      line('skip_final_snapshot', 'false');
+      line('vpc_security_group_ids', '[aws_security_group.postgres.id]');
+      line('db_subnet_group_name', 'aws_db_subnet_group.this.name');
+      raw(defaultTagsHCL());
+      break;
+
+    case 'postgres-aurora':
+      line('cluster_identifier', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('engine', '"aurora-postgresql"');
+      line('engine_version', hclString(v.engine_version));
+      line('database_name', '"appdb"');
+      line('master_username', '"dbadmin"');
+      line('manage_master_user_password', 'true');
+      line('storage_encrypted', !!v.storage_encrypted);
+      line('backup_retention_period', v.backup_retention_period);
+      line('db_subnet_group_name', 'aws_db_subnet_group.this.name');
+      line('vpc_security_group_ids', '[aws_security_group.postgres.id]');
+      raw(defaultTagsHCL());
+      break;
+
+    case 's3':
+      line('bucket', `"${'${var.project}'}-${v.bucket}"`);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'ecs-cluster':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      raw(`${TF_INDENT}setting {\n${TF_INDENT}${TF_INDENT}name  = "containerInsights"\n${TF_INDENT}${TF_INDENT}value = ${hclString(v.container_insights ? 'enabled' : 'disabled')}\n${TF_INDENT}}\n`);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'eks-cluster':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('version', hclString(v.version));
+      line('role_arn', 'aws_iam_role.eks.arn');
+      raw(`${TF_INDENT}vpc_config {\n`);
+      raw(`${TF_INDENT}${TF_INDENT}subnet_ids              = var.private_subnet_ids\n`);
+      raw(`${TF_INDENT}${TF_INDENT}endpoint_private_access = ${!!v.endpoint_private}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}endpoint_public_access  = ${!!v.endpoint_public}\n`);
+      raw(`${TF_INDENT}}\n`);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'eks-nodegroup':
+      line('cluster_name', 'aws_eks_cluster.eks.name');
+      line('node_group_name', `"${sanitizeName(name)}"`);
+      line('node_role_arn', 'aws_iam_role.eks_nodes.arn');
+      line('subnet_ids', 'var.private_subnet_ids');
+      line('instance_types', hclList([v.instance_types]));
+      line('capacity_type', hclString(v.capacity_type));
+      raw(`${TF_INDENT}scaling_config {\n${TF_INDENT}${TF_INDENT}desired_size = ${v.desired_size}\n${TF_INDENT}${TF_INDENT}min_size     = ${v.min_size}\n${TF_INDENT}${TF_INDENT}max_size     = ${v.max_size}\n${TF_INDENT}}\n`);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'ec2':
+    case 'kafka-self':
+    case 'zookeeper': {
+      // VM-based when provider is aws/azure/gcp; container when docker/local
+      if (res.provider === 'docker' || res.provider === 'local') {
+        emitDockerContainerBody(out2 => out += out2, res, def, v, name);
+      } else {
+        line('ami', hclString(v.ami || 'ami-0c7217cdde317cfec'));
+        line('instance_type', hclString(v.instance_type || 't3.large'));
+        if (v.count || v.instance_count) line('count', v.count || v.instance_count);
+        line('subnet_id', 'var.private_subnet_ids[0]');
+        line('vpc_security_group_ids', '[aws_security_group.default.id]');
+        if (v.monitoring) line('monitoring', true);
+        raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = ${v.root_volume_size || v.storage_gb || 50}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
+        raw(defaultTagsHCL(name));
+      }
+      break;
+    }
+
+    case 'asg':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('min_size', v.min_size);
+      line('max_size', v.max_size);
+      line('desired_capacity', v.desired_capacity);
+      line('vpc_zone_identifier', 'var.private_subnet_ids');
+      raw(`${TF_INDENT}launch_template {\n${TF_INDENT}${TF_INDENT}id      = aws_launch_template.this.id\n${TF_INDENT}${TF_INDENT}version = "$Latest"\n${TF_INDENT}}\n`);
+      break;
+
+    case 'alb':
+    case 'nlb':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('internal', !!v.internal);
+      line('load_balancer_type', hclString(def.id === 'alb' ? 'application' : 'network'));
+      line('subnets', 'var.public_subnet_ids');
+      if (def.id === 'alb') {
+        line('security_groups', '[aws_security_group.alb.id]');
+        if (v.idle_timeout) line('idle_timeout', v.idle_timeout);
+      }
+      if (v.enable_deletion_protection !== undefined) line('enable_deletion_protection', !!v.enable_deletion_protection);
+      if (v.cross_zone) line('enable_cross_zone_load_balancing', true);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'security-group':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('description', hclString(def.label + ' for ' + name));
+      line('vpc_id', 'var.vpc_id');
+      (v.ingress_ports || []).forEach(p => {
+        raw(`${TF_INDENT}ingress {\n${TF_INDENT}${TF_INDENT}from_port   = ${p}\n${TF_INDENT}${TF_INDENT}to_port     = ${p}\n${TF_INDENT}${TF_INDENT}protocol    = "tcp"\n${TF_INDENT}${TF_INDENT}cidr_blocks = ${hclList([v.ingress_cidr])}\n${TF_INDENT}}\n`);
+      });
+      if (v.egress_all) {
+        raw(`${TF_INDENT}egress {\n${TF_INDENT}${TF_INDENT}from_port   = 0\n${TF_INDENT}${TF_INDENT}to_port     = 0\n${TF_INDENT}${TF_INDENT}protocol    = "-1"\n${TF_INDENT}${TF_INDENT}cidr_blocks = ["0.0.0.0/0"]\n${TF_INDENT}}\n`);
+      }
+      raw(defaultTagsHCL());
+      break;
+
+    case 'iam-role':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      raw(`${TF_INDENT}assume_role_policy = jsonencode({\n${TF_INDENT}${TF_INDENT}Version = "2012-10-17"\n${TF_INDENT}${TF_INDENT}Statement = [{\n${TF_INDENT}${TF_INDENT}${TF_INDENT}Action    = "sts:AssumeRole"\n${TF_INDENT}${TF_INDENT}${TF_INDENT}Effect    = "Allow"\n${TF_INDENT}${TF_INDENT}${TF_INDENT}Principal = { Service = ${hclString(v.service)} }\n${TF_INDENT}${TF_INDENT}}]\n${TF_INDENT}})\n`);
+      if (v.managed_policies && v.managed_policies.length) line('managed_policy_arns', hclList(v.managed_policies));
+      raw(defaultTagsHCL());
+      break;
+
+    case 'kms':
+      line('description', hclString(v.description));
+      line('deletion_window_in_days', v.deletion_window_in_days);
+      line('enable_key_rotation', !!v.enable_key_rotation);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'secret':
+      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+      line('description', hclString(v.description));
+      line('recovery_window_in_days', v.recovery_window);
+      raw(defaultTagsHCL());
+      break;
+
+    case 'vpc':
+      line('cidr_block', hclString(v.cidr_block));
+      line('enable_dns_hostnames', !!v.enable_dns);
+      line('enable_dns_support', true);
+      raw(defaultTagsHCL(name));
+      break;
+
+    case 'subnet':
+      line('vpc_id', 'aws_vpc.main_vpc.id');
+      line('cidr_block', hclString(v.cidr_block));
+      line('availability_zone', hclString(v.availability_zone));
+      if (v.tier === 'public') line('map_public_ip_on_launch', true);
+      raw(defaultTagsHCL(name));
+      break;
+
+    /* ---- Docker resources ---- */
+    case 'docker-container':
+    case 'nifi':
+    case 'kafka-connect':
+    case 'schema-registry':
+    case 'proxy':
+    case 'postgres-container':
+      if (res.provider === 'docker' || res.provider === 'local') {
+        emitDockerContainerBody(out2 => out += out2, res, def, v, name);
+      } else {
+        // cloud container service (ECS/Cloud Run) — emit a minimal best-practice stub
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('cluster', 'aws_ecs_cluster.ecs.id');
+        line('launch_type', '"FARGATE"');
+        line('desired_count', v.cluster_nodes || v.workers || v.replicas || 2);
+        line('task_definition', `aws_ecs_task_definition.${label}.arn`);
+        raw(`${TF_INDENT}network_configuration {\n${TF_INDENT}${TF_INDENT}subnets         = var.private_subnet_ids\n${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.default.id]\n${TF_INDENT}}\n`);
+        raw(`${TF_INDENT}# Image: ${v.image || 'n/a'} — define the matching aws_ecs_task_definition.${label}\n`);
+      }
+      break;
+
+    case 'docker-network':
+      line('name', hclString(v.name));
+      line('driver', hclString(v.driver));
+      if (v.internal) line('internal', true);
+      if (v.subnet) {
+        raw(`${TF_INDENT}ipam_config {\n${TF_INDENT}${TF_INDENT}subnet = ${hclString(v.subnet)}\n${TF_INDENT}}\n`);
+      }
+      break;
+
+    case 'docker-volume':
+      line('name', hclString(v.name));
+      break;
+
+    case 'docker-image':
+      line('name', hclString(v.image));
+      line('keep_locally', !!v.keep_locally);
+      break;
+
+    default:
+      // Generic fallback: emit each non-name field as best we can
+      def.fields.forEach(f => {
+        if (f.tfArg === '__name') return;
+        const val = v[f.key];
+        if (val === '' || val === undefined || val === null) return;
+        const arg = f.tfArg || f.key;
+        if (f.type === 'bool') line(arg, !!val);
+        else if (f.type === 'number') line(arg, val);
+        else if (f.type === 'list' || f.type === 'tags') line(arg, hclList(val));
+        else line(arg, hclString(val));
+      });
+  }
+
+  // ---- custom user arguments (Advanced tab) ----
+  if (res.custom && res.custom.length) {
+    out += `${TF_INDENT}# --- custom arguments ---\n`;
+    res.custom.forEach(c => {
+      if (c.k) out += `${TF_INDENT}${c.k} = ${c.v}\n`;
+    });
+  }
+
+  out += `}\n`;
+  return out;
+}
+
+/* Shared docker_container body emitter (used by many container-capable services) */
+function emitDockerContainerBody(append, res, def, v, name) {
+  let s = '';
+  const I = TF_INDENT;
+  s += `${I}name  = ${hclString(sanitizeName(name))}\n`;
+  s += `${I}image = ${hclString(v.image || 'nginx:latest')}\n`;
+  if (v.restart) s += `${I}restart = ${hclString(v.restart)}\n`;
+  if (v.command) s += `${I}command = ${hclList(v.command.split(' ').filter(Boolean))}\n`;
+  const hp = v.host_port; const cp = v.container_port || v.host_port;
+  if (hp) {
+    s += `${I}ports {\n${I}${I}internal = ${cp}\n${I}${I}external = ${hp}\n${I}}\n`;
+  }
+  const envs = Array.isArray(v.env) ? v.env : [];
+  if (envs.length) {
+    s += `${I}env = ${hclList(envs)}\n`;
+  }
+  const vols = Array.isArray(v.volumes) ? v.volumes : (v.volume ? [v.volume + ':/var/lib/postgresql/data'] : []);
+  vols.forEach(vol => {
+    const [hostV, contV] = vol.split(':');
+    s += `${I}volumes {\n${I}${I}volume_name    = ${hclString(hostV)}\n${I}${I}container_path = ${hclString(contV || '/data')}\n${I}}\n`;
+  });
+  if (v.network) {
+    s += `${I}networks_advanced {\n${I}${I}name = ${hclString(v.network)}\n${I}}\n`;
+  }
+  if (v.memory) s += `${I}memory = ${v.memory}\n`;
+  append(s);
+}
+
+/* ---- variables.tf ---- */
+function emitVariables() {
+  const usesAws = STATE.resources.some(r => r.provider === 'aws') || STATE.settings.provider === 'aws';
+  let out = `# ============================================================\n# variables.tf — shared input variables\n# Keep this file in source control; provide values via\n# terraform.tfvars or environment-specific *.tfvars files.\n# ============================================================\n\n`;
+  out += `variable "project" {\n  description = "Project name, used as a prefix and tag"\n  type        = string\n  default     = ${hclString(STATE.settings.project)}\n}\n\n`;
+  out += `variable "environment" {\n  description = "Deployment environment"\n  type        = string\n  default     = ${hclString(STATE.settings.env)}\n}\n\n`;
+  out += `variable "region" {\n  description = "Cloud region"\n  type        = string\n  default     = ${hclString(STATE.settings.region)}\n}\n\n`;
+  if (usesAws) {
+    out += `variable "vpc_id" {\n  description = "VPC to deploy into"\n  type        = string\n  default     = ""\n}\n\n`;
+    out += `variable "private_subnet_ids" {\n  description = "Private subnet ids for data services"\n  type        = list(string)\n  default     = []\n}\n\n`;
+    out += `variable "public_subnet_ids" {\n  description = "Public subnet ids for load balancers"\n  type        = list(string)\n  default     = []\n}\n`;
+  }
+  return out;
+}
+
+/* ---- providers.tf ---- */
+function emitProviders() {
+  const providersUsed = new Set(STATE.resources.map(r => r.provider));
+  providersUsed.add(STATE.settings.provider);
+  const reqs = [];
+  if (providersUsed.has('aws')) reqs.push(`    aws = {\n      source  = "hashicorp/aws"\n      version = "~> 5.0"\n    }`);
+  if (providersUsed.has('azure')) reqs.push(`    azurerm = {\n      source  = "hashicorp/azurerm"\n      version = "~> 3.0"\n    }`);
+  if (providersUsed.has('gcp')) reqs.push(`    google = {\n      source  = "hashicorp/google"\n      version = "~> 5.0"\n    }`);
+  if (providersUsed.has('docker') || providersUsed.has('local')) reqs.push(`    docker = {\n      source  = "kreuzwerker/docker"\n      version = "~> 3.0"\n    }`);
+
+  let backend = '';
+  const b = STATE.settings.backend;
+  if (b === 's3') backend = `  backend "s3" {\n    bucket = ${hclString(STATE.settings.backendBucket || 'my-tfstate')}\n    key    = ${hclString(STATE.settings.backendKey)}\n    region = ${hclString(STATE.settings.region)}\n  }\n`;
+  else if (b === 'azurerm') backend = `  backend "azurerm" {\n    storage_account_name = ${hclString(STATE.settings.backendBucket || 'tfstate')}\n    container_name       = "tfstate"\n    key                  = ${hclString(STATE.settings.backendKey)}\n  }\n`;
+  else if (b === 'gcs') backend = `  backend "gcs" {\n    bucket = ${hclString(STATE.settings.backendBucket || 'my-tfstate')}\n    prefix = ${hclString(STATE.settings.backendKey)}\n  }\n`;
+  else backend = `  # backend "local" {}  # state stored on disk; switch to s3/gcs/azurerm for teams\n`;
+
+  let out = `# ============================================================\n# providers.tf — provider + backend configuration (shared)\n# ============================================================\n\n`;
+  out += `terraform {\n  required_version = ">= 1.5.0"\n  required_providers {\n${reqs.join('\n')}\n  }\n${backend}}\n\n`;
+
+  if (providersUsed.has('aws')) out += `provider "aws" {\n  region = var.region\n\n  default_tags {\n    tags = {\n      project     = var.project\n      environment = var.environment\n      ManagedBy   = "terraform"\n    }\n  }\n}\n\n`;
+  if (providersUsed.has('azure')) out += `provider "azurerm" {\n  features {}\n}\n\n`;
+  if (providersUsed.has('gcp')) out += `provider "google" {\n  project = var.project\n  region  = var.region\n}\n\n`;
+  if (providersUsed.has('docker') || providersUsed.has('local')) out += `provider "docker" {\n  # host = "unix:///var/run/docker.sock"\n}\n`;
+  return out.trimEnd() + '\n';
+}
+
+/* ---- main.tf ---- */
+function emitMain() {
+  let out = `# ============================================================\n# main.tf — infrastructure resources\n# Generated by Terraform Infrastructure Generator\n# ============================================================\n\n`;
+  if (!STATE.resources.length) {
+    out += `# No resources declared yet. Add infrastructure from the catalog.\n`;
+    return out;
+  }
+  // group by category for readability
+  const byCat = {};
+  STATE.resources.forEach(r => {
+    const cat = (CATALOG_BY_ID[r.catalogId] || {}).category || 'other';
+    (byCat[cat] = byCat[cat] || []).push(r);
+  });
+  CATEGORIES.forEach(cat => {
+    const list = byCat[cat.id];
+    if (!list || !list.length) return;
+    out += `# ----------------------------------------------------------\n# ${cat.label}\n# ----------------------------------------------------------\n\n`;
+    list.forEach(r => { out += emitResource(r) + '\n'; });
+  });
+  return out;
+}
+
+/* ---- outputs.tf ---- */
+function emitOutputs() {
+  let out = `# ============================================================\n# outputs.tf — useful endpoints and identifiers\n# ============================================================\n\n`;
+  let any = false;
+  STATE.resources.forEach(r => {
+    const def = CATALOG_BY_ID[r.catalogId];
+    if (!def) return;
+    const label = sanitizeName(r.values.name || def.id);
+    const tfType = def.tfType[r.provider] || Object.values(def.tfType)[0];
+    if (def.id === 'kafka-msk') { out += `output "${label}_bootstrap_brokers" {\n  value = ${tfType}.${label}.bootstrap_brokers_tls\n}\n\n`; any = true; }
+    else if (def.id === 'opensearch') { out += `output "${label}_endpoint" {\n  value = ${tfType}.${label}.endpoint\n}\n\n`; any = true; }
+    else if (def.id === 'postgres-rds' || def.id === 'postgres-aurora') { out += `output "${label}_endpoint" {\n  value = ${tfType}.${label}.endpoint\n}\n\n`; any = true; }
+    else if (def.id === 'alb' || def.id === 'nlb') { out += `output "${label}_dns_name" {\n  value = ${tfType}.${label}.dns_name\n}\n\n`; any = true; }
+    else if (def.id === 's3') { out += `output "${label}_bucket" {\n  value = ${tfType}.${label}.id\n}\n\n`; any = true; }
+  });
+  if (!any) out += `# No outputs for the current resources.\n`;
+  return out;
+}
+
+/* Public: get the file map */
+function getFiles() {
+  return {
+    'providers.tf': emitProviders(),
+    'variables.tf': emitVariables(),
+    'main.tf': emitMain(),
+    'outputs.tf': emitOutputs(),
+  };
+}
+
+/* Combined single-file view */
+function getCombined() {
+  const files = getFiles();
+  let out = '';
+  ['providers.tf','variables.tf','main.tf','outputs.tf'].forEach(name => {
+    out += `# ==== FILE: ${name} ====\n# (Split into ${name} when sharing with a team)\n\n` + files[name] + '\n\n';
+  });
+  return out.trimEnd() + '\n';
+}
+
+/* ============================================================================
+   MODULE: HCL IMPORT  ->  import.js
+   ----------------------------------------------------------------------------
+   A pragmatic (not full-grammar) parser: finds resource blocks, matches the
+   terraform type back to a catalog entry, and pulls top-level scalar args into
+   custom arguments so nothing is lost on round-trip.
+   ============================================================================ */
+
+const TFTYPE_TO_CATALOG = (() => {
+  const m = {};
+  CATALOG.forEach(def => {
+    Object.entries(def.tfType).forEach(([prov, t]) => {
+      if (!m[t]) m[t] = { catalogId: def.id, provider: prov };
+    });
+  });
+  return m;
+})();
+
+function importHCL(text) {
+  const resources = [];
+  // match: resource "type" "label" { ... }  (brace-balanced)
+  const re = /resource\s+"([^"]+)"\s+"([^"]+)"\s*\{/g;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const tfType = match[1];
+    const label = match[2];
+    const bodyStart = re.lastIndex;
+    const body = extractBlock(text, bodyStart - 1);
+    const mapped = TFTYPE_TO_CATALOG[tfType];
+    const catalogId = mapped ? mapped.catalogId : null;
+    const provider = mapped ? mapped.provider : guessProvider(tfType);
+
+    if (catalogId) {
+      const res = makeResource(catalogId, provider);
+      res.values.name = label;
+      // pull scalar args into custom for fidelity
+      res.custom = parseScalarArgs(body).filter(a => a.k !== 'name' && a.k !== 'tags');
+      resources.push(res);
+    } else {
+      // unknown type → represent as a generic docker-container or skip with note
+      resources.push({
+        id: uid(), catalogId: 'docker-container', provider,
+        values: { ...Object.fromEntries(CATALOG_BY_ID['docker-container'].fields.map(f => [f.key, structuredCloneSafe(f.default)])), name: label + '_imported' },
+        custom: [{ k: '# imported_from', v: hclString(tfType) }, ...parseScalarArgs(body)],
+      });
+    }
+  }
+  return resources;
+}
+
+function extractBlock(text, openBraceIdx) {
+  let depth = 0, i = openBraceIdx;
+  for (; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') { depth--; if (depth === 0) break; }
+  }
+  return text.slice(openBraceIdx + 1, i);
+}
+
+function parseScalarArgs(body) {
+  const args = [];
+  const lines = body.split('\n');
+  for (const ln of lines) {
+    const m = ln.match(/^\s*([a-z_][a-z0-9_]*)\s*=\s*(.+?)\s*$/i);
+    if (m && !m[2].endsWith('{')) {
+      args.push({ k: m[1], v: m[2] });
+    }
+  }
+  return args;
+}
+
+function guessProvider(tfType) {
+  if (tfType.startsWith('aws_')) return 'aws';
+  if (tfType.startsWith('azurerm_')) return 'azure';
+  if (tfType.startsWith('google_')) return 'gcp';
+  if (tfType.startsWith('docker_')) return 'docker';
+  return 'local';
+}
+/* ============================================================================
+   MODULE: UI  ->  ui.js
+   ----------------------------------------------------------------------------
+   Rendering and event wiring. Depends on CATALOG, STATE, HCL generator, and
+   importer modules above.
+   ============================================================================ */
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+let CURRENT_VIEW = 'dashboard';
+let EDIT_ID = null;            // resource id being edited (null = new)
+let DRAFT = null;              // working copy while modal open
+let SELECTED = new Set();      // selected resource ids in table
+let OUT_FILE = 'combined';     // current output file tab
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(8px)'; }, 2200);
+}
+
+/* ---------- theme ---------- */
+function initTheme() {
+  const saved = localStorage.getItem('tfgen.theme') || 'light';
+  setTheme(saved);
+  $('#btn-theme').addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  });
+}
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('tfgen.theme', theme);
+  const dark = theme === 'dark';
+  $('#icon-moon').hidden = dark;
+  $('#icon-sun').hidden = !dark;
+  $('#theme-label').textContent = dark ? 'Light' : 'Dark';
+}
+
+/* ---------- navigation ---------- */
+function initNav() {
+  $$('.cds-tab[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+  document.addEventListener('click', e => {
+    const go = e.target.closest('[data-goto]');
+    if (go) switchView(go.dataset.goto);
+  });
+}
+function switchView(view) {
+  CURRENT_VIEW = view;
+  $$('.view').forEach(v => v.hidden = true);
+  $('#view-' + view).hidden = false;
+  $$('.cds-tab[data-view]').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  if (view === 'dashboard') renderDashboard();
+  if (view === 'resources') renderTable();
+  if (view === 'catalog') renderCatalog();
+  if (view === 'output') renderOutput();
+  if (view === 'reference') renderReference();
+  if (view === 'settings') loadSettingsForm();
+  window.scrollTo(0, 0);
+}
+
+/* ---------- provider dropdown population ---------- */
+function fillProviderSelects() {
+  const opts = PROVIDERS.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+  $('#set-provider').innerHTML = opts;
+  $('#catalog-provider').innerHTML = `<option value="">All providers</option>` + opts;
+  const catFilter = $('#res-filter-cat');
+  catFilter.innerHTML = `<option value="">All categories</option>` + CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDashboard() {
+  const res = STATE.resources;
+  const providers = new Set(res.map(r => r.provider));
+  const cats = new Set(res.map(r => (CATALOG_BY_ID[r.catalogId] || {}).category));
+  const stats = [
+    { label: 'Total resources', value: res.length },
+    { label: 'Categories used', value: cats.size },
+    { label: 'Cloud providers', value: providers.size },
+    { label: 'Environment', value: STATE.settings.env },
+  ];
+  $('#dash-stats').innerHTML = stats.map(s => `
+    <div class="cds-stat">
+      <div style="font-size:12px; color:var(--cds-text-secondary); letter-spacing:0.32px;">${s.label}</div>
+      <div style="font-size:30px; font-weight:300; line-height:1.2; margin-top:6px;">${escapeHtml(String(s.value))}</div>
+    </div>`).join('');
+
+  // by category
+  const byCat = {};
+  res.forEach(r => { const c = (CATALOG_BY_ID[r.catalogId] || {}).category; byCat[c] = (byCat[c] || 0) + 1; });
+  const catRows = CATEGORIES.filter(c => byCat[c.id]).map(c => {
+    const n = byCat[c.id];
+    return `<div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--cds-border-subtle);">
+      <span class="cds-tag cds-tag--${c.tag}">${c.label}</span>
+      <span style="margin-left:auto; font-weight:500;">${n}</span>
+    </div>`;
+  }).join('');
+  $('#dash-by-category').innerHTML = catRows || `<p style="color:var(--cds-text-placeholder); font-size:14px; margin:0;">No resources yet. Add some from the catalog.</p>`;
+
+  // lint
+  $('#dash-lint').innerHTML = renderLint();
+
+  $('#dash-import').onclick = () => { switchView('output'); setTimeout(() => $('#import-file').click(), 50); };
+  $('#dash-seed').onclick = seedExample;
+}
+
+/* heuristic best-practice checks */
+function renderLint() {
+  const checks = [];
+  const res = STATE.resources;
+  const has = id => res.some(r => r.catalogId === id);
+  const awsRes = res.filter(r => r.provider === 'aws');
+
+  const push = (ok, msg, level) => checks.push({ ok, msg, level });
+
+  if (STATE.settings.backend === 'local' && res.length)
+    push(false, 'State backend is local. Use s3/gcs/azurerm remote state for team collaboration and locking.', 'warn');
+  else if (res.length)
+    push(true, 'Remote state backend configured.', 'ok');
+
+  if (awsRes.length && !has('security-group'))
+    push(false, 'AWS resources present but no security group declared. Restrict network access explicitly.', 'warn');
+
+  if (has('kafka-msk')) {
+    const k = res.find(r => r.catalogId === 'kafka-msk');
+    if (k.values.encryption_in_transit !== 'TLS') push(false, 'MSK encryption in transit is not TLS-only.', 'warn');
+    else push(true, 'MSK encryption in transit is TLS.', 'ok');
+  }
+  if (has('postgres-rds')) {
+    const p = res.find(r => r.catalogId === 'postgres-rds');
+    if (!p.values.multi_az) push(false, 'RDS PostgreSQL is single-AZ. Enable Multi-AZ for production.', 'warn');
+    if (!p.values.deletion_protection) push(false, 'RDS deletion protection is off.', 'warn');
+    if (p.values.storage_encrypted) push(true, 'RDS storage encryption enabled.', 'ok');
+  }
+  if (has('opensearch')) {
+    const o = res.find(r => r.catalogId === 'opensearch');
+    if (o.values.encrypt_at_rest && o.values.node_to_node_encryption) push(true, 'OpenSearch encryption fully enabled.', 'ok');
+    else push(false, 'OpenSearch is missing at-rest or node-to-node encryption.', 'warn');
+  }
+  if ((has('nifi') || has('kafka-connect')) && !has('alb') && !has('nlb') && !has('proxy'))
+    push(false, 'Clustered services present without a load balancer or proxy in front.', 'info');
+
+  if (STATE.settings.tags) push(true, 'Default tagging is enabled.', 'ok');
+  else push(false, 'Default tags disabled — tagging aids cost allocation and governance.', 'info');
+
+  if (!checks.length) return `<p style="color:var(--cds-text-placeholder); font-size:14px; margin:0;">Add resources to run checks.</p>`;
+
+  return checks.map(c => {
+    const color = c.ok ? 'var(--cds-support-success)' : (c.level === 'warn' ? 'var(--cds-support-warning)' : 'var(--cds-support-info)');
+    const glyph = c.ok ? '✓' : (c.level === 'warn' ? '!' : 'i');
+    return `<div style="display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--cds-border-subtle); align-items:flex-start;">
+      <span style="flex:0 0 18px; width:18px; height:18px; border-radius:50%; background:${color}; color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; margin-top:1px;">${glyph}</span>
+      <span style="font-size:13px; color:var(--cds-text-secondary);">${escapeHtml(c.msg)}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   RESOURCES TABLE (CRUD)
+   ============================================================ */
+function renderTable() {
+  const tbody = $('#res-tbody');
+  const search = ($('#res-search').value || '').toLowerCase();
+  const catFilter = $('#res-filter-cat').value;
+  let rows = STATE.resources.slice();
+
+  if (search) rows = rows.filter(r => {
+    const def = CATALOG_BY_ID[r.catalogId] || {};
+    return (r.values.name || '').toLowerCase().includes(search) ||
+           (def.label || '').toLowerCase().includes(search) ||
+           (def.tfType[r.provider] || '').toLowerCase().includes(search);
+  });
+  if (catFilter) rows = rows.filter(r => (CATALOG_BY_ID[r.catalogId] || {}).category === catFilter);
+
+  $('#res-empty').hidden = STATE.resources.length > 0;
+  $('#view-resources tbody').closest('table').parentElement.hidden = STATE.resources.length === 0;
+
+  tbody.innerHTML = rows.map(r => {
+    const def = CATALOG_BY_ID[r.catalogId] || {};
+    const cat = CATEGORY_BY_ID[def.category] || { label: '—', tag: 'gray' };
+    const prov = PROVIDERS.find(p => p.id === r.provider) || { label: r.provider };
+    const tfType = def.tfType[r.provider] || Object.values(def.tfType || {})[0] || '—';
+    const key = keySettingsSummary(r, def);
+    const checked = SELECTED.has(r.id) ? 'checked' : '';
+    return `<tr data-id="${r.id}" class="${SELECTED.has(r.id) ? 'selected' : ''}">
+      <td><input type="checkbox" class="row-check" data-id="${r.id}" ${checked}></td>
+      <td style="color:var(--cds-text-primary); font-weight:500;">${escapeHtml(r.values.name || def.id)}</td>
+      <td><span style="font-family:var(--font-mono,'IBM Plex Mono'); font-size:12px;">${escapeHtml(tfType)}</span><div style="font-size:12px; color:var(--cds-text-placeholder);">${escapeHtml(def.label || '')}</div></td>
+      <td><span class="cds-tag cds-tag--${cat.tag}">${cat.label}</span></td>
+      <td>${escapeHtml(prov.label)}</td>
+      <td style="font-size:12px;">${key}</td>
+      <td>
+        <button class="cds-btn cds-btn--ghost cds-btn--compact act-edit" data-id="${r.id}">Edit</button>
+        <button class="cds-btn cds-btn--ghost cds-btn--compact act-dup" data-id="${r.id}">Clone</button>
+        <button class="cds-btn cds-btn--ghost cds-btn--compact act-del" data-id="${r.id}" style="color:var(--cds-support-error);">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // wire row events
+  $$('.act-edit', tbody).forEach(b => b.onclick = e => { e.stopPropagation(); openModal(b.dataset.id); });
+  $$('.act-dup', tbody).forEach(b => b.onclick = e => { e.stopPropagation(); cloneResource(b.dataset.id); });
+  $$('.act-del', tbody).forEach(b => b.onclick = e => { e.stopPropagation(); confirmDelete(b.dataset.id); });
+  $$('tr[data-id]', tbody).forEach(tr => tr.onclick = () => openModal(tr.dataset.id));
+  $$('.row-check', tbody).forEach(c => c.onclick = e => {
+    e.stopPropagation();
+    if (c.checked) SELECTED.add(c.dataset.id); else SELECTED.delete(c.dataset.id);
+    updateSelCount();
+    c.closest('tr').classList.toggle('selected', c.checked);
+  });
+  updateSelCount();
+}
+
+function keySettingsSummary(r, def) {
+  const v = r.values;
+  const bits = [];
+  const showKeys = def.fields.filter(f => ['instance_type','instance_class','number_of_broker_nodes','instance_count','desired_size','image','host_port','cidr_block','engine_version','kafka_version','version'].includes(f.key)).slice(0, 3);
+  showKeys.forEach(f => { if (v[f.key] !== '' && v[f.key] !== undefined) bits.push(`<span style="color:var(--cds-text-placeholder)">${f.label}:</span> ${escapeHtml(String(v[f.key]))}`); });
+  return bits.join('&nbsp;&nbsp;·&nbsp;&nbsp;') || '<span style="color:var(--cds-text-placeholder)">—</span>';
+}
+
+function updateSelCount() {
+  $('#sel-count').textContent = SELECTED.size ? `${SELECTED.size} selected` : '';
+  const all = $('#select-all');
+  const total = STATE.resources.length;
+  if (all) all.checked = total > 0 && SELECTED.size === total;
+}
+
+function cloneResource(id) {
+  const r = getResource(id);
+  if (!r) return;
+  const copy = JSON.parse(JSON.stringify(r));
+  copy.id = uid();
+  copy.values.name = (copy.values.name || 'resource') + '_copy';
+  STATE.resources.push(copy);
+  saveState();
+  renderTable();
+  toast('Resource cloned');
+}
+
+function confirmDelete(id) {
+  const r = getResource(id);
+  if (!r) return;
+  if (confirm(`Delete "${r.values.name}"? This cannot be undone.`)) {
+    deleteResource(id);
+    SELECTED.delete(id);
+    renderTable();
+    toast('Resource deleted');
+  }
+}
+
+/* ============================================================
+   CATALOG
+   ============================================================ */
+function renderCatalog() {
+  const search = ($('#catalog-search').value || '').toLowerCase();
+  const provFilter = $('#catalog-provider').value;
+  const container = $('#catalog-groups');
+
+  let items = CATALOG.slice();
+  if (provFilter) items = items.filter(d => d.providers.includes(provFilter));
+  if (search) items = items.filter(d =>
+    d.label.toLowerCase().includes(search) ||
+    d.desc.toLowerCase().includes(search) ||
+    d.category.includes(search) ||
+    Object.values(d.tfType).some(t => t.toLowerCase().includes(search))
+  );
+
+  const byCat = {};
+  items.forEach(d => { (byCat[d.category] = byCat[d.category] || []).push(d); });
+
+  container.innerHTML = CATEGORIES.filter(c => byCat[c.id]).map(c => {
+    const cards = byCat[c.id].map(d => {
+      const provs = d.providers.map(p => (PROVIDERS.find(x => x.id === p) || {}).label).join(' · ');
+      return `<button class="catalog-item" data-add="${d.id}">
+        <div style="display:flex; align-items:flex-start; gap:12px;">
+          <span style="font-size:22px; line-height:1; color:var(--cds-interactive);">${d.icon}</span>
+          <div style="flex:1;">
+            <div style="font-size:15px; font-weight:500; color:var(--cds-text-primary);">${escapeHtml(d.label)}</div>
+            <div style="font-size:13px; color:var(--cds-text-secondary); margin:3px 0 8px; line-height:1.4;">${escapeHtml(d.desc)}</div>
+            <div style="font-size:11px; color:var(--cds-text-placeholder); letter-spacing:0.3px;">${escapeHtml(provs)}</div>
+          </div>
+          <span style="color:var(--cds-interactive); font-size:18px;">+</span>
+        </div>
+      </button>`;
+    }).join('');
+    return `<div style="margin-bottom:28px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <h2 style="font-size:14px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; color:var(--cds-text-secondary); margin:0;">${c.label}</h2>
+        <div style="flex:1; height:1px; background:var(--cds-border-subtle);"></div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1px; background:var(--cds-border-subtle); border:1px solid var(--cds-border-subtle);">${cards}</div>
+    </div>`;
+  }).join('') || `<p style="color:var(--cds-text-placeholder);">No catalog items match your search.</p>`;
+
+  $$('[data-add]', container).forEach(b => b.onclick = () => {
+    EDIT_ID = null;
+    DRAFT = makeResource(b.dataset.add, provFilter || undefined);
+    openModalWithDraft();
+  });
+}
+
+/* ============================================================
+   MODAL (view / edit details)
+   ============================================================ */
+function openModal(id) {
+  const r = getResource(id);
+  if (!r) return;
+  EDIT_ID = id;
+  DRAFT = JSON.parse(JSON.stringify(r));
+  openModalWithDraft();
+}
+
+function openModalWithDraft() {
+  const def = CATALOG_BY_ID[DRAFT.catalogId];
+  $('#modal-eyebrow').textContent = (EDIT_ID ? 'EDIT' : 'NEW') + ' · ' + (def.tfType[DRAFT.provider] || '');
+  $('#modal-title').textContent = def.label;
+  $('#modal-delete').hidden = !EDIT_ID;
+  $('#modal-save').textContent = EDIT_ID ? 'Save changes' : 'Add resource';
+  setModalTab('form');
+  renderModalFields();
+  renderCustomArgs();
+  $('#modal').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  $('#modal').hidden = true;
+  document.body.style.overflow = '';
+  DRAFT = null; EDIT_ID = null;
+}
+
+function setModalTab(tab) {
+  $$('[data-mtab]').forEach(t => t.classList.toggle('active', t.dataset.mtab === tab));
+  $('#mpane-form').hidden = tab !== 'form';
+  $('#mpane-raw').hidden = tab !== 'raw';
+  $('#mpane-advanced').hidden = tab !== 'advanced';
+  if (tab === 'raw') {
+    // build a temporary resource to preview HCL
+    const tmp = DRAFT;
+    $('#modal-raw').innerHTML = highlightHCL(emitResource(tmp));
+  }
+}
+
+function renderModalFields() {
+  const def = CATALOG_BY_ID[DRAFT.catalogId];
+  const wrap = $('#modal-fields');
+
+  // provider selector first (only providers this resource supports)
+  let html = '';
+  if (def.providers.length > 1) {
+    html += fieldShell('Cloud / provider', `
+      <select class="cds-field" data-field="__provider">
+        ${def.providers.map(p => `<option value="${p}" ${DRAFT.provider === p ? 'selected' : ''}>${(PROVIDERS.find(x => x.id === p) || {}).label}</option>`).join('')}
+      </select>`, 'Determines the Terraform resource type emitted.', true);
+  }
+
+  // group fields
+  const groups = {};
+  def.fields.forEach(f => { const g = f.group || 'General'; (groups[g] = groups[g] || []).push(f); });
+
+  Object.entries(groups).forEach(([g, fields]) => {
+    html += `<div style="grid-column:1/-1; margin-top:4px;"><div style="font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:var(--cds-text-placeholder); border-bottom:1px solid var(--cds-border-subtle); padding-bottom:4px;">${escapeHtml(g)}</div></div>`;
+    fields.forEach(f => { html += renderField(f); });
+  });
+
+  wrap.innerHTML = html;
+
+  // wire inputs
+  $$('[data-field]', wrap).forEach(el => {
+    el.addEventListener('input', () => onFieldChange(el));
+    el.addEventListener('change', () => onFieldChange(el));
+  });
+}
+
+function fieldShell(label, control, help, full) {
+  return `<div style="${full ? 'grid-column:1/-1;' : ''}">
+    <label class="cds-label">${escapeHtml(label)}</label>
+    ${control}
+    ${help ? `<div class="cds-helper">${escapeHtml(help)}</div>` : ''}
+  </div>`;
+}
+
+function renderField(f) {
+  const v = DRAFT.values[f.key];
+  let control = '';
+  if (f.type === 'select') {
+    control = `<select class="cds-field" data-field="${f.key}">${f.options.map(o => `<option value="${escapeAttr(o)}" ${String(v) === String(o) ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`;
+  } else if (f.type === 'bool') {
+    control = `<label class="cds-toggle" style="margin-top:4px;"><input type="checkbox" data-field="${f.key}" ${v ? 'checked' : ''}><span class="cds-toggle-track"><span class="cds-toggle-thumb"></span></span></label>`;
+  } else if (f.type === 'number') {
+    control = `<input class="cds-field" type="number" data-field="${f.key}" value="${escapeAttr(v)}">`;
+  } else if (f.type === 'textarea') {
+    control = `<textarea class="cds-field" rows="4" data-field="${f.key}">${escapeHtml(v || '')}</textarea>`;
+  } else if (f.type === 'list' || f.type === 'tags') {
+    const txt = Array.isArray(v) ? v.join('\n') : '';
+    control = `<textarea class="cds-field" rows="3" data-field="${f.key}" data-list="1" placeholder="one per line">${escapeHtml(txt)}</textarea>`;
+  } else {
+    control = `<input class="cds-field" type="text" data-field="${f.key}" value="${escapeAttr(v)}">`;
+  }
+  return fieldShell(f.label, control, f.help, f.type === 'textarea' || f.type === 'list' || f.type === 'tags');
+}
+
+function onFieldChange(el) {
+  const key = el.dataset.field;
+  if (key === '__provider') { DRAFT.provider = el.value; renderModalFields(); return; }
+  const def = CATALOG_BY_ID[DRAFT.catalogId];
+  const f = def.fields.find(x => x.key === key);
+  if (!f) return;
+  if (f.type === 'bool') DRAFT.values[key] = el.checked;
+  else if (f.type === 'number') DRAFT.values[key] = el.value === '' ? '' : Number(el.value);
+  else if (f.type === 'list' || f.type === 'tags') DRAFT.values[key] = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+  else DRAFT.values[key] = el.value;
+}
+
+/* custom args (Advanced tab) */
+function renderCustomArgs() {
+  const wrap = $('#custom-args');
+  wrap.innerHTML = (DRAFT.custom || []).map((c, i) => `
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input class="cds-field" style="flex:0 0 38%;" placeholder="argument" value="${escapeAttr(c.k)}" data-carg-k="${i}">
+      <span style="color:var(--cds-text-placeholder);">=</span>
+      <input class="cds-field" style="flex:1;" placeholder='"value" / 123 / ["a","b"]' value="${escapeAttr(c.v)}" data-carg-v="${i}">
+      <button class="cds-btn cds-btn--ghost cds-btn--compact" data-carg-del="${i}" style="color:var(--cds-support-error);">✕</button>
+    </div>`).join('');
+  $$('[data-carg-k]', wrap).forEach(el => el.oninput = () => DRAFT.custom[el.dataset.cargK].k = el.value);
+  $$('[data-carg-v]', wrap).forEach(el => el.oninput = () => DRAFT.custom[el.dataset.cargV].v = el.value);
+  $$('[data-carg-del]', wrap).forEach(el => el.onclick = () => { DRAFT.custom.splice(Number(el.dataset.cargDel), 1); renderCustomArgs(); });
+}
+
+function saveModal() {
+  if (!DRAFT.values.name || !String(DRAFT.values.name).trim()) {
+    toast('Please provide a resource name');
+    setModalTab('form');
+    return;
+  }
+  if (EDIT_ID) {
+    updateResource(EDIT_ID, DRAFT);
+    toast('Resource updated');
+  } else {
+    addResource(DRAFT);
+    toast('Resource added');
+  }
+  closeModal();
+  if (CURRENT_VIEW === 'catalog') switchView('resources');
+  else renderTable();
+}
+
+/* ============================================================
+   OUTPUT VIEW
+   ============================================================ */
+function renderOutput() {
+  const files = getFiles();
+  const tabs = $('#out-filetabs');
+  const tabDefs = STATE.settings.split
+    ? [['combined','All (combined)'], ['providers.tf','providers.tf'], ['variables.tf','variables.tf'], ['main.tf','main.tf'], ['outputs.tf','outputs.tf']]
+    : [['combined','main.tf (combined)']];
+  tabs.innerHTML = tabDefs.map(([id, label]) =>
+    `<button class="cds-btn ${OUT_FILE === id ? 'cds-btn--primary' : 'cds-btn--ghost'} cds-btn--compact" data-file="${id}" style="${OUT_FILE === id ? '' : 'border:1px solid var(--cds-border-subtle);'}">${escapeHtml(label)}</button>`
+  ).join('');
+  $$('[data-file]', tabs).forEach(b => b.onclick = () => { OUT_FILE = b.dataset.file; renderOutput(); });
+
+  const content = OUT_FILE === 'combined' ? getCombined() : files[OUT_FILE];
+  $('#out-code').innerHTML = highlightHCL(content);
+}
+
+function currentOutputText() {
+  const files = getFiles();
+  return OUT_FILE === 'combined' ? getCombined() : files[OUT_FILE];
+}
+
+function download(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* very small multi-file "zip" alternative: concatenated download of each file */
+function downloadAllFiles() {
+  const files = getFiles();
+  Object.entries(files).forEach(([name, text], i) => {
+    setTimeout(() => download(name, text), i * 250);
+  });
+  toast('Downloading 4 files');
+}
+
+/* ============================================================
+   REFERENCE VIEW
+   ============================================================ */
+function renderReference() {
+  const c = $('#reference-content');
+  c.innerHTML = CATEGORIES.map(cat => {
+    const defs = CATALOG.filter(d => d.category === cat.id);
+    if (!defs.length) return '';
+    const rows = defs.map(d => {
+      const tfTypes = Object.entries(d.tfType).map(([p, t]) => `<code style="font-size:12px;">${escapeHtml(t)}</code> <span style="color:var(--cds-text-placeholder); font-size:11px;">(${p})</span>`).join('<br>');
+      const settings = d.fields.filter(f => f.tfArg !== '__name').map(f => f.label).join(', ');
+      return `<tr>
+        <td style="color:var(--cds-text-primary); font-weight:500;">${d.icon} ${escapeHtml(d.label)}</td>
+        <td>${tfTypes}</td>
+        <td style="font-size:12px;">${escapeHtml(settings)}</td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin-bottom:32px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <span class="cds-tag cds-tag--${cat.tag}">${cat.label}</span>
+        <div style="flex:1; height:1px; background:var(--cds-border-subtle);"></div>
+      </div>
+      <div style="border:1px solid var(--cds-border-subtle); overflow-x:auto;">
+        <table class="cds-table">
+          <thead><tr><th style="width:240px;">Building block</th><th style="width:280px;">Terraform resource(s)</th><th>Configurable settings</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+function loadSettingsForm() {
+  const s = STATE.settings;
+  $('#set-project').value = s.project;
+  $('#set-env').value = s.env;
+  $('#set-provider').value = s.provider;
+  $('#set-region').value = s.region;
+  $('#set-backend').value = s.backend;
+  $('#set-backend-bucket').value = s.backendBucket;
+  $('#set-backend-key').value = s.backendKey;
+  $('#set-split').checked = s.split;
+  $('#set-tags').checked = s.tags;
+  $('#backend-detail-wrap').style.display = s.backend === 'local' ? 'none' : 'block';
+}
+
+function saveSettings() {
+  STATE.settings = {
+    project: $('#set-project').value.trim() || 'data-platform',
+    env: $('#set-env').value,
+    provider: $('#set-provider').value,
+    region: $('#set-region').value.trim() || 'us-east-1',
+    backend: $('#set-backend').value,
+    backendBucket: $('#set-backend-bucket').value.trim(),
+    backendKey: $('#set-backend-key').value.trim() || 'terraform.tfstate',
+    split: $('#set-split').checked,
+    tags: $('#set-tags').checked,
+  };
+  saveState();
+  updateProviderBadge();
+  $('#set-saved').hidden = false;
+  setTimeout(() => $('#set-saved').hidden = true, 1800);
+  toast('Settings saved');
+}
+
+function updateProviderBadge() {
+  const p = PROVIDERS.find(x => x.id === STATE.settings.provider) || { label: '—' };
+  const badge = $('#provider-badge');
+  badge.textContent = p.label;
+}
+
+/* ============================================================
+   SYNTAX HIGHLIGHT (lightweight HCL)
+   ============================================================ */
+function highlightHCL(code) {
+  // escape first
+  let s = escapeHtml(code);
+  // comments
+  s = s.replace(/(#[^\n]*)/g, '<span class="tok-comment">$1</span>');
+  // strings
+  s = s.replace(/("(?:[^"\\]|\\.)*")/g, '<span class="tok-str">$1</span>');
+  // resource/variable/output/provider keywords
+  s = s.replace(/\b(resource|variable|output|provider|terraform|module|data|backend|required_providers|required_version)\b/g, '<span class="tok-block">$1</span>');
+  // booleans/numbers
+  s = s.replace(/\b(true|false)\b/g, '<span class="tok-key">$1</span>');
+  s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>');
+  return s;
+}
+
+/* ============================================================
+   SEED EXAMPLE — a complete AWS Kafka data platform
+   ============================================================ */
+function seedExample() {
+  if (STATE.resources.length && !confirm('Load the Kafka platform example? This adds several resources to your current project.')) return;
+  const add = (catalogId, provider, overrides = {}) => {
+    const r = makeResource(catalogId, provider);
+    Object.assign(r.values, overrides);
+    STATE.resources.push(r);
+  };
+  STATE.settings.provider = 'aws';
+  STATE.settings.backend = 's3';
+  STATE.settings.backendBucket = 'data-platform-tfstate';
+
+  add('vpc', 'aws', { name: 'platform_vpc', cidr_block: '10.20.0.0/16' });
+  add('subnet', 'aws', { name: 'private_a', cidr_block: '10.20.1.0/24', availability_zone: 'us-east-1a', tier: 'private' });
+  add('subnet', 'aws', { name: 'private_b', cidr_block: '10.20.2.0/24', availability_zone: 'us-east-1b', tier: 'private' });
+  add('security-group', 'aws', { name: 'kafka', ingress_ports: ['9092','9094','2181'], ingress_cidr: '10.20.0.0/16' });
+  add('kms', 'aws', { name: 'data_key' });
+  add('kafka-msk', 'aws', { name: 'events', number_of_broker_nodes: 3, instance_type: 'kafka.m5.large' });
+  add('schema-registry', 'aws', { name: 'schema_registry' });
+  add('kafka-connect', 'aws', { name: 'connect', workers: 3 });
+  add('opensearch', 'aws', { name: 'analytics', instance_count: 3 });
+  add('postgres-rds', 'aws', { name: 'metadata', multi_az: true });
+  add('s3', 'aws', { name: 'data_lake', bucket: 'data-lake' });
+  add('ecs-cluster', 'aws', { name: 'platform' });
+  add('nifi', 'aws', { name: 'ingest', cluster_nodes: 3 });
+  add('alb', 'aws', { name: 'nifi_alb' });
+  add('iam-role', 'aws', { name: 'ecs_task_role' });
+
+  saveState();
+  updateProviderBadge();
+  toast('Kafka platform example loaded');
+  switchView('resources');
+}
+
+/* ============================================================
+   IMPORT
+   ============================================================ */
+function handleImportFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = importHCL(reader.result);
+      if (!imported.length) { toast('No resource blocks found'); return; }
+      if (confirm(`Found ${imported.length} resource(s). Add them to the project?`)) {
+        imported.forEach(r => STATE.resources.push(r));
+        saveState();
+        toast(`Imported ${imported.length} resource(s)`);
+        switchView('resources');
+      }
+    } catch (e) {
+      console.error(e);
+      toast('Import failed — see console');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function escapeAttr(s) { return escapeHtml(s); }
+
+/* ============================================================
+   INIT
+   ============================================================ */
+function init() {
+  initTheme();
+  fillProviderSelects();
+  initNav();
+  updateProviderBadge();
+
+  // modal events
+  $('#modal-close').onclick = closeModal;
+  $('#modal-cancel').onclick = closeModal;
+  $('#modal-save').onclick = saveModal;
+  $('#modal-delete').onclick = () => { if (EDIT_ID && confirm('Delete this resource?')) { deleteResource(EDIT_ID); closeModal(); renderTable(); toast('Resource deleted'); } };
+  $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+  $$('[data-mtab]').forEach(t => t.onclick = () => setModalTab(t.dataset.mtab));
+  $('#add-custom-arg').onclick = () => { DRAFT.custom = DRAFT.custom || []; DRAFT.custom.push({ k: '', v: '' }); renderCustomArgs(); };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
+
+  // table events
+  $('#res-search').oninput = renderTable;
+  $('#res-filter-cat').onchange = renderTable;
+  $('#select-all').onchange = e => {
+    if (e.target.checked) STATE.resources.forEach(r => SELECTED.add(r.id));
+    else SELECTED.clear();
+    renderTable();
+  };
+  $('#bulk-delete').onclick = () => {
+    if (!SELECTED.size) { toast('Nothing selected'); return; }
+    if (confirm(`Delete ${SELECTED.size} selected resource(s)?`)) {
+      SELECTED.forEach(id => deleteResource(id));
+      SELECTED.clear();
+      renderTable();
+      toast('Selected resources deleted');
+    }
+  };
+  $('#bulk-export').onclick = () => {
+    if (!SELECTED.size) { toast('Nothing selected'); return; }
+    const saved = STATE.resources;
+    STATE.resources = saved.filter(r => SELECTED.has(r.id));
+    const text = getCombined();
+    STATE.resources = saved;
+    download('selected-resources.tf', text);
+    toast('Exported selected resources');
+  };
+
+  // catalog events
+  $('#catalog-search').oninput = renderCatalog;
+  $('#catalog-provider').onchange = renderCatalog;
+
+  // settings events
+  $('#set-save').onclick = saveSettings;
+  $('#set-backend').onchange = () => { $('#backend-detail-wrap').style.display = $('#set-backend').value === 'local' ? 'none' : 'block'; };
+
+  // output events
+  $('#out-copy').onclick = () => { navigator.clipboard.writeText(currentOutputText()).then(() => toast('Copied to clipboard')); };
+  $('#out-download').onclick = () => { const name = OUT_FILE === 'combined' ? 'main.tf' : OUT_FILE; download(name, currentOutputText()); toast('Downloaded ' + name); };
+  $('#out-download-zip').onclick = downloadAllFiles;
+  $('#out-import').onclick = () => $('#import-file').click();
+  $('#import-file').onchange = e => { if (e.target.files[0]) handleImportFile(e.target.files[0]); e.target.value = ''; };
+
+  // initial view
+  switchView('dashboard');
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>
