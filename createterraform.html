@@ -428,6 +428,7 @@
       <button class="cds-btn cds-btn--ghost cds-btn--compact" id="bulk-export" style="border:1px solid var(--cds-border-subtle);">Export selected</button>
       <button class="cds-btn cds-btn--ghost cds-btn--compact" id="bulk-delete" style="border:1px solid var(--cds-border-subtle); color:var(--cds-support-error);">Delete selected</button>
       <span id="sel-count" style="font-size:13px; color:var(--cds-text-placeholder);"></span>
+      <button class="cds-btn cds-btn--ghost cds-btn--compact" id="clear-all" style="margin-left:auto; border:1px solid var(--cds-support-error); color:var(--cds-support-error);">Clear all</button>
     </div>
 
     <div style="border:1px solid var(--cds-border-subtle); overflow-x:auto;">
@@ -975,6 +976,23 @@ const CATALOG = [
     ],
   },
   {
+    id: 'ec2-amazon-linux', label: 'EC2 instance (Amazon Linux, latest)', category: 'compute', icon: '▣',
+    providers: ['aws'],
+    tfType: { aws: 'aws_instance' },
+    desc: 'A simple EC2 instance using the latest Amazon Linux 2023 AMI (resolved automatically — no AMI id to maintain).',
+    fields: [
+      F_NAME('app_server'),
+      { key: 'instance_type', label: 'Instance type', type: 'select', default: 't3.micro', options: ['t3.micro','t3.small','t3.medium','t3.large','m5.large','m5.xlarge','c5.large','c5.xlarge'], tfArg: 'instance_type', group: 'Sizing' },
+      { key: 'count', label: 'Count', type: 'number', default: 1, group: 'Sizing', help: 'Number of identical instances.' },
+      { key: 'root_volume_size', label: 'Root volume (GiB)', type: 'number', default: 20, group: 'Sizing' },
+      { key: 'associate_public_ip', label: 'Associate public IP', type: 'bool', default: false, group: 'Networking', help: 'Place in a public subnet and assign a public IP.' },
+      { key: 'key_name', label: 'SSH key pair name', type: 'text', default: '', group: 'Access', help: 'Existing EC2 key pair for SSH. Leave blank for none (use SSM).' },
+      { key: 'enable_ssm', label: 'Enable SSM (Session Manager)', type: 'bool', default: true, group: 'Access', help: 'Attach an instance profile for keyless shell access.' },
+      { key: 'monitoring', label: 'Detailed monitoring', type: 'bool', default: false, group: 'Observability' },
+      { key: 'user_data', label: 'User data (bootstrap script)', type: 'textarea', default: '', group: 'Config', advanced: true, help: 'Shell script run on first boot.' },
+    ],
+  },
+  {
     id: 'asg', label: 'Auto Scaling group', category: 'compute', icon: '⟳',
     providers: ['aws'],
     tfType: { aws: 'aws_autoscaling_group' },
@@ -1439,12 +1457,12 @@ function emitResource(res) {
       raw(`${TF_INDENT}broker_node_group_info {\n`);
       raw(`${TF_INDENT}${TF_INDENT}instance_type   = ${hclString(v.instance_type)}\n`);
       raw(`${TF_INDENT}${TF_INDENT}client_subnets  = var.private_subnet_ids\n`);
-      raw(`${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.kafka.id]\n`);
+      raw(`${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.${label}_sg.id]\n`);
       raw(`${TF_INDENT}${TF_INDENT}storage_info {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}ebs_storage_info {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}volume_size = ${v.ebs_volume_size}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}${TF_INDENT}}\n`);
       raw(`${TF_INDENT}}\n`);
       raw(`${TF_INDENT}encryption_info {\n${TF_INDENT}${TF_INDENT}encryption_in_transit {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}client_broker = ${hclString(v.encryption_in_transit)}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}in_cluster    = true\n${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}}\n`);
       line('enhanced_monitoring', hclString(v.enhanced_monitoring));
-      raw(`${TF_INDENT}configuration_info {\n${TF_INDENT}${TF_INDENT}arn      = aws_msk_configuration.this.arn\n${TF_INDENT}${TF_INDENT}revision = aws_msk_configuration.this.latest_revision\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}configuration_info {\n${TF_INDENT}${TF_INDENT}arn      = aws_msk_configuration.${label}_config.arn\n${TF_INDENT}${TF_INDENT}revision = aws_msk_configuration.${label}_config.latest_revision\n${TF_INDENT}}\n`);
       raw(defaultTagsHCL());
       break;
 
@@ -1483,8 +1501,8 @@ function emitResource(res) {
       line('backup_retention_period', v.backup_retention_period);
       line('deletion_protection', !!v.deletion_protection);
       line('skip_final_snapshot', 'false');
-      line('vpc_security_group_ids', '[aws_security_group.postgres.id]');
-      line('db_subnet_group_name', 'aws_db_subnet_group.this.name');
+      line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
+      line('db_subnet_group_name', `aws_db_subnet_group.${label}_subnets.name`);
       raw(defaultTagsHCL());
       break;
 
@@ -1497,8 +1515,8 @@ function emitResource(res) {
       line('manage_master_user_password', 'true');
       line('storage_encrypted', !!v.storage_encrypted);
       line('backup_retention_period', v.backup_retention_period);
-      line('db_subnet_group_name', 'aws_db_subnet_group.this.name');
-      line('vpc_security_group_ids', '[aws_security_group.postgres.id]');
+      line('db_subnet_group_name', `aws_db_subnet_group.${label}_subnets.name`);
+      line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
       raw(defaultTagsHCL());
       break;
 
@@ -1516,7 +1534,7 @@ function emitResource(res) {
     case 'eks-cluster':
       line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
       line('version', hclString(v.version));
-      line('role_arn', 'aws_iam_role.eks.arn');
+      line('role_arn', `aws_iam_role.${label}_role.arn`);
       raw(`${TF_INDENT}vpc_config {\n`);
       raw(`${TF_INDENT}${TF_INDENT}subnet_ids              = var.private_subnet_ids\n`);
       raw(`${TF_INDENT}${TF_INDENT}endpoint_private_access = ${!!v.endpoint_private}\n`);
@@ -1525,16 +1543,20 @@ function emitResource(res) {
       raw(defaultTagsHCL());
       break;
 
-    case 'eks-nodegroup':
-      line('cluster_name', 'aws_eks_cluster.eks.name');
+    case 'eks-nodegroup': {
+      // reference a real EKS cluster in the project if one exists, else var
+      const eksRes = STATE.resources.find(r => r.catalogId === 'eks-cluster');
+      const clusterRef = eksRes ? `aws_eks_cluster.${sanitizeName(eksRes.values.name || 'eks')}.name` : 'var.eks_cluster_name';
+      line('cluster_name', clusterRef);
       line('node_group_name', `"${sanitizeName(name)}"`);
-      line('node_role_arn', 'aws_iam_role.eks_nodes.arn');
+      line('node_role_arn', `aws_iam_role.${label}_role.arn`);
       line('subnet_ids', 'var.private_subnet_ids');
       line('instance_types', hclList([v.instance_types]));
       line('capacity_type', hclString(v.capacity_type));
       raw(`${TF_INDENT}scaling_config {\n${TF_INDENT}${TF_INDENT}desired_size = ${v.desired_size}\n${TF_INDENT}${TF_INDENT}min_size     = ${v.min_size}\n${TF_INDENT}${TF_INDENT}max_size     = ${v.max_size}\n${TF_INDENT}}\n`);
       raw(defaultTagsHCL());
       break;
+    }
 
     case 'ec2':
     case 'kafka-self':
@@ -1547,11 +1569,30 @@ function emitResource(res) {
         line('instance_type', hclString(v.instance_type || 't3.large'));
         if (v.count || v.instance_count) line('count', v.count || v.instance_count);
         line('subnet_id', 'var.private_subnet_ids[0]');
-        line('vpc_security_group_ids', '[aws_security_group.default.id]');
+        line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
         if (v.monitoring) line('monitoring', true);
         raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = ${v.root_volume_size || v.storage_gb || 50}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
         raw(defaultTagsHCL(name));
       }
+      break;
+    }
+
+    case 'ec2-amazon-linux': {
+      line('ami', 'data.aws_ami.amazon_linux.id');
+      line('instance_type', hclString(v.instance_type || 't3.micro'));
+      if (v.count && v.count > 1) line('count', v.count);
+      line('subnet_id', v.associate_public_ip ? 'var.public_subnet_ids[0]' : 'var.private_subnet_ids[0]');
+      line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
+      if (v.associate_public_ip) line('associate_public_ip_address', true);
+      if (v.key_name) line('key_name', hclString(v.key_name));
+      if (v.enable_ssm) line('iam_instance_profile', `aws_iam_instance_profile.${label}_profile.name`);
+      if (v.monitoring) line('monitoring', true);
+      if (v.user_data && v.user_data.trim()) {
+        raw(`${TF_INDENT}user_data = <<-USERDATA\n${indentBlock(v.user_data, TF_INDENT + TF_INDENT)}\n${TF_INDENT}USERDATA\n`);
+      }
+      raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = ${v.root_volume_size || 20}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}metadata_options {\n${TF_INDENT}${TF_INDENT}http_tokens = "required"\n${TF_INDENT}}\n`); // IMDSv2 best practice
+      raw(defaultTagsHCL(name));
       break;
     }
 
@@ -1561,7 +1602,7 @@ function emitResource(res) {
       line('max_size', v.max_size);
       line('desired_capacity', v.desired_capacity);
       line('vpc_zone_identifier', 'var.private_subnet_ids');
-      raw(`${TF_INDENT}launch_template {\n${TF_INDENT}${TF_INDENT}id      = aws_launch_template.this.id\n${TF_INDENT}${TF_INDENT}version = "$Latest"\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}launch_template {\n${TF_INDENT}${TF_INDENT}id      = aws_launch_template.${label}_lt.id\n${TF_INDENT}${TF_INDENT}version = "$Latest"\n${TF_INDENT}}\n`);
       break;
 
     case 'alb':
@@ -1571,7 +1612,7 @@ function emitResource(res) {
       line('load_balancer_type', hclString(def.id === 'alb' ? 'application' : 'network'));
       line('subnets', 'var.public_subnet_ids');
       if (def.id === 'alb') {
-        line('security_groups', '[aws_security_group.alb.id]');
+        line('security_groups', `[aws_security_group.${label}_sg.id]`);
         if (v.idle_timeout) line('idle_timeout', v.idle_timeout);
       }
       if (v.enable_deletion_protection !== undefined) line('enable_deletion_protection', !!v.enable_deletion_protection);
@@ -1620,13 +1661,16 @@ function emitResource(res) {
       raw(defaultTagsHCL(name));
       break;
 
-    case 'subnet':
-      line('vpc_id', 'aws_vpc.main_vpc.id');
+    case 'subnet': {
+      const vpcRes = STATE.resources.find(r => r.catalogId === 'vpc');
+      const vpcRef = vpcRes ? `aws_vpc.${sanitizeName(vpcRes.values.name || 'main_vpc')}.id` : 'var.vpc_id';
+      line('vpc_id', vpcRef);
       line('cidr_block', hclString(v.cidr_block));
       line('availability_zone', hclString(v.availability_zone));
       if (v.tier === 'public') line('map_public_ip_on_launch', true);
       raw(defaultTagsHCL(name));
       break;
+    }
 
     /* ---- Docker resources ---- */
     case 'docker-container':
@@ -1639,13 +1683,14 @@ function emitResource(res) {
         emitDockerContainerBody(out2 => out += out2, res, def, v, name);
       } else {
         // cloud container service (ECS/Cloud Run) — emit a minimal best-practice stub
+        const ecsRes = STATE.resources.find(r => r.catalogId === 'ecs-cluster');
+        const clusterRef = ecsRes ? `aws_ecs_cluster.${sanitizeName(ecsRes.values.name || 'ecs')}.id` : 'var.ecs_cluster_id';
         line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
-        line('cluster', 'aws_ecs_cluster.ecs.id');
+        line('cluster', clusterRef);
         line('launch_type', '"FARGATE"');
         line('desired_count', v.cluster_nodes || v.workers || v.replicas || 2);
-        line('task_definition', `aws_ecs_task_definition.${label}.arn`);
-        raw(`${TF_INDENT}network_configuration {\n${TF_INDENT}${TF_INDENT}subnets         = var.private_subnet_ids\n${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.default.id]\n${TF_INDENT}}\n`);
-        raw(`${TF_INDENT}# Image: ${v.image || 'n/a'} — define the matching aws_ecs_task_definition.${label}\n`);
+        line('task_definition', `aws_ecs_task_definition.${label}_task.arn`);
+        raw(`${TF_INDENT}network_configuration {\n${TF_INDENT}${TF_INDENT}subnets         = var.private_subnet_ids\n${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.${label}_sg.id]\n${TF_INDENT}}\n`);
       }
       break;
 
@@ -1784,6 +1829,234 @@ function emitResource(res) {
 
   out += `}\n`;
   return out;
+}
+
+/* ----------------------------------------------------------------------------
+   COMPANION RESOURCES
+   Some resources reference supporting resources (security groups, IAM roles,
+   DB subnet groups, MSK configs, launch templates, ECS task definitions).
+   These must exist or `terraform plan` fails with "Reference to undeclared
+   resource". This function returns the companion blocks each resource needs,
+   each tagged with its address so emitMain can de-duplicate. Companions are
+   only emitted when the user hasn't already declared their own equivalent.
+   ---------------------------------------------------------------------------- */
+function emitCompanions(res) {
+  const def = CATALOG_BY_ID[res.catalogId];
+  if (!def) return [];
+  if (res.provider !== 'aws') return []; // companions are AWS-specific
+  const v = res.values;
+  const label = sanitizeName(v.name || def.id);
+  const out = [];
+  const I = TF_INDENT;
+
+  // Helper: a security group scoped to this resource
+  const sg = (ingressBlocks, descr) => ({
+    addr: `aws_security_group.${label}_sg`,
+    hcl:
+`# Auto-generated security group for ${def.label} "${label}"
+resource "aws_security_group" "${label}_sg" {
+  name        = "\${var.project}-${label}"
+  description = "${descr}"
+  vpc_id      = var.vpc_id
+
+${ingressBlocks}
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+`
+  });
+
+  const ingress = (from, to, descr, cidr = '"10.0.0.0/16"') =>
+`  ingress {
+    description = "${descr}"
+    from_port   = ${from}
+    to_port     = ${to}
+    protocol    = "tcp"
+    cidr_blocks = [${cidr}]
+  }
+`;
+
+  switch (def.id) {
+    case 'kafka-msk': {
+      out.push(sg(ingress(9092, 9098, 'Kafka clients (plaintext, TLS, SASL/IAM)') + ingress(2181, 2181, 'Zookeeper'), 'MSK Kafka brokers'));
+      out.push({
+        addr: `aws_msk_configuration.${label}_config`,
+        hcl:
+`# Auto-generated MSK configuration for "${label}"
+resource "aws_msk_configuration" "${label}_config" {
+  kafka_versions = [${hclString(v.kafka_version)}]
+  name           = "\${var.project}-${label}-config"
+
+  server_properties = <<-PROPERTIES
+    auto.create.topics.enable = ${!!v.auto_create_topics}
+    default.replication.factor = 3
+    min.insync.replicas = 2
+    num.partitions = 3
+    unclean.leader.election.enable = false
+  PROPERTIES
+}
+`
+      });
+      break;
+    }
+
+    case 'postgres-rds':
+    case 'postgres-aurora': {
+      out.push(sg(ingress(5432, 5432, 'PostgreSQL from within the VPC'), 'PostgreSQL access'));
+      out.push({
+        addr: `aws_db_subnet_group.${label}_subnets`,
+        hcl:
+`# Auto-generated DB subnet group for "${label}"
+resource "aws_db_subnet_group" "${label}_subnets" {
+  name       = "\${var.project}-${label}"
+  subnet_ids = var.private_subnet_ids
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+`
+      });
+      break;
+    }
+
+    case 'opensearch':
+      out.push(sg(ingress(443, 443, 'HTTPS to OpenSearch'), 'OpenSearch domain access'));
+      break;
+
+    case 'ec2':
+    case 'kafka-self':
+    case 'zookeeper':
+      out.push(sg(ingress(22, 22, 'SSH from within the VPC') + ingress(9092, 9094, 'Service ports'), `${def.label} access`));
+      break;
+
+    case 'ec2-amazon-linux': {
+      const ssh = v.key_name ? ingress(22, 22, 'SSH', v.associate_public_ip ? '"0.0.0.0/0"' : '"10.0.0.0/16"') : '';
+      out.push(sg(ssh || `  # no inbound rules — access via SSM Session Manager\n`, 'Amazon Linux instance'));
+      if (v.enable_ssm) {
+        out.push({
+          addr: `aws_iam_role.${label}_role`,
+          hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'], `SSM role for "${label}"`),
+        });
+        out.push({
+          addr: `aws_iam_instance_profile.${label}_profile`,
+          hcl:
+`# Auto-generated instance profile for "${label}" (SSM access)
+resource "aws_iam_instance_profile" "${label}_profile" {
+  name = "\${var.project}-${label}"
+  role = aws_iam_role.${label}_role.name
+}
+`
+        });
+      }
+      break;
+    }
+
+    case 'alb':
+      out.push(sg(ingress(80, 80, 'HTTP', '"0.0.0.0/0"') + ingress(443, 443, 'HTTPS', '"0.0.0.0/0"'), 'Application Load Balancer'));
+      break;
+
+    case 'nifi':
+    case 'kafka-connect':
+    case 'schema-registry':
+    case 'proxy': {
+      // ECS service companions: SG + a placeholder task definition
+      out.push(sg(ingress(v.host_port || 8080, v.host_port || 8080, 'Service port'), `${def.label} tasks`));
+      out.push({
+        addr: `aws_ecs_task_definition.${label}_task`,
+        hcl:
+`# Auto-generated ECS task definition for "${label}"
+resource "aws_ecs_task_definition" "${label}_task" {
+  family                   = "\${var.project}-${label}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "${v.cpu || 1024}"
+  memory                   = "${v.memory || 2048}"
+
+  container_definitions = jsonencode([{
+    name      = "${label}"
+    image     = ${hclString(v.image || 'public.ecr.aws/docker/library/nginx:latest')}
+    essential = true
+    portMappings = [{ containerPort = ${v.host_port || 8080}, protocol = "tcp" }]
+  }])
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+`
+      });
+      break;
+    }
+
+    case 'eks-cluster': {
+      out.push({
+        addr: `aws_iam_role.${label}_role`,
+        hcl: iamRoleHCL(`${label}_role`, 'eks.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonEKSClusterPolicy'], `EKS control plane role for "${label}"`),
+      });
+      break;
+    }
+
+    case 'eks-nodegroup': {
+      out.push({
+        addr: `aws_iam_role.${label}_role`,
+        hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com',
+          ['arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy','arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy','arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'],
+          `EKS node role for "${label}"`),
+      });
+      break;
+    }
+
+    case 'asg': {
+      out.push({
+        addr: `aws_launch_template.${label}_lt`,
+        hcl:
+`# Auto-generated launch template for "${label}"
+resource "aws_launch_template" "${label}_lt" {
+  name_prefix   = "\${var.project}-${label}-"
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = ${hclString(v.instance_type || 'm5.large')}
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = { Name = "\${var.project}-${label}" }
+  }
+}
+`
+      });
+      break;
+    }
+  }
+  return out;
+}
+
+/* Shared IAM role HCL builder used by companions */
+function iamRoleHCL(roleName, service, policies, descr) {
+  const pol = policies.map(p => `    ${hclString(p)},`).join('\n');
+  return `# Auto-generated IAM role: ${descr}
+resource "aws_iam_role" "${roleName}" {
+  name = "\${var.project}-${roleName}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = ${hclString(service)} }
+    }]
+  })
+
+  managed_policy_arns = [
+${pol}
+  ]
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+`;
+}
+
+/* Does the resource set need the Amazon Linux AMI data source?
+   (used by ASG launch templates and the simple-ec2 resource) */
+function needsAmazonLinuxData() {
+  return STATE.resources.some(r => r.catalogId === 'asg' || r.catalogId === 'ec2-amazon-linux');
 }
 
 /* Shared docker_container body emitter (used by many container-capable services) */
@@ -1987,6 +2260,33 @@ function emitMain() {
     out += `# No resources declared yet. Add infrastructure from the catalog.\n`;
     return out;
   }
+
+  // Data sources (e.g. latest Amazon Linux AMI) emitted once if needed
+  if (needsAmazonLinuxData()) {
+    out += `# ----------------------------------------------------------\n# Data sources\n# ----------------------------------------------------------\n\n`;
+    out += amazonLinuxDataHCL() + '\n';
+  }
+
+  // Addresses the user explicitly declared — never auto-generate over these
+  const declaredAddrs = new Set(STATE.resources.map(r => {
+    const d = CATALOG_BY_ID[r.catalogId];
+    const t = d ? (d.tfType[r.provider] || Object.values(d.tfType)[0]) : '';
+    return `${t}.${sanitizeName(r.values.name || (d && d.id))}`;
+  }));
+
+  // Collect companion resources, de-duplicated by address
+  const companions = new Map();
+  STATE.resources.forEach(r => {
+    emitCompanions(r).forEach(c => {
+      if (declaredAddrs.has(c.addr)) return;     // user already has one
+      if (!companions.has(c.addr)) companions.set(c.addr, c.hcl);
+    });
+  });
+  if (companions.size) {
+    out += `# ----------------------------------------------------------\n# Supporting resources (auto-generated)\n# Security groups, IAM roles, subnet groups, etc. required by the\n# resources below. Edit or replace these with your own as needed.\n# ----------------------------------------------------------\n\n`;
+    companions.forEach(hcl => { out += hcl + '\n'; });
+  }
+
   // group by category for readability
   const byCat = {};
   STATE.resources.forEach(r => {
@@ -2000,6 +2300,25 @@ function emitMain() {
     list.forEach(r => { out += emitResource(r) + '\n'; });
   });
   return out;
+}
+
+/* The latest Amazon Linux 2023 AMI, resolved at plan time via SSM. */
+function amazonLinuxDataHCL() {
+  return `# Latest Amazon Linux 2023 AMI (x86_64), resolved at plan time
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+`;
 }
 
 /* ---- outputs.tf ---- */
@@ -2016,6 +2335,10 @@ function emitOutputs() {
     else if (def.id === 'postgres-rds' || def.id === 'postgres-aurora') { out += `output "${label}_endpoint" {\n  value = ${tfType}.${label}.endpoint\n}\n\n`; any = true; }
     else if (def.id === 'alb' || def.id === 'nlb') { out += `output "${label}_dns_name" {\n  value = ${tfType}.${label}.dns_name\n}\n\n`; any = true; }
     else if (def.id === 's3') { out += `output "${label}_bucket" {\n  value = ${tfType}.${label}.id\n}\n\n`; any = true; }
+    else if (def.id === 'ec2-amazon-linux' || def.id === 'ec2') {
+      const idx = (r.values.count && r.values.count > 1) ? '[*].private_ip' : '.private_ip';
+      out += `output "${label}_private_ip" {\n  value = ${tfType}.${label}${idx}\n}\n\n`; any = true;
+    }
   });
   if (!any) out += `# No outputs for the current resources.\n`;
   return out;
@@ -3033,6 +3356,18 @@ function init() {
     STATE.resources = saved;
     download('selected-resources.tf', text);
     toast('Exported selected resources');
+  };
+  $('#clear-all').onclick = () => {
+    if (!STATE.resources.length) { toast('Nothing to clear'); return; }
+    const n = STATE.resources.length;
+    if (confirm(`Clear all ${n} resource(s) from this project? This cannot be undone.\n\n(Project settings and providers are kept.)`)) {
+      STATE.resources = [];
+      SELECTED.clear();
+      saveState();
+      renderTable();
+      updateSelCount();
+      toast(`Cleared ${n} resource(s)`);
+    }
   };
 
   // catalog events
