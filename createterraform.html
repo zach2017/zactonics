@@ -368,6 +368,7 @@
   <nav style="display:flex; padding:0 8px; border-top:1px solid var(--cds-border-subtle); overflow-x:auto;">
     <button class="cds-tab active" data-view="dashboard">Dashboard</button>
     <button class="cds-tab" data-view="resources">Resources</button>
+    <button class="cds-tab" id="nav-platforms">Reference Platforms</button>
     <button class="cds-tab" data-view="catalog">Add Infrastructure</button>
     <button class="cds-tab" data-view="settings">Project &amp; Providers</button>
     <button class="cds-tab" data-view="output">Terraform Output</button>
@@ -393,10 +394,10 @@
       <div class="cds-card">
         <h2 style="font-size:16px; font-weight:600; margin:0 0 12px;">Quick actions</h2>
         <div style="display:flex; flex-direction:column; gap:8px;">
-          <button class="cds-btn cds-btn--primary" data-goto="catalog" style="justify-content:space-between; width:100%;">Add new infrastructure <span>+</span></button>
-          <button class="cds-btn cds-btn--secondary" data-goto="output" style="justify-content:space-between; width:100%;">Generate Terraform <span>→</span></button>
+          <button class="cds-btn cds-btn--primary" id="dash-platforms" style="justify-content:space-between; width:100%;">Load a reference platform <span>★</span></button>
+          <button class="cds-btn cds-btn--secondary" data-goto="catalog" style="justify-content:space-between; width:100%;">Add new infrastructure <span>+</span></button>
+          <button class="cds-btn cds-btn--ghost" data-goto="output" style="justify-content:space-between; width:100%; border:1px solid var(--cds-border-subtle);">Generate Terraform <span>→</span></button>
           <button class="cds-btn cds-btn--ghost" id="dash-import" style="justify-content:space-between; width:100%; border:1px solid var(--cds-border-subtle);">Import .tf file <span>↑</span></button>
-          <button class="cds-btn cds-btn--ghost" id="dash-seed" style="justify-content:space-between; width:100%; border:1px solid var(--cds-border-subtle);">Load Kafka platform example <span>★</span></button>
         </div>
       </div>
     </div>
@@ -664,6 +665,8 @@ const CATEGORIES = [
   { id: 'data-flow',       label: 'Data flow & ingestion', tag: 'magenta' },
   { id: 'compute',         label: 'Compute & clusters',    tag: 'blue' },
   { id: 'containers',      label: 'Containers',            tag: 'blue' },
+  { id: 'orchestration',   label: 'Kubernetes & Helm',     tag: 'blue' },
+  { id: 'observability',   label: 'Monitoring & alerting', tag: 'magenta' },
   { id: 'networking',      label: 'Networking & routing',  tag: 'green' },
   { id: 'security',        label: 'Security & access',     tag: 'gray' },
   { id: 'foundation',      label: 'Foundation',            tag: 'gray' },
@@ -1071,6 +1074,220 @@ const CATALOG = [
       { key: 'recovery_window', label: 'Recovery window (days)', type: 'number', default: 7, group: 'Config' },
     ],
   },
+
+  /* ---------------- KUBERNETES & HELM ---------------- */
+  {
+    id: 'k8s-namespace', label: 'Kubernetes namespace', category: 'orchestration', icon: '◫',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'kubernetes_namespace', azure: 'kubernetes_namespace', gcp: 'kubernetes_namespace', local: 'kubernetes_namespace' },
+    desc: 'A Kubernetes namespace to isolate a platform (e.g. kafka, monitoring).',
+    fields: [
+      F_NAME('kafka'),
+      { key: 'labels', label: 'Labels', type: 'list', default: ['app.kubernetes.io/part-of=data-platform'], group: 'Metadata', help: 'One key=value per line.' },
+    ],
+  },
+  {
+    id: 'helm-release', label: 'Helm release (generic)', category: 'orchestration', icon: '⎈',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release' },
+    desc: 'Install any Helm chart. The building block behind most open-source platforms.',
+    fields: [
+      F_NAME('release'),
+      { key: 'chart', label: 'Chart', type: 'text', default: 'nginx', group: 'Chart' },
+      { key: 'repository', label: 'Repository URL', type: 'text', default: 'https://charts.bitnami.com/bitnami', group: 'Chart' },
+      { key: 'chart_version', label: 'Chart version', type: 'text', default: '', group: 'Chart', help: 'Pin a version for reproducible deploys.' },
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'default', group: 'Placement' },
+      { key: 'create_namespace', label: 'Create namespace', type: 'bool', default: true, group: 'Placement' },
+      { key: 'values', label: 'values.yaml overrides', type: 'textarea', default: '', group: 'Config', help: 'Inline YAML passed to the chart.' },
+    ],
+  },
+
+  /* ---------------- STRIMZI (open-source Kafka on Kubernetes) ---------------- */
+  {
+    id: 'strimzi-operator', label: 'Strimzi Kafka operator', category: 'data-streaming', icon: '⎈',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release' },
+    desc: 'Installs the Strimzi operator that manages Kafka, Connect, and MirrorMaker via CRDs.',
+    fields: [
+      F_NAME('strimzi_operator'),
+      { key: 'chart_version', label: 'Strimzi version', type: 'select', default: '0.40.0', options: ['0.40.0','0.39.0','0.38.0'], group: 'Chart' },
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
+      { key: 'watch_any_namespace', label: 'Watch all namespaces', type: 'bool', default: false, group: 'Config' },
+    ],
+  },
+  {
+    id: 'strimzi-kafka', label: 'Strimzi Kafka cluster (CR)', category: 'data-streaming', icon: '⇄',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'kubernetes_manifest', azure: 'kubernetes_manifest', gcp: 'kubernetes_manifest', local: 'kubernetes_manifest' },
+    desc: 'A Strimzi Kafka custom resource: brokers, KRaft/Zookeeper, storage, listeners.',
+    fields: [
+      F_NAME('events'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
+      { key: 'kafka_version', label: 'Kafka version', type: 'select', default: '3.7.0', options: ['3.7.0','3.6.1','3.5.1'], group: 'Config' },
+      { key: 'replicas', label: 'Broker replicas', type: 'number', default: 3, group: 'Sizing' },
+      { key: 'mode', label: 'Coordination', type: 'select', default: 'kraft', options: ['kraft','zookeeper'], group: 'Config', help: 'KRaft (node pools) or classic Zookeeper.' },
+      { key: 'zookeeper_replicas', label: 'Zookeeper replicas', type: 'number', default: 3, group: 'Sizing', help: 'Used only in zookeeper mode.' },
+      { key: 'storage_size', label: 'Storage per broker', type: 'text', default: '100Gi', group: 'Sizing' },
+      { key: 'storage_class', label: 'Storage class', type: 'text', default: 'gp3', group: 'Sizing' },
+      { key: 'default_replication_factor', label: 'Default replication factor', type: 'number', default: 3, group: 'Config' },
+      { key: 'min_insync_replicas', label: 'min.insync.replicas', type: 'number', default: 2, group: 'Config', help: 'Set to RF-1 for durability without blocking on one failure.' },
+      { key: 'rack_awareness', label: 'Rack awareness (spread across AZs)', type: 'bool', default: true, group: 'Resilience' },
+      { key: 'expose_external', label: 'External listener', type: 'select', default: 'internal', options: ['internal','loadbalancer','nodeport','ingress'], group: 'Networking' },
+    ],
+  },
+  {
+    id: 'strimzi-connect', label: 'Strimzi Kafka Connect (CR)', category: 'data-flow', icon: '⇶',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'kubernetes_manifest', azure: 'kubernetes_manifest', gcp: 'kubernetes_manifest', local: 'kubernetes_manifest' },
+    desc: 'A Strimzi KafkaConnect custom resource for source/sink connectors.',
+    fields: [
+      F_NAME('connect'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
+      { key: 'replicas', label: 'Worker replicas', type: 'number', default: 3, group: 'Sizing' },
+      { key: 'bootstrap', label: 'Bootstrap servers', type: 'text', default: 'events-kafka-bootstrap:9093', group: 'Config' },
+    ],
+  },
+  {
+    id: 'mirrormaker', label: 'MirrorMaker 2 (failover/replication)', category: 'data-streaming', icon: '⇄',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'kubernetes_manifest', azure: 'kubernetes_manifest', gcp: 'kubernetes_manifest', local: 'kubernetes_manifest' },
+    desc: 'Strimzi KafkaMirrorMaker2 — replicates topics between clusters for DR / multi-region failover.',
+    fields: [
+      F_NAME('mm2'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
+      { key: 'replicas', label: 'Replicas', type: 'number', default: 2, group: 'Sizing' },
+      { key: 'source_cluster', label: 'Source cluster alias', type: 'text', default: 'primary', group: 'Replication' },
+      { key: 'target_cluster', label: 'Target cluster alias', type: 'text', default: 'dr', group: 'Replication' },
+      { key: 'source_bootstrap', label: 'Source bootstrap', type: 'text', default: 'events-kafka-bootstrap.kafka:9093', group: 'Replication' },
+      { key: 'target_bootstrap', label: 'Target bootstrap', type: 'text', default: 'dr-kafka-bootstrap.kafka:9093', group: 'Replication' },
+      { key: 'topics_pattern', label: 'Topics to mirror (regex)', type: 'text', default: '.*', group: 'Replication' },
+      { key: 'sync_group_offsets', label: 'Sync consumer group offsets', type: 'bool', default: true, group: 'Replication', help: 'Enables consumer failover to the DR cluster.' },
+    ],
+  },
+  {
+    id: 'cruise-control', label: 'Cruise Control (rebalancing)', category: 'data-streaming', icon: '⟳',
+    providers: ['aws','azure','gcp','local'],
+    tfType: { aws: 'kubernetes_manifest', azure: 'kubernetes_manifest', gcp: 'kubernetes_manifest', local: 'kubernetes_manifest' },
+    desc: 'Automated Kafka partition rebalancing and self-healing (enabled on the Strimzi Kafka CR).',
+    fields: [
+      F_NAME('cruise_control'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
+      { key: 'goals', label: 'Optimization goals', type: 'list', default: ['RackAwareGoal','ReplicaCapacityGoal','DiskCapacityGoal','NetworkInboundCapacityGoal','CpuCapacityGoal'], group: 'Config' },
+    ],
+  },
+  {
+    id: 'kafka-ui', label: 'Kafka UI (kafbat/provectus)', category: 'data-streaming', icon: '◧',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Web UI for browsing topics, consumer groups, and messages.',
+    fields: [
+      F_NAME('kafka_ui'),
+      { key: 'image', label: 'Container image', type: 'text', default: 'provectuslabs/kafka-ui:latest', group: 'Image' },
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
+      { key: 'host_port', label: 'UI port', type: 'number', default: 8080, group: 'Networking' },
+      { key: 'bootstrap', label: 'Bootstrap servers', type: 'text', default: 'events-kafka-bootstrap:9092', group: 'Config' },
+    ],
+  },
+
+  /* ---------------- MONITORING & ALERTING (open source) ---------------- */
+  {
+    id: 'prometheus', label: 'Prometheus', category: 'observability', icon: '◔',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Metrics collection and time-series database. Scrapes exporters and app endpoints.',
+    fields: [
+      F_NAME('prometheus'),
+      { key: 'chart_version', label: 'kube-prometheus-stack version', type: 'text', default: '58.0.0', group: 'Chart' },
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
+      { key: 'image', label: 'Container image (docker)', type: 'text', default: 'prom/prometheus:v2.51.0', group: 'Image' },
+      { key: 'retention', label: 'Retention period', type: 'text', default: '15d', group: 'Storage' },
+      { key: 'storage_size', label: 'Storage size', type: 'text', default: '50Gi', group: 'Storage' },
+      { key: 'host_port', label: 'Port (docker)', type: 'number', default: 9090, group: 'Networking' },
+      { key: 'scrape_interval', label: 'Scrape interval', type: 'text', default: '30s', group: 'Config', advanced: true },
+    ],
+  },
+  {
+    id: 'grafana', label: 'Grafana', category: 'observability', icon: '◉',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Dashboards and visualization for Prometheus / Loki / OpenSearch data sources.',
+    fields: [
+      F_NAME('grafana'),
+      { key: 'chart_version', label: 'Chart version', type: 'text', default: '7.3.0', group: 'Chart' },
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
+      { key: 'image', label: 'Container image (docker)', type: 'text', default: 'grafana/grafana:10.4.0', group: 'Image' },
+      { key: 'host_port', label: 'UI port', type: 'number', default: 3000, group: 'Networking' },
+      { key: 'admin_password', label: 'Admin password', type: 'text', default: 'changeme', group: 'Security', help: 'Override with a secret in production.' },
+      { key: 'persistence', label: 'Persist dashboards', type: 'bool', default: true, group: 'Storage' },
+      { key: 'default_dashboards', label: 'Install Kafka/JVM dashboards', type: 'bool', default: true, group: 'Config' },
+    ],
+  },
+  {
+    id: 'alertmanager', label: 'Alertmanager', category: 'observability', icon: '◆',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Routes and de-duplicates Prometheus alerts to email, Slack, PagerDuty, etc.',
+    fields: [
+      F_NAME('alertmanager'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
+      { key: 'image', label: 'Container image (docker)', type: 'text', default: 'prom/alertmanager:v0.27.0', group: 'Image' },
+      { key: 'host_port', label: 'Port (docker)', type: 'number', default: 9093, group: 'Networking' },
+      { key: 'receiver', label: 'Default receiver', type: 'select', default: 'slack', options: ['slack','pagerduty','email','webhook'], group: 'Routing' },
+      { key: 'route_target', label: 'Receiver target (URL/email)', type: 'text', default: 'https://hooks.slack.com/services/XXX', group: 'Routing' },
+    ],
+  },
+  {
+    id: 'kafka-exporter', label: 'Kafka Exporter', category: 'observability', icon: '◌',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Exports Kafka consumer-group lag and topic metrics to Prometheus.',
+    fields: [
+      F_NAME('kafka_exporter'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
+      { key: 'image', label: 'Container image', type: 'text', default: 'danielqsj/kafka-exporter:latest', group: 'Image' },
+      { key: 'bootstrap', label: 'Bootstrap servers', type: 'text', default: 'events-kafka-bootstrap:9092', group: 'Config' },
+      { key: 'host_port', label: 'Metrics port', type: 'number', default: 9308, group: 'Networking' },
+    ],
+  },
+  {
+    id: 'node-exporter', label: 'Node Exporter', category: 'observability', icon: '◌',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Exports host-level metrics (CPU, memory, disk, network) to Prometheus.',
+    fields: [
+      F_NAME('node_exporter'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
+      { key: 'image', label: 'Container image', type: 'text', default: 'prom/node-exporter:v1.7.0', group: 'Image' },
+      { key: 'host_port', label: 'Metrics port', type: 'number', default: 9100, group: 'Networking' },
+    ],
+  },
+  {
+    id: 'loki', label: 'Loki (log aggregation)', category: 'observability', icon: '☰',
+    providers: ['aws','azure','gcp','local','docker'],
+    tfType: { aws: 'helm_release', azure: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Log aggregation system that pairs with Grafana, like Prometheus but for logs.',
+    fields: [
+      F_NAME('loki'),
+      { key: 'chart_version', label: 'Chart version', type: 'text', default: '6.0.0', group: 'Chart' },
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
+      { key: 'image', label: 'Container image (docker)', type: 'text', default: 'grafana/loki:3.0.0', group: 'Image' },
+      { key: 'host_port', label: 'Port (docker)', type: 'number', default: 3100, group: 'Networking' },
+      { key: 'retention', label: 'Retention period', type: 'text', default: '168h', group: 'Storage' },
+    ],
+  },
+  {
+    id: 'opensearch-dashboards', label: 'OpenSearch Dashboards', category: 'observability', icon: '◎',
+    providers: ['aws','gcp','local','docker'],
+    tfType: { aws: 'helm_release', gcp: 'helm_release', local: 'helm_release', docker: 'docker_container' },
+    desc: 'Visualization front-end for OpenSearch (Kibana-equivalent).',
+    fields: [
+      F_NAME('os_dashboards'),
+      { key: 'namespace', label: 'Namespace', type: 'text', default: 'observability', group: 'Placement' },
+      { key: 'image', label: 'Container image (docker)', type: 'text', default: 'opensearchproject/opensearch-dashboards:2.13.0', group: 'Image' },
+      { key: 'host_port', label: 'UI port', type: 'number', default: 5601, group: 'Networking' },
+      { key: 'opensearch_url', label: 'OpenSearch URL', type: 'text', default: 'https://opensearch:9200', group: 'Config' },
+    ],
+  },
 ];
 
 /* lookups */
@@ -1450,6 +1667,99 @@ function emitResource(res) {
       line('keep_locally', !!v.keep_locally);
       break;
 
+    /* ---- Kubernetes & Helm ---- */
+    case 'k8s-namespace':
+      raw(`${TF_INDENT}metadata {\n${TF_INDENT}${TF_INDENT}name = ${hclString(sanitizeName(name))}\n`);
+      if (v.labels && v.labels.length) {
+        raw(`${TF_INDENT}${TF_INDENT}labels = {\n`);
+        v.labels.forEach(l => { const [lk, lv] = l.split('='); raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${hclString((lk||'').trim())} = ${hclString((lv||'').trim())}\n`); });
+        raw(`${TF_INDENT}${TF_INDENT}}\n`);
+      }
+      raw(`${TF_INDENT}}\n`);
+      break;
+
+    case 'helm-release':
+      line('name', hclString(sanitizeName(name)));
+      line('repository', hclString(v.repository));
+      line('chart', hclString(v.chart));
+      if (v.chart_version) line('version', hclString(v.chart_version));
+      line('namespace', hclString(v.namespace));
+      line('create_namespace', !!v.create_namespace);
+      if (v.values && v.values.trim()) {
+        raw(`${TF_INDENT}values = [yamlencode(yamldecode(<<-EOT\n${indentBlock(v.values, TF_INDENT + TF_INDENT)}\n${TF_INDENT}EOT\n${TF_INDENT}))]\n`);
+      }
+      break;
+
+    case 'strimzi-operator':
+      line('name', '"strimzi-kafka-operator"');
+      line('repository', '"oci://quay.io/strimzi-helm"');
+      line('chart', '"strimzi-kafka-operator"');
+      line('version', hclString(v.chart_version));
+      line('namespace', hclString(v.namespace));
+      line('create_namespace', 'true');
+      raw(`${TF_INDENT}set {\n${TF_INDENT}${TF_INDENT}name  = "watchAnyNamespace"\n${TF_INDENT}${TF_INDENT}value = ${hclString(String(!!v.watch_any_namespace))}\n${TF_INDENT}}\n`);
+      break;
+
+    case 'strimzi-kafka': {
+      const ns = v.namespace, ver = v.kafka_version, reps = v.replicas;
+      raw(strimziKafkaManifest(name, ns, ver, reps, v));
+      break;
+    }
+
+    case 'strimzi-connect':
+      raw(`${TF_INDENT}manifest = {\n`);
+      raw(`${TF_INDENT}${TF_INDENT}apiVersion = "kafka.strimzi.io/v1beta2"\n`);
+      raw(`${TF_INDENT}${TF_INDENT}kind       = "KafkaConnect"\n`);
+      raw(`${TF_INDENT}${TF_INDENT}metadata = {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}name      = ${hclString(sanitizeName(name))}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}namespace = ${hclString(v.namespace)}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}annotations = { "strimzi.io/use-connector-resources" = "true" }\n${TF_INDENT}${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}spec = {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}replicas         = ${v.replicas}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}bootstrapServers = ${hclString(v.bootstrap)}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}config = {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}"group.id"                          = ${hclString(sanitizeName(name))}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}"config.storage.replication.factor" = 3\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}"offset.storage.replication.factor" = 3\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}"status.storage.replication.factor" = 3\n${TF_INDENT}${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}}\n`);
+      break;
+
+    case 'mirrormaker':
+      raw(`${TF_INDENT}manifest = {\n`);
+      raw(`${TF_INDENT}${TF_INDENT}apiVersion = "kafka.strimzi.io/v1beta2"\n`);
+      raw(`${TF_INDENT}${TF_INDENT}kind       = "KafkaMirrorMaker2"\n`);
+      raw(`${TF_INDENT}${TF_INDENT}metadata   = { name = ${hclString(sanitizeName(name))}, namespace = ${hclString(v.namespace)} }\n`);
+      raw(`${TF_INDENT}${TF_INDENT}spec = {\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}replicas        = ${v.replicas}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}connectCluster  = ${hclString(v.target_cluster)}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}clusters = [\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}{ alias = ${hclString(v.source_cluster)}, bootstrapServers = ${hclString(v.source_bootstrap)} },\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}{ alias = ${hclString(v.target_cluster)}, bootstrapServers = ${hclString(v.target_bootstrap)},\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}  config = { "config.storage.replication.factor" = 3, "offset.storage.replication.factor" = 3, "status.storage.replication.factor" = 3 } },\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}]\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}mirrors = [{\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}sourceCluster = ${hclString(v.source_cluster)}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}targetCluster = ${hclString(v.target_cluster)}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}topicsPattern = ${hclString(v.topics_pattern)}\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}sourceConnector  = { tasksMax = 3, config = { "replication.factor" = 3, "sync.topic.acls.enabled" = "false" } }\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}checkpointConnector = { tasksMax = 3, config = { "sync.group.offsets.enabled" = ${hclString(String(!!v.sync_group_offsets))} } }\n`);
+      raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}}]\n`);
+      raw(`${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}}\n`);
+      break;
+
+    case 'cruise-control':
+      out += `${TF_INDENT}# Cruise Control is enabled via the 'cruiseControl' block on the Strimzi Kafka CR.\n`;
+      out += `${TF_INDENT}# This resource documents the optimization goals to apply.\n`;
+      raw(`${TF_INDENT}manifest = {\n${TF_INDENT}${TF_INDENT}apiVersion = "kafka.strimzi.io/v1beta2"\n${TF_INDENT}${TF_INDENT}kind = "KafkaRebalance"\n${TF_INDENT}${TF_INDENT}metadata = { name = ${hclString(sanitizeName(name))}, namespace = ${hclString(v.namespace)}, labels = { "strimzi.io/cluster" = "events" } }\n`);
+      raw(`${TF_INDENT}${TF_INDENT}spec = { goals = ${hclList(v.goals || [])} }\n${TF_INDENT}}\n`);
+      break;
+
+    /* ---- Monitoring stack: Helm on k8s, docker_container locally ---- */
+    case 'prometheus':
+    case 'grafana':
+    case 'alertmanager':
+    case 'loki':
+    case 'kafka-exporter':
+    case 'node-exporter':
+    case 'opensearch-dashboards':
+    case 'kafka-ui':
+      // 'docker' => run as a container; everything else (local/aws/gcp/azure) => Helm chart on k8s
+      if (res.provider === 'docker') {
+        emitDockerContainerBody(out2 => out += out2, res, def, normalizeMonitorDocker(def, v), name);
+      } else {
+        emitMonitoringHelm(s => out += s, def, v, name);
+      }
+      break;
+
     default:
       // Generic fallback: emit each non-name field as best we can
       def.fields.forEach(f => {
@@ -1504,6 +1814,118 @@ function emitDockerContainerBody(append, res, def, v, name) {
   append(s);
 }
 
+/* indent every line of a block of text by `pad` */
+function indentBlock(text, pad) {
+  return String(text).split('\n').map(l => pad + l).join('\n');
+}
+
+/* For docker deployments of monitoring tools, map their fields onto the
+   docker_container body emitter's expected shape (host_port/image/etc). */
+function normalizeMonitorDocker(def, v) {
+  return {
+    image: v.image,
+    host_port: v.host_port,
+    container_port: v.host_port,
+    restart: 'unless-stopped',
+    env: [],
+    volumes: [],
+    network: 'monitoring_net',
+  };
+}
+
+/* Emit a monitoring tool as a Helm release with sensible best-practice values. */
+function emitMonitoringHelm(append, def, v, name) {
+  const I = TF_INDENT;
+  let s = '';
+  const label = sanitizeName(name);
+  const charts = {
+    'prometheus':            { repo: 'https://prometheus-community.github.io/helm-charts', chart: 'kube-prometheus-stack' },
+    'grafana':               { repo: 'https://grafana.github.io/helm-charts',              chart: 'grafana' },
+    'alertmanager':          { repo: 'https://prometheus-community.github.io/helm-charts', chart: 'alertmanager' },
+    'loki':                  { repo: 'https://grafana.github.io/helm-charts',              chart: 'loki' },
+    'kafka-exporter':        { repo: 'https://prometheus-community.github.io/helm-charts', chart: 'prometheus-kafka-exporter' },
+    'node-exporter':         { repo: 'https://prometheus-community.github.io/helm-charts', chart: 'prometheus-node-exporter' },
+    'opensearch-dashboards': { repo: 'https://opensearch-project.github.io/helm-charts',   chart: 'opensearch-dashboards' },
+    'kafka-ui':              { repo: 'https://provectus.github.io/kafka-ui-charts',         chart: 'kafka-ui' },
+  };
+  const c = charts[def.id] || { repo: 'https://example.com/charts', chart: def.id };
+  s += `${I}name             = ${hclString(label)}\n`;
+  s += `${I}repository       = ${hclString(c.repo)}\n`;
+  s += `${I}chart            = ${hclString(c.chart)}\n`;
+  if (v.chart_version) s += `${I}version          = ${hclString(v.chart_version)}\n`;
+  s += `${I}namespace        = ${hclString(v.namespace || 'monitoring')}\n`;
+  s += `${I}create_namespace = true\n`;
+
+  // a few chart-specific best-practice values
+  const setVals = [];
+  if (def.id === 'prometheus') {
+    setVals.push(['prometheus.prometheusSpec.retention', v.retention || '15d']);
+    setVals.push(['prometheus.prometheusSpec.scrapeInterval', v.scrape_interval || '30s']);
+    setVals.push(['prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage', v.storage_size || '50Gi']);
+  } else if (def.id === 'grafana') {
+    setVals.push(['adminPassword', v.admin_password || 'changeme']);
+    setVals.push(['persistence.enabled', String(!!v.persistence)]);
+    if (v.default_dashboards) setVals.push(['sidecar.dashboards.enabled', 'true']);
+  } else if (def.id === 'loki') {
+    setVals.push(['loki.limits_config.retention_period', v.retention || '168h']);
+  } else if (def.id === 'kafka-exporter') {
+    setVals.push(['kafkaServer', `{${v.bootstrap || 'events-kafka-bootstrap:9092'}}`]);
+  } else if (def.id === 'kafka-ui') {
+    setVals.push(['yamlApplicationConfig.kafka.clusters[0].name', label]);
+    setVals.push(['yamlApplicationConfig.kafka.clusters[0].bootstrapServers', v.bootstrap || 'events-kafka-bootstrap:9092']);
+  }
+  setVals.forEach(([k, val]) => {
+    s += `${I}set {\n${I}${I}name  = ${hclString(k)}\n${I}${I}value = ${hclString(val)}\n${I}}\n`;
+  });
+  append(s);
+}
+
+/* Build a Strimzi Kafka custom resource (kubernetes_manifest). Covers KRaft
+   and Zookeeper modes, rack awareness, storage, listeners, metrics, and
+   Cruise Control for self-healing. */
+function strimziKafkaManifest(name, ns, ver, replicas, v) {
+  const I = TF_INDENT;
+  const nm = sanitizeName(name);
+  let s = '';
+  const listeners = [
+    `{ name = "plain", port = 9092, type = "internal", tls = false }`,
+    `{ name = "tls", port = 9093, type = "internal", tls = true }`,
+  ];
+  if (v.expose_external && v.expose_external !== 'internal') {
+    listeners.push(`{ name = "external", port = 9094, type = ${hclString(v.expose_external)}, tls = true }`);
+  }
+  s += `${I}manifest = {\n`;
+  s += `${I}${I}apiVersion = "kafka.strimzi.io/v1beta2"\n`;
+  s += `${I}${I}kind       = "Kafka"\n`;
+  s += `${I}${I}metadata = {\n${I}${I}${I}name      = ${hclString(nm)}\n${I}${I}${I}namespace = ${hclString(ns)}\n`;
+  if (v.mode === 'kraft') s += `${I}${I}${I}annotations = { "strimzi.io/kraft" = "enabled", "strimzi.io/node-pools" = "enabled" }\n`;
+  s += `${I}${I}}\n`;
+  s += `${I}${I}spec = {\n`;
+  s += `${I}${I}${I}kafka = {\n`;
+  s += `${I}${I}${I}${I}version  = ${hclString(ver)}\n`;
+  s += `${I}${I}${I}${I}replicas = ${replicas}\n`;
+  s += `${I}${I}${I}${I}listeners = [\n${I}${I}${I}${I}${I}${listeners.join(`,\n${I}${I}${I}${I}${I}`)}\n${I}${I}${I}${I}]\n`;
+  s += `${I}${I}${I}${I}config = {\n`;
+  s += `${I}${I}${I}${I}${I}"offsets.topic.replication.factor"         = ${v.default_replication_factor}\n`;
+  s += `${I}${I}${I}${I}${I}"transaction.state.log.replication.factor" = ${v.default_replication_factor}\n`;
+  s += `${I}${I}${I}${I}${I}"transaction.state.log.min.isr"            = ${v.min_insync_replicas}\n`;
+  s += `${I}${I}${I}${I}${I}"default.replication.factor"               = ${v.default_replication_factor}\n`;
+  s += `${I}${I}${I}${I}${I}"min.insync.replicas"                      = ${v.min_insync_replicas}\n`;
+  s += `${I}${I}${I}${I}}\n`;
+  if (v.rack_awareness) s += `${I}${I}${I}${I}rack = { topologyKey = "topology.kubernetes.io/zone" }\n`;
+  s += `${I}${I}${I}${I}storage = { type = "persistent-claim", size = ${hclString(v.storage_size)}, class = ${hclString(v.storage_class)}, deleteClaim = false }\n`;
+  s += `${I}${I}${I}${I}metricsConfig = { type = "jmxPrometheusExporter", valueFrom = { configMapKeyRef = { name = "kafka-metrics", key = "kafka-metrics-config.yml" } } }\n`;
+  s += `${I}${I}${I}}\n`;
+  if (v.mode !== 'kraft') {
+    s += `${I}${I}${I}zookeeper = { replicas = ${v.zookeeper_replicas}, storage = { type = "persistent-claim", size = "20Gi", class = ${hclString(v.storage_class)}, deleteClaim = false } }\n`;
+  }
+  s += `${I}${I}${I}entityOperator = { topicOperator = {}, userOperator = {} }\n`;
+  s += `${I}${I}${I}cruiseControl  = {}\n`;
+  s += `${I}${I}}\n`;
+  s += `${I}}\n`;
+  return s;
+}
+
 /* ---- variables.tf ---- */
 function emitVariables() {
   const usesAws = STATE.resources.some(r => r.provider === 'aws') || STATE.settings.provider === 'aws';
@@ -1529,6 +1951,16 @@ function emitProviders() {
   if (providersUsed.has('gcp')) reqs.push(`    google = {\n      source  = "hashicorp/google"\n      version = "~> 5.0"\n    }`);
   if (providersUsed.has('docker') || providersUsed.has('local')) reqs.push(`    docker = {\n      source  = "kreuzwerker/docker"\n      version = "~> 3.0"\n    }`);
 
+  // Detect Helm / Kubernetes resource usage (Strimzi, monitoring, CRs)
+  const tfTypesUsed = new Set(STATE.resources.map(r => {
+    const d = CATALOG_BY_ID[r.catalogId];
+    return d ? (d.tfType[r.provider] || Object.values(d.tfType)[0]) : '';
+  }));
+  const usesHelm = [...tfTypesUsed].some(t => t === 'helm_release');
+  const usesK8s = [...tfTypesUsed].some(t => t === 'kubernetes_manifest' || t === 'kubernetes_namespace');
+  if (usesHelm) reqs.push(`    helm = {\n      source  = "hashicorp/helm"\n      version = "~> 2.13"\n    }`);
+  if (usesK8s) reqs.push(`    kubernetes = {\n      source  = "hashicorp/kubernetes"\n      version = "~> 2.27"\n    }`);
+
   let backend = '';
   const b = STATE.settings.backend;
   if (b === 's3') backend = `  backend "s3" {\n    bucket = ${hclString(STATE.settings.backendBucket || 'my-tfstate')}\n    key    = ${hclString(STATE.settings.backendKey)}\n    region = ${hclString(STATE.settings.region)}\n  }\n`;
@@ -1542,7 +1974,9 @@ function emitProviders() {
   if (providersUsed.has('aws')) out += `provider "aws" {\n  region = var.region\n\n  default_tags {\n    tags = {\n      project     = var.project\n      environment = var.environment\n      ManagedBy   = "terraform"\n    }\n  }\n}\n\n`;
   if (providersUsed.has('azure')) out += `provider "azurerm" {\n  features {}\n}\n\n`;
   if (providersUsed.has('gcp')) out += `provider "google" {\n  project = var.project\n  region  = var.region\n}\n\n`;
-  if (providersUsed.has('docker') || providersUsed.has('local')) out += `provider "docker" {\n  # host = "unix:///var/run/docker.sock"\n}\n`;
+  if (providersUsed.has('docker') || providersUsed.has('local')) out += `provider "docker" {\n  # host = "unix:///var/run/docker.sock"\n}\n\n`;
+  if (usesK8s) out += `provider "kubernetes" {\n  config_path = "~/.kube/config"  # or use cluster credentials from your EKS/GKE/AKS resource\n}\n\n`;
+  if (usesHelm) out += `provider "helm" {\n  kubernetes {\n    config_path = "~/.kube/config"\n  }\n}\n`;
   return out.trimEnd() + '\n';
 }
 
@@ -1798,7 +2232,7 @@ function renderDashboard() {
   $('#dash-lint').innerHTML = renderLint();
 
   $('#dash-import').onclick = () => { switchView('output'); setTimeout(() => $('#import-file').click(), 50); };
-  $('#dash-seed').onclick = seedExample;
+  $('#dash-platforms').onclick = openPlatformPicker;
 }
 
 /* heuristic best-practice checks */
@@ -1836,6 +2270,27 @@ function renderLint() {
   }
   if ((has('nifi') || has('kafka-connect')) && !has('alb') && !has('nlb') && !has('proxy'))
     push(false, 'Clustered services present without a load balancer or proxy in front.', 'info');
+
+  // monitoring / observability
+  const hasKafka = has('kafka-msk') || has('kafka-self') || has('strimzi-kafka');
+  const hasMonitoring = has('prometheus') || has('grafana');
+  if (hasKafka && !hasMonitoring)
+    push(false, 'Kafka present but no monitoring. Add Prometheus + Grafana (and Kafka Exporter for consumer lag).', 'warn');
+  else if (hasMonitoring)
+    push(true, 'Monitoring stack present.', 'ok');
+  if (hasKafka && hasMonitoring && !has('kafka-exporter'))
+    push(false, 'Add Kafka Exporter to track consumer-group lag in Prometheus.', 'info');
+  if (!has('alertmanager') && hasMonitoring)
+    push(false, 'Prometheus without Alertmanager — alerts will fire but not route anywhere.', 'info');
+
+  // HA / DR
+  if (has('strimzi-kafka')) {
+    const sk = res.filter(r => r.catalogId === 'strimzi-kafka');
+    if (sk.some(r => !r.values.rack_awareness)) push(false, 'A Strimzi Kafka cluster has rack awareness off — brokers may not spread across AZs.', 'warn');
+    else push(true, 'Strimzi rack awareness enabled (AZ spread).', 'ok');
+    if (sk.length > 1 && !has('mirrormaker')) push(false, 'Multiple Kafka clusters but no MirrorMaker 2 — add it for cross-cluster replication/failover.', 'info');
+    if (has('mirrormaker')) push(true, 'MirrorMaker 2 configured for replication/failover.', 'ok');
+  }
 
   if (STATE.settings.tags) push(true, 'Default tagging is enabled.', 'ok');
   else push(false, 'Default tags disabled — tagging aids cost allocation and governance.', 'info');
@@ -2009,6 +2464,7 @@ function openModal(id) {
 }
 
 function openModalWithDraft() {
+  restoreModalChrome();
   const def = CATALOG_BY_ID[DRAFT.catalogId];
   $('#modal-eyebrow').textContent = (EDIT_ID ? 'EDIT' : 'NEW') + ' · ' + (def.tfType[DRAFT.provider] || '');
   $('#modal-title').textContent = def.label;
@@ -2024,6 +2480,7 @@ function openModalWithDraft() {
 function closeModal() {
   $('#modal').hidden = true;
   document.body.style.overflow = '';
+  restoreModalChrome();
   DRAFT = null; EDIT_ID = null;
 }
 
@@ -2277,40 +2734,230 @@ function highlightHCL(code) {
 }
 
 /* ============================================================
-   SEED EXAMPLE — a complete AWS Kafka data platform
-   ============================================================ */
-function seedExample() {
-  if (STATE.resources.length && !confirm('Load the Kafka platform example? This adds several resources to your current project.')) return;
-  const add = (catalogId, provider, overrides = {}) => {
-    const r = makeResource(catalogId, provider);
-    Object.assign(r.values, overrides);
-    STATE.resources.push(r);
-  };
-  STATE.settings.provider = 'aws';
-  STATE.settings.backend = 's3';
-  STATE.settings.backendBucket = 'data-platform-tfstate';
+   REFERENCE PLATFORMS LIBRARY
+   ------------------------------------------------------------
+   Each platform is a curated reference architecture. Selecting one
+   loads its resources (with sensible defaults) which can then be
+   edited like any other resource. `apply` mutates STATE.
 
-  add('vpc', 'aws', { name: 'platform_vpc', cidr_block: '10.20.0.0/16' });
-  add('subnet', 'aws', { name: 'private_a', cidr_block: '10.20.1.0/24', availability_zone: 'us-east-1a', tier: 'private' });
-  add('subnet', 'aws', { name: 'private_b', cidr_block: '10.20.2.0/24', availability_zone: 'us-east-1b', tier: 'private' });
-  add('security-group', 'aws', { name: 'kafka', ingress_ports: ['9092','9094','2181'], ingress_cidr: '10.20.0.0/16' });
-  add('kms', 'aws', { name: 'data_key' });
-  add('kafka-msk', 'aws', { name: 'events', number_of_broker_nodes: 3, instance_type: 'kafka.m5.large' });
-  add('schema-registry', 'aws', { name: 'schema_registry' });
-  add('kafka-connect', 'aws', { name: 'connect', workers: 3 });
-  add('opensearch', 'aws', { name: 'analytics', instance_count: 3 });
-  add('postgres-rds', 'aws', { name: 'metadata', multi_az: true });
-  add('s3', 'aws', { name: 'data_lake', bucket: 'data-lake' });
-  add('ecs-cluster', 'aws', { name: 'platform' });
-  add('nifi', 'aws', { name: 'ingest', cluster_nodes: 3 });
-  add('alb', 'aws', { name: 'nifi_alb' });
-  add('iam-role', 'aws', { name: 'ecs_task_role' });
+   To add your own platform, push an entry here with:
+     { id, name, summary, tags[], provider, backend?, settings?,
+       resources: [ [catalogId, provider, overrides], ... ] }
+   This block is a natural candidate for its own file: platforms.js
+   ============================================================ */
+const PLATFORMS = [
+  {
+    id: 'msk-lakehouse',
+    name: 'AWS MSK streaming lakehouse',
+    summary: 'Managed Kafka (MSK) + Schema Registry + Connect feeding OpenSearch, RDS metadata, and an S3 data lake. NiFi ingestion behind an ALB. Production AWS-native baseline.',
+    tags: ['AWS','MSK','OpenSearch','NiFi','S3'],
+    provider: 'aws', backend: 's3', backendBucket: 'data-platform-tfstate',
+    resources: [
+      ['vpc','aws',{ name:'platform_vpc', cidr_block:'10.20.0.0/16' }],
+      ['subnet','aws',{ name:'private_a', cidr_block:'10.20.1.0/24', availability_zone:'us-east-1a', tier:'private' }],
+      ['subnet','aws',{ name:'private_b', cidr_block:'10.20.2.0/24', availability_zone:'us-east-1b', tier:'private' }],
+      ['subnet','aws',{ name:'private_c', cidr_block:'10.20.3.0/24', availability_zone:'us-east-1c', tier:'private' }],
+      ['security-group','aws',{ name:'kafka', ingress_ports:['9092','9094','2181'], ingress_cidr:'10.20.0.0/16' }],
+      ['kms','aws',{ name:'data_key' }],
+      ['kafka-msk','aws',{ name:'events', number_of_broker_nodes:3, instance_type:'kafka.m5.large' }],
+      ['schema-registry','aws',{ name:'schema_registry' }],
+      ['kafka-connect','aws',{ name:'connect', workers:3 }],
+      ['opensearch','aws',{ name:'analytics', instance_count:3, dedicated_master:true }],
+      ['postgres-rds','aws',{ name:'metadata', multi_az:true }],
+      ['s3','aws',{ name:'data_lake', bucket:'data-lake', versioning:true }],
+      ['ecs-cluster','aws',{ name:'platform' }],
+      ['nifi','aws',{ name:'ingest', cluster_nodes:3 }],
+      ['alb','aws',{ name:'nifi_alb' }],
+      ['iam-role','aws',{ name:'ecs_task_role' }],
+    ],
+  },
+  {
+    id: 'strimzi-k8s',
+    name: 'Strimzi Kafka on Kubernetes (open source)',
+    summary: 'Fully open-source Kafka on EKS via the Strimzi operator: KRaft Kafka cluster with rack awareness, Kafka Connect, Schema Registry, and Kafka UI. No managed services.',
+    tags: ['EKS','Strimzi','KRaft','Open source','Connect'],
+    provider: 'aws', backend: 's3', backendBucket: 'data-platform-tfstate',
+    resources: [
+      ['vpc','aws',{ name:'platform_vpc', cidr_block:'10.30.0.0/16' }],
+      ['subnet','aws',{ name:'private_a', cidr_block:'10.30.1.0/24', availability_zone:'us-east-1a', tier:'private' }],
+      ['subnet','aws',{ name:'private_b', cidr_block:'10.30.2.0/24', availability_zone:'us-east-1b', tier:'private' }],
+      ['subnet','aws',{ name:'private_c', cidr_block:'10.30.3.0/24', availability_zone:'us-east-1c', tier:'private' }],
+      ['eks-cluster','aws',{ name:'data_platform', version:'1.29', endpoint_private:true }],
+      ['eks-nodegroup','aws',{ name:'kafka_nodes', instance_types:'m5.xlarge', desired_size:3, min_size:3, max_size:6 }],
+      ['k8s-namespace','local',{ name:'kafka' }],
+      ['strimzi-operator','local',{ name:'strimzi_operator', namespace:'kafka' }],
+      ['strimzi-kafka','local',{ name:'events', namespace:'kafka', mode:'kraft', replicas:3, rack_awareness:true, min_insync_replicas:2 }],
+      ['strimzi-connect','local',{ name:'connect', namespace:'kafka' }],
+      ['schema-registry','local',{ name:'schema_registry' }],
+      ['kafka-ui','local',{ name:'kafka_ui', namespace:'kafka' }],
+    ],
+  },
+  {
+    id: 'kafka-monitoring',
+    name: 'Kafka observability stack',
+    summary: 'Drop-in monitoring for any Kafka: Prometheus (kube-prometheus-stack), Grafana with Kafka/JVM dashboards, Alertmanager, Kafka Exporter for consumer lag, Node Exporter, and Loki for logs.',
+    tags: ['Prometheus','Grafana','Alertmanager','Loki','Lag'],
+    provider: 'aws', backend: 's3',
+    resources: [
+      ['k8s-namespace','local',{ name:'monitoring' }],
+      ['prometheus','local',{ name:'prometheus', namespace:'monitoring', retention:'30d', storage_size:'100Gi' }],
+      ['grafana','local',{ name:'grafana', namespace:'monitoring', default_dashboards:true }],
+      ['alertmanager','local',{ name:'alertmanager', namespace:'monitoring', receiver:'slack' }],
+      ['kafka-exporter','local',{ name:'kafka_exporter', namespace:'monitoring', bootstrap:'events-kafka-bootstrap.kafka:9092' }],
+      ['node-exporter','local',{ name:'node_exporter', namespace:'monitoring' }],
+      ['loki','local',{ name:'loki', namespace:'monitoring' }],
+    ],
+  },
+  {
+    id: 'strimzi-ha-dr',
+    name: 'Multi-region Kafka with failover (HA/DR)',
+    summary: 'Active/standby Strimzi Kafka across two clusters with MirrorMaker 2 replicating topics and consumer-group offsets for disaster recovery. Cruise Control for self-healing rebalances. Full monitoring included.',
+    tags: ['HA','DR','MirrorMaker 2','Failover','Cruise Control'],
+    provider: 'aws', backend: 's3', backendBucket: 'data-platform-tfstate',
+    resources: [
+      ['eks-cluster','aws',{ name:'primary', version:'1.29' }],
+      ['eks-nodegroup','aws',{ name:'primary_nodes', instance_types:'m5.2xlarge', desired_size:3, min_size:3, max_size:9 }],
+      ['k8s-namespace','local',{ name:'kafka' }],
+      ['strimzi-operator','local',{ name:'strimzi_operator', namespace:'kafka' }],
+      ['strimzi-kafka','local',{ name:'events', namespace:'kafka', mode:'kraft', replicas:3, rack_awareness:true, min_insync_replicas:2, storage_size:'200Gi' }],
+      ['strimzi-kafka','local',{ name:'dr', namespace:'kafka', mode:'kraft', replicas:3, rack_awareness:true, min_insync_replicas:2, storage_size:'200Gi' }],
+      ['mirrormaker','local',{ name:'mm2', namespace:'kafka', source_cluster:'events', target_cluster:'dr', source_bootstrap:'events-kafka-bootstrap.kafka:9093', target_bootstrap:'dr-kafka-bootstrap.kafka:9093', sync_group_offsets:true }],
+      ['cruise-control','local',{ name:'rebalance', namespace:'kafka' }],
+      ['k8s-namespace','local',{ name:'monitoring' }],
+      ['prometheus','local',{ name:'prometheus', namespace:'monitoring', retention:'30d' }],
+      ['grafana','local',{ name:'grafana', namespace:'monitoring' }],
+      ['alertmanager','local',{ name:'alertmanager', namespace:'monitoring', receiver:'pagerduty' }],
+      ['kafka-exporter','local',{ name:'kafka_exporter', namespace:'monitoring' }],
+    ],
+  },
+  {
+    id: 'local-docker-dev',
+    name: 'Local Docker dev stack',
+    summary: 'Everything on your laptop with Docker: Kafka (KRaft), Zookeeper-free, Schema Registry, Kafka Connect, Kafka UI, Postgres, plus Prometheus and Grafana. Edit ports and images with local values.',
+    tags: ['Docker','Local','Kafka UI','Postgres','Grafana'],
+    provider: 'docker', backend: 'local',
+    resources: [
+      ['docker-network','docker',{ name:'data_net' }],
+      ['kafka-self','docker',{ name:'kafka', image:'confluentinc/cp-kafka:7.6.0', mode:'kraft', instance_count:1 }],
+      ['schema-registry','docker',{ name:'schema_registry', image:'confluentinc/cp-schema-registry:7.6.0' }],
+      ['kafka-connect','docker',{ name:'connect', image:'confluentinc/cp-kafka-connect:7.6.0', workers:1 }],
+      ['kafka-ui','docker',{ name:'kafka_ui', host_port:8080, bootstrap:'kafka:9092' }],
+      ['postgres-container','docker',{ name:'postgres', host_port:5432 }],
+      ['nifi','docker',{ name:'nifi', host_port:8443, cluster_nodes:1 }],
+      ['prometheus','docker',{ name:'prometheus', host_port:9090 }],
+      ['grafana','docker',{ name:'grafana', host_port:3000 }],
+    ],
+  },
+  {
+    id: 'nifi-cluster',
+    name: 'Clustered NiFi ingestion',
+    summary: 'A highly-available Apache NiFi cluster coordinated by Zookeeper, behind an ALB, writing to an S3 data lake. Good for ETL and edge data collection.',
+    tags: ['NiFi','Zookeeper','ALB','S3','ETL'],
+    provider: 'aws', backend: 's3',
+    resources: [
+      ['vpc','aws',{ name:'platform_vpc', cidr_block:'10.40.0.0/16' }],
+      ['subnet','aws',{ name:'private_a', cidr_block:'10.40.1.0/24', availability_zone:'us-east-1a', tier:'private' }],
+      ['subnet','aws',{ name:'private_b', cidr_block:'10.40.2.0/24', availability_zone:'us-east-1b', tier:'private' }],
+      ['subnet','aws',{ name:'public_a', cidr_block:'10.40.10.0/24', availability_zone:'us-east-1a', tier:'public' }],
+      ['security-group','aws',{ name:'nifi', ingress_ports:['8443','2181','11443'], ingress_cidr:'10.40.0.0/16' }],
+      ['ecs-cluster','aws',{ name:'nifi_cluster' }],
+      ['zookeeper','aws',{ name:'zookeeper', ensemble_size:'3' }],
+      ['nifi','aws',{ name:'nifi', cluster_nodes:3, cpu:2048, memory:8192 }],
+      ['alb','aws',{ name:'nifi_alb', internal:false }],
+      ['s3','aws',{ name:'landing', bucket:'nifi-landing' }],
+      ['iam-role','aws',{ name:'nifi_task_role' }],
+    ],
+  },
+];
+const PLATFORM_BY_ID = Object.fromEntries(PLATFORMS.map(p => [p.id, p]));
+
+function loadPlatform(platformId, mode) {
+  const p = PLATFORM_BY_ID[platformId];
+  if (!p) return;
+  // mode: 'replace' or 'append'
+  if (mode === 'replace') {
+    STATE.resources = [];
+    SELECTED.clear();
+  }
+  if (p.provider) STATE.settings.provider = p.provider;
+  if (p.backend) STATE.settings.backend = p.backend;
+  if (p.backendBucket) STATE.settings.backendBucket = p.backendBucket;
+  if (p.settings) Object.assign(STATE.settings, p.settings);
+
+  p.resources.forEach(([catalogId, provider, overrides]) => {
+    if (!CATALOG_BY_ID[catalogId]) return;
+    const r = makeResource(catalogId, provider);
+    Object.assign(r.values, overrides || {});
+    STATE.resources.push(r);
+  });
 
   saveState();
   updateProviderBadge();
-  toast('Kafka platform example loaded');
+  closeModal();
+  toast(`Loaded "${p.name}" — ${p.resources.length} resources`);
   switchView('resources');
 }
+
+/* Platform picker modal */
+function openPlatformPicker() {
+  EDIT_ID = null; DRAFT = null;
+  $('#modal-eyebrow').textContent = 'REFERENCE PLATFORMS';
+  $('#modal-title').textContent = 'Load a reference platform';
+  $('#modal-delete').hidden = true;
+  // hide the modal tab bar + footer for this informational modal
+  $('#modal .cds-modal > div:nth-child(2)').style.display = 'none'; // tab bar
+  $('#modal .cds-modal > div:last-child').style.display = 'none';    // footer
+  $('#mpane-form').hidden = false;
+  $('#mpane-raw').hidden = true;
+  $('#mpane-advanced').hidden = true;
+
+  const hasExisting = STATE.resources.length > 0;
+  $('#modal-fields').style.display = 'block';
+  $('#modal-fields').innerHTML = `
+    <p style="font-size:13px; color:var(--cds-text-secondary); margin:0 0 16px;">
+      Pick a curated architecture to load. Resources come in with best-practice defaults and are fully editable afterward with your own local values.
+      ${hasExisting ? `<br><strong style="color:var(--cds-text-primary)">You have ${STATE.resources.length} existing resource(s)</strong> — choose whether to replace or add.` : ''}
+    </p>
+    <div style="display:flex; flex-direction:column; gap:1px; background:var(--cds-border-subtle); border:1px solid var(--cds-border-subtle);">
+      ${PLATFORMS.map(p => `
+        <div style="background:var(--cds-background); padding:16px;">
+          <div style="display:flex; align-items:flex-start; gap:12px;">
+            <div style="flex:1;">
+              <div style="font-size:15px; font-weight:500; color:var(--cds-text-primary);">${escapeHtml(p.name)}</div>
+              <div style="font-size:13px; color:var(--cds-text-secondary); margin:4px 0 8px; line-height:1.5;">${escapeHtml(p.summary)}</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                ${p.tags.map(t => `<span class="cds-tag cds-tag--blue">${escapeHtml(t)}</span>`).join('')}
+                <span class="cds-tag cds-tag--gray">${p.resources.length} resources</span>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; flex:0 0 auto;">
+              ${hasExisting
+                ? `<button class="cds-btn cds-btn--primary cds-btn--compact" data-plat-replace="${p.id}" style="padding-right:14px;">Replace</button>
+                   <button class="cds-btn cds-btn--secondary cds-btn--compact" data-plat-append="${p.id}" style="padding-right:14px;">Add</button>`
+                : `<button class="cds-btn cds-btn--primary cds-btn--compact" data-plat-replace="${p.id}" style="padding-right:14px;">Load</button>`}
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+
+  $$('[data-plat-replace]', $('#modal-fields')).forEach(b => b.onclick = () => loadPlatform(b.dataset.platReplace, 'replace'));
+  $$('[data-plat-append]', $('#modal-fields')).forEach(b => b.onclick = () => loadPlatform(b.dataset.platAppend, 'append'));
+
+  $('#modal').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+/* Restore the modal chrome that the platform picker hid */
+function restoreModalChrome() {
+  const tabBar = $('#modal .cds-modal > div:nth-child(2)');
+  const footer = $('#modal .cds-modal > div:last-child');
+  if (tabBar) tabBar.style.display = '';
+  if (footer) footer.style.display = '';
+  $('#modal-fields').style.display = '';
+}
+
+/* Back-compat: dashboard "example" button now opens the picker */
+function seedExample() { openPlatformPicker(); }
 
 /* ============================================================
    IMPORT
@@ -2349,6 +2996,7 @@ function init() {
   fillProviderSelects();
   initNav();
   updateProviderBadge();
+  $('#nav-platforms').onclick = openPlatformPicker;
 
   // modal events
   $('#modal-close').onclick = closeModal;
