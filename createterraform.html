@@ -1048,6 +1048,7 @@ const CATALOG = [
       { key: 'count', label: 'Count', type: 'number', default: 1, group: 'Sizing', help: 'Number of identical instances.' },
       { key: 'root_volume_size', label: 'Root volume (GiB)', type: 'number', default: 20, group: 'Sizing' },
       { key: 'associate_public_ip', label: 'Associate public IP', type: 'bool', default: false, group: 'Networking', help: 'Place in a public subnet and assign a public IP.' },
+      { key: 'use_default_vpc', label: 'Use account default VPC', type: 'bool', default: false, group: 'Networking', help: 'Deploy into the AWS account default VPC/subnet via data sources — no VPC resources needed. Simplest path for a quick demo.' },
       { key: 'http_server', label: 'Open HTTP/HTTPS (web server)', type: 'bool', default: false, group: 'Networking', help: 'Allow inbound 80/443 from the internet for a public web host.' },
       { key: 'key_name', label: 'SSH key pair name', type: 'text', default: '', group: 'Access', help: 'Existing EC2 key pair for SSH. Leave blank for none (use SSM).' },
       { key: 'enable_ssm', label: 'Enable SSM (Session Manager)', type: 'bool', default: true, group: 'Access', help: 'Attach an instance profile for keyless shell access.' },
@@ -1740,7 +1741,10 @@ function emitResource(res) {
       line('ami', 'data.aws_ami.amazon_linux.id');
       line('instance_type', hclString(v.instance_type || 't3.micro'));
       if (v.count && v.count > 1) line('count', v.count);
-      line('subnet_id', v.associate_public_ip ? firstSubnetExpr('public', 'public_subnet_ids') : firstSubnetExpr('private', 'private_subnet_ids'));
+      // In default-VPC mode, omit subnet_id so AWS auto-selects a default subnet.
+      if (!v.use_default_vpc) {
+        line('subnet_id', v.associate_public_ip ? firstSubnetExpr('public', 'public_subnet_ids') : firstSubnetExpr('private', 'private_subnet_ids'));
+      }
       line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
       if (v.associate_public_ip) line('associate_public_ip_address', true);
       if (v.key_name) line('key_name', hclString(v.key_name));
@@ -1748,6 +1752,7 @@ function emitResource(res) {
       if (v.monitoring) line('monitoring', true);
       if (v.user_data && v.user_data.trim()) {
         raw(`${TF_INDENT}user_data = <<-USERDATA\n${indentBlock(v.user_data, TF_INDENT + TF_INDENT)}\n${TF_INDENT}USERDATA\n`);
+        line('user_data_replace_on_change', true);
       }
       raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = ${v.root_volume_size || 20}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
       raw(`${TF_INDENT}metadata_options {\n${TF_INDENT}${TF_INDENT}http_tokens = "required"\n${TF_INDENT}}\n`); // IMDSv2 best practice
@@ -2111,7 +2116,8 @@ function emitCompanions(res) {
 
   // Helper: a security group scoped to this resource
   const vpcDecl = STATE.resources.find(r => r.catalogId === 'vpc' && r.provider === 'aws');
-  const vpcRef = vpcDecl ? `aws_vpc.${sanitizeName(vpcDecl.values.name || 'main_vpc')}.id` : 'var.vpc_id';
+  let vpcRef = vpcDecl ? `aws_vpc.${sanitizeName(vpcDecl.values.name || 'main_vpc')}.id` : 'var.vpc_id';
+  if (v.use_default_vpc) vpcRef = 'data.aws_vpc.default.id';
   const sg = (ingressBlocks, descr) => ({
     addr: `aws_security_group.${label}_sg`,
     hcl:
@@ -2748,7 +2754,7 @@ function emitVariables() {
   if (usesAws) {
     // Are the subnet variables actually referenced (compute without declared subnets)?
     const hasAwsSubnets = STATE.resources.some(r => r.catalogId === 'subnet' && r.provider === 'aws');
-    const needsSubnetValues = !hasAwsSubnets && STATE.resources.some(r => r.provider === 'aws' &&
+    const needsSubnetValues = !hasAwsSubnets && STATE.resources.some(r => r.provider === 'aws' && !r.values.use_default_vpc &&
       ['ec2','ec2-amazon-linux','ec2-cluster','ec2-bastion','kafka-self','zookeeper','kafka-msk',
        'opensearch','postgres-rds','postgres-aurora','eks-cluster','eks-nodegroup','asg','alb','nlb',
        'nifi','kafka-connect','schema-registry','proxy'].includes(r.catalogId));
@@ -2835,9 +2841,15 @@ function emitMain() {
   }
 
   // Data sources (e.g. latest Amazon Linux AMI) emitted once if needed
-  if (needsAmazonLinuxData()) {
+  const needsDefaultVpc = STATE.resources.some(r => r.provider === 'aws' && r.values.use_default_vpc);
+  if (needsAmazonLinuxData() || needsDefaultVpc) {
     out += `# ----------------------------------------------------------\n# Data sources\n# ----------------------------------------------------------\n\n`;
-    out += amazonLinuxDataHCL() + '\n';
+    if (needsAmazonLinuxData()) out += amazonLinuxDataHCL() + '\n';
+    if (needsDefaultVpc) {
+      out += `# Account default VPC and its subnets (no networking resources needed)\n` +
+             `data "aws_vpc" "default" {\n  default = true\n}\n\n` +
+             `data "aws_subnets" "default" {\n  filter {\n    name   = "vpc-id"\n    values = [data.aws_vpc.default.id]\n  }\n}\n\n`;
+    }
   }
 
   // Addresses the user explicitly declared — never auto-generate over these
@@ -3682,31 +3694,24 @@ const PLATFORMS = [
   {
     id: 'ec2-hello-world',
     name: 'EC2 web host — Hello World',
-    summary: 'A single public EC2 instance (latest Amazon Linux) serving a "Hello World" web page, with every dependency: VPC, public subnet, internet gateway, route table, and a security group allowing HTTP/HTTPS. Uses local state — terraform init/apply works with zero extra setup.',
-    tags: ['AWS','EC2','Beginner','Self-contained','Web'],
+    summary: 'A single EC2 instance (latest Amazon Linux 2023) serving a "Hello World" web page in your account\'s default VPC — no networking resources to manage. Security group opens HTTP/SSH. Local state, so terraform init/apply works on download with zero setup.',
+    tags: ['AWS','EC2','Beginner','Default VPC','Web'],
     provider: 'aws', backend: 'local',
     resources: [
-      ['vpc','aws',{ name:'web_vpc', cidr_block:'10.10.0.0/16', enable_dns:true }],
-      ['subnet','aws',{ name:'web_public', cidr_block:'10.10.1.0/24', tier:'public', availability_zone:'us-east-1a' }],
       ['ec2-amazon-linux','aws',{
         name:'web',
-        instance_type:'t3.micro',
+        instance_type:'t2.micro',
+        use_default_vpc:true,
         associate_public_ip:true,
         http_server:true,
-        enable_ssm:true,
+        enable_ssm:false,
         root_volume_size:8,
         user_data:
           '#!/bin/bash\n' +
+          'dnf update -y\n' +
           'dnf install -y httpd\n' +
           'systemctl enable --now httpd\n' +
-          'cat > /var/www/html/index.html <<\'HTML\'\n' +
-          '<!doctype html>\n' +
-          '<html><head><title>Hello World</title></head>\n' +
-          '<body style="font-family:sans-serif;text-align:center;margin-top:10%">\n' +
-          '<h1>Hello, World!</h1>\n' +
-          '<p>Served from EC2 via Terraform.</p>\n' +
-          '</body></html>\n' +
-          'HTML\n',
+          'echo "<html><body style=\'font-family:sans-serif;text-align:center;margin-top:10%\'><h1>Hello World from Terraform!</h1><p>Served from $(hostname -f)</p></body></html>" > /var/www/html/index.html\n',
       }],
     ],
   },
