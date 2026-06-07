@@ -677,6 +677,20 @@ const CATEGORIES = [
 const F_NAME = (def) => ({ key: 'name', label: 'Resource name', type: 'text', default: def, help: 'Logical name; used for the Terraform resource label and Name tag.', tfArg: '__name' });
 const F_INSTANCE_COUNT = { key: 'instance_count', label: 'Instance / node count', type: 'number', default: 3, group: 'Sizing', help: 'Number of nodes in the cluster.' };
 
+/* Environment variables for a service. Rendered as one KEY=VALUE per line,
+   emitted into container env / Helm values, and (for managed AWS services)
+   stored in Secrets Manager rather than inline. */
+const F_ENV = (defaults) => ({
+  key: 'env', label: 'Environment variables', type: 'list', default: defaults || [],
+  group: 'Environment', help: 'One KEY=VALUE per line. Sensitive values are routed to a secret where the provider supports it.',
+});
+/* A password/credential field with a generated-looking default.
+   `secret: true` marks it so the emitter treats it as sensitive. */
+const F_PASSWORD = (key, label, def, help) => ({
+  key, label: label || 'Password', type: 'text', default: def || 'change-me-' + Math.random().toString(36).slice(2, 8),
+  group: 'Environment', secret: true, help: help || 'Default is a placeholder — override and store securely before deploying.',
+});
+
 const CATALOG = [
 
   /* ---------------- FOUNDATION ---------------- */
@@ -735,6 +749,16 @@ const CATALOG = [
       { key: 'mode', label: 'Coordination mode', type: 'select', default: 'kraft', options: ['kraft','zookeeper'], group: 'Config', help: 'KRaft removes the Zookeeper dependency (Kafka 3.3+).' },
       { key: 'replication_factor', label: 'Default replication factor', type: 'number', default: 3, group: 'Config' },
       { key: 'storage_gb', label: 'Storage per broker (GB)', type: 'number', default: 200, group: 'Sizing' },
+      F_ENV([
+        'KAFKA_PROCESS_ROLES=broker,controller',
+        'KAFKA_NODE_ID=1',
+        'KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093',
+        'KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092',
+        'KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093',
+        'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3',
+        'KAFKA_AUTO_CREATE_TOPICS_ENABLE=false',
+        'CLUSTER_ID=ciWo7IWazngRchmPES6q5A==',
+      ]),
     ],
   },
   {
@@ -747,6 +771,12 @@ const CATALOG = [
       { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-zookeeper:7.6.0', group: 'Image' },
       { key: 'ensemble_size', label: 'Ensemble size', type: 'select', default: '3', options: ['1','3','5','7'], group: 'Sizing', help: 'Use an odd number for quorum.' },
       { key: 'instance_type', label: 'Instance type', type: 'text', default: 't3.medium', group: 'Sizing' },
+      F_ENV([
+        'ZOOKEEPER_CLIENT_PORT=2181',
+        'ZOOKEEPER_TICK_TIME=2000',
+        'ZOOKEEPER_INIT_LIMIT=5',
+        'ZOOKEEPER_SYNC_LIMIT=2',
+      ]),
     ],
   },
   {
@@ -758,6 +788,11 @@ const CATALOG = [
       F_NAME('schema_registry'),
       { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-schema-registry:7.6.0', group: 'Image' },
       { key: 'compatibility', label: 'Compatibility level', type: 'select', default: 'BACKWARD', options: ['BACKWARD','FORWARD','FULL','NONE'], group: 'Config' },
+      F_ENV([
+        'SCHEMA_REGISTRY_HOST_NAME=schema-registry',
+        'SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS=PLAINTEXT://kafka:9092',
+        'SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081',
+      ]),
     ],
   },
 
@@ -778,6 +813,8 @@ const CATALOG = [
       { key: 'zone_awareness', label: 'Multi-AZ zone awareness', type: 'bool', default: true, group: 'Resilience' },
       { key: 'encrypt_at_rest', label: 'Encryption at rest', type: 'bool', default: true, group: 'Security' },
       { key: 'node_to_node_encryption', label: 'Node-to-node encryption', type: 'bool', default: true, group: 'Security' },
+      { key: 'master_user', label: 'Master username (fine-grained access)', type: 'text', default: 'admin', group: 'Environment', help: 'Enables fine-grained access control with an internal user database.' },
+      F_PASSWORD('master_password', 'Master password', 'OpenSearch-Admin-1!', 'Must meet AWS complexity rules (uppercase, lowercase, number, symbol, 8+ chars). Stored in Secrets Manager on emit.'),
     ],
   },
   {
@@ -797,6 +834,7 @@ const CATALOG = [
       { key: 'deletion_protection', label: 'Deletion protection', type: 'bool', default: true, tfArg: 'deletion_protection', group: 'Security' },
       { key: 'db_name', label: 'Initial database name', type: 'text', default: 'appdb', tfArg: 'db_name', group: 'Config' },
       { key: 'username', label: 'Master username', type: 'text', default: 'dbadmin', tfArg: 'username', group: 'Config' },
+      F_PASSWORD('password', 'Master password', 'change-me-in-secrets-manager', 'For RDS, a Secrets-Manager-managed password is generated automatically (manage_master_user_password). This value is only used if you disable that.'),
     ],
   },
   {
@@ -811,6 +849,7 @@ const CATALOG = [
       { key: 'instance_class', label: 'Instance class', type: 'select', default: 'db.r6g.large', options: ['db.t3.medium','db.r6g.large','db.r6g.xlarge','db.serverless'], group: 'Sizing' },
       { key: 'storage_encrypted', label: 'Storage encrypted', type: 'bool', default: true, tfArg: 'storage_encrypted', group: 'Security' },
       { key: 'backup_retention_period', label: 'Backup retention (days)', type: 'number', default: 7, tfArg: 'backup_retention_period', group: 'Backups' },
+      F_PASSWORD('password', 'Master password', 'change-me-in-secrets-manager', 'Aurora uses a Secrets-Manager-managed password automatically. This value is only used if you disable that.'),
     ],
   },
   {
@@ -825,6 +864,12 @@ const CATALOG = [
       { key: 'db_name', label: 'Database name', type: 'text', default: 'appdb', group: 'Config' },
       { key: 'username', label: 'Username', type: 'text', default: 'postgres', group: 'Config' },
       { key: 'volume', label: 'Named volume', type: 'text', default: 'pgdata', group: 'Storage' },
+      F_PASSWORD('password', 'POSTGRES_PASSWORD', 'postgres', 'Default password for the postgres superuser. Override for anything beyond local dev.'),
+      F_ENV([
+        'POSTGRES_DB=appdb',
+        'POSTGRES_USER=postgres',
+        'PGDATA=/var/lib/postgresql/data/pgdata',
+      ]),
     ],
   },
   {
@@ -855,6 +900,13 @@ const CATALOG = [
       { key: 'cpu', label: 'CPU units (per node)', type: 'number', default: 2048, group: 'Sizing' },
       { key: 'memory', label: 'Memory MiB (per node)', type: 'number', default: 8192, group: 'Sizing' },
       { key: 'host_port', label: 'UI port', type: 'number', default: 8443, group: 'Networking' },
+      F_PASSWORD('password', 'Single-user password', 'ctmsL8nFkSF9Tn5l8aQ2YxR', 'NiFi requires a password of at least 12 characters (SINGLE_USER_CREDENTIALS_PASSWORD).'),
+      F_ENV([
+        'SINGLE_USER_CREDENTIALS_USERNAME=admin',
+        'NIFI_WEB_HTTPS_PORT=8443',
+        'NIFI_CLUSTER_IS_NODE=true',
+        'NIFI_ZK_CONNECT_STRING=zookeeper:2181',
+      ]),
     ],
   },
   {
@@ -867,6 +919,16 @@ const CATALOG = [
       { key: 'image', label: 'Container image', type: 'text', default: 'confluentinc/cp-kafka-connect:7.6.0', group: 'Image' },
       { key: 'workers', label: 'Worker count', type: 'number', default: 3, group: 'Sizing' },
       { key: 'group_id', label: 'Connect group id', type: 'text', default: 'connect-cluster', group: 'Config' },
+      F_ENV([
+        'CONNECT_BOOTSTRAP_SERVERS=kafka:9092',
+        'CONNECT_GROUP_ID=connect-cluster',
+        'CONNECT_CONFIG_STORAGE_TOPIC=connect-configs',
+        'CONNECT_OFFSET_STORAGE_TOPIC=connect-offsets',
+        'CONNECT_STATUS_STORAGE_TOPIC=connect-status',
+        'CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter',
+        'CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter',
+        'CONNECT_REST_ADVERTISED_HOST_NAME=connect',
+      ]),
     ],
   },
 
@@ -883,7 +945,7 @@ const CATALOG = [
       { key: 'host_port', label: 'Host port', type: 'number', default: 8080, group: 'Networking' },
       { key: 'container_port', label: 'Container port', type: 'number', default: 80, group: 'Networking' },
       { key: 'network', label: 'Network name', type: 'text', default: 'app_net', group: 'Networking', help: 'Attach to a docker_network of this name.' },
-      { key: 'env', label: 'Environment variables', type: 'list', default: ['ENV=production'], group: 'Config', help: 'One KEY=VALUE per line.' },
+      { key: 'env', label: 'Environment variables', type: 'list', default: ['ENV=production'], group: 'Environment', help: 'One KEY=VALUE per line.' },
       { key: 'volumes', label: 'Volume mounts', type: 'list', default: ['app_data:/data'], group: 'Storage', help: 'One volume:/path per line.' },
       { key: 'command', label: 'Command override', type: 'text', default: '', group: 'Runtime', advanced: true },
       { key: 'memory', label: 'Memory limit (MB)', type: 'number', default: 512, group: 'Runtime', advanced: true },
@@ -986,10 +1048,44 @@ const CATALOG = [
       { key: 'count', label: 'Count', type: 'number', default: 1, group: 'Sizing', help: 'Number of identical instances.' },
       { key: 'root_volume_size', label: 'Root volume (GiB)', type: 'number', default: 20, group: 'Sizing' },
       { key: 'associate_public_ip', label: 'Associate public IP', type: 'bool', default: false, group: 'Networking', help: 'Place in a public subnet and assign a public IP.' },
+      { key: 'http_server', label: 'Open HTTP/HTTPS (web server)', type: 'bool', default: false, group: 'Networking', help: 'Allow inbound 80/443 from the internet for a public web host.' },
       { key: 'key_name', label: 'SSH key pair name', type: 'text', default: '', group: 'Access', help: 'Existing EC2 key pair for SSH. Leave blank for none (use SSM).' },
       { key: 'enable_ssm', label: 'Enable SSM (Session Manager)', type: 'bool', default: true, group: 'Access', help: 'Attach an instance profile for keyless shell access.' },
       { key: 'monitoring', label: 'Detailed monitoring', type: 'bool', default: false, group: 'Observability' },
       { key: 'user_data', label: 'User data (bootstrap script)', type: 'textarea', default: '', group: 'Config', advanced: true, help: 'Shell script run on first boot.' },
+    ],
+  },
+  {
+    id: 'ec2-cluster', label: 'EC2 cluster (multi-node, multi-AZ)', category: 'compute', icon: '▦',
+    providers: ['aws'],
+    tfType: { aws: 'aws_instance' },
+    desc: 'A fixed-size cluster of EC2 instances spread across availability zones, with a shared security group and IMDSv2. Good for self-managed Kafka/Zookeeper/databases.',
+    fields: [
+      F_NAME('cluster_node'),
+      { key: 'count', label: 'Node count', type: 'number', default: 3, group: 'Sizing', help: 'Nodes are distributed round-robin across the private subnets.' },
+      { key: 'instance_type', label: 'Instance type', type: 'select', default: 'm5.large', options: ['t3.medium','t3.large','m5.large','m5.xlarge','m5.2xlarge','r5.xlarge','r5.2xlarge','c5.2xlarge'], group: 'Sizing' },
+      { key: 'root_volume_size', label: 'Root volume (GiB)', type: 'number', default: 50, group: 'Sizing' },
+      { key: 'data_volume_size', label: 'Data volume (GiB)', type: 'number', default: 200, group: 'Storage', help: 'Separate encrypted EBS data volume per node.' },
+      { key: 'ingress_ports', label: 'Cluster ingress ports', type: 'list', default: ['9092','9093','2181'], group: 'Networking', help: 'Ports open within the VPC for inter-node + client traffic.' },
+      { key: 'enable_ssm', label: 'Enable SSM', type: 'bool', default: true, group: 'Access' },
+      F_ENV([
+        'CLUSTER_SIZE=3',
+        'NODE_ROLE=worker',
+      ]),
+      { key: 'user_data', label: 'Bootstrap script', type: 'textarea', default: '#!/bin/bash\n# install + configure your service here\n', group: 'Config', help: 'Runs on each node at first boot.' },
+    ],
+  },
+  {
+    id: 'ec2-bastion', label: 'Bastion / jump host', category: 'compute', icon: '⛨',
+    providers: ['aws'],
+    tfType: { aws: 'aws_instance' },
+    desc: 'A hardened public bastion host (latest Amazon Linux) for SSH access into private subnets. SSM enabled, minimal footprint.',
+    fields: [
+      F_NAME('bastion'),
+      { key: 'instance_type', label: 'Instance type', type: 'select', default: 't3.micro', options: ['t3.micro','t3.small'], group: 'Sizing' },
+      { key: 'allowed_cidr', label: 'Allowed SSH source CIDR', type: 'text', default: '0.0.0.0/0', group: 'Access', help: 'Restrict to your office/VPN range in production.' },
+      { key: 'key_name', label: 'SSH key pair name', type: 'text', default: '', group: 'Access', help: 'Required for SSH; leave blank to use SSM only.' },
+      { key: 'enable_ssm', label: 'Enable SSM', type: 'bool', default: true, group: 'Access' },
     ],
   },
   {
@@ -1204,6 +1300,11 @@ const CATALOG = [
       { key: 'namespace', label: 'Namespace', type: 'text', default: 'kafka', group: 'Placement' },
       { key: 'host_port', label: 'UI port', type: 'number', default: 8080, group: 'Networking' },
       { key: 'bootstrap', label: 'Bootstrap servers', type: 'text', default: 'events-kafka-bootstrap:9092', group: 'Config' },
+      F_ENV([
+        'KAFKA_CLUSTERS_0_NAME=local',
+        'KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092',
+        'DYNAMIC_CONFIG_ENABLED=true',
+      ]),
     ],
   },
 
@@ -1235,7 +1336,12 @@ const CATALOG = [
       { key: 'namespace', label: 'Namespace', type: 'text', default: 'monitoring', group: 'Placement' },
       { key: 'image', label: 'Container image (docker)', type: 'text', default: 'grafana/grafana:10.4.0', group: 'Image' },
       { key: 'host_port', label: 'UI port', type: 'number', default: 3000, group: 'Networking' },
-      { key: 'admin_password', label: 'Admin password', type: 'text', default: 'changeme', group: 'Security', help: 'Override with a secret in production.' },
+      { key: 'admin_password', label: 'GF_SECURITY_ADMIN_PASSWORD', type: 'text', default: 'admin', group: 'Environment', secret: true, help: 'Default Grafana admin password. Override before exposing.' },
+      F_ENV([
+        'GF_SECURITY_ADMIN_USER=admin',
+        'GF_USERS_ALLOW_SIGN_UP=false',
+        'GF_INSTALL_PLUGINS=grafana-piechart-panel',
+      ]),
       { key: 'persistence', label: 'Persist dashboards', type: 'bool', default: true, group: 'Storage' },
       { key: 'default_dashboards', label: 'Install Kafka/JVM dashboards', type: 'bool', default: true, group: 'Config' },
     ],
@@ -1304,6 +1410,10 @@ const CATALOG = [
       { key: 'image', label: 'Container image (docker)', type: 'text', default: 'opensearchproject/opensearch-dashboards:2.13.0', group: 'Image' },
       { key: 'host_port', label: 'UI port', type: 'number', default: 5601, group: 'Networking' },
       { key: 'opensearch_url', label: 'OpenSearch URL', type: 'text', default: 'https://opensearch:9200', group: 'Config' },
+      F_ENV([
+        'OPENSEARCH_HOSTS=["https://opensearch:9200"]',
+        'DISABLE_SECURITY_DASHBOARDS_PLUGIN=false',
+      ]),
     ],
   },
 ];
@@ -1415,6 +1525,42 @@ function sanitizeName(s) {
 function hclString(v) { return '"' + String(v).replace(/"/g, '\\"') + '"'; }
 function hclList(arr) { return '[' + arr.map(x => hclString(x)).join(', ') + ']'; }
 
+/* ----------------------------------------------------------------------------
+   SUBNET REFERENCE HELPERS
+   The subnet variables default to [] so indexing them ( [0] ) errors at plan
+   time when the user hasn't supplied values. To make the output applyable
+   out-of-the-box, prefer subnet RESOURCES the user declared in the project;
+   only fall back to the variable when none exist.
+   ---------------------------------------------------------------------------- */
+function declaredSubnets(tier /* 'private' | 'public' | undefined */) {
+  return STATE.resources.filter(r =>
+    r.catalogId === 'subnet' && r.provider === 'aws' &&
+    (!tier || (r.values.tier || 'private') === tier));
+}
+/* A list expression of subnet ids for a tier (e.g. for subnet_ids = ...). */
+function subnetListExpr(tier, varName) {
+  const subs = declaredSubnets(tier);
+  if (subs.length) return '[' + subs.map(s => `aws_subnet.${sanitizeName(s.values.name)}.id`).join(', ') + ']';
+  // fall back to any declared subnet of any tier, else the variable
+  const any = declaredSubnets();
+  if (any.length) return '[' + any.map(s => `aws_subnet.${sanitizeName(s.values.name)}.id`).join(', ') + ']';
+  return `var.${varName}`;
+}
+/* A single subnet id (e.g. for subnet_id = ...). */
+function firstSubnetExpr(tier, varName) {
+  const subs = declaredSubnets(tier);
+  if (subs.length) return `aws_subnet.${sanitizeName(subs[0].values.name)}.id`;
+  const any = declaredSubnets();
+  if (any.length) return `aws_subnet.${sanitizeName(any[0].values.name)}.id`;
+  return `var.${varName}[0]`;
+}
+/* For count-based round-robin placement across declared subnets. */
+function countSubnetExpr(tier, varName) {
+  const subs = declaredSubnets(tier).length ? declaredSubnets(tier) : declaredSubnets();
+  if (subs.length) return `element([${subs.map(s => `aws_subnet.${sanitizeName(s.values.name)}.id`).join(', ')}], count.index)`;
+  return `element(var.${varName}, count.index)`;
+}
+
 /* Default tags block shared by AWS resources */
 function defaultTagsHCL(extraName) {
   if (!STATE.settings.tags) return extraName ? `${TF_INDENT}tags = {\n${TF_INDENT}${TF_INDENT}Name = ${hclString(extraName)}\n${TF_INDENT}}\n` : '';
@@ -1456,7 +1602,7 @@ function emitResource(res) {
       line('number_of_broker_nodes', v.number_of_broker_nodes);
       raw(`${TF_INDENT}broker_node_group_info {\n`);
       raw(`${TF_INDENT}${TF_INDENT}instance_type   = ${hclString(v.instance_type)}\n`);
-      raw(`${TF_INDENT}${TF_INDENT}client_subnets  = var.private_subnet_ids\n`);
+      raw(`${TF_INDENT}${TF_INDENT}client_subnets  = ${subnetListExpr('private', 'private_subnet_ids')}\n`);
       raw(`${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.${label}_sg.id]\n`);
       raw(`${TF_INDENT}${TF_INDENT}storage_info {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}ebs_storage_info {\n${TF_INDENT}${TF_INDENT}${TF_INDENT}${TF_INDENT}volume_size = ${v.ebs_volume_size}\n${TF_INDENT}${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}${TF_INDENT}}\n`);
       raw(`${TF_INDENT}}\n`);
@@ -1483,6 +1629,15 @@ function emitResource(res) {
       raw(`${TF_INDENT}encrypt_at_rest {\n${TF_INDENT}${TF_INDENT}enabled = ${!!v.encrypt_at_rest}\n${TF_INDENT}}\n`);
       raw(`${TF_INDENT}node_to_node_encryption {\n${TF_INDENT}${TF_INDENT}enabled = ${!!v.node_to_node_encryption}\n${TF_INDENT}}\n`);
       raw(`${TF_INDENT}domain_endpoint_options {\n${TF_INDENT}${TF_INDENT}enforce_https       = true\n${TF_INDENT}${TF_INDENT}tls_security_policy = "Policy-Min-TLS-1-2-2019-07"\n${TF_INDENT}}\n`);
+      if (v.master_user) {
+        raw(`${TF_INDENT}advanced_security_options {\n`);
+        raw(`${TF_INDENT}${TF_INDENT}enabled                        = true\n`);
+        raw(`${TF_INDENT}${TF_INDENT}internal_user_database_enabled = true\n`);
+        raw(`${TF_INDENT}${TF_INDENT}master_user_options {\n`);
+        raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}master_user_name     = ${hclString(v.master_user)}\n`);
+        raw(`${TF_INDENT}${TF_INDENT}${TF_INDENT}master_user_password = ${hclString(v.master_password || '')}  # consider sourcing from aws_secretsmanager_secret_version\n`);
+        raw(`${TF_INDENT}${TF_INDENT}}\n${TF_INDENT}}\n`);
+      }
       raw(defaultTagsHCL());
       break;
 
@@ -1536,7 +1691,7 @@ function emitResource(res) {
       line('version', hclString(v.version));
       line('role_arn', `aws_iam_role.${label}_role.arn`);
       raw(`${TF_INDENT}vpc_config {\n`);
-      raw(`${TF_INDENT}${TF_INDENT}subnet_ids              = var.private_subnet_ids\n`);
+      raw(`${TF_INDENT}${TF_INDENT}subnet_ids              = ${subnetListExpr('private', 'private_subnet_ids')}\n`);
       raw(`${TF_INDENT}${TF_INDENT}endpoint_private_access = ${!!v.endpoint_private}\n`);
       raw(`${TF_INDENT}${TF_INDENT}endpoint_public_access  = ${!!v.endpoint_public}\n`);
       raw(`${TF_INDENT}}\n`);
@@ -1550,7 +1705,7 @@ function emitResource(res) {
       line('cluster_name', clusterRef);
       line('node_group_name', `"${sanitizeName(name)}"`);
       line('node_role_arn', `aws_iam_role.${label}_role.arn`);
-      line('subnet_ids', 'var.private_subnet_ids');
+      line('subnet_ids', subnetListExpr('private', 'private_subnet_ids'));
       line('instance_types', hclList([v.instance_types]));
       line('capacity_type', hclString(v.capacity_type));
       raw(`${TF_INDENT}scaling_config {\n${TF_INDENT}${TF_INDENT}desired_size = ${v.desired_size}\n${TF_INDENT}${TF_INDENT}min_size     = ${v.min_size}\n${TF_INDENT}${TF_INDENT}max_size     = ${v.max_size}\n${TF_INDENT}}\n`);
@@ -1561,14 +1716,18 @@ function emitResource(res) {
     case 'ec2':
     case 'kafka-self':
     case 'zookeeper': {
-      // VM-based when provider is aws/azure/gcp; container when docker/local
+      // container when docker/local; VM otherwise (provider-specific)
       if (res.provider === 'docker' || res.provider === 'local') {
         emitDockerContainerBody(out2 => out += out2, res, def, v, name);
+      } else if (res.provider === 'azure') {
+        emitAzureLinuxVM(s => out += s, res, def, v, name, label);
+      } else if (res.provider === 'gcp') {
+        emitGcpInstance(s => out += s, res, def, v, name, label);
       } else {
         line('ami', hclString(v.ami || 'ami-0c7217cdde317cfec'));
         line('instance_type', hclString(v.instance_type || 't3.large'));
-        if (v.count || v.instance_count) line('count', v.count || v.instance_count);
-        line('subnet_id', 'var.private_subnet_ids[0]');
+        { const _c = Number(v.count || v.instance_count) || 1; if (_c > 1) line('count', _c); }
+        line('subnet_id', firstSubnetExpr('private', 'private_subnet_ids'));
         line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
         if (v.monitoring) line('monitoring', true);
         raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = ${v.root_volume_size || v.storage_gb || 50}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
@@ -1581,7 +1740,7 @@ function emitResource(res) {
       line('ami', 'data.aws_ami.amazon_linux.id');
       line('instance_type', hclString(v.instance_type || 't3.micro'));
       if (v.count && v.count > 1) line('count', v.count);
-      line('subnet_id', v.associate_public_ip ? 'var.public_subnet_ids[0]' : 'var.private_subnet_ids[0]');
+      line('subnet_id', v.associate_public_ip ? firstSubnetExpr('public', 'public_subnet_ids') : firstSubnetExpr('private', 'private_subnet_ids'));
       line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
       if (v.associate_public_ip) line('associate_public_ip_address', true);
       if (v.key_name) line('key_name', hclString(v.key_name));
@@ -1596,12 +1755,47 @@ function emitResource(res) {
       break;
     }
 
+    case 'ec2-cluster': {
+      const cnt = Number(v.count) || 3;
+      line('ami', 'data.aws_ami.amazon_linux.id');
+      line('instance_type', hclString(v.instance_type || 'm5.large'));
+      line('count', cnt);
+      // round-robin across the available private subnets
+      line('subnet_id', countSubnetExpr('private', 'private_subnet_ids'));
+      line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
+      if (v.enable_ssm) line('iam_instance_profile', `aws_iam_instance_profile.${label}_profile.name`);
+      if (v.user_data && v.user_data.trim()) {
+        raw(`${TF_INDENT}user_data = <<-USERDATA\n${indentBlock(v.user_data, TF_INDENT + TF_INDENT)}\n${TF_INDENT}USERDATA\n`);
+      }
+      raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = ${v.root_volume_size || 50}\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}metadata_options {\n${TF_INDENT}${TF_INDENT}http_tokens = "required"\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}tags = {\n${TF_INDENT}${TF_INDENT}Name        = "\${var.project}-${label}-\${count.index}"\n${TF_INDENT}${TF_INDENT}project     = var.project\n${TF_INDENT}${TF_INDENT}environment = var.environment\n${TF_INDENT}${TF_INDENT}ManagedBy   = "terraform"\n${TF_INDENT}}\n`);
+      raw(`}\n\n`);
+      // separate encrypted data volume + attachment per node
+      raw(`resource "aws_ebs_volume" "${label}_data" {\n  count             = ${cnt}\n  availability_zone = element(aws_instance.${label}, count.index).availability_zone\n  size              = ${v.data_volume_size || 200}\n  type              = "gp3"\n  encrypted         = true\n${defaultTagsHCL().replace(/\n$/, '')}\n}\n\n`);
+      raw(`resource "aws_volume_attachment" "${label}_data" {\n  count       = ${cnt}\n  device_name = "/dev/sdf"\n  volume_id   = element(aws_ebs_volume.${label}_data, count.index).id\n  instance_id = element(aws_instance.${label}, count.index).id\n`);
+      // note: trailing close brace added by the generic flow below
+      break;
+    }
+
+    case 'ec2-bastion': {
+      line('ami', 'data.aws_ami.amazon_linux.id');
+      line('instance_type', hclString(v.instance_type || 't3.micro'));
+      line('subnet_id', firstSubnetExpr('public', 'public_subnet_ids'));
+      line('vpc_security_group_ids', `[aws_security_group.${label}_sg.id]`);
+      line('associate_public_ip_address', true);
+      if (v.key_name) line('key_name', hclString(v.key_name));
+      if (v.enable_ssm) line('iam_instance_profile', `aws_iam_instance_profile.${label}_profile.name`);
+      raw(`${TF_INDENT}root_block_device {\n${TF_INDENT}${TF_INDENT}volume_size = 8\n${TF_INDENT}${TF_INDENT}volume_type = "gp3"\n${TF_INDENT}${TF_INDENT}encrypted   = true\n${TF_INDENT}}\n`);
+      raw(`${TF_INDENT}metadata_options {\n${TF_INDENT}${TF_INDENT}http_tokens = "required"\n${TF_INDENT}}\n`);
+      raw(defaultTagsHCL(name));
+      break;
+    }
+
     case 'asg':
-      line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
-      line('min_size', v.min_size);
       line('max_size', v.max_size);
       line('desired_capacity', v.desired_capacity);
-      line('vpc_zone_identifier', 'var.private_subnet_ids');
+      line('vpc_zone_identifier', subnetListExpr('private', 'private_subnet_ids'));
       raw(`${TF_INDENT}launch_template {\n${TF_INDENT}${TF_INDENT}id      = aws_launch_template.${label}_lt.id\n${TF_INDENT}${TF_INDENT}version = "$Latest"\n${TF_INDENT}}\n`);
       break;
 
@@ -1610,7 +1804,7 @@ function emitResource(res) {
       line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
       line('internal', !!v.internal);
       line('load_balancer_type', hclString(def.id === 'alb' ? 'application' : 'network'));
-      line('subnets', 'var.public_subnet_ids');
+      line('subnets', subnetListExpr('public', 'public_subnet_ids'));
       if (def.id === 'alb') {
         line('security_groups', `[aws_security_group.${label}_sg.id]`);
         if (v.idle_timeout) line('idle_timeout', v.idle_timeout);
@@ -1655,20 +1849,45 @@ function emitResource(res) {
       break;
 
     case 'vpc':
-      line('cidr_block', hclString(v.cidr_block));
-      line('enable_dns_hostnames', !!v.enable_dns);
-      line('enable_dns_support', true);
-      raw(defaultTagsHCL(name));
+      if (res.provider === 'azure') {
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('address_space', hclList([v.cidr_block]));
+        line('location', 'azurerm_resource_group.main.location');
+        line('resource_group_name', 'azurerm_resource_group.main.name');
+        raw(defaultTagsHCL());
+      } else if (res.provider === 'gcp') {
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('auto_create_subnetworks', false);
+      } else {
+        line('cidr_block', hclString(v.cidr_block));
+        line('enable_dns_hostnames', !!v.enable_dns);
+        line('enable_dns_support', true);
+        raw(defaultTagsHCL(name));
+      }
       break;
 
     case 'subnet': {
-      const vpcRes = STATE.resources.find(r => r.catalogId === 'vpc');
-      const vpcRef = vpcRes ? `aws_vpc.${sanitizeName(vpcRes.values.name || 'main_vpc')}.id` : 'var.vpc_id';
-      line('vpc_id', vpcRef);
-      line('cidr_block', hclString(v.cidr_block));
-      line('availability_zone', hclString(v.availability_zone));
-      if (v.tier === 'public') line('map_public_ip_on_launch', true);
-      raw(defaultTagsHCL(name));
+      if (res.provider === 'azure') {
+        const vnet = STATE.resources.find(r => r.catalogId === 'vpc' && r.provider === 'azure');
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('resource_group_name', 'azurerm_resource_group.main.name');
+        line('virtual_network_name', vnet ? `azurerm_virtual_network.${sanitizeName(vnet.values.name)}.name` : 'var.vnet_name');
+        line('address_prefixes', hclList([v.cidr_block]));
+      } else if (res.provider === 'gcp') {
+        const vnet = STATE.resources.find(r => r.catalogId === 'vpc' && r.provider === 'gcp');
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('ip_cidr_range', hclString(v.cidr_block));
+        line('region', 'var.region');
+        line('network', vnet ? `google_compute_network.${sanitizeName(vnet.values.name)}.id` : 'var.network');
+      } else {
+        const vpcRes = STATE.resources.find(r => r.catalogId === 'vpc' && r.provider === 'aws');
+        const vpcRef = vpcRes ? `aws_vpc.${sanitizeName(vpcRes.values.name || 'main_vpc')}.id` : 'var.vpc_id';
+        line('vpc_id', vpcRef);
+        line('cidr_block', hclString(v.cidr_block));
+        line('availability_zone', hclString(v.availability_zone));
+        if (v.tier === 'public') line('map_public_ip_on_launch', true);
+        raw(defaultTagsHCL(name));
+      }
       break;
     }
 
@@ -1681,6 +1900,45 @@ function emitResource(res) {
     case 'postgres-container':
       if (res.provider === 'docker' || res.provider === 'local') {
         emitDockerContainerBody(out2 => out += out2, res, def, v, name);
+      } else if (res.provider === 'azure') {
+        // Azure Container Instances (azurerm_container_group)
+        const I = TF_INDENT;
+        const azSubnet = STATE.resources.find(r => r.catalogId === 'subnet' && r.provider === 'azure');
+        const subnetRef = azSubnet ? `[azurerm_subnet.${sanitizeName(azSubnet.values.name)}.id]` : '[var.subnet_id]';
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('resource_group_name', 'azurerm_resource_group.main.name');
+        line('location', 'azurerm_resource_group.main.location');
+        line('os_type', '"Linux"');
+        line('ip_address_type', '"Private"');
+        line('subnet_ids', subnetRef);
+        raw(`${I}container {\n`);
+        raw(`${I}${I}name   = ${hclString(sanitizeName(name))}\n`);
+        raw(`${I}${I}image  = ${hclString(v.image || 'nginx:latest')}\n`);
+        raw(`${I}${I}cpu    = "${(v.cpu ? (v.cpu / 1024) : 1)}"\n`);
+        raw(`${I}${I}memory = "${(v.memory ? (v.memory / 1024) : 2)}"\n`);
+        raw(`${I}${I}ports {\n${I}${I}${I}port     = ${v.host_port || 80}\n${I}${I}${I}protocol = "TCP"\n${I}${I}}\n`);
+        const envs = Array.isArray(v.env) ? v.env : [];
+        if (envs.length) {
+          raw(`${I}${I}environment_variables = {\n`);
+          envs.forEach(e => { const i = e.indexOf('='); if (i > 0) raw(`${I}${I}${I}${hclString(e.slice(0, i).trim())} = ${hclString(e.slice(i + 1).trim())}\n`); });
+          raw(`${I}${I}}\n`);
+        }
+        raw(`${I}}\n`);
+        raw(defaultTagsHCL());
+      } else if (res.provider === 'gcp') {
+        // GCP Cloud Run v2 service
+        const I = TF_INDENT;
+        line('name', `"${'${var.project}'}-${sanitizeName(name)}"`);
+        line('location', 'var.region');
+        raw(`${I}template {\n`);
+        raw(`${I}${I}scaling {\n${I}${I}${I}min_instance_count = ${v.cluster_nodes || v.workers || v.replicas || 1}\n${I}${I}${I}max_instance_count = ${(v.cluster_nodes || v.workers || v.replicas || 1) + 2}\n${I}${I}}\n`);
+        raw(`${I}${I}containers {\n`);
+        raw(`${I}${I}${I}image = ${hclString(v.image || 'gcr.io/cloudrun/hello')}\n`);
+        raw(`${I}${I}${I}ports {\n${I}${I}${I}${I}container_port = ${v.host_port || 8080}\n${I}${I}${I}}\n`);
+        const genvs = Array.isArray(v.env) ? v.env : [];
+        genvs.forEach(e => { const i = e.indexOf('='); if (i > 0) raw(`${I}${I}${I}env {\n${I}${I}${I}${I}name  = ${hclString(e.slice(0, i).trim())}\n${I}${I}${I}${I}value = ${hclString(e.slice(i + 1).trim())}\n${I}${I}${I}}\n`); });
+        raw(`${I}${I}}\n`);
+        raw(`${I}}\n`);
       } else {
         // cloud container service (ECS/Cloud Run) — emit a minimal best-practice stub
         const ecsRes = STATE.resources.find(r => r.catalogId === 'ecs-cluster');
@@ -1690,7 +1948,7 @@ function emitResource(res) {
         line('launch_type', '"FARGATE"');
         line('desired_count', v.cluster_nodes || v.workers || v.replicas || 2);
         line('task_definition', `aws_ecs_task_definition.${label}_task.arn`);
-        raw(`${TF_INDENT}network_configuration {\n${TF_INDENT}${TF_INDENT}subnets         = var.private_subnet_ids\n${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.${label}_sg.id]\n${TF_INDENT}}\n`);
+        raw(`${TF_INDENT}network_configuration {\n${TF_INDENT}${TF_INDENT}subnets         = ${subnetListExpr('private', 'private_subnet_ids')}\n${TF_INDENT}${TF_INDENT}security_groups = [aws_security_group.${label}_sg.id]\n${TF_INDENT}}\n`);
       }
       break;
 
@@ -1843,21 +2101,25 @@ function emitResource(res) {
 function emitCompanions(res) {
   const def = CATALOG_BY_ID[res.catalogId];
   if (!def) return [];
-  if (res.provider !== 'aws') return []; // companions are AWS-specific
+  if (res.provider === 'azure') return azureCompanions(res, def);
+  if (res.provider === 'docker' || res.provider === 'local') return dockerCompanions(res, def);
+  if (res.provider !== 'aws') return [];
   const v = res.values;
   const label = sanitizeName(v.name || def.id);
   const out = [];
   const I = TF_INDENT;
 
   // Helper: a security group scoped to this resource
+  const vpcDecl = STATE.resources.find(r => r.catalogId === 'vpc' && r.provider === 'aws');
+  const vpcRef = vpcDecl ? `aws_vpc.${sanitizeName(vpcDecl.values.name || 'main_vpc')}.id` : 'var.vpc_id';
   const sg = (ingressBlocks, descr) => ({
     addr: `aws_security_group.${label}_sg`,
     hcl:
 `# Auto-generated security group for ${def.label} "${label}"
 resource "aws_security_group" "${label}_sg" {
   name        = "\${var.project}-${label}"
-  description = "${descr}"
-  vpc_id      = var.vpc_id
+  description = "${String(descr).replace(/"/g, "'")}"
+  vpc_id      = ${vpcRef}
 
 ${ingressBlocks}
   egress {
@@ -1882,6 +2144,55 @@ ${defaultTagsHCL().replace(/\n$/, '')}
 `;
 
   switch (def.id) {
+    case 'vpc': {
+      // If there are public subnets, the VPC needs an internet gateway + public
+      // route table so instances with public IPs are actually reachable.
+      const publicSubnets = STATE.resources.filter(r => r.catalogId === 'subnet' && r.provider === 'aws' && (r.values.tier || 'private') === 'public');
+      if (publicSubnets.length) {
+        const vpcSelf = `aws_vpc.${label}.id`;
+        out.push({
+          addr: `aws_internet_gateway.${label}_igw`,
+          hcl:
+`# Internet gateway for public subnets in "${label}"
+resource "aws_internet_gateway" "${label}_igw" {
+  vpc_id = ${vpcSelf}
+${defaultTagsHCL('\${var.project}-' + label + '-igw').replace(/\n$/, '')}
+}
+`
+        });
+        out.push({
+          addr: `aws_route_table.${label}_public`,
+          hcl:
+`# Public route table (default route to the internet gateway)
+resource "aws_route_table" "${label}_public" {
+  vpc_id = ${vpcSelf}
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.${label}_igw.id
+  }
+${defaultTagsHCL('\${var.project}-' + label + '-public-rt').replace(/\n$/, '')}
+}
+`
+        });
+        // Associate each public subnet with the public route table.
+        publicSubnets.forEach(s => {
+          const sl = sanitizeName(s.values.name);
+          out.push({
+            addr: `aws_route_table_association.${sl}_public`,
+            hcl:
+`# Route table association for public subnet "${sl}"
+resource "aws_route_table_association" "${sl}_public" {
+  subnet_id      = aws_subnet.${sl}.id
+  route_table_id = aws_route_table.${label}_public.id
+}
+`
+          });
+        });
+      }
+      break;
+    }
+
     case 'kafka-msk': {
       out.push(sg(ingress(9092, 9098, 'Kafka clients (plaintext, TLS, SASL/IAM)') + ingress(2181, 2181, 'Zookeeper'), 'MSK Kafka brokers'));
       out.push({
@@ -1914,16 +2225,25 @@ resource "aws_msk_configuration" "${label}_config" {
 `# Auto-generated DB subnet group for "${label}"
 resource "aws_db_subnet_group" "${label}_subnets" {
   name       = "\${var.project}-${label}"
-  subnet_ids = var.private_subnet_ids
+  subnet_ids = ${subnetListExpr('private', 'private_subnet_ids')}
 ${defaultTagsHCL().replace(/\n$/, '')}
 }
 `
       });
+      // Store the credentials in Secrets Manager (best practice — never hardcode).
+      out.push(secretCompanion(`${label}_credentials`,
+        { username: v.username || 'dbadmin', password: v.password || 'change-me' },
+        `Database credentials for ${label}`));
       break;
     }
 
     case 'opensearch':
       out.push(sg(ingress(443, 443, 'HTTPS to OpenSearch'), 'OpenSearch domain access'));
+      if (v.master_user) {
+        out.push(secretCompanion(`${label}_master`,
+          { username: v.master_user, password: v.master_password || 'change-me' },
+          `OpenSearch master credentials for ${label}`));
+      }
       break;
 
     case 'ec2':
@@ -1934,22 +2254,41 @@ ${defaultTagsHCL().replace(/\n$/, '')}
 
     case 'ec2-amazon-linux': {
       const ssh = v.key_name ? ingress(22, 22, 'SSH', v.associate_public_ip ? '"0.0.0.0/0"' : '"10.0.0.0/16"') : '';
-      out.push(sg(ssh || `  # no inbound rules — access via SSM Session Manager\n`, 'Amazon Linux instance'));
+      const web = v.http_server ? ingress(80, 80, 'HTTP', '"0.0.0.0/0"') + ingress(443, 443, 'HTTPS', '"0.0.0.0/0"') : '';
+      const rules = ssh + web;
+      out.push(sg(rules || `  # no inbound rules — access via SSM Session Manager\n`, 'Amazon Linux instance'));
       if (v.enable_ssm) {
         out.push({
           addr: `aws_iam_role.${label}_role`,
-          hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'], `SSM role for "${label}"`),
+          hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'], `SSM role for ${label}`),
         });
+        out.push(instanceProfile(label));
+      }
+      break;
+    }
+
+    case 'ec2-cluster': {
+      const ports = (v.ingress_ports || ['9092']);
+      const ingressBlocks = ports.map(p => ingress(p, p, `Cluster port ${p}`)).join('') + ingress(22, 22, 'SSH within VPC');
+      out.push(sg(ingressBlocks, `${def.label} inter-node + client access`));
+      if (v.enable_ssm) {
         out.push({
-          addr: `aws_iam_instance_profile.${label}_profile`,
-          hcl:
-`# Auto-generated instance profile for "${label}" (SSM access)
-resource "aws_iam_instance_profile" "${label}_profile" {
-  name = "\${var.project}-${label}"
-  role = aws_iam_role.${label}_role.name
-}
-`
+          addr: `aws_iam_role.${label}_role`,
+          hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'], `SSM role for ${label}`),
         });
+        out.push(instanceProfile(label));
+      }
+      break;
+    }
+
+    case 'ec2-bastion': {
+      out.push(sg(ingress(22, 22, 'SSH from allowed range', hclString(v.allowed_cidr || '0.0.0.0/0')), 'Bastion host'));
+      if (v.enable_ssm) {
+        out.push({
+          addr: `aws_iam_role.${label}_role`,
+          hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'], `SSM role for ${label}`),
+        });
+        out.push(instanceProfile(label));
       }
       break;
     }
@@ -1991,7 +2330,7 @@ ${defaultTagsHCL().replace(/\n$/, '')}
     case 'eks-cluster': {
       out.push({
         addr: `aws_iam_role.${label}_role`,
-        hcl: iamRoleHCL(`${label}_role`, 'eks.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonEKSClusterPolicy'], `EKS control plane role for "${label}"`),
+        hcl: iamRoleHCL(`${label}_role`, 'eks.amazonaws.com', ['arn:aws:iam::aws:policy/AmazonEKSClusterPolicy'], `EKS control plane role for ${label}`),
       });
       break;
     }
@@ -2001,7 +2340,7 @@ ${defaultTagsHCL().replace(/\n$/, '')}
         addr: `aws_iam_role.${label}_role`,
         hcl: iamRoleHCL(`${label}_role`, 'ec2.amazonaws.com',
           ['arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy','arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy','arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'],
-          `EKS node role for "${label}"`),
+          `EKS node role for ${label}`),
       });
       break;
     }
@@ -2027,6 +2366,120 @@ resource "aws_launch_template" "${label}_lt" {
     }
   }
   return out;
+}
+
+/* Azure companions: a shared resource group plus per-VM network interface.
+   Mirrors the official azurerm VM example (RG + VNet + Subnet + NIC + VM). */
+function azureCompanions(res, def) {
+  const v = res.values;
+  const label = sanitizeName(v.name || def.id);
+  const out = [];
+  const I = TF_INDENT;
+
+  // Shared resource group — emitted once, de-duplicated by address in emitMain.
+  out.push({
+    addr: 'azurerm_resource_group.main',
+    hcl:
+`# Shared resource group for all Azure resources
+resource "azurerm_resource_group" "main" {
+  name     = "\${var.project}-rg"
+  location = var.region
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+`
+  });
+
+  // VMs need a network interface bound to a subnet.
+  if (['ec2', 'kafka-self', 'zookeeper'].includes(def.id)) {
+    const subnet = STATE.resources.find(r => r.catalogId === 'subnet' && r.provider === 'azure');
+    const subnetRef = subnet ? `azurerm_subnet.${sanitizeName(subnet.values.name)}.id` : 'var.subnet_id';
+    out.push({
+      addr: `azurerm_network_interface.${label}_nic`,
+      hcl:
+`# Network interface for ${def.label} "${label}"
+resource "azurerm_network_interface" "${label}_nic" {
+  name                = "\${var.project}-${label}-nic"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = ${subnetRef}
+    private_ip_address_allocation = "Dynamic"
+  }
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+`
+    });
+  }
+  return out;
+}
+
+/* Docker companions: pull a docker_image for each container's image, the
+   documented best practice (container.image references docker_image.image_id),
+   plus a docker_network if the container attaches to one not declared. */
+function dockerCompanions(res, def) {
+  const v = res.values;
+  const label = sanitizeName(v.name || def.id);
+  const out = [];
+  // Only container-style resources need an image.
+  const containerLike = ['docker-container','nifi','kafka-connect','schema-registry','proxy',
+    'postgres-container','kafka-self','zookeeper','kafka-ui','prometheus','grafana',
+    'alertmanager','loki','kafka-exporter','node-exporter','opensearch-dashboards'];
+  if (containerLike.includes(def.id)) {
+    const img = v.image || 'nginx:latest';
+    out.push({
+      addr: `docker_image.${label}_image`,
+      hcl:
+`# Pull image for ${def.label} "${label}"
+resource "docker_image" "${label}_image" {
+  name         = ${hclString(img)}
+  keep_locally = true
+}
+`
+    });
+  }
+  return out;
+}
+
+/* A Secrets Manager secret + version holding a JSON credential blob.
+   Returns a companion {addr, hcl}. The secret name is unique per resource. */
+function secretCompanion(secretName, creds, descr) {
+  const safe = String(descr).replace(/"/g, "'");
+  const jsonLines = Object.entries(creds)
+    .map(([k, val]) => `    ${k} = ${hclString(val)}`).join('\n');
+  return {
+    addr: `aws_secretsmanager_secret.${secretName}`,
+    hcl:
+`# ${safe} (stored in Secrets Manager — do not hardcode in app config)
+resource "aws_secretsmanager_secret" "${secretName}" {
+  name        = "\${var.project}-${secretName}"
+  description = "${safe}"
+${defaultTagsHCL().replace(/\n$/, '')}
+}
+
+resource "aws_secretsmanager_secret_version" "${secretName}" {
+  secret_id = aws_secretsmanager_secret.${secretName}.id
+  secret_string = jsonencode({
+${jsonLines}
+  })
+}
+`
+  };
+}
+
+/* An IAM instance profile wrapping a role (for EC2 SSM access). */
+function instanceProfile(label) {
+  return {
+    addr: `aws_iam_instance_profile.${label}_profile`,
+    hcl:
+`# Instance profile for ${label} (SSM access)
+resource "aws_iam_instance_profile" "${label}_profile" {
+  name = "\${var.project}-${label}"
+  role = aws_iam_role.${label}_role.name
+}
+`
+  };
 }
 
 /* Shared IAM role HCL builder used by companions */
@@ -2056,22 +2509,33 @@ ${defaultTagsHCL().replace(/\n$/, '')}
 /* Does the resource set need the Amazon Linux AMI data source?
    (used by ASG launch templates and the simple-ec2 resource) */
 function needsAmazonLinuxData() {
-  return STATE.resources.some(r => r.catalogId === 'asg' || r.catalogId === 'ec2-amazon-linux');
+  return STATE.resources.some(r => ['asg','ec2-amazon-linux','ec2-cluster','ec2-bastion'].includes(r.catalogId));
 }
 
 /* Shared docker_container body emitter (used by many container-capable services) */
 function emitDockerContainerBody(append, res, def, v, name) {
   let s = '';
   const I = TF_INDENT;
-  s += `${I}name  = ${hclString(sanitizeName(name))}\n`;
-  s += `${I}image = ${hclString(v.image || 'nginx:latest')}\n`;
+  const label = sanitizeName(name);
+  s += `${I}name  = ${hclString(label)}\n`;
+  s += `${I}image = docker_image.${label}_image.image_id\n`;
   if (v.restart) s += `${I}restart = ${hclString(v.restart)}\n`;
   if (v.command) s += `${I}command = ${hclList(v.command.split(' ').filter(Boolean))}\n`;
   const hp = v.host_port; const cp = v.container_port || v.host_port;
   if (hp) {
     s += `${I}ports {\n${I}${I}internal = ${cp}\n${I}${I}external = ${hp}\n${I}}\n`;
   }
-  const envs = Array.isArray(v.env) ? v.env : [];
+  const envs = Array.isArray(v.env) ? v.env.slice() : [];
+  // Fold the service's password field into env under the right variable name.
+  const pwEnv = passwordEnvVar(def.id);
+  if (pwEnv && v.password) {
+    // don't duplicate if the user already set it explicitly in env
+    if (!envs.some(e => e.split('=')[0].trim() === pwEnv)) envs.push(`${pwEnv}=${v.password}`);
+  }
+  // Grafana stores its admin password under a dedicated field
+  if (def.id === 'grafana' && v.admin_password && !envs.some(e => e.startsWith('GF_SECURITY_ADMIN_PASSWORD'))) {
+    envs.push(`GF_SECURITY_ADMIN_PASSWORD=${v.admin_password}`);
+  }
   if (envs.length) {
     s += `${I}env = ${hclList(envs)}\n`;
   }
@@ -2090,6 +2554,76 @@ function emitDockerContainerBody(append, res, def, v, name) {
 /* indent every line of a block of text by `pad` */
 function indentBlock(text, pad) {
   return String(text).split('\n').map(l => pad + l).join('\n');
+}
+
+/* Azure Linux VM — follows hashicorp/azurerm official example. Requires a NIC
+   (emitted as a companion) plus resource group (shared companion). */
+function emitAzureLinuxVM(append, res, def, v, name, label) {
+  const I = TF_INDENT;
+  let s = '';
+  s += `${I}name                  = "\${var.project}-${sanitizeName(name)}"\n`;
+  s += `${I}resource_group_name   = azurerm_resource_group.main.name\n`;
+  s += `${I}location              = azurerm_resource_group.main.location\n`;
+  s += `${I}size                  = ${hclString(azureVmSize(v.instance_type))}\n`;
+  s += `${I}admin_username        = "azureuser"\n`;
+  s += `${I}network_interface_ids = [azurerm_network_interface.${label}_nic.id]\n`;
+  // SSH key auth (password auth disabled = best practice)
+  s += `${I}admin_ssh_key {\n${I}${I}username   = "azureuser"\n${I}${I}public_key = file("~/.ssh/id_rsa.pub")\n${I}}\n`;
+  s += `${I}os_disk {\n${I}${I}caching              = "ReadWrite"\n${I}${I}storage_account_type = "Premium_LRS"\n${I}${I}disk_size_gb         = ${v.root_volume_size || v.storage_gb || 64}\n${I}}\n`;
+  s += `${I}source_image_reference {\n${I}${I}publisher = "Canonical"\n${I}${I}offer     = "0001-com-ubuntu-server-jammy"\n${I}${I}sku       = "22_04-lts-gen2"\n${I}${I}version   = "latest"\n${I}}\n`;
+  if (v.user_data && v.user_data.trim()) {
+    s += `${I}custom_data = base64encode(<<-USERDATA\n${indentBlock(v.user_data, I + I)}\n${I}USERDATA\n${I})\n`;
+  }
+  s += defaultTagsHCL();
+  append(s);
+}
+
+/* GCP Compute instance — follows hashicorp/google official example. */
+function emitGcpInstance(append, res, def, v, name, label) {
+  const I = TF_INDENT;
+  let s = '';
+  const subnet = STATE.resources.find(r => r.catalogId === 'subnet' && r.provider === 'gcp');
+  s += `${I}name         = "\${var.project}-${sanitizeName(name)}"\n`;
+  s += `${I}machine_type = ${hclString(gcpMachineType(v.instance_type))}\n`;
+  s += `${I}zone         = "\${var.region}-a"\n`;
+  s += `${I}boot_disk {\n${I}${I}initialize_params {\n${I}${I}${I}image = "debian-cloud/debian-12"\n${I}${I}${I}size  = ${v.root_volume_size || v.storage_gb || 20}\n${I}${I}}\n${I}}\n`;
+  s += `${I}network_interface {\n`;
+  s += subnet ? `${I}${I}subnetwork = google_compute_subnetwork.${sanitizeName(subnet.values.name)}.id\n` : `${I}${I}network = "default"\n`;
+  s += `${I}}\n`;
+  if (v.user_data && v.user_data.trim()) {
+    s += `${I}metadata_startup_script = <<-USERDATA\n${indentBlock(v.user_data, I + I)}\n${I}USERDATA\n`;
+  }
+  append(s);
+}
+
+/* Map a generic instance type to an Azure VM size. */
+function azureVmSize(t) {
+  const map = {
+    't3.micro': 'Standard_B1s', 't3.small': 'Standard_B1ms', 't3.medium': 'Standard_B2s',
+    't3.large': 'Standard_B2ms', 'm5.large': 'Standard_D2s_v3', 'm5.xlarge': 'Standard_D4s_v3',
+    'm5.2xlarge': 'Standard_D8s_v3', 'c5.large': 'Standard_F2s_v2', 'c5.xlarge': 'Standard_F4s_v2',
+  };
+  return map[t] || 'Standard_D2s_v3';
+}
+/* Map a generic instance type to a GCP machine type. */
+function gcpMachineType(t) {
+  const map = {
+    't3.micro': 'e2-micro', 't3.small': 'e2-small', 't3.medium': 'e2-medium',
+    't3.large': 'e2-standard-2', 'm5.large': 'n2-standard-2', 'm5.xlarge': 'n2-standard-4',
+    'm5.2xlarge': 'n2-standard-8', 'c5.large': 'c2-standard-4', 'c5.xlarge': 'c2-standard-4',
+  };
+  return map[t] || 'e2-standard-2';
+}
+
+/* Maps a catalog id to the environment variable its password should populate
+   when running as a container. Returns null if the service has no such var. */
+function passwordEnvVar(catalogId) {
+  switch (catalogId) {
+    case 'postgres-container': return 'POSTGRES_PASSWORD';
+    case 'nifi':               return 'SINGLE_USER_CREDENTIALS_PASSWORD';
+    case 'grafana':            return 'GF_SECURITY_ADMIN_PASSWORD';
+    default:                   return null;
+  }
 }
 
 /* For docker deployments of monitoring tools, map their fields onto the
@@ -2139,6 +2673,11 @@ function emitMonitoringHelm(append, def, v, name) {
     setVals.push(['adminPassword', v.admin_password || 'changeme']);
     setVals.push(['persistence.enabled', String(!!v.persistence)]);
     if (v.default_dashboards) setVals.push(['sidecar.dashboards.enabled', 'true']);
+    // pass environment variables through as Grafana chart env entries
+    (Array.isArray(v.env) ? v.env : []).forEach(e => {
+      const idx = e.indexOf('=');
+      if (idx > 0) setVals.push([`env.${e.slice(0, idx).trim()}`, e.slice(idx + 1).trim()]);
+    });
   } else if (def.id === 'loki') {
     setVals.push(['loki.limits_config.retention_period', v.retention || '168h']);
   } else if (def.id === 'kafka-exporter') {
@@ -2207,10 +2746,44 @@ function emitVariables() {
   out += `variable "environment" {\n  description = "Deployment environment"\n  type        = string\n  default     = ${hclString(STATE.settings.env)}\n}\n\n`;
   out += `variable "region" {\n  description = "Cloud region"\n  type        = string\n  default     = ${hclString(STATE.settings.region)}\n}\n\n`;
   if (usesAws) {
+    // Are the subnet variables actually referenced (compute without declared subnets)?
+    const hasAwsSubnets = STATE.resources.some(r => r.catalogId === 'subnet' && r.provider === 'aws');
+    const needsSubnetValues = !hasAwsSubnets && STATE.resources.some(r => r.provider === 'aws' &&
+      ['ec2','ec2-amazon-linux','ec2-cluster','ec2-bastion','kafka-self','zookeeper','kafka-msk',
+       'opensearch','postgres-rds','postgres-aurora','eks-cluster','eks-nodegroup','asg','alb','nlb',
+       'nifi','kafka-connect','schema-registry','proxy'].includes(r.catalogId));
+    const subnetNote = needsSubnetValues
+      ? '\n  # REQUIRED: no subnet resources are declared in this project, so you must\n  # supply existing subnet ids here (e.g. via terraform.tfvars) or add subnet\n  # resources from the catalog. Leaving this empty will fail at plan time.'
+      : '';
     out += `variable "vpc_id" {\n  description = "VPC to deploy into"\n  type        = string\n  default     = ""\n}\n\n`;
-    out += `variable "private_subnet_ids" {\n  description = "Private subnet ids for data services"\n  type        = list(string)\n  default     = []\n}\n\n`;
+    out += `variable "private_subnet_ids" {\n  description = "Private subnet ids for data services"${subnetNote}\n  type        = list(string)\n  default     = []\n}\n\n`;
     out += `variable "public_subnet_ids" {\n  description = "Public subnet ids for load balancers"\n  type        = list(string)\n  default     = []\n}\n`;
   }
+
+  // Fallback variables only emitted when a resource references a cluster
+  // that isn't declared in the project (e.g. a node group without its EKS cluster).
+  const needsEksVar = STATE.resources.some(r => r.catalogId === 'eks-nodegroup') &&
+                      !STATE.resources.some(r => r.catalogId === 'eks-cluster');
+  const needsEcsVar = STATE.resources.some(r => ['nifi','kafka-connect','schema-registry','proxy'].includes(r.catalogId) && r.provider === 'aws') &&
+                      !STATE.resources.some(r => r.catalogId === 'ecs-cluster');
+  if (needsEksVar) out += `\nvariable "eks_cluster_name" {\n  description = "Name of an existing EKS cluster (no eks-cluster resource was declared)"\n  type        = string\n  default     = ""\n}\n`;
+  if (needsEcsVar) out += `\nvariable "ecs_cluster_id" {\n  description = "ID/ARN of an existing ECS cluster (no ecs-cluster resource was declared)"\n  type        = string\n  default     = ""\n}\n`;
+
+  // Azure: VMs/containers may reference a subnet not declared in the project.
+  const azureNeedsSubnet = STATE.resources.some(r => r.provider === 'azure' &&
+      ['ec2','kafka-self','zookeeper','nifi','kafka-connect','schema-registry','proxy'].includes(r.catalogId)) &&
+      !STATE.resources.some(r => r.catalogId === 'subnet' && r.provider === 'azure');
+  if (azureNeedsSubnet) out += `\nvariable "subnet_id" {\n  description = "Azure subnet id to attach NICs/containers to"\n  type        = string\n  default     = ""\n}\n`;
+
+  // Azure subnet without its vnet declared
+  const azSubnetNoVnet = STATE.resources.some(r => r.catalogId === 'subnet' && r.provider === 'azure') &&
+      !STATE.resources.some(r => r.catalogId === 'vpc' && r.provider === 'azure');
+  if (azSubnetNoVnet) out += `\nvariable "vnet_name" {\n  description = "Existing Azure virtual network name (no vpc resource declared)"\n  type        = string\n  default     = ""\n}\n`;
+
+  // GCP subnet without its network declared
+  const gcpSubnetNoNet = STATE.resources.some(r => r.catalogId === 'subnet' && r.provider === 'gcp') &&
+      !STATE.resources.some(r => r.catalogId === 'vpc' && r.provider === 'gcp');
+  if (gcpSubnetNoNet) out += `\nvariable "network" {\n  description = "Existing GCP network self-link/id (no vpc resource declared)"\n  type        = string\n  default     = ""\n}\n`;
   return out;
 }
 
@@ -2336,8 +2909,18 @@ function emitOutputs() {
     else if (def.id === 'alb' || def.id === 'nlb') { out += `output "${label}_dns_name" {\n  value = ${tfType}.${label}.dns_name\n}\n\n`; any = true; }
     else if (def.id === 's3') { out += `output "${label}_bucket" {\n  value = ${tfType}.${label}.id\n}\n\n`; any = true; }
     else if (def.id === 'ec2-amazon-linux' || def.id === 'ec2') {
-      const idx = (r.values.count && r.values.count > 1) ? '[*].private_ip' : '.private_ip';
+      // Must match the resource: count is only emitted when > 1, and then
+      // attributes require splat/index access.
+      const cnt = Number(r.values.count || r.values.instance_count) || 1;
+      const idx = cnt > 1 ? '[*].private_ip' : '.private_ip';
       out += `output "${label}_private_ip" {\n  value = ${tfType}.${label}${idx}\n}\n\n`; any = true;
+      if (r.values.associate_public_ip) {
+        const pidx = cnt > 1 ? '[*].public_ip' : '.public_ip';
+        out += `output "${label}_public_ip" {\n  value = ${tfType}.${label}${pidx}\n}\n\n`;
+        if (r.values.http_server && cnt <= 1) {
+          out += `output "${label}_url" {\n  description = "Open this in a browser once the instance finishes booting"\n  value = "http://\${${tfType}.${label}.public_ip}"\n}\n\n`;
+        }
+      }
     }
   });
   if (!any) out += `# No outputs for the current resources.\n`;
@@ -2566,6 +3149,17 @@ function renderLint() {
   const awsRes = res.filter(r => r.provider === 'aws');
 
   const push = (ok, msg, level) => checks.push({ ok, msg, level });
+
+  // Networking: compute that references subnets without any subnet/VPC declared
+  const hasAwsSubnets = res.some(r => r.catalogId === 'subnet' && r.provider === 'aws');
+  const hasAwsVpc = res.some(r => r.catalogId === 'vpc' && r.provider === 'aws');
+  const needsNet = res.some(r => r.provider === 'aws' && ['ec2','ec2-amazon-linux','ec2-cluster','ec2-bastion','kafka-self','zookeeper','kafka-msk','opensearch','postgres-rds','postgres-aurora','eks-cluster','eks-nodegroup','asg','alb','nlb','nifi','kafka-connect','schema-registry','proxy'].includes(r.catalogId));
+  if (needsNet && !hasAwsSubnets)
+    push(false, 'AWS compute/services are declared but no subnets exist in the project. Add VPC + subnet resources, or set the subnet id variables in terraform.tfvars — otherwise plan fails on empty subnet lists.', 'warn');
+  else if (needsNet && hasAwsSubnets && !hasAwsVpc)
+    push(false, 'Subnets are declared without a VPC resource. Add a VPC, or ensure var.vpc_id points to an existing VPC.', 'info');
+  else if (needsNet && hasAwsSubnets && hasAwsVpc)
+    push(true, 'Networking is self-contained (VPC + subnets declared).', 'ok');
 
   if (STATE.settings.backend === 'local' && res.length)
     push(false, 'State backend is local. Use s3/gcs/azurerm remote state for team collaboration and locking.', 'warn');
@@ -2848,6 +3442,16 @@ function renderModalFields() {
     el.addEventListener('input', () => onFieldChange(el));
     el.addEventListener('change', () => onFieldChange(el));
   });
+  // wire password reveal toggles
+  $$('[data-reveal]', wrap).forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = wrap.querySelector(`input[data-field="${btn.dataset.reveal}"]`);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? 'Hide' : 'Show';
+    });
+  });
 }
 
 function fieldShell(label, control, help, full) {
@@ -2872,6 +3476,12 @@ function renderField(f) {
   } else if (f.type === 'list' || f.type === 'tags') {
     const txt = Array.isArray(v) ? v.join('\n') : '';
     control = `<textarea class="cds-field" rows="3" data-field="${f.key}" data-list="1" placeholder="one per line">${escapeHtml(txt)}</textarea>`;
+  } else if (f.secret) {
+    // password field: masked by default with a reveal toggle
+    control = `<div style="position:relative;">
+      <input class="cds-field" type="password" data-field="${f.key}" value="${escapeAttr(v)}" autocomplete="off" style="padding-right:64px;">
+      <button type="button" class="reveal-btn" data-reveal="${f.key}" style="position:absolute; right:1px; top:1px; bottom:1px; width:56px; border:none; background:var(--cds-layer-accent); color:var(--cds-text-secondary); cursor:pointer; font-size:12px;">Show</button>
+    </div>`;
   } else {
     control = `<input class="cds-field" type="text" data-field="${f.key}" value="${escapeAttr(v)}">`;
   }
@@ -3069,6 +3679,37 @@ function highlightHCL(code) {
    This block is a natural candidate for its own file: platforms.js
    ============================================================ */
 const PLATFORMS = [
+  {
+    id: 'ec2-hello-world',
+    name: 'EC2 web host — Hello World',
+    summary: 'A single public EC2 instance (latest Amazon Linux) serving a "Hello World" web page, with every dependency: VPC, public subnet, internet gateway, route table, and a security group allowing HTTP/HTTPS. Uses local state — terraform init/apply works with zero extra setup.',
+    tags: ['AWS','EC2','Beginner','Self-contained','Web'],
+    provider: 'aws', backend: 'local',
+    resources: [
+      ['vpc','aws',{ name:'web_vpc', cidr_block:'10.10.0.0/16', enable_dns:true }],
+      ['subnet','aws',{ name:'web_public', cidr_block:'10.10.1.0/24', tier:'public', availability_zone:'us-east-1a' }],
+      ['ec2-amazon-linux','aws',{
+        name:'web',
+        instance_type:'t3.micro',
+        associate_public_ip:true,
+        http_server:true,
+        enable_ssm:true,
+        root_volume_size:8,
+        user_data:
+          '#!/bin/bash\n' +
+          'dnf install -y httpd\n' +
+          'systemctl enable --now httpd\n' +
+          'cat > /var/www/html/index.html <<\'HTML\'\n' +
+          '<!doctype html>\n' +
+          '<html><head><title>Hello World</title></head>\n' +
+          '<body style="font-family:sans-serif;text-align:center;margin-top:10%">\n' +
+          '<h1>Hello, World!</h1>\n' +
+          '<p>Served from EC2 via Terraform.</p>\n' +
+          '</body></html>\n' +
+          'HTML\n',
+      }],
+    ],
+  },
   {
     id: 'msk-lakehouse',
     name: 'AWS MSK streaming lakehouse',
