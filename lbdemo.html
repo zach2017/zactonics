@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud School · Load Balancers &amp; Terraform on AWS</title>
+<meta name="description" content="A friendly, step-by-step tutorial: how AWS load balancers work, how to build them with Terraform, best practices for Kafka, NiFi, Zookeeper and data pipelines, GitLab CI/CD, and Terraform state management.">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        ink: '#161616',
+        paper: '#ffffff',
+        mist: '#f4f4f4',
+        line: '#e0e0e0',
+        blue: '#0f62fe',
+        bluedark: '#002d9c',
+        bluepale: '#edf5ff',
+        green: '#24a148',
+        greenpale: '#defbe6',
+        yellow: '#f1c21b',
+        yellowpale: '#fcf4d6',
+        red: '#da1e28',
+        redpale: '#fff1f1'
+      },
+      fontFamily: {
+        sans: ['"IBM Plex Sans"','system-ui','sans-serif'],
+        mono: ['"IBM Plex Mono"','ui-monospace','SFMono-Regular','monospace']
+      }
+    }
+  }
+}
+</script>
+<style>
+:root { --reader-size: 16px; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { font-family: "IBM Plex Sans", system-ui, sans-serif; color:#161616; background:#ffffff; }
+section { scroll-margin-top: 92px; }
+
+/* Reader-size zone: the +/- buttons change this variable (14px–36px) */
+.rd p, .rd li, .rd dt, .rd dd, .rd td, .rd th, .rd .term, .rd summary, .rd label, .rd blockquote, .rd figcaption.txt {
+  font-size: var(--reader-size);
+  line-height: 1.65;
+}
+.rd code.inline { font-family:"IBM Plex Mono",monospace; font-size: calc(var(--reader-size) * 0.88); background:#f4f4f4; border:1px solid #e0e0e0; padding:0 .35em; }
+pre code { font-size: clamp(12px, calc(var(--reader-size) * 0.85), 21px); }
+
+h1,h2,h3,h4 { letter-spacing:-0.01em; }
+.eyebrow { font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#0f62fe; }
+.secnum { font-family:"IBM Plex Mono",monospace; font-weight:600; color:#0f62fe; }
+
+/* Clickable vocabulary words → popup */
+.term {
+  font: inherit; color:#0043ce; background:none; border:0; padding:0; cursor:pointer;
+  border-bottom:2px dotted #0f62fe; text-align:left;
+}
+.term:hover { color:#0f62fe; background:#edf5ff; }
+.term:focus-visible, .morebtn:focus-visible, button:focus-visible, a:focus-visible { outline:2px solid #0f62fe; outline-offset:2px; }
+
+/* "More info" pill buttons → popup */
+.morebtn {
+  display:inline-flex; align-items:center; gap:.5rem;
+  font-family:"IBM Plex Mono",monospace; font-size:13px;
+  color:#0043ce; border:1px solid #0f62fe; background:#ffffff;
+  padding:.45rem .8rem; cursor:pointer;
+}
+.morebtn:hover { background:#edf5ff; }
+
+/* Callout boxes */
+.callout { border-left:4px solid; padding:1rem 1.1rem; margin:1.25rem 0; }
+.callout h5 { font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.4rem; }
+.co-info { background:#edf5ff; border-color:#0f62fe; } .co-info h5{color:#0043ce;}
+.co-tip { background:#defbe6; border-color:#24a148; } .co-tip h5{color:#0e6027;}
+.co-warn { background:#fcf4d6; border-color:#f1c21b; } .co-warn h5{color:#684e00;}
+.co-danger { background:#fff1f1; border-color:#da1e28; } .co-danger h5{color:#a2191f;}
+
+/* Numbered steps */
+.step { display:flex; gap:1rem; border:1px solid #e0e0e0; border-left:4px solid #0f62fe; padding:1.1rem 1.2rem; margin:1rem 0; background:#ffffff; }
+.step-n { font-family:"IBM Plex Mono",monospace; font-weight:600; color:#ffffff; background:#0f62fe; min-width:2.2rem; height:2.2rem; display:flex; align-items:center; justify-content:center; }
+.step h4 { font-weight:600; margin-bottom:.35rem; font-size: calc(var(--reader-size) * 1.05); }
+
+/* Code blocks */
+.cb { border:1px solid #161616; margin:1.25rem 0; }
+.cb figcaption { display:flex; justify-content:space-between; align-items:center; gap:1rem; background:#161616; color:#f4f4f4; font-family:"IBM Plex Mono",monospace; font-size:12px; padding:.5rem .9rem; border-bottom:1px solid #393939; }
+.cb pre { background:#161616; color:#f4f4f4; overflow-x:auto; padding:1rem 1.1rem; }
+.cb code { font-family:"IBM Plex Mono",monospace; line-height:1.6; white-space:pre; }
+.copybtn { font-family:"IBM Plex Mono",monospace; font-size:12px; color:#161616; background:#ffffff; border:0; padding:.25rem .7rem; cursor:pointer; }
+.copybtn:hover { background:#e0e0e0; }
+.tk-c { color:#8d8d8d; font-style:italic; }   /* comments */
+.tk-s { color:#3ddbd9; }                       /* "strings" */
+.tk-k { color:#78a9ff; font-weight:500; }      /* keywords / yaml keys */
+
+/* Mini diagrams built from boxes */
+.diag { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; font-family:"IBM Plex Mono",monospace; font-size:13px; margin:1.1rem 0; }
+.dbox { border:1px solid #161616; padding:.55rem .8rem; background:#ffffff; }
+.dbox.hot { background:#0f62fe; color:#ffffff; border-color:#0f62fe; }
+.dbox.soft { background:#f4f4f4; }
+.darrow { color:#0f62fe; font-weight:600; }
+
+/* Tables */
+.tbl { width:100%; border-collapse:collapse; margin:1.1rem 0; }
+.tbl th { background:#161616; color:#ffffff; text-align:left; font-weight:600; padding:.6rem .8rem; }
+.tbl td { border:1px solid #e0e0e0; padding:.6rem .8rem; vertical-align:top; }
+.tbl tr:nth-child(even) td { background:#f4f4f4; }
+
+/* Doc library cards */
+.doccard { display:block; border:1px solid #e0e0e0; border-top:3px solid #0f62fe; padding:1rem 1.1rem; background:#ffffff; color:#161616; text-decoration:none; }
+.doccard:hover { background:#edf5ff; }
+.doccard .t { font-weight:600; }
+.doccard .u { font-family:"IBM Plex Mono",monospace; font-size:12px; color:#0043ce; word-break:break-all; }
+
+/* Modal */
+#modal[aria-hidden="true"] { display:none; }
+#modal { position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; }
+@media (min-width:640px){ #modal { align-items:center; } }
+#modal .backdrop { position:absolute; inset:0; background:rgba(22,22,22,.6); }
+#modal .panel { position:relative; background:#ffffff; width:100%; max-width:40rem; max-height:85vh; overflow-y:auto; border-top:4px solid #0f62fe; box-shadow:0 8px 30px rgba(22,22,22,.35); }
+
+/* Scroll progress + back-to-top */
+#progress { position:fixed; top:0; left:0; height:3px; background:#0f62fe; width:0; z-index:70; }
+#toTop { position:fixed; right:1rem; bottom:1rem; z-index:50; display:none; background:#161616; color:#ffffff; font-family:"IBM Plex Mono",monospace; font-size:12px; padding:.6rem .8rem; border:0; cursor:pointer; }
+#toTop:hover { background:#0f62fe; }
+
+details > summary { cursor:pointer; font-weight:600; }
+.filetree { font-family:"IBM Plex Mono",monospace; font-size:clamp(12px, calc(var(--reader-size) * 0.85), 20px); line-height:1.55; background:#f4f4f4; border:1px solid #e0e0e0; padding:1rem 1.1rem; overflow-x:auto; white-space:pre; }
+</style>
+</head>
+<body id="top" class="bg-paper text-ink antialiased">
+<div id="progress"></div>
+
+<!-- ===================== STICKY TOOLBAR ===================== -->
+<header class="sticky top-0 z-40 bg-paper border-b border-line">
+  <div class="max-w-5xl mx-auto px-5 md:px-8 py-3 flex flex-wrap items-center gap-3 justify-between">
+    <a href="#top" class="flex items-center gap-3 no-underline">
+      <span class="w-7 h-7 bg-blue inline-block" aria-hidden="true"></span>
+      <span class="font-semibold leading-tight">Cloud School
+        <span class="block font-mono text-[11px] tracking-[.18em] uppercase text-bluedark">Load Balancers · Terraform · AWS</span>
+      </span>
+    </a>
+    <div class="flex items-center gap-2" role="group" aria-label="Text size controls">
+      <span class="font-mono text-[11px] uppercase tracking-[.14em] text-ink/70 hidden sm:inline">Text size</span>
+      <button id="fontMinus" class="w-9 h-9 border border-ink font-mono font-semibold hover:bg-mist" aria-label="Decrease text size">A−</button>
+      <span id="fontReadout" class="font-mono text-sm border border-line px-2 py-1.5 min-w-[4.5rem] text-center" aria-live="polite">16 px</span>
+      <button id="fontPlus" class="w-9 h-9 border border-ink bg-ink text-paper font-mono font-semibold hover:bg-blue hover:border-blue" aria-label="Increase text size">A+</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-5 md:px-8">
+
+<!-- ===================== HERO ===================== -->
+<div class="pt-10 md:pt-16 pb-8 border-b border-line">
+  <p class="eyebrow mb-3">A beginner-friendly engineering course · no experience needed</p>
+  <h1 class="text-3xl md:text-5xl font-bold leading-tight max-w-3xl">How load balancers work on AWS — and how to build them with Terraform.</h1>
+  <p class="mt-4 max-w-2xl text-ink/80" style="font-size:var(--reader-size);line-height:1.65;">We explain every word, use everyday comparisons, and go step by step. By the end you will understand load balancers, write real Terraform code, learn best practices for data tools like <strong>Kafka</strong>, <strong>NiFi</strong>, and <strong>Zookeeper</strong>, run everything through <strong>GitLab pipelines</strong>, and manage <strong>Terraform state</strong> like a professional team.</p>
+  <div class="mt-5 flex flex-wrap gap-2 font-mono text-[12px]">
+    <span class="border border-line px-3 py-1.5">Level · Middle-school friendly</span>
+    <span class="border border-line px-3 py-1.5">Time · ~90 minutes</span>
+    <span class="border border-line px-3 py-1.5">Stack · AWS + Terraform + GitLab</span>
+  </div>
+
+  <!-- Signature diagram: one request stream, fanned across three servers -->
+  <figure class="mt-8 border border-line bg-mist p-4 md:p-6 overflow-x-auto">
+    <svg viewBox="0 0 760 250" class="w-full min-w-[560px] h-auto" role="img" aria-labelledby="heroDiagTitle">
+      <title id="heroDiagTitle">Many users send requests to one load balancer, which spreads them across three servers</title>
+      <!-- users -->
+      <g font-family="IBM Plex Mono, monospace" font-size="13" fill="#161616">
+        <circle cx="60" cy="55" r="16" fill="#ffffff" stroke="#161616"/><text x="60" y="60" text-anchor="middle">🙂</text>
+        <circle cx="60" cy="125" r="16" fill="#ffffff" stroke="#161616"/><text x="60" y="130" text-anchor="middle">🙂</text>
+        <circle cx="60" cy="195" r="16" fill="#ffffff" stroke="#161616"/><text x="60" y="200" text-anchor="middle">🙂</text>
+        <text x="60" y="235" text-anchor="middle">users</text>
+      </g>
+      <!-- lines users -> LB -->
+      <g stroke="#0f62fe" stroke-width="2">
+        <line x1="80" y1="55" x2="300" y2="115"/>
+        <line x1="80" y1="125" x2="300" y2="125"/>
+        <line x1="80" y1="195" x2="300" y2="135"/>
+      </g>
+      <!-- LB box -->
+      <rect x="300" y="90" width="160" height="70" fill="#0f62fe"/>
+      <text x="380" y="120" text-anchor="middle" fill="#ffffff" font-family="IBM Plex Mono, monospace" font-size="14" font-weight="600">LOAD</text>
+      <text x="380" y="140" text-anchor="middle" fill="#ffffff" font-family="IBM Plex Mono, monospace" font-size="14" font-weight="600">BALANCER</text>
+      <!-- lines LB -> servers -->
+      <g stroke="#161616" stroke-width="2" stroke-dasharray="6 4">
+        <line x1="460" y1="105" x2="620" y2="55"/>
+        <line x1="460" y1="125" x2="620" y2="125"/>
+        <line x1="460" y1="145" x2="620" y2="195"/>
+      </g>
+      <!-- servers -->
+      <g font-family="IBM Plex Mono, monospace" font-size="13">
+        <rect x="620" y="35" width="110" height="40" fill="#ffffff" stroke="#161616"/><text x="675" y="60" text-anchor="middle">server 1</text>
+        <rect x="620" y="105" width="110" height="40" fill="#ffffff" stroke="#161616"/><text x="675" y="130" text-anchor="middle">server 2</text>
+        <rect x="620" y="175" width="110" height="40" fill="#ffffff" stroke="#161616"/><text x="675" y="200" text-anchor="middle">server 3</text>
+      </g>
+    </svg>
+    <figcaption class="txt mt-3 text-ink/70" style="font-size:calc(var(--reader-size)*0.9);">The whole idea in one picture: many people, one smart traffic director, several helpers doing the work.</figcaption>
+  </figure>
+</div>
+
+<!-- ===================== HOW TO USE ===================== -->
+<div class="rd py-8 border-b border-line">
+  <div class="callout co-info my-0">
+    <h5>How to use this page</h5>
+    <p class="mb-2"><strong>1.</strong> Words with a <button class="term" data-term="server">dotted blue underline</button> are clickable. Tap one to open a popup with a simple definition, extra detail, and a link to the official documentation.</p>
+    <p class="mb-2"><strong>2.</strong> The <strong>A− / A+</strong> buttons at the top change the reading size from 14 px up to 36 px. Pick whatever feels comfortable.</p>
+    <p class="mb-0"><strong>3.</strong> Every dark box is real code you can copy with the <em>Copy</em> button and run yourself. Read it slowly — every line is explained.</p>
+  </div>
+</div>
+
+<!-- ===================== TABLE OF CONTENTS ===================== -->
+<nav class="py-10 border-b border-line" aria-label="Table of contents">
+  <p class="eyebrow mb-4">Course map</p>
+  <h2 class="text-2xl md:text-3xl font-bold mb-6">Ten lessons, in order.</h2>
+  <ol class="grid sm:grid-cols-2 gap-3 list-none">
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s1"><span class="secnum">01</span><span>What is a load balancer?</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s2"><span class="secnum">02</span><span>The AWS load balancer family</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s3"><span class="secnum">03</span><span>Building blocks: VPCs, subnets &amp; security groups</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s4"><span class="secnum">04</span><span>What is Terraform?</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s5"><span class="secnum">05</span><span>Build a real load balancer, step by step</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s6"><span class="secnum">06</span><span>Data pipelines: Kafka, Zookeeper, NiFi &amp; analytics</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s7"><span class="secnum">07</span><span>GitLab pipelines: robots that ship your code</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s8"><span class="secnum">08</span><span>Terraform state: the save file (and how to split it)</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s9"><span class="secnum">09</span><span>Project structure &amp; the golden rules</span></a></li>
+    <li><a class="flex gap-3 border border-line p-4 hover:bg-bluepale no-underline text-ink" href="#s10"><span class="secnum">10</span><span>Official docs library</span></a></li>
+  </ol>
+</nav>
+
+<!-- ===================== 01 WHAT IS A LOAD BALANCER ===================== -->
+<section id="s1" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">01</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">What is a load balancer?</h2>
+
+  <p class="mb-4"><strong>Start with a pizza shop.</strong> Imagine a pizza shop with only one cashier. On a quiet Tuesday, that one cashier is fine. But on Friday night, fifty hungry people show up at once. The line stretches out the door, people wait forever, and some give up and leave. The cashier is overloaded.</p>
+  <p class="mb-4">Now imagine the shop hires <strong>three cashiers</strong> and one friendly greeter at the door. The greeter looks at the three lines and sends each new customer to whichever cashier is least busy. Suddenly everyone gets served quickly, no single cashier melts down, and if one cashier goes on break, the greeter simply stops sending people their way.</p>
+  <p class="mb-4">On the internet, that greeter is called a <strong>load balancer</strong>. The cashiers are <button class="term" data-term="server">servers</button> — computers that do the actual work, like showing a website or saving your game score. The customers are <button class="term" data-term="request">requests</button> — little messages your phone or laptop sends, like “please show me this web page.”</p>
+
+  <div class="diag" aria-hidden="true">
+    <span class="dbox soft">50 customers</span><span class="darrow">→</span>
+    <span class="dbox hot">greeter (load balancer)</span><span class="darrow">→</span>
+    <span class="dbox">cashier 1</span><span class="dbox">cashier 2</span><span class="dbox">cashier 3</span>
+  </div>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-8 mb-3">The three jobs of a load balancer</h3>
+  <p class="mb-3">A load balancer does three important jobs, all day, every second:</p>
+  <ol class="list-decimal pl-6 space-y-3 mb-4">
+    <li><strong>Spread the work (balancing).</strong> It shares incoming requests across many servers so no single server gets crushed. “Load” just means “amount of work,” and “balance” means “share it fairly.”</li>
+    <li><strong>Check who is healthy (health checks).</strong> Every few seconds it pokes each server and asks, “Are you okay?” If a server stops answering, the load balancer stops sending it customers. Users never even notice a server broke. This is called a <button class="term" data-term="healthcheck">health check</button>.</li>
+    <li><strong>Be the one front door.</strong> Users only need to remember one address (one <button class="term" data-term="dns">DNS name</button>). Behind that door, you can add servers, remove servers, or replace servers, and nobody outside has to change anything.</li>
+  </ol>
+
+  <div class="callout co-tip">
+    <h5>Why this matters</h5>
+    <p class="mb-0">Big sites like streaming services or game servers stay up during huge traffic spikes because of load balancers. They make systems <strong>scalable</strong> (add more servers when busy) and <strong>highly available</strong> (survive when one server dies). Those two words come up in almost every cloud job interview.</p>
+  </div>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-8 mb-3">A few words you will see everywhere</h3>
+  <p class="mb-3">Before we touch AWS, let’s lock in the basic vocabulary. Tap any word for the full popup explanation:</p>
+  <ul class="list-disc pl-6 space-y-2 mb-4">
+    <li>A <button class="term" data-term="server">server</button> is just a computer whose job is to answer requests.</li>
+    <li>An <button class="term" data-term="ipaddress">IP address</button> is a computer’s street address on a network, like <code class="inline">10.0.1.25</code>.</li>
+    <li>A <button class="term" data-term="port">port</button> is a numbered door on that computer. Websites usually use door <code class="inline">80</code> (HTTP) or door <code class="inline">443</code> (<button class="term" data-term="https">HTTPS</button>, the locked version).</li>
+    <li><button class="term" data-term="dns">DNS</button> is the internet’s phone book — it turns a name like <code class="inline">myapp.example.com</code> into an IP address.</li>
+    <li><strong>Traffic</strong> is the flow of all those requests and responses, like cars on a road.</li>
+  </ul>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="lbdocs">ℹ More on load balancing + AWS official docs ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 02 AWS LB FAMILY ===================== -->
+<section id="s2" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">02</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">The AWS load balancer family</h2>
+
+  <p class="mb-4">AWS (Amazon Web Services) is a huge collection of rentable computer services. Its load balancer service is called <strong>Elastic Load Balancing (ELB)</strong> — “elastic” because it stretches automatically when traffic grows. ELB is not one product; it’s a small family. Choosing the right family member is your first real engineering decision.</p>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">First, a 60-second idea: network “layers”</h3>
+  <p class="mb-4">Engineers describe networking as a stack of <button class="term" data-term="osi">layers</button>, like floors in a building. Two floors matter for us. <strong>Layer 4</strong> is the “envelope” floor: it only sees addresses and ports — <em>where</em> a message goes, never what’s inside. <strong>Layer 7</strong> is the “letter” floor: it opens the envelope and reads the actual web request — the URL path, the website name, the headers. A Layer 7 balancer can make smart decisions like “send <code class="inline">/videos</code> to the video servers.” A Layer 4 balancer can’t read any of that, but because it does less, it is blazingly fast.</p>
+
+  <table class="tbl">
+    <thead><tr><th>Type</th><th>Layer</th><th>Best at</th><th>Use it for</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><button class="term" data-term="alb">Application Load Balancer (ALB)</button></td>
+        <td>7 — reads the request</td>
+        <td>Smart routing by URL path, hostname, or headers; HTTPS; redirects</td>
+        <td>Websites, APIs, microservices, the <strong>NiFi</strong> web screen</td>
+      </tr>
+      <tr>
+        <td><button class="term" data-term="nlb">Network Load Balancer (NLB)</button></td>
+        <td>4 — sees only address + port</td>
+        <td>Extreme speed, millions of connections, raw TCP/UDP, fixed IPs</td>
+        <td>Databases, game servers, <strong>Kafka</strong>-style TCP traffic</td>
+      </tr>
+      <tr>
+        <td>Gateway Load Balancer (GWLB)</td>
+        <td>3 — whole network packets</td>
+        <td>Slipping firewalls and security inspection boxes into the traffic path</td>
+        <td>Security appliance fleets (a more advanced, niche tool)</td>
+      </tr>
+      <tr>
+        <td>Classic Load Balancer (CLB)</td>
+        <td>4 &amp; 7 (old)</td>
+        <td>Nothing new — it’s the retired grandparent</td>
+        <td>Legacy systems only. <strong>Never pick it for new work.</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout co-info">
+    <h5>The simple rule of thumb</h5>
+    <p class="mb-0">Talking <strong>HTTP/HTTPS</strong> (web pages, APIs, dashboards)? Choose the <strong>ALB</strong>. Talking raw <strong>TCP/UDP</strong> at high speed (Kafka brokers, databases, custom protocols)? Choose the <strong>NLB</strong>. We will build one of each in this course.</p>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="alb">ℹ ALB details + docs ↗</button>
+    <button class="morebtn" data-term="nlb">ℹ NLB details + docs ↗</button>
+    <button class="morebtn" data-term="osi">ℹ What are network layers? ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 03 BUILDING BLOCKS ===================== -->
+<section id="s3" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">03</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">Building blocks: the neighborhood your load balancer lives in</h2>
+
+  <p class="mb-4">A load balancer never floats alone in space. It lives inside a private network you build in AWS, surrounded by a few pieces with intimidating names. Here’s the friendly version of each. Think of AWS as a giant country, and you are designing one gated neighborhood inside it.</p>
+
+  <dl class="space-y-5 mb-6">
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="region">Region</button> — the country’s cities</dt>
+      <dd class="text-ink/80">AWS has data centers grouped into regions like <code class="inline">us-east-1</code> (Northern Virginia) or <code class="inline">eu-west-1</code> (Ireland). You pick one region and build there.</dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="az">Availability Zone (AZ)</button> — separate buildings in that city</dt>
+      <dd class="text-ink/80">Each region contains several AZs — physically separate data centers with their own power and internet. If lightning takes out one building, the others keep running. <strong>Best practice: always spread across at least two AZs.</strong> Load balancers actually require it.</dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="vpc">VPC (Virtual Private Cloud)</button> — your gated neighborhood</dt>
+      <dd class="text-ink/80">Your own private slice of AWS networking. Nothing gets in or out unless you allow it. You give it a range of IP addresses using <button class="term" data-term="cidr">CIDR notation</button>, like <code class="inline">10.0.0.0/16</code> (about 65,000 addresses to hand out).</dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="subnet">Subnets</button> — the streets</dt>
+      <dd class="text-ink/80">You divide the VPC into smaller streets. <strong>Public subnets</strong> have a road to the internet (through an <button class="term" data-term="igw">Internet Gateway</button>) — load balancers that face the world live here. <strong>Private subnets</strong> have no direct road in — your servers, Kafka brokers, and databases hide here, safe from random internet strangers.</dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="securitygroup">Security Groups</button> — bouncers at each door</dt>
+      <dd class="text-ink/80">A tiny firewall attached to each resource. Its rules say things like “allow door 443 from anywhere” or, even better, “allow door 80 <em>only</em> from the load balancer’s security group.” Security groups are <em>stateful</em>: if a request is allowed in, the reply is automatically allowed back out.</dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="listener">Listeners</button> — the receptionist’s instructions</dt>
+      <dd class="text-ink/80">A listener tells the load balancer which door to watch and what to do: “Listen on port 443 for HTTPS, and forward everything to the web servers group.”</dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><button class="term" data-term="targetgroup">Target Groups</button> — the team roster</dt>
+      <dd class="text-ink/80">A named list of servers (the “targets”) that share work, plus the <button class="term" data-term="healthcheck">health check</button> rules for deciding who on the roster is fit to play today.</dd>
+    </div>
+  </dl>
+
+  <div class="diag" aria-hidden="true">
+    <span class="dbox soft">internet</span><span class="darrow">→</span>
+    <span class="dbox">Internet Gateway</span><span class="darrow">→</span>
+    <span class="dbox hot">ALB · public subnets</span><span class="darrow">→</span>
+    <span class="dbox">target group → servers · private subnets</span>
+  </div>
+
+  <div class="callout co-warn">
+    <h5>Watch out — the #1 beginner mistake</h5>
+    <p class="mb-0">Putting servers in <strong>public</strong> subnets and opening their ports to the whole internet (<code class="inline">0.0.0.0/0</code>). Only the load balancer should be public. Servers belong in private subnets, accepting traffic <em>only from the load balancer’s security group</em>. We’ll write the code exactly that way.</p>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="vpc">ℹ VPC docs ↗</button>
+    <button class="morebtn" data-term="securitygroup">ℹ Security group docs ↗</button>
+    <button class="morebtn" data-term="targetgroup">ℹ Target group docs ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 04 WHAT IS TERRAFORM ===================== -->
+<section id="s4" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">04</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">What is Terraform?</h2>
+
+  <p class="mb-4">You <em>could</em> build everything from Lesson 03 by clicking around the AWS website. But imagine clicking 40 buttons perfectly, three times, for three environments… and then doing it again next month when something changes. Humans forget steps. Clicks leave no record. That’s why professionals use <button class="term" data-term="iac">Infrastructure as Code (IaC)</button>.</p>
+  <p class="mb-4"><strong>Think of a LEGO set.</strong> Terraform is like writing the LEGO instruction booklet for your cloud. You describe the finished build in text files — “one VPC, two subnets, one load balancer, two servers” — and Terraform reads the booklet and assembles the real thing in AWS for you. Same booklet, same build, every single time. The booklet lives in <button class="term" data-term="git">Git</button>, so every change is reviewed and remembered.</p>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">Five words that unlock all of Terraform</h3>
+  <ul class="list-disc pl-6 space-y-3 mb-5">
+    <li><button class="term" data-term="hcl">HCL</button> — the language Terraform files are written in. Files end in <code class="inline">.tf</code> and read almost like English.</li>
+    <li><button class="term" data-term="provider">Provider</button> — the plugin that teaches Terraform how to talk to a specific cloud. We use the <code class="inline">aws</code> provider; there are providers for GitLab, Kafka, and hundreds more.</li>
+    <li><button class="term" data-term="resource">Resource</button> — one thing you want to exist: one VPC, one load balancer, one security group. Each gets a <code class="inline">resource</code> block.</li>
+    <li><button class="term" data-term="state">State</button> — Terraform’s memory file (<code class="inline">terraform.tfstate</code>) recording what it has already built. So important it gets its own lesson (08).</li>
+    <li><button class="term" data-term="module">Module</button> — a reusable folder of Terraform code, like a saved LEGO sub-assembly you can snap into many builds.</li>
+  </ul>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">The four commands you’ll type forever</h3>
+  <div class="diag" aria-hidden="true">
+    <span class="dbox">terraform init</span><span class="darrow">→</span>
+    <span class="dbox">terraform validate</span><span class="darrow">→</span>
+    <span class="dbox hot">terraform plan</span><span class="darrow">→</span>
+    <span class="dbox">terraform apply</span>
+  </div>
+  <ol class="list-decimal pl-6 space-y-2 mb-4">
+    <li><code class="inline">terraform init</code> — “unbox the kit”: downloads the providers and connects to your state storage.</li>
+    <li><code class="inline">terraform validate</code> — “spell-check the booklet”: catches typos and broken references.</li>
+    <li><code class="inline">terraform plan</code> — “preview the build”: shows exactly what would be created (<span class="font-mono">+</span>), changed (<span class="font-mono">~</span>), or destroyed (<span class="font-mono">-</span>) — <em>without touching anything</em>. Always read the plan.</li>
+    <li><code class="inline">terraform apply</code> — “build it for real.” And <code class="inline">terraform destroy</code> tears it all down when you’re done practicing (important for your wallet!).</li>
+  </ol>
+
+  <div class="callout co-tip">
+    <h5>Best practice from day one</h5>
+    <p class="mb-0">Run <code class="inline">terraform fmt</code> to auto-tidy your files, and <strong>never</strong> edit the cloud by hand once Terraform manages it — hand edits create “drift” (the cloud quietly differing from the booklet), and the next <code class="inline">plan</code> will fight you.</p>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="iac">ℹ IaC explained + Terraform docs ↗</button>
+    <button class="morebtn" data-term="provider">ℹ AWS provider registry ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 05 STEP BY STEP BUILD ===================== -->
+<section id="s5" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">05</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">Build a real load balancer, step by step</h2>
+
+  <p class="mb-4">Time to build! We’ll create a complete mini-system: a VPC, two public subnets (in two AZs), two tiny web servers, and an Application Load Balancer that shares traffic between them. Each step adds one file or one block, with every line explained. Total cost if you destroy it within an hour: a few cents.</p>
+
+  <div class="step">
+    <div class="step-n">1</div>
+    <div class="step-body">
+      <h4>Install your tools</h4>
+      <p class="mb-2">You need three things on your computer: the <strong>Terraform CLI</strong>, the <strong>AWS CLI</strong>, and an AWS account with access keys configured (run <code class="inline">aws configure</code> and paste your keys). Ask an adult/teammate with the AWS account to create an IAM user for you — never use the root account for daily work.</p>
+      <p class="mb-0">Check it worked: <code class="inline">terraform -version</code> and <code class="inline">aws sts get-caller-identity</code> should both print happily.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">2</div>
+    <div class="step-body">
+      <h4>Make a project folder</h4>
+      <p class="mb-2">Terraform reads <em>every</em> <code class="inline">.tf</code> file in a folder and merges them, so we split code into clearly named files just for human sanity:</p>
+      <div class="filetree">alb-tutorial/
+├── versions.tf    ← which Terraform + providers we need
+├── variables.tf   ← knobs we might want to change
+├── network.tf     ← VPC, subnets, internet gateway, routes
+├── security.tf    ← the bouncers (security groups)
+├── servers.tf     ← two tiny web servers
+├── alb.tf         ← the star: load balancer + target group + listener
+└── outputs.tf     ← useful answers printed after apply</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">3</div>
+    <div class="step-body">
+      <h4>Pin your versions <span class="font-mono text-sm text-blue">versions.tf</span></h4>
+      <p class="mb-2">Pinning versions means everyone on the team (and the GitLab robot later) builds with the same tools — no “works on my machine” mysteries.</p>
+      <figure class="cb"><figcaption><span>versions.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">terraform {
+  # Refuse to run on a Terraform older than this
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"   # any 5.x release, never 6.x
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region   # value comes from variables.tf
+}</code></pre></figure>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">4</div>
+    <div class="step-body">
+      <h4>Add your knobs <span class="font-mono text-sm text-blue">variables.tf</span></h4>
+      <p class="mb-2">A <strong>variable</strong> is a labeled knob. Instead of burying <code class="inline">"us-east-1"</code> in ten places, you define it once and reuse it everywhere as <code class="inline">var.aws_region</code>.</p>
+      <figure class="cb"><figcaption><span>variables.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">variable "aws_region" {
+  description = "Which AWS region to build in"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "project" {
+  description = "Short name stamped on every resource"
+  type        = string
+  default     = "lb-tutorial"
+}</code></pre></figure>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">5</div>
+    <div class="step-body">
+      <h4>Build the neighborhood <span class="font-mono text-sm text-blue">network.tf</span></h4>
+      <p class="mb-2">One VPC, two public subnets in <em>different</em> AZs (the ALB requires at least two), an internet gateway (the road to the outside world), and a route table that says “to reach the internet, take the gateway.”</p>
+      <figure class="cb"><figcaption><span>network.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl"># The gated neighborhood: ~65,000 private addresses
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = { Name = "${var.project}-vpc" }
+}
+
+# Two public streets, each in a different building (AZ)
+resource "aws_subnet" "public_a" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.aws_region}a"
+  map_public_ip_on_launch = true
+  tags = { Name = "${var.project}-public-a" }
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.aws_region}b"
+  map_public_ip_on_launch = true
+  tags = { Name = "${var.project}-public-b" }
+}
+
+# The road connecting our neighborhood to the internet
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "${var.project}-igw" }
+}
+
+# Directions: "anything bound for the internet → take the gateway"
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+}
+
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}</code></pre></figure>
+      <p class="mb-0">Notice how blocks reference each other: <code class="inline">aws_vpc.main.id</code> means “the ID of the VPC named <em>main</em>, once it exists.” Terraform reads these references and figures out the correct build order all by itself.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">6</div>
+    <div class="step-body">
+      <h4>Hire the bouncers <span class="font-mono text-sm text-blue">security.tf</span></h4>
+      <p class="mb-2">Two security groups. The ALB’s bouncer lets the whole internet knock on port 80. The servers’ bouncer is stricter: it admits port-80 traffic <strong>only if it comes from the ALB’s security group</strong>. That chaining is the textbook best practice.</p>
+      <figure class="cb"><figcaption><span>security.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl"># Bouncer #1: the load balancer's front door
+resource "aws_security_group" "alb" {
+  name_prefix = "${var.project}-alb-"
+  description = "Allow web traffic from the internet to the ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP from anywhere"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all replies and outbound calls"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Bouncer #2: the servers. Note: NO cidr_blocks here!
+resource "aws_security_group" "web" {
+  name_prefix = "${var.project}-web-"
+  description = "Servers accept traffic ONLY from the ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "HTTP, but only from the ALB's security group"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}</code></pre></figure>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">7</div>
+    <div class="step-body">
+      <h4>Launch two tiny servers <span class="font-mono text-sm text-blue">servers.tf</span></h4>
+      <p class="mb-2">We start two small <button class="term" data-term="ec2">EC2</button> machines. A startup script (<code class="inline">user_data</code>) installs the nginx web server and writes a page saying which server you reached — so you can <em>watch</em> the balancing happen. <code class="inline">count = 2</code> is Terraform’s copy machine: one block, two servers.</p>
+      <figure class="cb"><figcaption><span>servers.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl"># Always fetch the newest Amazon Linux 2023 image
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+}
+
+resource "aws_instance" "web" {
+  count                  = 2
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = "t3.micro"
+  subnet_id              = count.index == 0 ? aws_subnet.public_a.id : aws_subnet.public_b.id
+  vpc_security_group_ids = [aws_security_group.web.id]
+
+  user_data = &lt;&lt;-EOT
+              #!/bin/bash
+              dnf install -y nginx
+              echo "&lt;h1&gt;Hello from server ${count.index + 1}!&lt;/h1&gt;" &gt; /usr/share/nginx/html/index.html
+              systemctl enable --now nginx
+              EOT
+
+  tags = { Name = "${var.project}-web-${count.index + 1}" }
+}</code></pre></figure>
+      <p class="mb-0">(In real production you’d put servers in <em>private</em> subnets behind a NAT gateway, and use an Auto Scaling Group instead of fixed instances. We keep this lab small and cheap on purpose.)</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">8</div>
+    <div class="step-body">
+      <h4>The star of the show <span class="font-mono text-sm text-blue">alb.tf — the load balancer</span></h4>
+      <figure class="cb"><figcaption><span>alb.tf · part 1</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">resource "aws_lb" "web" {
+  name               = "${var.project}-alb"
+  internal           = false           # false = faces the internet
+  load_balancer_type = "application"   # this makes it an ALB
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+
+  # In production set this to true so nobody deletes it by accident
+  enable_deletion_protection = false
+
+  tags = { Project = var.project }
+}</code></pre></figure>
+      <p class="mb-0">Six lines of meaning: its name, whether it’s public, its type, which bouncer guards it, and which two streets (in two AZs) it stands on.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">9</div>
+    <div class="step-body">
+      <h4>The team roster <span class="font-mono text-sm text-blue">alb.tf — target group + members</span></h4>
+      <p class="mb-2">The <button class="term" data-term="targetgroup">target group</button> defines the team and the health-check rules: visit <code class="inline">/</code> every 30 seconds; two passes in a row = healthy, three fails = benched.</p>
+      <figure class="cb"><figcaption><span>alb.tf · part 2</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">resource "aws_lb_target_group" "web" {
+  name        = "${var.project}-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "instance"
+
+  health_check {
+    path                = "/"      # the page the ALB pokes
+    interval            = 30       # poke every 30 seconds
+    timeout             = 5        # wait up to 5s for an answer
+    healthy_threshold   = 2        # 2 wins in a row = healthy
+    unhealthy_threshold = 3        # 3 losses in a row = benched
+    matcher             = "200"    # only HTTP 200 counts as "OK"
+  }
+}
+
+# Put both servers on the roster
+resource "aws_lb_target_group_attachment" "web" {
+  count            = 2
+  target_group_arn = aws_lb_target_group.web.arn
+  target_id        = aws_instance.web[count.index].id
+  port             = 80
+}</code></pre></figure>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">10</div>
+    <div class="step-body">
+      <h4>The receptionist’s instructions <span class="font-mono text-sm text-blue">alb.tf — listener</span></h4>
+      <figure class="cb"><figcaption><span>alb.tf · part 3</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.web.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web.arn
+  }
+}</code></pre></figure>
+      <p class="mb-0">Translation: “Stand at door 80. Whatever arrives, forward it to the <em>web</em> team.” ALB listeners can also hold smarter rules — “if the path starts with <code class="inline">/api</code>, send it to the API team” — which is exactly the Layer-7 magic from Lesson 02.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">11</div>
+    <div class="step-body">
+      <h4>Print the address <span class="font-mono text-sm text-blue">outputs.tf</span></h4>
+      <figure class="cb"><figcaption><span>outputs.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">output "alb_dns_name" {
+  description = "Paste this into your browser after apply"
+  value       = aws_lb.web.dns_name
+}</code></pre></figure>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">12</div>
+    <div class="step-body">
+      <h4>Build it, test it, tear it down</h4>
+      <figure class="cb"><figcaption><span>terminal</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-bash">terraform init       # unbox the kit (downloads the AWS provider)
+terraform fmt        # auto-tidy the files
+terraform validate   # spell-check
+terraform plan       # PREVIEW: expect "Plan: 14 to add"
+terraform apply      # type "yes" — build time ~3 minutes
+
+# When it finishes, copy the alb_dns_name output into your
+# browser and refresh a few times. Watch the page flip between
+# "Hello from server 1!" and "Hello from server 2!"
+# That flip IS load balancing, live, built by you.
+
+terraform destroy    # clean up so you stop paying. Type "yes".</code></pre></figure>
+      <div class="callout co-tip">
+        <h5>Try the magic trick</h5>
+        <p class="mb-0">Before destroying, stop one EC2 instance in the AWS console. Wait ~90 seconds (3 failed health checks), then refresh your browser. Every request now goes to the surviving server — no errors, no downtime. You just witnessed <strong>high availability</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout co-info">
+    <h5>Level up: real HTTPS</h5>
+    <p class="mb-0">Production sites use HTTPS. The pattern: request a free certificate in <strong>AWS Certificate Manager (ACM)</strong>, add a listener on port <code class="inline">443</code> with <code class="inline">protocol = "HTTPS"</code> and <code class="inline">certificate_arn</code>, then change the port-80 listener’s action to a <code class="inline">redirect</code> to 443. Users typing the insecure address get bounced to the locked one automatically.</p>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="awslbres">ℹ aws_lb resource docs ↗</button>
+    <button class="morebtn" data-term="healthcheck">ℹ Health checks explained ↗</button>
+    <button class="morebtn" data-term="https">ℹ HTTPS &amp; certificates ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 06 DATA PIPELINES ===================== -->
+<section id="s6" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">06</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">Data pipelines: Kafka, Zookeeper, NiFi &amp; friends</h2>
+
+  <p class="mb-4">Websites aren’t the only things behind load balancers. Companies also run <strong>data pipelines</strong> — systems that move and clean rivers of information: every click, every sensor reading, every purchase. Picture a water system: <strong>Kafka</strong> is the high-pressure pipes, <strong>NiFi</strong> is the control room where you connect pipes visually, <strong>Zookeeper</strong> is the old supervisor keeping everyone coordinated, and analytics tools are the labs testing the water at the end.</p>
+
+  <!-- KAFKA -->
+  <h3 class="text-xl md:text-2xl font-semibold mt-8 mb-3">Apache Kafka — the conveyor belt for events</h3>
+  <p class="mb-3"><button class="term" data-term="kafka">Kafka</button> is a super-fast conveyor belt for messages, called <em>events</em> (“player123 scored,” “sensor 7 reads 21°C”). Producers drop events on the belt; consumers pick them up — even hours later, because Kafka keeps everything for a configurable time. The belt is split into named lanes called <button class="term" data-term="topic">topics</button>, each chopped into <em>partitions</em> so many readers can work in parallel. The machines running the belt are called <button class="term" data-term="broker">brokers</button>.</p>
+  <p class="mb-3">On AWS, the best practice is usually <strong>not</strong> to babysit Kafka yourself but to use <button class="term" data-term="msk">Amazon MSK</button> (Managed Streaming for Apache Kafka): AWS patches, monitors, and repairs the brokers for you.</p>
+
+  <div class="callout co-tip">
+    <h5>Kafka / MSK best practices (memorize these)</h5>
+    <ul class="list-disc pl-5 space-y-1 mb-0">
+      <li><strong>3 brokers across 3 AZs</strong> minimum, with replication factor 3 — one building can burn down and no data is lost.</li>
+      <li><strong>Private subnets only.</strong> A message system should never have a public IP address.</li>
+      <li><strong>Encrypt everywhere:</strong> TLS between clients and brokers, and between brokers (<code class="inline">client_broker = "TLS"</code>).</li>
+      <li><strong>Turn on monitoring and broker logs</strong> to CloudWatch — when a pipeline jams at 2 a.m., logs are your flashlight.</li>
+      <li><strong>Lock access with security groups:</strong> only your app and NiFi security groups may reach ports 9092–9098.</li>
+    </ul>
+  </div>
+
+  <figure class="cb"><figcaption><span>kafka.tf — a production-shaped MSK cluster</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">resource "aws_cloudwatch_log_group" "msk" {
+  name              = "/msk/${var.project}"
+  retention_in_days = 30
+}
+
+resource "aws_msk_cluster" "events" {
+  cluster_name           = "${var.project}-events"
+  kafka_version          = "3.6.0"
+  number_of_broker_nodes = 3   # one per AZ — must divide evenly
+
+  broker_node_group_info {
+    instance_type = "kafka.m5.large"
+    # Three PRIVATE subnets, one per availability zone
+    client_subnets = [
+      aws_subnet.private_a.id,
+      aws_subnet.private_b.id,
+      aws_subnet.private_c.id,
+    ]
+    security_groups = [aws_security_group.kafka.id]
+
+    storage_info {
+      ebs_storage_info {
+        volume_size = 100   # GB per broker
+      }
+    }
+  }
+
+  encryption_info {
+    encryption_in_transit {
+      client_broker = "TLS"   # clients must speak encrypted
+      in_cluster    = true    # brokers whisper encrypted too
+    }
+  }
+
+  enhanced_monitoring = "PER_TOPIC_PER_BROKER"
+
+  logging_info {
+    broker_logs {
+      cloudwatch_logs {
+        enabled   = true
+        log_group = aws_cloudwatch_log_group.msk.name
+      }
+    }
+  }
+
+  tags = { Project = var.project }
+}
+
+output "kafka_bootstrap_brokers_tls" {
+  value = aws_msk_cluster.events.bootstrap_brokers_tls
+}</code></pre></figure>
+
+  <div class="callout co-warn">
+    <h5>Honest engineering note: Kafka and load balancers are frenemies</h5>
+    <p class="mb-0">Kafka clients are clever: they ask any broker “who holds partition 3 of my topic?” and then connect <strong>directly to that exact broker</strong>. A normal “spread it anywhere” load balancer breaks that. So the patterns that actually work are: (a) use MSK’s built-in <em>bootstrap brokers</em> address — no load balancer needed inside your VPC; or (b) if outside clients must reach self-managed Kafka, put an internal <button class="term" data-term="nlb">NLB</button> in front with <strong>one listener + one target group per broker</strong> (e.g., port 9092 → broker 1, 9093 → broker 2…), matching each broker’s <em>advertised listener</em>. Knowing this nuance is what separates copy-pasters from engineers.</p>
+  </div>
+
+  <!-- ZOOKEEPER -->
+  <h3 class="text-xl md:text-2xl font-semibold mt-10 mb-3">Zookeeper — the referee (now retiring)</h3>
+  <p class="mb-3"><button class="term" data-term="zookeeper">Apache Zookeeper</button> is a small coordination service — a referee that distributed systems use to agree on things: who is the leader broker, what configuration is current, who is alive. Classic Kafka could not start without it.</p>
+  <p class="mb-3">Two best-practice facts for today: <strong>(1)</strong> modern Kafka replaced Zookeeper with a built-in mode called <button class="term" data-term="kraft">KRaft</button> — new clusters (including new MSK clusters) should use KRaft, and with MSK, AWS manages the coordination layer for you either way; <strong>(2)</strong> Zookeeper still matters because other tools — notably a <strong>NiFi cluster</strong> — use it as their referee. If you must run it: always an odd number of nodes (3 or 5, so votes can’t tie), in private subnets, spread across AZs.</p>
+
+  <!-- NIFI -->
+  <h3 class="text-xl md:text-2xl font-semibold mt-10 mb-3">Apache NiFi — pipelines you can <em>see</em></h3>
+  <p class="mb-3"><button class="term" data-term="nifi">NiFi</button> lets you build data pipelines by dragging boxes on a canvas: “pull files from this folder → convert to JSON → push into Kafka.” It’s the visual control room. A NiFi <em>cluster</em> is several NiFi machines acting as one (coordinated by — you guessed it — Zookeeper), and its web screen is exactly the kind of HTTP traffic an <strong>ALB</strong> was born for.</p>
+  <p class="mb-3">One special trick is required: <strong>sticky sessions</strong>. After you log in to NiFi on node 2, your next click must also go to node 2, or you’d be “logged out” constantly. Stickiness makes the ALB hand your browser a cookie and keep sending you to the same node.</p>
+
+  <figure class="cb"><figcaption><span>nifi-alb.tf — sticky target group for the NiFi UI</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">resource "aws_lb_target_group" "nifi_ui" {
+  name        = "${var.project}-nifi-ui"
+  port        = 8443
+  protocol    = "HTTPS"        # NiFi itself speaks HTTPS
+  vpc_id      = aws_vpc.main.id
+  target_type = "instance"
+
+  # THE key setting: same person -> same NiFi node, all day
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400    # 24 hours, in seconds
+    enabled         = true
+  }
+
+  health_check {
+    path     = "/nifi/"
+    protocol = "HTTPS"
+    matcher  = "200,302"       # a login redirect still means "alive"
+  }
+}</code></pre></figure>
+
+  <div class="callout co-tip">
+    <h5>NiFi best practices</h5>
+    <ul class="list-disc pl-5 space-y-1 mb-0">
+      <li>Cluster nodes in <strong>private subnets</strong>; only the <strong>internal ALB</strong> (and your VPN/office network) may reach port 8443.</li>
+      <li>Make the ALB <code class="inline">internal = true</code> — a pipeline control room does not belong on the public internet.</li>
+      <li>Use an external Zookeeper ensemble (3 nodes) for production clusters, not NiFi’s embedded one.</li>
+      <li>Give NiFi fast disks — its “flowfile” and “content” repositories are disk-hungry.</li>
+    </ul>
+  </div>
+
+  <!-- ELT + ANALYTICS -->
+  <h3 class="text-xl md:text-2xl font-semibold mt-10 mb-3">ETL vs. ELT, and the analytics shelf</h3>
+  <p class="mb-3">You’ll hear <button class="term" data-term="elt">ETL and ELT</button> constantly. Both mean Extract (collect data), Transform (clean/reshape it), Load (store it for analysis) — the only difference is the order of the last two. <strong>ETL</strong>: clean first, then store. <strong>ELT</strong> (the modern favorite): dump the raw data into cheap storage first, transform later inside a powerful warehouse — like keeping all your raw photos and editing copies whenever you need them.</p>
+  <p class="mb-3">The AWS analytics shelf, in one breath: <button class="term" data-term="kinesis">Kinesis</button> (AWS’s own streaming belt, simpler than Kafka), <strong>S3</strong> as the data lake (the giant raw-files bucket), <button class="term" data-term="glue">Glue</button> (serverless Spark jobs + a catalog that acts as the lake’s index), <button class="term" data-term="athena">Athena</button> (ask SQL questions directly against files in S3, pay per query), <button class="term" data-term="redshift">Redshift</button> (the heavy-duty SQL warehouse for dashboards), and <strong>EMR</strong> (rent-a-Spark-cluster for big custom jobs).</p>
+
+  <div class="diag" aria-hidden="true">
+    <span class="dbox soft">apps · sensors</span><span class="darrow">→</span>
+    <span class="dbox">Kafka / Kinesis</span><span class="darrow">→</span>
+    <span class="dbox">NiFi / Glue</span><span class="darrow">→</span>
+    <span class="dbox">S3 data lake</span><span class="darrow">→</span>
+    <span class="dbox hot">Athena · Redshift</span><span class="darrow">→</span>
+    <span class="dbox">dashboards</span>
+  </div>
+
+  <div class="callout co-info">
+    <h5>Best practices for the whole pipeline (these apply to everything above)</h5>
+    <ul class="list-disc pl-5 space-y-1 mb-0">
+      <li><strong>Everything in Terraform modules</strong> — one <code class="inline">kafka</code> module, one <code class="inline">nifi</code> module — reused identically in dev, staging, and prod.</li>
+      <li><strong>Least privilege everywhere:</strong> each service gets an IAM role allowing only what it truly needs; security groups reference other security groups, never <code class="inline">0.0.0.0/0</code> on data ports.</li>
+      <li><strong>Encrypt at rest and in transit:</strong> KMS keys on S3/MSK/Redshift, TLS on every connection.</li>
+      <li><strong>Tag every resource</strong> (<code class="inline">Project</code>, <code class="inline">Environment</code>, <code class="inline">Owner</code>) so bills and incidents have a name attached.</li>
+      <li><strong>Alarms before users notice:</strong> CloudWatch alarms on broker disk, consumer lag, NiFi back-pressure, and ALB 5xx errors.</li>
+      <li><strong>One state file per service</strong> — the heart of Lesson 08.</li>
+    </ul>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="kafka">ℹ Kafka docs ↗</button>
+    <button class="morebtn" data-term="msk">ℹ Amazon MSK docs ↗</button>
+    <button class="morebtn" data-term="nifi">ℹ NiFi docs ↗</button>
+    <button class="morebtn" data-term="zookeeper">ℹ Zookeeper docs ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 07 GITLAB PIPELINES ===================== -->
+<section id="s7" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">07</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">GitLab pipelines: robots that ship your code</h2>
+
+  <p class="mb-4">Running <code class="inline">terraform apply</code> from your laptop is fine for learning, but dangerous for a team: whose laptop? with whose keys? did anyone review it? The professional answer is <button class="term" data-term="cicd">CI/CD</button> — an assembly line of robots that checks, previews, and (only after human approval) applies every change. In GitLab, the assembly line is described in one file at the root of your repo: <code class="inline">.gitlab-ci.yml</code>. The robots that execute it are called <button class="term" data-term="runner">runners</button>.</p>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">The safe workflow, as a story</h3>
+  <ol class="list-decimal pl-6 space-y-2 mb-5">
+    <li>You create a <strong>branch</strong> (a personal copy of the code) and change <code class="inline">alb.tf</code>.</li>
+    <li>You open a <strong>Merge Request (MR)</strong> — “please review my change.”</li>
+    <li>The pipeline robot automatically runs <code class="inline">fmt</code>, <code class="inline">validate</code>, and <code class="inline">plan</code>, and pastes the plan into the MR for everyone to read.</li>
+    <li>A teammate reviews the plan (“creates 1 listener, destroys nothing — approved ✅”).</li>
+    <li>You merge to <code class="inline">main</code>. The pipeline plans again, then <strong>waits</strong> at a manual <code class="inline">apply</code> button. A human clicks it. Terraform applies <em>the exact saved plan file</em> — no surprises between preview and reality.</li>
+  </ol>
+
+  <div class="diag" aria-hidden="true">
+    <span class="dbox">validate</span><span class="darrow">→</span>
+    <span class="dbox">plan</span><span class="darrow">→</span>
+    <span class="dbox soft">👀 human review</span><span class="darrow">→</span>
+    <span class="dbox hot">apply (manual)</span>
+  </div>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">A clean starter pipeline</h3>
+  <figure class="cb"><figcaption><span>.gitlab-ci.yml — single environment</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-yaml"># Every job runs inside this official Terraform container
+image:
+  name: hashicorp/terraform:1.9
+  entrypoint: [""]
+
+variables:
+  TF_ROOT: ${CI_PROJECT_DIR}/envs/dev   # which folder to operate on
+  TF_IN_AUTOMATION: "true"
+
+# Speed-up: reuse downloaded providers between runs
+cache:
+  key: "${CI_COMMIT_REF_SLUG}-dev"
+  paths:
+    - ${TF_ROOT}/.terraform
+
+stages:
+  - validate
+  - plan
+  - apply
+
+before_script:
+  - cd ${TF_ROOT}
+  - terraform init -input=false
+
+fmt:
+  stage: validate
+  script:
+    - terraform fmt -check -recursive   # fail if files are messy
+
+validate:
+  stage: validate
+  script:
+    - terraform validate
+
+plan:
+  stage: plan
+  script:
+    - terraform plan -input=false -out=plan.tfplan
+  artifacts:                  # save the plan for the apply job
+    paths:
+      - ${TF_ROOT}/plan.tfplan
+    expire_in: 7 days
+
+apply:
+  stage: apply
+  script:
+    - terraform apply -input=false plan.tfplan   # apply EXACTLY that plan
+  when: manual                # a human must press the button
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"   # never from feature branches
+  environment:
+    name: dev</code></pre></figure>
+
+  <p class="mb-4">Three details make this professional: the plan is saved as an <button class="term" data-term="artifact">artifact</button> and the apply consumes that exact file; the apply is <code class="inline">when: manual</code>; and it can only run from <code class="inline">main</code>. Your AWS keys never live in the file — store them as masked, protected <strong>CI/CD variables</strong> in GitLab settings (or, best of all, use GitLab’s OIDC to assume an AWS role with no long-lived keys at all).</p>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-8 mb-3">Scaling up: many services, many environments</h3>
+  <p class="mb-3">Real repos hold several components (network, ALB, Kafka, NiFi) and several environments (dev → staging → prod). Two GitLab features keep that tidy: a hidden <strong>template job</strong> (the <code class="inline">.tf-component</code> below — names starting with a dot don’t run by themselves) and <code class="inline">rules: changes</code>, so each component’s jobs run <em>only when its own folder changed</em>:</p>
+
+  <figure class="cb"><figcaption><span>.gitlab-ci.yml — per-component jobs</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-yaml">stages: [validate, plan, apply]
+
+# A reusable recipe: extend it, point TF_ROOT at a folder
+.tf-component:
+  image:
+    name: hashicorp/terraform:1.9
+    entrypoint: [""]
+  before_script:
+    - cd ${TF_ROOT}
+    - terraform init -input=false
+
+plan:network:
+  extends: .tf-component
+  stage: plan
+  variables: { TF_ROOT: envs/dev/network }
+  script: [ "terraform plan -out=plan.tfplan" ]
+  artifacts: { paths: ["envs/dev/network/plan.tfplan"] }
+  rules:
+    - changes: ["envs/dev/network/**", "modules/network/**"]
+
+plan:kafka:
+  extends: .tf-component
+  stage: plan
+  variables: { TF_ROOT: envs/dev/kafka }
+  script: [ "terraform plan -out=plan.tfplan" ]
+  artifacts: { paths: ["envs/dev/kafka/plan.tfplan"] }
+  rules:
+    - changes: ["envs/dev/kafka/**", "modules/kafka/**"]
+
+apply:kafka:
+  extends: .tf-component
+  stage: apply
+  variables: { TF_ROOT: envs/dev/kafka }
+  script: [ "terraform apply plan.tfplan" ]
+  needs: ["plan:kafka"]
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: ["envs/dev/kafka/**", "modules/kafka/**"]
+  environment: { name: dev/kafka }</code></pre></figure>
+
+  <div class="callout co-tip">
+    <h5>GitLab best practices checklist</h5>
+    <ul class="list-disc pl-5 space-y-1 mb-0">
+      <li><strong>Protect the prod environment</strong> (Settings → CI/CD → Protected environments) so only senior approvers can press apply.</li>
+      <li><strong>Promote in order:</strong> dev applies automatically-ish, staging after review, prod last — same code, increasing ceremony.</li>
+      <li>Add <code class="inline">tflint</code> and a security scanner like <code class="inline">trivy</code> or <code class="inline">checkov</code> to the validate stage.</li>
+      <li>Touched several components? GitLab simply runs each affected plan side by side — small <strong>blast radius</strong> per job.</li>
+      <li>GitLab can even <strong>store your Terraform state</strong> for you (next lesson covers when to choose that vs. S3).</li>
+    </ul>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="cicd">ℹ GitLab CI/CD docs ↗</button>
+    <button class="morebtn" data-term="gltf">ℹ GitLab + Terraform (IaC) docs ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 08 STATE ===================== -->
+<section id="s8" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">08</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">Terraform state: the save file (and how to split it)</h2>
+
+  <p class="mb-4">Here’s the lesson that separates hobby projects from real teams. <button class="term" data-term="state">Terraform state</button> is like a video-game save file: a JSON document recording every resource Terraform built and its real-world ID. On every <code class="inline">plan</code>, Terraform compares three things — your code (what you <em>want</em>), the state (what it <em>remembers</em>), and AWS (what actually <em>exists</em>) — and computes the difference. Lose the save file and Terraform forgets it ever built anything: the next apply tries to build duplicates of your whole world.</p>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">Rule 1 — never keep state on a laptop (or in Git)</h3>
+  <p class="mb-3">By default state lands next to your code as <code class="inline">terraform.tfstate</code>. Three problems: teammates can’t see it, it can contain secrets (so it must <strong>never</strong> be committed to Git), and two people applying at once will corrupt it. The fix is a remote <button class="term" data-term="backend">backend</button> — shared storage for the save file. On AWS the classic choice is an <strong>S3 bucket</strong> (versioned + encrypted) plus a <strong>DynamoDB table</strong> for <button class="term" data-term="locking">locking</button>: while one person applies, everyone else is politely told to wait, like a “recording in progress” light.</p>
+
+  <figure class="cb"><figcaption><span>backend.tf — inside each component folder</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">terraform {
+  backend "s3" {
+    bucket         = "mycompany-terraform-state"     # one shared bucket
+    key            = "dev/network/terraform.tfstate" # UNIQUE per component!
+    region         = "us-east-1"
+    dynamodb_table = "terraform-locks"               # the "in use" light
+    encrypt        = true
+  }
+}</code></pre></figure>
+
+  <figure class="cb"><figcaption><span>bootstrap/main.tf — create the storage once, by hand</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl"># Chicken-and-egg: this tiny project is applied ONCE with local
+# state, just to create the home where all other state will live.
+
+resource "aws_s3_bucket" "tf_state" {
+  bucket = "mycompany-terraform-state"
+}
+
+# Versioning = time machine. Every change keeps the old copy.
+resource "aws_s3_bucket_versioning" "tf_state" {
+  bucket = aws_s3_bucket.tf_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "tf_state" {
+  bucket = aws_s3_bucket.tf_state.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "tf_state" {
+  bucket                  = aws_s3_bucket.tf_state.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_dynamodb_table" "tf_locks" {
+  name         = "terraform-locks"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+}</code></pre></figure>
+
+  <div class="callout co-info">
+    <h5>Two modern alternatives, so nothing surprises you</h5>
+    <p class="mb-0"><strong>(a)</strong> Terraform 1.10+ can lock using S3 itself — add <code class="inline">use_lockfile = true</code> to the S3 backend and skip DynamoDB on new projects. <strong>(b)</strong> GitLab offers <em>GitLab-managed Terraform state</em>: state is stored, versioned, and locked inside your GitLab project via an HTTP backend — wonderfully convenient when GitLab is already your CI home. Both are legitimate; what is <em>not</em> legitimate is local state for a team.</p>
+  </div>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-8 mb-3">Rule 2 — many small states, never one giant one</h3>
+  <p class="mb-3">Beginners put the VPC, the ALB, Kafka, NiFi, and analytics into <strong>one</strong> state. Then every plan takes ages, every lock blocks the whole team, and a mistake while touching NiFi can propose destroying the network. The pro move is splitting by <strong>environment × component</strong>, each with its own backend <code class="inline">key</code>. The damage any one mistake can cause — the <button class="term" data-term="blastradius">blast radius</button> — shrinks to one small folder.</p>
+
+  <table class="tbl">
+    <thead><tr><th>Component folder</th><th>Backend key (its own save file)</th><th>Changes how often?</th></tr></thead>
+    <tbody>
+      <tr><td>envs/dev/network</td><td><code class="inline">dev/network/terraform.tfstate</code></td><td>Rarely — the foundation</td></tr>
+      <tr><td>envs/dev/alb</td><td><code class="inline">dev/alb/terraform.tfstate</code></td><td>Sometimes</td></tr>
+      <tr><td>envs/dev/kafka</td><td><code class="inline">dev/kafka/terraform.tfstate</code></td><td>Sometimes</td></tr>
+      <tr><td>envs/dev/nifi</td><td><code class="inline">dev/nifi/terraform.tfstate</code></td><td>Often — pipelines evolve</td></tr>
+      <tr><td>envs/prod/…</td><td><code class="inline">prod/…/terraform.tfstate</code></td><td>Only via reviewed MRs</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">Rule 3 — let components read each other’s outputs</h3>
+  <p class="mb-3">Split states still need to cooperate: the Kafka component must know the VPC ID that the network component created. The clean bridge is the <button class="term" data-term="remotestate">terraform_remote_state</button> data source — read-only access to another component’s <strong>outputs</strong> (only outputs are exposed, which is exactly the point):</p>
+
+  <figure class="cb"><figcaption><span>envs/dev/kafka/data.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl"># Peek (read-only!) at the network component's outputs
+data "terraform_remote_state" "network" {
+  backend = "s3"
+  config = {
+    bucket = "mycompany-terraform-state"
+    key    = "dev/network/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
+# Then use its published answers:
+#   vpc_id  = data.terraform_remote_state.network.outputs.vpc_id
+#   subnets = data.terraform_remote_state.network.outputs.private_subnet_ids</code></pre></figure>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-6 mb-3">Adding a brand-new service later (say, Redshift)</h3>
+  <ol class="list-decimal pl-6 space-y-2 mb-4">
+    <li>Create <code class="inline">modules/redshift/</code> (reusable code) and <code class="inline">envs/dev/redshift/</code> (this environment’s copy).</li>
+    <li>Give it its <strong>own backend key</strong>: <code class="inline">dev/redshift/terraform.tfstate</code>. Existing states are untouched — zero risk to what already runs.</li>
+    <li>Pull the VPC and subnets it needs via <code class="inline">terraform_remote_state</code>.</li>
+    <li>Add <code class="inline">plan:redshift</code> / <code class="inline">apply:redshift</code> jobs with <code class="inline">rules: changes</code> (Lesson 07).</li>
+    <li>MR → robot plan → review → merge → manual apply in dev → promote to staging → prod. Same dance, every time.</li>
+  </ol>
+
+  <div class="callout co-warn">
+    <h5>State surgery exists — handle with gloves</h5>
+    <p class="mb-0">Renaming a resource in code makes Terraform think “destroy old, create new.” To <em>rename without rebuilding</em>, use a <code class="inline">moved {}</code> block (or <code class="inline">terraform state mv</code>). To adopt something built by hand, use an <code class="inline">import {}</code> block. Run these on a branch, read the plan twice, and remember the S3 versioning you enabled is your undo button.</p>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <button class="morebtn" data-term="state">ℹ State docs ↗</button>
+    <button class="morebtn" data-term="backend">ℹ S3 backend docs ↗</button>
+    <button class="morebtn" data-term="gltf">ℹ GitLab-managed state docs ↗</button>
+  </div>
+</section>
+
+<!-- ===================== 09 STRUCTURE + GOLDEN RULES ===================== -->
+<section id="s9" class="rd py-12 border-b border-line">
+  <p class="eyebrow">Lesson <span class="secnum">09</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">Project structure &amp; the golden rules</h2>
+
+  <p class="mb-4">Here is the whole course condensed into one repository layout. <strong>Modules</strong> are the LEGO sub-assemblies (written once); <strong>envs</strong> folders are thin wrappers that call those modules with each environment’s sizes and names. Dev gets one small Kafka broker; prod gets three big ones — same module, different inputs.</p>
+
+  <div class="filetree">infrastructure/                      ← one Git repo
+├── .gitlab-ci.yml                   ← the robot assembly line (Lesson 07)
+├── .gitignore                       ← MUST ignore: .terraform/, *.tfstate*
+├── bootstrap/                       ← state bucket + lock table (applied once)
+├── modules/                         ← reusable LEGO sub-assemblies
+│   ├── network/                     ← VPC, subnets, routes
+│   ├── alb/                         ← load balancer + listeners + TGs
+│   ├── kafka/                       ← MSK cluster (Lesson 06)
+│   ├── nifi/                        ← NiFi cluster + sticky internal ALB
+│   └── analytics/                   ← Glue, Athena workgroup, etc.
+└── envs/
+    ├── dev/
+    │   ├── network/                 ← own backend key + state
+    │   ├── alb/                     ← own backend key + state
+    │   ├── kafka/                   ← own backend key + state
+    │   └── nifi/                    ← own backend key + state
+    ├── staging/                     ← same shape as dev
+    └── prod/                        ← same shape, protected applies</div>
+
+  <p class="mt-4 mb-3">And an environment wrapper is genuinely this small — that’s the payoff of modules:</p>
+  <figure class="cb"><figcaption><span>envs/prod/kafka/main.tf</span><button class="copybtn">Copy</button></figcaption><pre><code class="lang-hcl">module "kafka" {
+  source = "../../../modules/kafka"
+
+  project         = "dataplatform"
+  environment     = "prod"
+  broker_count    = 3                  # dev uses 1 small broker
+  instance_type   = "kafka.m5.xlarge"
+  vpc_id          = data.terraform_remote_state.network.outputs.vpc_id
+  private_subnets = data.terraform_remote_state.network.outputs.private_subnet_ids
+}</code></pre></figure>
+
+  <div class="callout co-info">
+    <h5>A quick word on workspaces</h5>
+    <p class="mb-0">Terraform also offers <button class="term" data-term="workspace">workspaces</button> — multiple states under one folder, switched with <code class="inline">terraform workspace select</code>. They’re handy for short-lived clones (like a per-MR preview environment), but for dev/staging/prod most teams prefer the explicit folders above: you can <em>see</em> every difference in Git, and it’s much harder to apply prod while believing you’re in dev.</p>
+  </div>
+
+  <h3 class="text-xl md:text-2xl font-semibold mt-8 mb-3">The golden rules — print this</h3>
+  <ol class="list-decimal pl-6 space-y-2 mb-2">
+    <li><strong>Everything is code.</strong> If it isn’t in Git, it doesn’t exist. No console clicking on managed resources.</li>
+    <li><strong>Remote state, locked, versioned, encrypted.</strong> One state per environment × component. Never commit state.</li>
+    <li><strong>Plan before apply, human before prod.</strong> Apply the saved plan artifact, behind a manual, protected button.</li>
+    <li><strong>ALB for HTTP, NLB for TCP,</strong> at least two AZs, health checks always, deletion protection in prod.</li>
+    <li><strong>Private by default.</strong> Only load balancers face the internet; security groups reference security groups.</li>
+    <li><strong>Modules + variables,</strong> versions pinned, <code class="inline">fmt</code> + <code class="inline">validate</code> + linters in CI.</li>
+    <li><strong>Encrypt and tag everything;</strong> alarms on the metrics that page you (5xx, unhealthy hosts, consumer lag, disk).</li>
+    <li><strong>Small blast radius.</strong> New service = new module + new folder + new state key — never a bigger old state.</li>
+  </ol>
+</section>
+
+<!-- ===================== 10 DOCS LIBRARY ===================== -->
+<section id="s10" class="rd py-12">
+  <p class="eyebrow">Lesson <span class="secnum">10</span></p>
+  <h2 class="text-2xl md:text-4xl font-bold mt-2 mb-6">Official docs library</h2>
+  <p class="mb-6">Bookmark these. Real engineers don’t memorize everything — they know exactly where to look it up.</p>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    <a class="doccard" href="https://docs.aws.amazon.com/elasticloadbalancing/" target="_blank" rel="noopener"><span class="t">Elastic Load Balancing</span><br><span class="u">docs.aws.amazon.com/elasticloadbalancing ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html" target="_blank" rel="noopener"><span class="t">ALB guide</span><br><span class="u">…/latest/application ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html" target="_blank" rel="noopener"><span class="t">NLB guide</span><br><span class="u">…/latest/network ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html" target="_blank" rel="noopener"><span class="t">Amazon VPC</span><br><span class="u">docs.aws.amazon.com/vpc ↗</span></a>
+    <a class="doccard" href="https://developer.hashicorp.com/terraform/docs" target="_blank" rel="noopener"><span class="t">Terraform docs</span><br><span class="u">developer.hashicorp.com/terraform ↗</span></a>
+    <a class="doccard" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener"><span class="t">Terraform AWS provider</span><br><span class="u">registry.terraform.io ↗</span></a>
+    <a class="doccard" href="https://developer.hashicorp.com/terraform/language/state" target="_blank" rel="noopener"><span class="t">Terraform state</span><br><span class="u">…/terraform/language/state ↗</span></a>
+    <a class="doccard" href="https://developer.hashicorp.com/terraform/language/backend/s3" target="_blank" rel="noopener"><span class="t">S3 backend</span><br><span class="u">…/language/backend/s3 ↗</span></a>
+    <a class="doccard" href="https://docs.gitlab.com/ee/ci/" target="_blank" rel="noopener"><span class="t">GitLab CI/CD</span><br><span class="u">docs.gitlab.com/ee/ci ↗</span></a>
+    <a class="doccard" href="https://docs.gitlab.com/ee/user/infrastructure/iac/" target="_blank" rel="noopener"><span class="t">GitLab + Terraform (IaC)</span><br><span class="u">docs.gitlab.com/…/iac ↗</span></a>
+    <a class="doccard" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener"><span class="t">Apache Kafka</span><br><span class="u">kafka.apache.org/documentation ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank" rel="noopener"><span class="t">Amazon MSK</span><br><span class="u">docs.aws.amazon.com/msk ↗</span></a>
+    <a class="doccard" href="https://nifi.apache.org/documentation/" target="_blank" rel="noopener"><span class="t">Apache NiFi</span><br><span class="u">nifi.apache.org/documentation ↗</span></a>
+    <a class="doccard" href="https://zookeeper.apache.org/" target="_blank" rel="noopener"><span class="t">Apache Zookeeper</span><br><span class="u">zookeeper.apache.org ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/glue/" target="_blank" rel="noopener"><span class="t">AWS Glue</span><br><span class="u">docs.aws.amazon.com/glue ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/athena/" target="_blank" rel="noopener"><span class="t">Amazon Athena</span><br><span class="u">docs.aws.amazon.com/athena ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/redshift/" target="_blank" rel="noopener"><span class="t">Amazon Redshift</span><br><span class="u">docs.aws.amazon.com/redshift ↗</span></a>
+    <a class="doccard" href="https://docs.aws.amazon.com/kinesis/" target="_blank" rel="noopener"><span class="t">Amazon Kinesis</span><br><span class="u">docs.aws.amazon.com/kinesis ↗</span></a>
+  </div>
+
+  <div class="callout co-tip mt-8">
+    <h5>You made it 🎓</h5>
+    <p class="mb-0">You now understand what a load balancer is, which AWS type to pick, the network it lives in, how Terraform describes it all as code, how Kafka/NiFi/Zookeeper fit behind the right balancers, how GitLab robots review and ship changes, and how split state keeps mistakes small. Next mission: actually run Lesson 05 in a sandbox account — reading is 20%, building is the other 80%.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t border-ink bg-ink text-paper mt-4">
+  <div class="max-w-5xl mx-auto px-5 md:px-8 py-8 flex flex-wrap gap-4 items-center justify-between">
+    <p class="font-mono text-[12px] tracking-[.14em] uppercase">Cloud School · Load Balancers &amp; Terraform on AWS</p>
+    <p class="text-sm text-paper/70">Educational tutorial. Always confirm details in the official docs above — clouds evolve.</p>
+  </div>
+</footer>
+
+<button id="toTop" aria-label="Back to top">↑ Top</button>
+
+<!-- ===================== GLOSSARY MODAL ===================== -->
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true">
+  <div class="backdrop" data-close="1"></div>
+  <div class="panel rd">
+    <div class="flex items-start justify-between gap-4 px-5 pt-5">
+      <div>
+        <p class="eyebrow mb-1">Glossary</p>
+        <h3 id="modalTitle" class="text-xl md:text-2xl font-bold"></h3>
+      </div>
+      <button id="modalClose" class="w-9 h-9 border border-ink font-mono hover:bg-mist shrink-0" aria-label="Close popup">✕</button>
+    </div>
+    <div id="modalBody" class="px-5 py-4 space-y-3"></div>
+    <div class="px-5 pb-5">
+      <a id="modalLink" class="morebtn no-underline" target="_blank" rel="noopener"></a>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== Glossary: title (t), body HTML (d), official link (l) + label (ll) ====== */
+const TERMS = {
+server:{t:'Server',d:`<p>A server is simply a computer whose full-time job is to answer requests from other computers. When you open a website, a server somewhere receives your request and sends the page back. In AWS, rented servers are usually EC2 instances.</p><p>“Server” describes the <em>role</em>, not special hardware — your laptop could be one if it answered requests.</p>`,l:'https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_web_server',ll:'MDN: What is a web server ↗'},
+request:{t:'Request & response',d:`<p>A request is a small message from your device: “GET me the page at /scores, please.” The server replies with a response: the content plus a status code like <code class="inline">200</code> (all good) or <code class="inline">404</code> (not found).</p><p>Every tap, refresh, and image load is its own little request–response round trip.</p>`,l:'https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview',ll:'MDN: HTTP overview ↗'},
+ipaddress:{t:'IP address',d:`<p>An IP address is a computer’s street address on a network, written like <code class="inline">10.0.1.25</code>. Messages get delivered to IP addresses the way mail gets delivered to houses.</p><p>Addresses starting with <code class="inline">10.</code> or <code class="inline">192.168.</code> are <em>private</em> — usable inside your own network (like a VPC) but unreachable from the public internet.</p>`,l:'https://en.wikipedia.org/wiki/IP_address',ll:'Reference: IP address ↗'},
+port:{t:'Port',d:`<p>One computer runs many programs, so each IP address has 65,535 numbered “doors” called ports. Web traffic knocks on door <code class="inline">80</code> (HTTP) or <code class="inline">443</code> (HTTPS); Kafka brokers listen around <code class="inline">9092</code>.</p><p>Security groups and listeners are mostly rules about which doors are open, and to whom.</p>`,l:'https://en.wikipedia.org/wiki/Port_(computer_networking)',ll:'Reference: Ports ↗'},
+dns:{t:'DNS',d:`<p>DNS (Domain Name System) is the internet’s phone book: it turns friendly names like <code class="inline">myapp.example.com</code> into IP addresses.</p><p>Your AWS load balancer gets an automatic DNS name (the <code class="inline">alb_dns_name</code> output in Lesson 05). In production you point your own pretty domain at it using Route 53, AWS’s DNS service.</p>`,l:'https://aws.amazon.com/route53/what-is-dns/',ll:'AWS: What is DNS ↗'},
+https:{t:'HTTPS & TLS certificates',d:`<p>HTTPS is HTTP inside a locked, encrypted envelope (the lock is a protocol called TLS), so nobody between you and the server can read or change the data. The browser padlock means HTTPS.</p><p>On AWS you get free certificates from <strong>ACM</strong> (AWS Certificate Manager) and attach one to a port-443 listener on the ALB — the balancer does the encryption work, called <em>TLS termination</em>.</p>`,l:'https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html',ll:'AWS Certificate Manager docs ↗'},
+lbdocs:{t:'Elastic Load Balancing (ELB)',d:`<p>ELB is AWS’s load balancer family: it spreads incoming traffic across targets in multiple Availability Zones, health-checks them, and scales itself as traffic grows.</p><p>The official guide below covers all four types and every feature in this course.</p>`,l:'https://docs.aws.amazon.com/elasticloadbalancing/',ll:'AWS ELB documentation ↗'},
+alb:{t:'Application Load Balancer (ALB)',d:`<p>The Layer-7 family member: it reads each web request and can route by URL path (<code class="inline">/api</code> → API team), hostname, or headers. It also handles HTTPS, redirects, and sticky sessions.</p><p>The default choice for websites, APIs, microservices, and web UIs like NiFi’s.</p>`,l:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html',ll:'ALB official guide ↗'},
+nlb:{t:'Network Load Balancer (NLB)',d:`<p>The Layer-4 speed demon: it forwards raw TCP/UDP connections by address and port only, handles millions of connections with tiny delay, and can have fixed IP addresses (firewalls love that).</p><p>Choose it for non-HTTP traffic: databases, game protocols, and Kafka-style connections.</p>`,l:'https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html',ll:'NLB official guide ↗'},
+osi:{t:'Network layers (OSI model)',d:`<p>Engineers picture networking as 7 stacked layers, from physical cables (Layer 1) up to applications (Layer 7); each layer worries only about its own job.</p><p>You need two: <strong>Layer 4</strong> = transport (addresses + ports — reading only the envelope) and <strong>Layer 7</strong> = application (the actual HTTP request — reading the letter inside).</p>`,l:'https://en.wikipedia.org/wiki/OSI_model',ll:'Reference: OSI model ↗'},
+region:{t:'AWS Region',d:`<p>A region is a geographic cluster of AWS data centers, named like <code class="inline">us-east-1</code> (N. Virginia) or <code class="inline">ap-southeast-2</code> (Sydney). You pick one per project, usually near your users.</p><p>Resources in different regions are almost completely separate worlds.</p>`,l:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html',ll:'AWS: Regions & AZs ↗'},
+az:{t:'Availability Zone (AZ)',d:`<p>Each region contains several AZs — physically separate data centers with independent power, cooling, and networking, linked by very fast private cables.</p><p>Spreading across 2–3 AZs means a fire or power cut in one building doesn’t take you offline. Load balancers and MSK are <em>built</em> around this idea.</p>`,l:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html',ll:'AWS: Regions & AZs ↗'},
+vpc:{t:'VPC — Virtual Private Cloud',d:`<p>Your own private, fenced-off network inside AWS. You choose its address range, carve it into subnets, and decide exactly what may enter or leave — nothing is reachable until you allow it.</p><p>Nearly everything in this course — balancers, servers, Kafka, NiFi — lives inside a VPC.</p>`,l:'https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html',ll:'AWS VPC user guide ↗'},
+cidr:{t:'CIDR notation',d:`<p>CIDR is shorthand for “a block of IP addresses.” <code class="inline">10.0.0.0/16</code> = addresses starting with 10.0, about 65,000 of them; <code class="inline">10.0.1.0/24</code> = a block of 256. Bigger number after the slash → smaller block.</p><p>And <code class="inline">0.0.0.0/0</code> means “every address on the internet” — be careful where you type that one.</p>`,l:'https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing',ll:'Reference: CIDR ↗'},
+subnet:{t:'Subnet',d:`<p>A slice of your VPC’s address space living in <em>one</em> Availability Zone. <strong>Public</strong> subnets have a route to the Internet Gateway; <strong>private</strong> subnets don’t, so the internet can’t reach them directly.</p><p>Pattern to remember: load balancers in public subnets, everything else in private ones.</p>`,l:'https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html',ll:'AWS: Subnets ↗'},
+igw:{t:'Internet Gateway',d:`<p>The doorway between your VPC and the public internet. Attach one, add a route “<code class="inline">0.0.0.0/0</code> → gateway,” and subnets using that route become <em>public</em>.</p><p>Private subnets that need to download updates go out through a NAT gateway instead — a one-way door: out yes, in no.</p>`,l:'https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html',ll:'AWS: Internet gateways ↗'},
+securitygroup:{t:'Security Group',d:`<p>A virtual bouncer attached to a resource; its rules list who may connect, on which ports. It’s <em>stateful</em>: if a request is let in, the reply is automatically let back out.</p><p>Pro move: allow <em>another security group</em> instead of IP ranges — “web servers accept port 80 only from the ALB’s group.” Membership, not addresses, defines trust.</p>`,l:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html',ll:'AWS: Security groups ↗'},
+listener:{t:'Listener',d:`<p>A rule on the load balancer: “watch port X with protocol Y; when traffic arrives, do Z.” The usual Z is <em>forward to a target group</em>; ALBs can also redirect (HTTP→HTTPS) or answer directly.</p><p>One balancer can hold several listeners — e.g., 80 redirects to 443, and 443 forwards to your servers.</p>`,l:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html',ll:'AWS: Listeners ↗'},
+targetgroup:{t:'Target Group',d:`<p>The team roster: a named set of targets (instances, IPs, or Lambda functions) that share the work, plus the health-check rules deciding who’s fit to play.</p><p>Listeners forward to target groups, never to individual servers — that indirection lets you swap servers freely behind the scenes.</p>`,l:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html',ll:'AWS: Target groups ↗'},
+healthcheck:{t:'Health check',d:`<p>Every few seconds the balancer pings each target — for an ALB, by requesting a real page like <code class="inline">/</code> and expecting HTTP 200. Pass a few in a row: healthy, you get traffic. Fail a few: benched until you recover.</p><p>Tuning tip: point the check at a cheap page that proves the app truly works, not just that the machine is on.</p>`,l:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html',ll:'AWS: Health checks ↗'},
+iac:{t:'Infrastructure as Code (IaC)',d:`<p>Describing your cloud in text files instead of building it with clicks. The files live in Git, so every change is reviewed, every version remembered, and the same code rebuilds identical environments on demand.</p><p>Terraform is the most widely used IaC tool and speaks to AWS, GitLab, and hundreds of other platforms.</p>`,l:'https://developer.hashicorp.com/terraform/intro',ll:'Terraform: Introduction ↗'},
+git:{t:'Git',d:`<p>Git is version control: a time machine for files. It records every change, who made it, and why, and lets many people edit the same code without stepping on each other.</p><p>GitLab is a website built around Git that adds merge requests, reviews, and the CI/CD pipelines from Lesson 07.</p>`,l:'https://git-scm.com/doc',ll:'Git documentation ↗'},
+hcl:{t:'HCL — Terraform’s language',d:`<p>HashiCorp Configuration Language: the friendly syntax in <code class="inline">.tf</code> files — blocks like <code class="inline">resource "aws_lb" "web" { … }</code> plus key = value settings, variables, and expressions like <code class="inline">var.project</code>.</p><p>It describes <em>what should exist</em>, not step-by-step instructions; Terraform figures out the steps.</p>`,l:'https://developer.hashicorp.com/terraform/language/syntax/configuration',ll:'Terraform: Syntax ↗'},
+provider:{t:'Provider',d:`<p>A plugin that teaches Terraform one platform’s API. The <code class="inline">aws</code> provider knows how to create VPCs, load balancers, and MSK clusters; others manage GitLab, Cloudflare, even Kafka topics.</p><p><code class="inline">terraform init</code> downloads the providers your code declares, at the versions you pinned.</p>`,l:'https://registry.terraform.io/providers/hashicorp/aws/latest/docs',ll:'AWS provider registry ↗'},
+resource:{t:'Resource',d:`<p>One real thing you want to exist, declared as a block: a type (<code class="inline">aws_lb</code>), your nickname for it (<code class="inline">web</code>), and its settings. Other blocks reference it as <code class="inline">aws_lb.web.arn</code>.</p><p>Terraform reads those references and builds everything in the correct order automatically.</p>`,l:'https://developer.hashicorp.com/terraform/language/resources',ll:'Terraform: Resources ↗'},
+state:{t:'Terraform state',d:`<p>Terraform’s memory: a JSON file mapping each block of your code to the real object it created in AWS. <code class="inline">plan</code> = compare code ↔ state ↔ reality and propose the difference.</p><p>It can contain secrets, so never commit it to Git — teams store it remotely, locked and encrypted (Lesson 08).</p>`,l:'https://developer.hashicorp.com/terraform/language/state',ll:'Terraform: State ↗'},
+module:{t:'Module',d:`<p>A reusable folder of Terraform code with declared inputs and outputs — a saved LEGO sub-assembly. Write the <code class="inline">kafka</code> module once; call it from dev with one small broker and from prod with three big ones.</p><p>Modules keep environments consistent and code reviews short.</p>`,l:'https://developer.hashicorp.com/terraform/language/modules',ll:'Terraform: Modules ↗'},
+ec2:{t:'Amazon EC2',d:`<p>EC2 (Elastic Compute Cloud) is AWS’s rent-a-computer service: virtual machines called <em>instances</em>, in sizes from tiny <code class="inline">t3.micro</code> to monsters with hundreds of CPUs.</p><p>Our two web servers, and self-managed NiFi or Zookeeper nodes, all run on EC2.</p>`,l:'https://docs.aws.amazon.com/ec2/',ll:'Amazon EC2 docs ↗'},
+awslbres:{t:'The aws_lb resource',d:`<p>The Terraform resource that creates ALBs and NLBs — the <code class="inline">load_balancer_type</code> argument picks which. Its registry page lists every argument with examples, including the listener and target-group resources that go with it.</p><p>Registry pages are an engineer’s daily reading; bookmark this one.</p>`,l:'https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb',ll:'Registry: aws_lb ↗'}
+};
+</script>
+
+<script>
+/* ====== Glossary, part 2: data & pipeline terms ====== */
+Object.assign(TERMS, {
+kafka:{t:'Apache Kafka',d:`<p>Kafka is a distributed event-streaming platform — a super-fast, replay-able conveyor belt for messages. Producers write events to named <em>topics</em>; consumers read them at their own pace, even hours later, because Kafka keeps events for a configurable retention time.</p><p>It powers click streams, game telemetry, fraud detection — anywhere data must flow continuously between systems.</p>`,l:'https://kafka.apache.org/documentation/',ll:'Kafka documentation ↗'},
+topic:{t:'Topic & partition',d:`<p>A topic is a named lane on the Kafka conveyor belt, like <code class="inline">orders</code> or <code class="inline">sensor-readings</code>. Each topic is chopped into <em>partitions</em> — parallel sub-lanes — so many consumers can read at once and the lane can grow huge.</p><p>Order is guaranteed <em>within</em> one partition, which is why related events (same player, same order) are usually keyed to the same partition.</p>`,l:'https://kafka.apache.org/documentation/#intro_concepts_and_terms',ll:'Kafka: concepts ↗'},
+broker:{t:'Broker',d:`<p>A broker is one server in a Kafka cluster: it stores partitions on disk and serves producers and consumers. Clusters run several brokers, and every partition is copied (replicated) to others, so one broker can die without losing data.</p><p>Clients first contact any <em>bootstrap</em> broker to learn the cluster map, then talk directly to the broker that owns their partition — the reason ordinary load balancing doesn’t fit Kafka.</p>`,l:'https://kafka.apache.org/documentation/#intro_concepts_and_terms',ll:'Kafka: concepts ↗'},
+msk:{t:'Amazon MSK',d:`<p>Managed Streaming for Apache Kafka: AWS runs the brokers, patches them, replaces failed ones, and hands you a ready <em>bootstrap brokers</em> address. You focus on topics and data instead of 3 a.m. server surgery.</p><p>MSK Serverless goes further — no broker sizing at all, pay per use. Best practice for most teams: start with MSK, not do-it-yourself Kafka on EC2.</p>`,l:'https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html',ll:'Amazon MSK docs ↗'},
+zookeeper:{t:'Apache Zookeeper',d:`<p>A small, highly reliable coordination service — a referee distributed systems use to agree on facts: who is the leader, what config is current, who is alive. Classic Kafka and NiFi clusters both depend on it.</p><p>Rules of thumb: run an odd number of nodes (3 or 5) so votes can’t tie, spread them across AZs, keep them in private subnets, and give them stable storage.</p>`,l:'https://zookeeper.apache.org/',ll:'Zookeeper site & docs ↗'},
+kraft:{t:'KRaft mode',d:`<p>KRaft (Kafka Raft) is Kafka’s built-in replacement for Zookeeper: the brokers coordinate among themselves using the Raft consensus algorithm. Fewer moving parts, faster recovery, simpler ops.</p><p>New Kafka clusters should use KRaft — Kafka 4.x dropped Zookeeper support entirely. Zookeeper itself lives on for other tools, like NiFi clustering.</p>`,l:'https://kafka.apache.org/documentation/#kraft',ll:'Kafka: KRaft docs ↗'},
+nifi:{t:'Apache NiFi',d:`<p>NiFi is a visual data-pipeline builder: drag processors onto a canvas, wire them together — “watch this folder → convert to JSON → publish to Kafka” — and watch the data flow live, with built-in back-pressure and full provenance (a record of where every piece of data went).</p><p>Its web UI is classic ALB territory, with sticky sessions so each user stays on one cluster node (Lesson 06).</p>`,l:'https://nifi.apache.org/documentation/',ll:'NiFi documentation ↗'},
+elt:{t:'ETL vs. ELT',d:`<p>Both mean Extract (collect), Transform (clean/reshape), Load (store for analysis). <strong>ETL</strong> transforms first, then loads — careful but rigid. <strong>ELT</strong>, the modern favorite, loads raw data into cheap storage (the S3 data lake) first and transforms later inside a powerful warehouse.</p><p>ELT wins because storage is cheap and keeping the raw data means you can always re-transform when questions change.</p>`,l:'https://aws.amazon.com/what-is/etl/',ll:'AWS: What is ETL ↗'},
+kinesis:{t:'Amazon Kinesis',d:`<p>AWS’s own streaming service family — conceptually Kafka’s cousin, but fully serverless and deeply wired into other AWS services. Data Streams carries events; Firehose delivers streams straight into S3 or Redshift with zero servers.</p><p>Rough guide: Kinesis for AWS-native simplicity, Kafka/MSK for the huge open-source ecosystem and portability.</p>`,l:'https://docs.aws.amazon.com/kinesis/',ll:'Amazon Kinesis docs ↗'},
+glue:{t:'AWS Glue',d:`<p>Serverless data-preparation service: Glue <em>crawlers</em> scan your S3 data lake and build a searchable catalog (the lake’s index), and Glue <em>jobs</em> run Spark transformations without you managing any cluster.</p><p>It’s the “T” engine in many AWS ELT pipelines.</p>`,l:'https://docs.aws.amazon.com/glue/latest/dg/what-is-glue.html',ll:'AWS Glue docs ↗'},
+athena:{t:'Amazon Athena',d:`<p>Ask SQL questions directly against files sitting in S3 — no database to load, no servers to run, pay per query scanned. It uses the Glue catalog to know what your files contain.</p><p>Perfect for exploring the data lake; pair with columnar formats like Parquet to make queries fast and cheap.</p>`,l:'https://docs.aws.amazon.com/athena/latest/ug/what-is.html',ll:'Amazon Athena docs ↗'},
+redshift:{t:'Amazon Redshift',d:`<p>AWS’s heavy-duty data warehouse: a SQL database tuned for analytics across billions of rows, feeding company dashboards and reports. In ELT, transformed data often lands here for fast, repeated querying.</p><p>Redshift Serverless removes cluster sizing for spiky workloads.</p>`,l:'https://docs.aws.amazon.com/redshift/latest/mgmt/welcome.html',ll:'Amazon Redshift docs ↗'},
+cicd:{t:'CI/CD',d:`<p><strong>CI</strong> (Continuous Integration): every change automatically gets checked — formatting, validation, tests — the moment it’s pushed. <strong>CD</strong> (Continuous Delivery): passing changes are packaged and shipped through environments via the same repeatable pipeline.</p><p>For Terraform, the pipeline is validate → plan → human review → manual apply, exactly as in Lesson 07.</p>`,l:'https://docs.gitlab.com/ee/ci/',ll:'GitLab CI/CD docs ↗'},
+runner:{t:'GitLab Runner',d:`<p>The worker machine that actually executes pipeline jobs, usually inside a fresh container per job (ours uses the official <code class="inline">hashicorp/terraform</code> image). GitLab.com provides shared runners; companies also register their own for private networks.</p><p>Fresh container each time = clean, repeatable builds with nothing left over from last run.</p>`,l:'https://docs.gitlab.com/runner/',ll:'GitLab Runner docs ↗'},
+artifact:{t:'Pipeline artifact',d:`<p>A file a job saves and passes to later jobs — our <code class="inline">plan.tfplan</code> is the perfect example. The apply job consumes the <em>exact</em> plan that humans reviewed, so what was approved is what happens.</p><p>Artifacts also expire automatically (<code class="inline">expire_in</code>), keeping storage tidy.</p>`,l:'https://docs.gitlab.com/ee/ci/jobs/job_artifacts.html',ll:'GitLab: Job artifacts ↗'},
+gltf:{t:'GitLab + Terraform (IaC features)',d:`<p>GitLab ships Terraform-specific goodies: it can <strong>store and lock your state</strong> (an HTTP backend inside your project, versioned per environment), render plan summaries right inside merge requests, and provide ready-made CI templates.</p><p>Great default when GitLab is already your home; the S3 backend remains the AWS-classic alternative.</p>`,l:'https://docs.gitlab.com/ee/user/infrastructure/iac/terraform_state.html',ll:'GitLab-managed state docs ↗'},
+backend:{t:'Backend (remote state storage)',d:`<p>The backend block tells Terraform <em>where the save file lives</em>. The S3 backend stores state in a versioned, encrypted bucket; each component gets a unique <code class="inline">key</code> path, and locking stops simultaneous applies.</p><p>Changing backends later is possible (<code class="inline">terraform init -migrate-state</code>), but pick wisely on day one.</p>`,l:'https://developer.hashicorp.com/terraform/language/backend/s3',ll:'Terraform: S3 backend ↗'},
+locking:{t:'State locking',d:`<p>Locking is the “recording in progress” light: while one apply runs, the state is locked and everyone else must wait, preventing two people from writing the save file at once and corrupting it.</p><p>Classically a DynamoDB table provides the lock; Terraform 1.10+ can instead use an S3 lock file (<code class="inline">use_lockfile = true</code>), and GitLab-managed state locks automatically.</p>`,l:'https://developer.hashicorp.com/terraform/language/state/locking',ll:'Terraform: Locking ↗'},
+blastradius:{t:'Blast radius',d:`<p>Borrowed from demolition: how much can one mistake damage? A single giant state file means any error — or any stuck lock — threatens <em>everything</em>. Splitting by environment × component shrinks each possible explosion to one small folder.</p><p>Senior engineers design for small blast radius everywhere: states, permissions, deployments.</p>`,l:'https://developer.hashicorp.com/terraform/language/state',ll:'Terraform: State docs ↗'},
+remotestate:{t:'terraform_remote_state',d:`<p>A read-only data source that opens <em>another</em> component’s state and exposes only its declared <strong>outputs</strong> — the polite, public doorway between split states. Kafka asks the network component “what’s your VPC ID?” without being able to touch anything.</p><p>Alternative wiring: publish outputs to SSM Parameter Store and read those — looser coupling for big organizations.</p>`,l:'https://developer.hashicorp.com/terraform/language/state/remote-state-data',ll:'Terraform: Remote state data ↗'},
+workspace:{t:'Workspaces',d:`<p>Workspaces let one folder of code hold several independent state files, switched with <code class="inline">terraform workspace select dev</code>. Handy for short-lived clones like per-merge-request preview stacks.</p><p>For long-lived dev/staging/prod, most teams prefer explicit folders: differences are visible in Git, and it’s harder to apply prod while believing you’re in dev.</p>`,l:'https://developer.hashicorp.com/terraform/language/state/workspaces',ll:'Terraform: Workspaces ↗'}
+});
+
+/* ============ Modal open/close ============ */
+const modal = document.getElementById('modal');
+const mTitle = document.getElementById('modalTitle');
+const mBody = document.getElementById('modalBody');
+const mLink = document.getElementById('modalLink');
+let lastFocus = null;
+
+function openTerm(key){
+  const t = TERMS[key];
+  if(!t) return;
+  lastFocus = document.activeElement;
+  mTitle.textContent = t.t;
+  mBody.innerHTML = t.d;
+  mLink.href = t.l;
+  mLink.textContent = t.ll;
+  modal.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('modalClose').focus();
+}
+function closeModal(){
+  modal.setAttribute('aria-hidden','true');
+  document.body.style.overflow = '';
+  if(lastFocus) lastFocus.focus();
+}
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-term]');
+  if(btn){ openTerm(btn.dataset.term); return; }
+  if(e.target.closest('#modalClose') || e.target.dataset.close) closeModal();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') closeModal();
+});
+
+/* ============ Reading size: 14px – 36px ============ */
+const MIN_F = 14, MAX_F = 36, STEP_F = 2;
+let fsize = 16;
+const readout = document.getElementById('fontReadout');
+function applyFont(){
+  document.documentElement.style.setProperty('--reader-size', fsize + 'px');
+  readout.textContent = fsize + ' px';
+  document.getElementById('fontMinus').disabled = (fsize <= MIN_F);
+  document.getElementById('fontPlus').disabled = (fsize >= MAX_F);
+}
+document.getElementById('fontMinus').addEventListener('click', ()=>{ fsize = Math.max(MIN_F, fsize - STEP_F); applyFont(); });
+document.getElementById('fontPlus').addEventListener('click', ()=>{ fsize = Math.min(MAX_F, fsize + STEP_F); applyFont(); });
+applyFont();
+
+/* ============ Copy buttons on code blocks ============ */
+document.querySelectorAll('.copybtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const pre = btn.closest('.cb').querySelector('pre');
+    const text = pre.innerText;
+    const done = ()=>{ const old = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(()=>btn.textContent = old, 1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(done);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); }catch(err){}
+      document.body.removeChild(ta); done();
+    }
+  });
+});
+
+/* ============ Tiny best-effort syntax highlighter ============ */
+const HCL_KW = /^(\s*)(resource|data|module|variable|output|provider|terraform|backend|locals)\b/;
+const YAML_KEY = /^(\s*(?:- )?)([A-Za-z0-9_.\/-]+(?::[A-Za-z0-9_.\/-]+)*)(:)(\s|$)/;
+document.querySelectorAll('pre code').forEach(block=>{
+  const isYaml = block.classList.contains('lang-yaml');
+  const isHcl = block.classList.contains('lang-hcl');
+  const out = block.innerHTML.split('\n').map(line=>{
+    if(/^\s*#/.test(line)) return '<span class="tk-c">' + line + '</span>';
+    let l = line.replace(/"[^"\n]*"/g, m => '<span class="tk-s">' + m + '</span>');
+    const cm = l.match(/^(.*?)(\s{2,}#[^"<]*)$/);
+    if(cm) l = cm[1] + '<span class="tk-c">' + cm[2] + '</span>';
+    if(isHcl) l = l.replace(HCL_KW, (m,sp,kw) => sp + '<span class="tk-k">' + kw + '</span>');
+    if(isYaml) l = l.replace(YAML_KEY, (m,sp,key,colon,rest) => sp + '<span class="tk-k">' + key + '</span>' + colon + rest);
+    return l;
+  }).join('\n');
+  block.innerHTML = out;
+});
+
+/* ============ Scroll progress + back-to-top ============ */
+const bar = document.getElementById('progress');
+const toTop = document.getElementById('toTop');
+window.addEventListener('scroll', ()=>{
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  toTop.style.display = h.scrollTop > 600 ? 'block' : 'none';
+}, { passive: true });
+toTop.addEventListener('click', ()=> window.scrollTo({ top: 0, behavior: 'smooth' }));
+</script>
+</body>
+</html>
