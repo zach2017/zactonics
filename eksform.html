@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
+<title>EKS Node Group Builder</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          carbon: {
+            bg:'#ffffff', layer:'#f4f4f4', field:'#f4f4f4',
+            border:'#e0e0e0', borderStrong:'#8d8d8d',
+            text:'#161616', textSec:'#525252',
+            blue:'#0f62fe', blueHover:'#0353e9', link:'#0f62fe',
+            dbg:'#161616', dlayer:'#262626', dfield:'#262626',
+            dborder:'#393939', dborderStrong:'#6f6f6f',
+            dtext:'#f4f4f4', dtextSec:'#c6c6c6', dlink:'#78a9ff',
+            green:'#24a148', amber:'#f1c21b'
+          }
+        },
+        fontFamily: {
+          sans:['"IBM Plex Sans"','system-ui','sans-serif'],
+          mono:['"IBM Plex Mono"','ui-monospace','monospace']
+        }
+      }
+    }
+  }
+</script>
+
+<style type="text/tailwindcss">
+  @layer components{
+    .c-eyebrow{ @apply font-mono text-[0.7rem] tracking-[0.2em] uppercase text-carbon-blue dark:text-carbon-dlink; }
+    .c-h2{ @apply font-sans text-lg font-medium text-carbon-text dark:text-carbon-dtext; }
+    .c-label{ @apply block text-sm text-carbon-text dark:text-carbon-dtext mb-2; }
+    .c-req{ @apply text-carbon-textSec dark:text-carbon-dtextSec text-xs font-mono; }
+    .c-help{ @apply mt-2 text-xs leading-relaxed text-carbon-textSec dark:text-carbon-dtextSec; }
+    .c-input{
+      @apply w-full bg-carbon-field dark:bg-carbon-dfield text-carbon-text dark:text-carbon-dtext
+             border-0 border-b border-carbon-borderStrong dark:border-carbon-dborderStrong
+             px-4 py-3 font-mono text-[0.95rem]
+             placeholder:text-carbon-textSec/55 dark:placeholder:text-carbon-dtextSec/45
+             focus:outline focus:outline-2 focus:outline-carbon-blue focus:outline-offset-[-2px]; }
+    .c-select{
+      @apply w-full appearance-none bg-carbon-field dark:bg-carbon-dfield text-carbon-text dark:text-carbon-dtext
+             border-0 border-b border-carbon-borderStrong dark:border-carbon-dborderStrong
+             px-4 py-3 pr-10 font-sans text-[0.95rem] cursor-pointer
+             focus:outline focus:outline-2 focus:outline-carbon-blue focus:outline-offset-[-2px]; }
+    .c-btn{
+      @apply inline-flex items-center justify-between gap-6 min-w-[12rem] bg-carbon-blue hover:bg-carbon-blueHover
+             text-white px-5 py-3 text-sm transition-colors
+             focus:outline focus:outline-2 focus:outline-white focus:outline-offset-[-3px]
+             disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-carbon-blue; }
+    .c-btn-tert{
+      @apply inline-flex items-center gap-2 border border-carbon-blue dark:border-carbon-dlink
+             text-carbon-blue dark:text-carbon-dlink hover:bg-carbon-blue hover:text-white
+             dark:hover:bg-carbon-dlink dark:hover:text-carbon-dbg px-5 py-3 text-sm transition-colors
+             focus:outline focus:outline-2 focus:outline-carbon-blue focus:outline-offset-[-3px]; }
+    .c-info{
+      @apply inline-flex items-center justify-center w-8 h-8 text-carbon-textSec dark:text-carbon-dtextSec
+             hover:text-carbon-blue dark:hover:text-carbon-dlink hover:bg-carbon-layer dark:hover:bg-carbon-dlayer
+             transition-colors focus:outline focus:outline-2 focus:outline-carbon-blue focus:outline-offset-[-2px]; }
+    .c-hdr-btn{
+      @apply inline-flex items-center justify-center gap-1.5 text-white/90 hover:bg-white/10 px-2.5 h-9 text-sm
+             transition-colors focus:outline focus:outline-2 focus:outline-white focus:outline-offset-[-2px]
+             disabled:opacity-35 disabled:hover:bg-transparent; }
+    .c-doclink{
+      @apply inline-flex items-start gap-1.5 text-carbon-blue dark:text-carbon-dlink underline underline-offset-2
+             decoration-1 hover:bg-carbon-layer dark:hover:bg-carbon-dlayer; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+
+<body class="bg-carbon-bg dark:bg-carbon-dbg text-carbon-text dark:text-carbon-dtext font-sans antialiased min-h-screen">
+
+  <!-- ===================== UI SHELL HEADER ===================== -->
+  <header class="sticky top-0 z-30 bg-[#161616] text-white border-b border-carbon-dborder">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-x-4 gap-y-2 py-2 min-h-[3rem]">
+      <div class="flex items-center gap-3 mr-auto">
+        <span class="font-mono text-[0.7rem] tracking-[0.2em] uppercase text-white/55">Amazon EKS</span>
+        <span class="hidden sm:inline w-px h-4 bg-white/25"></span>
+        <h1 class="font-sans text-base font-medium">Node Group Builder</h1>
+      </div>
+
+      <!-- text size stepper -->
+      <div class="flex items-center" role="group" aria-label="Text size">
+        <button id="fsMinus" class="c-hdr-btn" aria-label="Decrease text size"><span class="text-xs">A</span><span aria-hidden="true">–</span></button>
+        <span id="fsVal" class="px-1.5 text-sm tabular-nums text-white/80 select-none" title="Text size in pixels">16</span>
+        <button id="fsPlus" class="c-hdr-btn" aria-label="Increase text size"><span class="text-base leading-none">A</span><span aria-hidden="true">+</span></button>
+      </div>
+
+      <span class="w-px h-4 bg-white/25"></span>
+
+      <!-- theme toggle -->
+      <button id="themeBtn" class="c-hdr-btn" aria-label="Toggle dark and light mode">
+        <svg class="w-4 h-4 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+        <svg class="w-4 h-4 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+
+      <!-- help -->
+      <button class="c-hdr-btn" data-info="help" aria-label="How this works">
+        <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- intro -->
+  <section class="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-2">
+    <p class="c-eyebrow">Add compute to your cluster</p>
+    <h2 class="mt-2 text-2xl sm:text-3xl font-medium tracking-tight max-w-3xl">Send worker nodes to your EKS cluster</h2>
+    <p class="mt-3 max-w-2xl text-carbon-textSec dark:text-carbon-dtextSec">Fill in the details below. The exact <span class="font-mono text-carbon-text dark:text-carbon-dtext">eksctl</span> and <span class="font-mono text-carbon-text dark:text-carbon-dtext">aws</span> commands build themselves on the right as you type — grey italic text marks anything you still need to provide. Tap the <span class="inline-flex align-middle text-carbon-blue dark:text-carbon-dlink"><svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg></span> on any section for a plain-language explainer and links to the official docs.</p>
+  </section>
+
+  <!-- ===================== MAIN GRID ===================== -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-8 items-start mt-4">
+
+    <!-- ---------- FORM ---------- -->
+    <form id="form" autocomplete="off" class="divide-y divide-carbon-border dark:divide-carbon-dborder">
+
+      <!-- BASICS -->
+      <section class="pb-7">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="flex-1">
+            <p class="c-eyebrow">Basics</p>
+            <h3 class="c-h2 mt-1">Identify the cluster &amp; name the group</h3>
+          </div>
+          <button type="button" class="c-info" data-info="basics" aria-label="More about the basics">
+            <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg>
+          </button>
+        </div>
+
+        <div class="mb-5">
+          <label class="c-label" for="cluster">Cluster name <span class="c-req">required</span></label>
+          <input class="c-input" type="text" id="cluster" placeholder="my-cluster" />
+          <p class="c-help">The cluster you already created. Case-sensitive.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="c-label" for="region">AWS region <span class="c-req">required</span></label>
+            <div class="relative">
+              <select class="c-select" id="region">
+                <option value="" disabled selected>Choose a region</option>
+                <option value="us-east-1">us-east-1 · N. Virginia</option>
+                <option value="us-east-2">us-east-2 · Ohio</option>
+                <option value="us-west-1">us-west-1 · N. California</option>
+                <option value="us-west-2">us-west-2 · Oregon</option>
+                <option value="eu-west-1">eu-west-1 · Ireland</option>
+                <option value="eu-central-1">eu-central-1 · Frankfurt</option>
+                <option value="ap-south-1">ap-south-1 · Mumbai</option>
+                <option value="ap-southeast-1">ap-southeast-1 · Singapore</option>
+                <option value="ap-southeast-2">ap-southeast-2 · Sydney</option>
+                <option value="ap-northeast-1">ap-northeast-1 · Tokyo</option>
+              </select>
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-carbon-textSec dark:text-carbon-dtextSec">▾</span>
+            </div>
+            <p class="c-help">Match your cluster's region.</p>
+          </div>
+          <div>
+            <label class="c-label" for="ngname">Node group name <span class="c-req">required</span></label>
+            <input class="c-input" type="text" id="ngname" placeholder="my-nodes" />
+            <p class="c-help">A label for this batch of workers.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- MACHINES -->
+      <section class="py-7">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="flex-1">
+            <p class="c-eyebrow">Machines</p>
+            <h3 class="c-h2 mt-1">What each worker is made of</h3>
+          </div>
+          <button type="button" class="c-info" data-info="machines" aria-label="More about the machines">
+            <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="c-label" for="instance">Instance type</label>
+            <div class="relative">
+              <select class="c-select" id="instance">
+                <option value="t3.small">t3.small · 2 vCPU / 2 GiB</option>
+                <option value="t3.medium" selected>t3.medium · 2 vCPU / 4 GiB</option>
+                <option value="t3.large">t3.large · 2 vCPU / 8 GiB</option>
+                <option value="t3.xlarge">t3.xlarge · 4 vCPU / 16 GiB</option>
+                <option value="m5.large">m5.large · 2 vCPU / 8 GiB</option>
+                <option value="m5.xlarge">m5.xlarge · 4 vCPU / 16 GiB</option>
+                <option value="c5.large">c5.large · 2 vCPU / 4 GiB</option>
+                <option value="c5.xlarge">c5.xlarge · 4 vCPU / 8 GiB</option>
+              </select>
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-carbon-textSec dark:text-carbon-dtextSec">▾</span>
+            </div>
+            <p class="c-help">CPU and memory per node. t3.medium is the EKS default.</p>
+          </div>
+          <div>
+            <label class="c-label" for="ami">Operating system (AMI)</label>
+            <div class="relative">
+              <select class="c-select" id="ami">
+                <option value="al2023" selected>Amazon Linux 2023</option>
+                <option value="al2">Amazon Linux 2</option>
+                <option value="bottlerocket">Bottlerocket</option>
+              </select>
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-carbon-textSec dark:text-carbon-dtextSec">▾</span>
+            </div>
+            <p class="c-help">The prebuilt disk image. The default is a safe pick.</p>
+          </div>
+          <div>
+            <label class="c-label" for="disk">Disk size (GiB)</label>
+            <input class="c-input" type="number" id="disk" value="20" min="1" max="2000" />
+            <p class="c-help">Storage per node. Default is 20.</p>
+          </div>
+          <div>
+            <span class="c-label">Pricing</span>
+            <div class="grid grid-cols-2 border border-carbon-borderStrong dark:border-carbon-dborderStrong" role="radiogroup" aria-label="Pricing">
+              <label class="text-center py-3 text-sm cursor-pointer select-none border-r border-carbon-borderStrong dark:border-carbon-dborderStrong has-[:checked]:bg-carbon-blue has-[:checked]:text-white text-carbon-textSec dark:text-carbon-dtextSec focus-within:outline focus-within:outline-2 focus-within:outline-carbon-blue focus-within:outline-offset-[-2px]">
+                <input class="sr-only" type="radio" name="cap" value="on-demand" checked />On-Demand
+              </label>
+              <label class="text-center py-3 text-sm cursor-pointer select-none has-[:checked]:bg-carbon-blue has-[:checked]:text-white text-carbon-textSec dark:text-carbon-dtextSec focus-within:outline focus-within:outline-2 focus-within:outline-carbon-blue focus-within:outline-offset-[-2px]">
+                <input class="sr-only" type="radio" name="cap" value="spot" />Spot
+              </label>
+            </div>
+            <p class="c-help">On-Demand is steady; Spot is cheaper but reclaimable.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- FLEET SIZE -->
+      <section class="py-7">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="flex-1">
+            <p class="c-eyebrow">Fleet size</p>
+            <h3 class="c-h2 mt-1">How many nodes to run</h3>
+          </div>
+          <button type="button" class="c-info" data-info="fleet" aria-label="More about fleet size">
+            <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div>
+            <label class="c-label" for="min">Minimum</label>
+            <input class="c-input" type="number" id="min" value="1" min="0" max="1000" />
+            <p class="c-help">Never fewer.</p>
+          </div>
+          <div>
+            <label class="c-label" for="desired">Desired</label>
+            <input class="c-input" type="number" id="desired" value="2" min="0" max="1000" />
+            <p class="c-help">Start with this many.</p>
+          </div>
+          <div>
+            <label class="c-label" for="max">Maximum</label>
+            <input class="c-input" type="number" id="max" value="3" min="0" max="1000" />
+            <p class="c-help">Never more.</p>
+          </div>
+        </div>
+        <p id="sizeNote" class="mt-3 text-sm text-carbon-blue dark:text-carbon-dlink min-h-[1.25rem]" aria-live="polite"></p>
+      </section>
+
+      <!-- ACCESS (accordion) -->
+      <section class="py-7">
+        <button type="button" id="accBtn" class="w-full flex items-center gap-3 text-left" aria-expanded="false" aria-controls="accPanel">
+          <span class="text-carbon-blue dark:text-carbon-dlink transition-transform" id="accChev">▸</span>
+          <span class="flex-1">
+            <span class="c-eyebrow">Access &amp; permissions</span>
+            <span class="block c-h2 mt-1">Optional — required for the AWS CLI path</span>
+          </span>
+          <span role="presentation" class="c-info" data-info="access" tabindex="0" aria-label="More about access and permissions">
+            <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg>
+          </span>
+        </button>
+
+        <div id="accPanel" class="hidden mt-6 space-y-5">
+          <label class="flex items-center gap-3 cursor-pointer text-sm">
+            <input class="w-5 h-5 accent-carbon-blue cursor-pointer" type="checkbox" id="ssh" />
+            Allow SSH access to nodes
+          </label>
+          <div id="keyRow" class="hidden">
+            <label class="c-label" for="keyname">EC2 key pair name</label>
+            <input class="c-input" type="text" id="keyname" placeholder="my-key-pair" />
+            <p class="c-help">The name of a key pair you created in AWS.</p>
+          </div>
+          <div>
+            <label class="c-label" for="role">Node IAM role ARN <span class="c-req">CLI only</span></label>
+            <input class="c-input" type="text" id="role" placeholder="arn:aws:iam::123456789012:role/eksNodeRole" />
+            <p class="c-help">eksctl creates this for you. Only the AWS CLI needs the ARN here.</p>
+          </div>
+          <div>
+            <label class="c-label" for="subnets">Subnet IDs <span class="c-req">CLI only</span></label>
+            <input class="c-input" type="text" id="subnets" placeholder="subnet-0abc123 subnet-0def456" />
+            <p class="c-help">Space-separated. Get them with <span class="font-mono">aws eks describe-cluster</span>.</p>
+          </div>
+          <div>
+            <label class="c-label" for="labels">Kubernetes labels</label>
+            <input class="c-input" type="text" id="labels" placeholder="team=blue,env=dev" />
+            <p class="c-help">Optional key=value tags, comma-separated.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="pt-7">
+        <button type="button" class="c-btn-tert" id="resetBtn">Clear the form</button>
+      </div>
+    </form>
+
+    <!-- ---------- READOUT ---------- -->
+    <div class="lg:sticky lg:top-20">
+      <div class="border border-carbon-border dark:border-carbon-dborder">
+        <div class="flex items-start gap-3 p-4 border-b border-carbon-border dark:border-carbon-dborder">
+          <div class="flex-1">
+            <p class="c-eyebrow">Your command</p>
+            <h3 class="c-h2 mt-1">Copy &amp; run in your terminal</h3>
+          </div>
+          <button type="button" class="c-info" data-info="tools" aria-label="eksctl versus AWS CLI">
+            <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.6A5.6 5.6 0 118 2.4a5.6 5.6 0 010 11.2z"/><circle cx="8" cy="4.5" r=".95"/><path d="M8.7 7H7.3v5h1.4z"/></svg>
+          </button>
+        </div>
+
+        <!-- tabs -->
+        <div class="flex border-b border-carbon-border dark:border-carbon-dborder" role="tablist">
+          <button class="tab flex items-center gap-2 px-4 py-3 text-sm border-b-2 border-carbon-blue text-carbon-text dark:text-carbon-dtext font-medium" data-tool="eksctl" role="tab" aria-selected="true">
+            <span class="w-2.5 h-2.5 inline-block" style="background:#24a148"></span>eksctl
+          </button>
+          <button class="tab flex items-center gap-2 px-4 py-3 text-sm border-b-2 border-transparent text-carbon-textSec dark:text-carbon-dtextSec hover:border-carbon-border dark:hover:border-carbon-dborder" data-tool="cli" role="tab" aria-selected="false">
+            <span class="w-2.5 h-2.5 inline-block" style="background:#4589ff"></span>AWS CLI
+          </button>
+        </div>
+
+        <!-- code -->
+        <pre id="sheet" class="bg-[#262626] text-[#f4f4f4] font-mono text-[0.85rem] leading-[1.9] p-5 overflow-x-auto whitespace-pre-wrap break-words m-0"></pre>
+
+        <!-- footer -->
+        <div class="flex flex-wrap items-center gap-3 p-4 border-t border-carbon-border dark:border-carbon-dborder">
+          <button type="button" id="copyBtn" class="c-btn !min-w-0 gap-3">
+            <span id="copyLabel">Copy command</span>
+            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10 1H4a1 1 0 00-1 1v8h1.5V2.5H10V1z"/><path d="M12 4H7a1 1 0 00-1 1v9a1 1 0 001 1h5a1 1 0 001-1V5a1 1 0 00-1-1zm-.5 10h-4V5.5h4V14z"/></svg>
+          </button>
+          <div id="status" class="flex items-center gap-2 text-sm" aria-live="polite">
+            <span id="statusDot" class="w-2.5 h-2.5 inline-block shrink-0"></span>
+            <span id="statusText" class="text-carbon-textSec dark:text-carbon-dtextSec"></span>
+          </div>
+        </div>
+      </div>
+
+      <p class="mt-4 text-xs leading-relaxed text-carbon-textSec dark:text-carbon-dtextSec">
+        After running, watch progress with <span class="font-mono text-carbon-text dark:text-carbon-dtext">kubectl get nodes</span> until your nodes show <span class="font-mono text-carbon-text dark:text-carbon-dtext">Ready</span>. This builds a <span class="font-medium text-carbon-text dark:text-carbon-dtext">managed</span> node group; Fargate works differently.
+      </p>
+    </div>
+  </main>
+
+  <!-- ===================== MODAL ===================== -->
+  <div id="modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div id="modalBackdrop" class="absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-150"></div>
+    <div id="modalPanel" role="dialog" aria-modal="true" aria-labelledby="modalTitle"
+         class="relative w-full sm:max-w-lg max-h-[85vh] flex flex-col bg-carbon-bg dark:bg-carbon-dlayer border border-carbon-border dark:border-carbon-dborder shadow-2xl opacity-0 translate-y-2 transition duration-150">
+      <div class="flex items-start justify-between gap-4 p-5 border-b border-carbon-border dark:border-carbon-dborder">
+        <h2 id="modalTitle" class="text-lg font-medium pr-2"></h2>
+        <button id="modalClose" class="c-info shrink-0" aria-label="Close">
+          <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12 4.7L11.3 4 8 7.3 4.7 4 4 4.7 7.3 8 4 11.3l.7.7L8 8.7l3.3 3.3.7-.7L8.7 8z"/></svg>
+        </button>
+      </div>
+      <div id="modalBody" class="p-5 overflow-y-auto text-sm leading-relaxed text-carbon-textSec dark:text-carbon-dtextSec space-y-3"></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  var doc = document;
+  function $(id){ return doc.getElementById(id); }
+  function val(id){ var el=$(id); return el ? String(el.value).trim() : ""; }
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  /* ---------- theme ---------- */
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){
+    doc.documentElement.classList.add('dark');
+  }
+  $("themeBtn").addEventListener("click", function(){
+    doc.documentElement.classList.toggle('dark');
+  });
+
+  /* ---------- text size 14–36 ---------- */
+  var fs = 16, FS_MIN = 14, FS_MAX = 36, FS_STEP = 2;
+  function applyFs(){
+    doc.documentElement.style.fontSize = fs + "px";
+    $("fsVal").textContent = fs;
+    $("fsMinus").disabled = fs <= FS_MIN;
+    $("fsPlus").disabled  = fs >= FS_MAX;
+  }
+  $("fsMinus").addEventListener("click", function(){ fs = Math.max(FS_MIN, fs - FS_STEP); applyFs(); });
+  $("fsPlus").addEventListener("click",  function(){ fs = Math.min(FS_MAX, fs + FS_STEP); applyFs(); });
+  applyFs();
+
+  /* ---------- command generator ---------- */
+  var tool = "eksctl";
+  var AMI = {
+    al2023:      { eksctl:"AmazonLinux2023", cli:"AL2023_x86_64_STANDARD" },
+    al2:         { eksctl:"AmazonLinux2",    cli:"AL2_x86_64" },
+    bottlerocket:{ eksctl:"Bottlerocket",    cli:"BOTTLEROCKET_x86_64" }
+  };
+  function tok(v, ph){ return v ? esc(v) : '<span style="color:#8d8d8d;font-style:italic">'+esc(ph)+'</span>'; }
+  function flag(f){ return '<span style="color:#78a9ff">'+f+'</span>'; }
+  function capChecked(){ var r=doc.querySelector('input[name="cap"]:checked'); return r?r.value:"on-demand"; }
+  function sizesValid(){
+    var mn=val("min"), ds=val("desired"), mx=val("max");
+    if(mn===""||ds===""||mx==="") return false;
+    mn=+mn; ds=+ds; mx=+mx;
+    return mn>=0 && mn<=ds && ds<=mx;
+  }
+
+  function build(){
+    var cluster=val("cluster"), region=val("region"), name=val("ngname");
+    var instance=val("instance"), amiKey=val("ami"), disk=val("disk")||"20";
+    var mn=val("min")||"1", ds=val("desired")||"2", mx=val("max")||"3";
+    var spot=capChecked()==="spot", ssh=$("ssh").checked, keyname=val("keyname");
+    var role=val("role"), subnets=val("subnets"), labels=val("labels");
+    var L=[];
+
+    if(tool==="eksctl"){
+      L.push("eksctl create nodegroup");
+      L.push(flag("--cluster")+" "+tok(cluster,"<your-cluster-name>"));
+      L.push(flag("--region")+" "+tok(region,"<region>"));
+      L.push(flag("--name")+" "+tok(name,"<node-group-name>"));
+      L.push(flag("--node-type")+" "+esc(instance));
+      L.push(flag("--nodes")+" "+esc(ds));
+      L.push(flag("--nodes-min")+" "+esc(mn));
+      L.push(flag("--nodes-max")+" "+esc(mx));
+      L.push(flag("--node-volume-size")+" "+esc(disk));
+      L.push(flag("--node-ami-family")+" "+esc(AMI[amiKey].eksctl));
+      if(spot) L.push(flag("--spot"));
+      if(ssh){ L.push(flag("--ssh-access")); L.push(flag("--ssh-public-key")+" "+tok(keyname,"<ec2-key-pair-name>")); }
+      if(labels) L.push(flag("--labels")+" "+esc(labels));
+      L.push(flag("--managed"));
+    } else {
+      L.push("aws eks create-nodegroup");
+      L.push(flag("--cluster-name")+" "+tok(cluster,"<your-cluster-name>"));
+      L.push(flag("--region")+" "+tok(region,"<region>"));
+      L.push(flag("--nodegroup-name")+" "+tok(name,"<node-group-name>"));
+      L.push(flag("--node-role")+" "+tok(role,"<node-iam-role-arn>"));
+      L.push(flag("--subnets")+" "+tok(subnets,"<subnet-id-1> <subnet-id-2>"));
+      L.push(flag("--instance-types")+" "+esc(instance));
+      L.push(flag("--disk-size")+" "+esc(disk));
+      L.push(flag("--ami-type")+" "+esc(AMI[amiKey].cli));
+      L.push(flag("--capacity-type")+" "+(spot?"SPOT":"ON_DEMAND"));
+      L.push(flag("--scaling-config")+" minSize="+esc(mn)+",maxSize="+esc(mx)+",desiredSize="+esc(ds));
+      if(labels) L.push(flag("--labels")+" "+esc(labels));
+      if(ssh) L.push(flag("--remote-access")+" ec2SshKey="+tok(keyname,"<ec2-key-pair-name>"));
+    }
+    return L.join(' \\\n  ');
+  }
+
+  function basicsDone(){ return val("cluster") && val("region") && val("ngname") && sizesValid(); }
+
+  function render(){
+    $("sheet").innerHTML = build();
+
+    // size validity
+    var ok = sizesValid();
+    ["min","desired","max"].forEach(function(id){
+      var el=$(id);
+      if(!ok && val(id)!==""){ el.classList.add("outline","outline-2","outline-carbon-amber"); }
+      else { el.classList.remove("outline","outline-2","outline-carbon-amber"); }
+    });
+    $("sizeNote").textContent = ok ? "" : "Keep them in order: minimum ≤ desired ≤ maximum.";
+
+    // status
+    var dot=$("statusDot"), txt=$("statusText");
+    var state;
+    if(tool==="cli" && (!val("role") || !val("subnets"))){
+      state = { c:"#f1c21b", t:"Add the IAM role and subnets for the AWS CLI." };
+    } else if(basicsDone()){
+      state = { c:"#24a148", t:"Ready to run." };
+    } else {
+      state = { c:"#8d8d8d", t:"Fill in the required fields." };
+    }
+    dot.style.background = state.c;
+    txt.textContent = state.t;
+  }
+
+  /* ---------- events: form ---------- */
+  $("form").addEventListener("input", render);
+  $("form").addEventListener("change", function(e){
+    if(e.target && e.target.id==="ssh"){ $("keyRow").classList.toggle("hidden", !$("ssh").checked); }
+    render();
+  });
+
+  /* ---------- accordion ---------- */
+  $("accBtn").addEventListener("click", function(e){
+    if(e.target.closest('[data-info]')) return; // info icon handled separately
+    var open = $("accPanel").classList.toggle("hidden") === false;
+    $("accBtn").setAttribute("aria-expanded", open ? "true":"false");
+    $("accChev").style.transform = open ? "rotate(90deg)" : "rotate(0deg)";
+  });
+
+  /* ---------- tabs ---------- */
+  Array.prototype.forEach.call(doc.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){
+      tool = t.getAttribute("data-tool");
+      doc.querySelectorAll(".tab").forEach(function(x){
+        var on = x===t;
+        x.setAttribute("aria-selected", on?"true":"false");
+        x.classList.toggle("border-carbon-blue", on);
+        x.classList.toggle("text-carbon-text", on);
+        x.classList.toggle("dark:text-carbon-dtext", on);
+        x.classList.toggle("font-medium", on);
+        x.classList.toggle("border-transparent", !on);
+        x.classList.toggle("text-carbon-textSec", !on);
+        x.classList.toggle("dark:text-carbon-dtextSec", !on);
+      });
+      if(tool==="cli" && (!val("role")||!val("subnets")) && $("accPanel").classList.contains("hidden")){
+        $("accBtn").click();
+      }
+      render();
+    });
+  });
+
+  /* ---------- copy ---------- */
+  $("copyBtn").addEventListener("click", function(){
+    var text = $("sheet").textContent;
+    var label=$("copyLabel"), old=label.textContent;
+    function done(){ label.textContent="Copied"; setTimeout(function(){ label.textContent=old; },1400); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else fallback();
+    function fallback(){
+      var ta=doc.createElement("textarea"); ta.value=text; doc.body.appendChild(ta); ta.select();
+      try{ doc.execCommand("copy"); done(); }catch(_){}
+      doc.body.removeChild(ta);
+    }
+  });
+
+  /* ---------- reset ---------- */
+  $("resetBtn").addEventListener("click", function(){
+    $("form").reset();
+    $("keyRow").classList.add("hidden");
+    if(!$("accPanel").classList.contains("hidden")) $("accBtn").click();
+    render();
+  });
+
+  /* ---------- modals ---------- */
+  function dl(href, label){
+    return '<a class="inline-flex items-start gap-1 text-[#0f62fe] dark:text-[#78a9ff] underline underline-offset-2 decoration-1 hover:opacity-80" target="_blank" rel="noopener" href="'+href+'">'+label+' <span aria-hidden="true">↗</span></a>';
+  }
+  function docsBlock(items){
+    var lis = items.map(function(i){ return '<li>'+dl(i[0], i[1])+'</li>'; }).join("");
+    return '<div class="mt-2"><p class="font-medium text-carbon-text dark:text-carbon-dtext mb-1">Official docs</p><ul class="list-disc pl-5 space-y-1">'+lis+'</ul></div>';
+  }
+  var MODALS = {
+    help: {
+      title: "How this works",
+      body:
+        '<p>Fill in the form. The command on the right updates as you type, and <em>grey italic</em> text marks values you still need to provide.</p>'+
+        '<p>Switch between the <strong>eksctl</strong> and <strong>AWS CLI</strong> tabs, press <strong>Copy command</strong>, and run it in your terminal.</p>'+
+        '<p>Creating nodes takes a few minutes. Check progress with <span class="font-mono text-carbon-text dark:text-carbon-dtext">kubectl get nodes</span> until they show <span class="font-mono text-carbon-text dark:text-carbon-dtext">Ready</span>.</p>'+
+        docsBlock([
+          ["https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html","Get started with Amazon EKS"],
+          ["https://eksctl.io/installation/","Install eksctl"]
+        ])
+    },
+    basics: {
+      title: "Basics",
+      body:
+        '<p>These three fields say where your workers go and what to call them.</p>'+
+        '<p><strong>Cluster name</strong> must match the cluster you already created (case-sensitive). <strong>Region</strong> is the AWS location of that cluster. <strong>Node group name</strong> labels this batch of workers — one cluster can hold several node groups.</p>'+
+        docsBlock([
+          ["https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html","Managed node groups (overview)"],
+          ["https://docs.aws.amazon.com/eks/latest/userguide/create-managed-node-group.html","Create a managed node group"]
+        ])
+    },
+    machines: {
+      title: "Machines",
+      body:
+        '<p>Each worker is an EC2 virtual computer.</p>'+
+        '<p><strong>Instance type</strong> sets CPU and memory — t3.medium (2 vCPU / 4 GiB) is a low-cost start and the EKS default. <strong>Operating system (AMI)</strong> is the prebuilt disk image AWS boots; Amazon Linux 2023 is current. <strong>Disk size</strong> is storage per node (20 GiB default). <strong>Pricing</strong>: On-Demand is the steady hourly rate; Spot uses spare capacity at a steep discount but can be reclaimed with a two-minute warning.</p>'+
+        docsBlock([
+          ["https://aws.amazon.com/ec2/instance-types/","EC2 instance types"],
+          ["https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-amis.html","EKS-optimized AMIs"],
+          ["https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html","Capacity types: On-Demand vs Spot"],
+          ["https://aws.amazon.com/bottlerocket/","Bottlerocket OS"]
+        ])
+    },
+    fleet: {
+      title: "Fleet size",
+      body:
+        '<p>A node group is backed by an EC2 Auto Scaling group.</p>'+
+        '<p><strong>Desired</strong> is how many nodes start. <strong>Minimum</strong> and <strong>Maximum</strong> are the floor and ceiling it can scale between — keep minimum ≤ desired ≤ maximum. To scale automatically with load, pair this with the Kubernetes Cluster Autoscaler or Karpenter.</p>'+
+        docsBlock([
+          ["https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html","Autoscaling in EKS"],
+          ["https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html","Scaling managed node groups"]
+        ])
+    },
+    access: {
+      title: "Access & permissions",
+      body:
+        '<p>Optional extras — most beginners using eksctl can skip these.</p>'+
+        '<p><strong>SSH access</strong> lets you log into a node with an EC2 key pair (off by default). <strong>Node IAM role</strong> is the permissions identity nodes assume; eksctl creates one automatically, but the raw AWS CLI needs its ARN. <strong>Subnets</strong> are the VPC network segments nodes launch into (the AWS CLI needs these; eksctl reuses your cluster\'s). <strong>Labels</strong> are key=value tags on the Kubernetes nodes for scheduling.</p>'+
+        docsBlock([
+          ["https://docs.aws.amazon.com/eks/latest/userguide/create-node-role.html","Create the node IAM role"],
+          ["https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html","VPC and subnet requirements"],
+          ["https://eksctl.io/usage/nodegroup-managed/","eksctl: managed node groups"]
+        ])
+    },
+    tools: {
+      title: "eksctl vs AWS CLI",
+      body:
+        '<p><strong>eksctl</strong> is the shortcut: one command that also creates the IAM role and figures out subnets for you.</p>'+
+        '<p><strong>AWS CLI</strong> (<span class="font-mono text-carbon-text dark:text-carbon-dtext">aws eks create-nodegroup</span>) does the same job but expects you to pass the node IAM role ARN and subnet IDs yourself — that is why those fields are required on this tab. Both create a managed node group.</p>'+
+        docsBlock([
+          ["https://eksctl.io/usage/nodegroup-managed/","eksctl: managed node groups"],
+          ["https://docs.aws.amazon.com/cli/latest/reference/eks/create-nodegroup.html","aws eks create-nodegroup reference"],
+          ["https://eksctl.io/installation/","Install eksctl"]
+        ])
+    }
+  };
+
+  var lastFocus=null;
+  function openModal(key){
+    var m=MODALS[key]; if(!m) return;
+    lastFocus = doc.activeElement;
+    $("modalTitle").textContent = m.title;
+    $("modalBody").innerHTML = m.body;
+    $("modal").classList.remove("hidden");
+    requestAnimationFrame(function(){
+      $("modalBackdrop").classList.add("opacity-100");
+      var p=$("modalPanel"); p.classList.add("opacity-100"); p.classList.remove("translate-y-2");
+    });
+    $("modalClose").focus();
+  }
+  function closeModal(){
+    $("modalBackdrop").classList.remove("opacity-100");
+    var p=$("modalPanel"); p.classList.remove("opacity-100"); p.classList.add("translate-y-2");
+    setTimeout(function(){ $("modal").classList.add("hidden"); }, 150);
+    if(lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  doc.querySelectorAll("[data-info]").forEach(function(b){
+    b.addEventListener("click", function(e){ e.stopPropagation(); openModal(b.getAttribute("data-info")); });
+    b.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); e.stopPropagation(); openModal(b.getAttribute("data-info")); } });
+  });
+  $("modalClose").addEventListener("click", closeModal);
+  $("modalBackdrop").addEventListener("click", closeModal);
+  doc.addEventListener("keydown", function(e){ if(e.key==="Escape" && !$("modal").classList.contains("hidden")) closeModal(); });
+
+  render();
+})();
+</script>
+</body>
+</html>
