@@ -1,0 +1,1974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka on AWS EKS with Strimzi — A Step-by-Step Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ibmblue: '#0f62fe',
+          ibmblue70: '#0043ce',
+          ink: '#161616',
+          ink70: '#393939',
+          ink50: '#6f6f6f',
+          line: '#e0e0e0',
+          field: '#f4f4f4',
+        },
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'monospace'],
+          serif: ['"IBM Plex Serif"', 'serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  :root { --fs: 18px; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  body { background:#ffffff; color:#161616; }
+
+  /* Font-size control only scales the reading content, not headings/labels */
+  #content p, #content li { font-size: var(--fs); line-height: 1.6; }
+  #content .lead { font-size: calc(var(--fs) + 4px); }
+
+  /* Sharp IBM Carbon corners everywhere */
+  .card, .codewrap, .chip, .modal-card, .navbtn, .fbtn, .copybtn, input[type=range] { border-radius: 0; }
+
+  /* Code blocks */
+  .codewrap { background:#161616; border:1px solid #161616; }
+  .codewrap pre { margin:0; padding:18px 16px; overflow-x:auto; }
+  .codewrap code { font-family:"IBM Plex Mono",monospace; font-size:14px; line-height:1.6; color:#f4f4f4; white-space:pre; }
+  .codewrap .tok-c { color:#8d8d8d; }      /* comments */
+  .copybtn { background:#262626; color:#c6c6c6; border:1px solid #393939; }
+  .copybtn:hover { background:#393939; color:#fff; }
+
+  /* Step number marker */
+  .stepnum { font-family:"IBM Plex Mono",monospace; }
+
+  /* Info chip / popup trigger */
+  .chip { border:1px solid #0f62fe; color:#0f62fe; background:#edf5ff; }
+  .chip:hover { background:#0f62fe; color:#fff; }
+  .chip:focus-visible, a:focus-visible, button:focus-visible, input:focus-visible {
+    outline:2px solid #0f62fe; outline-offset:2px;
+  }
+
+  /* Modal */
+  .modal-overlay { background:rgba(22,22,22,.55); }
+  .modal-card { background:#fff; border-top:4px solid #0f62fe; }
+  .modal-body p { font-size:16px; line-height:1.6; }
+  .modal-body code { font-family:"IBM Plex Mono",monospace; background:#f4f4f4; padding:1px 5px; font-size:14px; }
+
+  /* Inline code in prose */
+  .ic { font-family:"IBM Plex Mono",monospace; background:#f4f4f4; padding:1px 6px; font-size:0.92em; color:#0043ce; }
+
+  /* Range slider (Carbon-ish) */
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:4px; background:#393939; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; background:#0f62fe; cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:14px; height:14px; background:#0f62fe; cursor:pointer; border:0; }
+
+  .navlink:hover { color:#0f62fe; border-color:#0f62fe; }
+  .anchor-offset { scroll-margin-top:96px; }
+</style>
+</head>
+<body class="font-sans antialiased">
+
+<!-- ============ STICKY HEADER ============ -->
+<header class="sticky top-0 z-40 bg-white border-b border-line">
+  <div class="h-1 w-full bg-ibmblue"></div>
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+    <div class="min-w-0">
+      <p class="font-mono text-[11px] uppercase tracking-widest text-ink50">Tutorial</p>
+      <h1 class="font-semibold text-ink text-sm sm:text-base leading-tight truncate">Kafka on AWS EKS with Strimzi</h1>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <span class="hidden sm:inline font-mono text-[11px] text-ink50 mr-1">Text size</span>
+      <button id="fsDown" class="fbtn w-9 h-9 border border-line text-ink font-semibold hover:bg-field" aria-label="Make text smaller">A−</button>
+      <span id="fsVal" class="font-mono text-xs text-ink70 w-10 text-center" aria-live="polite">18px</span>
+      <button id="fsUp" class="fbtn w-9 h-9 border border-line text-ink font-semibold hover:bg-field" aria-label="Make text larger">A+</button>
+      <button id="navToggle" class="md:hidden navbtn w-9 h-9 border border-line text-ink hover:bg-field" aria-label="Open contents">☰</button>
+    </div>
+  </div>
+  <!-- Full-width slider for fine control -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 pb-3 flex items-center gap-3">
+    <span class="font-mono text-[11px] text-ink50">14</span>
+    <input id="fsRange" type="range" min="14" max="36" step="1" value="18" class="flex-1" aria-label="Text size slider from 14 to 36 pixels">
+    <span class="font-mono text-[11px] text-ink50">36</span>
+  </div>
+</header>
+
+<!-- ============ MOBILE NAV DRAWER ============ -->
+<nav id="navDrawer" class="hidden md:hidden border-b border-line bg-field">
+  <div class="max-w-5xl mx-auto px-4 py-3 grid grid-cols-1 gap-1 text-sm">
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#background">What these tools are</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#versions">Versions (June 2026)</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#tools">Step 0 · Install tools</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#cluster">Step 1 · EKS control plane</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#nodegroups">Step 2 · Node groups</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#terraform">Terraform (IaC)</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#scaling">Step 3 · More nodes & self-healing</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#operator">Step 4 · Strimzi operator</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#deploy">Step 5 · Deploy Kafka</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#loadbalancing">Step 6 · Load balancing</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#failover">Step 7 · Failover & HA</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#logging">Step 8 · Logging</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#monitoring">Step 9 · Grafana & Prometheus</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#test">Step 10 · Test it</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#troubleshooting">Troubleshooting</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#cleanup">Clean up</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#refs">Official docs</a>
+  </div>
+</nav>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 md:flex md:gap-10">
+
+  <!-- ============ DESKTOP SIDEBAR ============ -->
+  <aside class="hidden md:block w-56 shrink-0 py-10">
+    <div class="sticky top-32">
+      <p class="font-mono text-[11px] uppercase tracking-widest text-ink50 mb-3">On this page</p>
+      <nav class="text-sm space-y-1">
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#background">What these tools are</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#versions">Versions</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#tools">0 · Install tools</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#cluster">1 · EKS control plane</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#nodegroups">2 · Node groups</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#terraform">Terraform (IaC)</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#scaling">3 · More nodes / healing</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#operator">4 · Strimzi operator</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#deploy">5 · Deploy Kafka</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#loadbalancing">6 · Load balancing</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#failover">7 · Failover & HA</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#logging">8 · Logging</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#monitoring">9 · Grafana</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#test">10 · Test it</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#troubleshooting">Troubleshooting</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#cleanup">Clean up</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#refs">Official docs</a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN CONTENT ============ -->
+  <main id="content" class="min-w-0 flex-1 py-10">
+
+    <!-- HERO -->
+    <section class="mb-14">
+      <p class="font-mono text-xs uppercase tracking-widest text-ibmblue mb-4">AWS EKS · Apache Kafka · Strimzi</p>
+      <h2 class="font-serif text-3xl sm:text-5xl font-semibold text-ink leading-tight mb-5">
+        Run Apache Kafka on Amazon's Kubernetes, the easy way.
+      </h2>
+      <p class="lead text-ink70 max-w-2xl">
+        This guide walks you through setting up Kafka on <strong>AWS EKS</strong> using the <strong>Strimzi</strong> operator.
+        We start from zero, build the worker computers (node groups), add load balancing, make it survive failures,
+        let it grow, and finish with logging and pretty Grafana dashboards. Plain language. Real commands. One step at a time.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-3 text-sm">
+        <span class="inline-flex items-center gap-2 border border-line px-3 py-1.5 font-mono text-ink70">~60–90 min</span>
+        <span class="inline-flex items-center gap-2 border border-line px-3 py-1.5 font-mono text-ink70">Beginner friendly</span>
+        <span class="inline-flex items-center gap-2 border border-line px-3 py-1.5 font-mono text-ink70">Costs real AWS money — clean up after!</span>
+      </div>
+      <div class="mt-6 bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>Tip:</strong> Tap any <span class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle">i</span> button to open a popup with more detail. Use the <strong>A− / A+</strong> buttons or the slider at the top to grow the text from 14 up to 36 pixels.</p>
+      </div>
+    </section>
+
+    <!-- BACKGROUND -->
+    <section id="background" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 00</span>
+        <h3 class="font-semibold text-2xl text-ink">First, what are all these words?</h3>
+      </div>
+      <p class="text-ink70 mb-5">Before we type anything, let's learn the four big words in plain English. Think of building a giant restaurant kitchen.</p>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="card border border-line p-5">
+          <h4 class="font-semibold text-ink mb-2">📨 Apache Kafka</h4>
+          <p class="text-ink70">Kafka is like a <strong>super-fast post office</strong> for computer programs. One program drops off messages, and other programs pick them up — millions per second, in order, without losing them.
+            <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle ml-1" data-modal="m-kafka" aria-label="More about Kafka">i</button>
+          </p>
+        </div>
+        <div class="card border border-line p-5">
+          <h4 class="font-semibold text-ink mb-2">📦 Kubernetes</h4>
+          <p class="text-ink70">Kubernetes (people write <span class="ic">k8s</span>) is a <strong>manager that runs apps inside containers</strong>. It decides which computer runs what, restarts crashed apps, and keeps everything healthy.
+            <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle ml-1" data-modal="m-k8s" aria-label="More about Kubernetes">i</button>
+          </p>
+        </div>
+        <div class="card border border-line p-5">
+          <h4 class="font-semibold text-ink mb-2">☁️ AWS EKS</h4>
+          <p class="text-ink70">EKS = <strong>Elastic Kubernetes Service</strong>. It's Amazon running the hard, boring parts of Kubernetes <em>for you</em>, so you only worry about your apps and your worker computers.
+            <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle ml-1" data-modal="m-eks" aria-label="More about EKS">i</button>
+          </p>
+        </div>
+        <div class="card border border-line p-5">
+          <h4 class="font-semibold text-ink mb-2">🤖 Strimzi</h4>
+          <p class="text-ink70">Strimzi is a <strong>robot helper (an "operator")</strong> that knows how to install and babysit Kafka on Kubernetes. You tell it "I want a Kafka cluster," and it builds and repairs it for you.
+            <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle ml-1" data-modal="m-strimzi" aria-label="More about Strimzi">i</button>
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-6 bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>The kitchen picture:</strong> EKS is the <em>building</em>. <strong>Node groups</strong> are <em>teams of cooks</em> (worker computers). Kubernetes is the <em>head chef</em> giving orders. Strimzi is the <em>specialist</em> who sets up the Kafka "order conveyor belt." We'll build them in that order.</p>
+      </div>
+    </section>
+
+    <!-- VERSIONS -->
+    <section id="versions" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ INFO</span>
+        <h3 class="font-semibold text-2xl text-ink">Versions used in this guide</h3>
+      </div>
+      <p class="text-ink70 mb-5">These tools change often. Here is what is current as of <strong>June 2026</strong>. Newer numbers are usually fine — just check the official docs linked at the bottom.</p>
+      <div class="card border border-line overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="bg-ink text-white">
+              <th class="p-3 font-medium text-sm">Tool</th>
+              <th class="p-3 font-medium text-sm">Version</th>
+              <th class="p-3 font-medium text-sm">Notes</th>
+            </tr>
+          </thead>
+          <tbody class="text-ink70">
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Strimzi</td><td class="p-3 font-mono text-sm">1.0.1</td><td class="p-3 text-sm">Released June 2026. Uses the new <span class="ic">v1</span> API.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Apache Kafka</td><td class="p-3 font-mono text-sm">4.1.x</td><td class="p-3 text-sm">No more ZooKeeper — runs in <strong>KRaft</strong> mode only. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-kraft" aria-label="What is KRaft">i</button></td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Kubernetes (EKS)</td><td class="p-3 font-mono text-sm">1.30+</td><td class="p-3 text-sm">Strimzi needs 1.30 or newer. Pick the newest EKS offers.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">eksctl</td><td class="p-3 font-mono text-sm">0.215.0+</td><td class="p-3 text-sm">The command-line tool that builds EKS for us.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-4 bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>Big change to know:</strong> Old Kafka needed a sidekick called ZooKeeper. Modern Kafka (4.x) dropped it and uses <strong>KRaft</strong> instead. Strimzi removed ZooKeeper support back in version 0.46, so everything here is KRaft. That's why we make two kinds of nodes: <strong>controllers</strong> (the bookkeepers) and <strong>brokers</strong> (the message carriers).</p>
+      </div>
+    </section>
+
+    <!-- STEP 0: TOOLS -->
+    <section id="tools" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 01</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 0 — Install your tools</h3>
+      </div>
+      <p class="text-ink70 mb-4">You need four command-line tools on your laptop. Think of them as your toolbox before any building starts.</p>
+      <ul class="list-disc pl-6 text-ink70 mb-5 space-y-1">
+        <li><span class="ic">aws</span> — talks to your Amazon account.</li>
+        <li><span class="ic">eksctl</span> — builds and changes EKS clusters with one command.</li>
+        <li><span class="ic">kubectl</span> — sends orders to Kubernetes ("koob-control").</li>
+        <li><span class="ic">helm</span> — installs big apps (like Strimzi) from ready-made packages. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-helm" aria-label="What is Helm">i</button></li>
+      </ul>
+
+      <p class="text-ink70 mb-2 font-medium">Install on macOS (with Homebrew):</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>brew install awscli eksctl kubectl helm
+
+<span class="tok-c"># Check they all work</span>
+aws --version
+eksctl version      <span class="tok-c"># must be 0.215.0 or newer</span>
+kubectl version --client
+helm version</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Then connect to your AWS account:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># It will ask for your Access Key, Secret Key, region, and output format</span>
+aws configure
+
+<span class="tok-c"># Make sure it recognizes you</span>
+aws sts get-caller-identity</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70">On Windows use <span class="ic">choco install</span> or download the installers; on Linux use the official scripts. The links are in the <a href="#refs" class="text-ibmblue underline">Official docs</a> section.</p>
+      </div>
+    </section>
+
+    <!-- STEP 1: CLUSTER -->
+    <section id="cluster" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 02</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 1 — Create the EKS control plane</h3>
+      </div>
+      <p class="text-ink70 mb-4">Every cluster has a <strong>control plane</strong> (the brain) and <strong>nodes</strong> (the muscle). Amazon runs the brain for you. Here we create the brain only, with <em>zero</em> nodes, so we can add node groups carefully in the next step (that's what you asked for).</p>
+
+      <p class="text-ink70 mb-2 font-medium">Save this as <span class="ic">cluster.yaml</span>:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">cluster.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: kafka-cluster
+  region: us-east-1
+  version: "1.33"          <span class="tok-c"># use the newest EKS offers (1.30+)</span>
+
+<span class="tok-c"># Use 3 Availability Zones so we can survive a zone outage later</span>
+availabilityZones: ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+<span class="tok-c"># Start with NO worker nodes — we add node groups in Step 2</span>
+managedNodeGroups: []
+
+<span class="tok-c"># Lets pods get their own AWS permissions (needed later for the load balancer)</span>
+iam:
+  withOIDC: true</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Build it (takes ~15 minutes — grab a snack):</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>eksctl create cluster -f cluster.yaml
+
+<span class="tok-c"># When done, point kubectl at the new cluster</span>
+aws eks update-kubeconfig --name kafka-cluster --region us-east-1
+
+<span class="tok-c"># Prove it works (there are no worker nodes yet — that's expected)</span>
+kubectl get nodes
+kubectl get svc</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>What just happened?</strong> Amazon created the brain, a private network (VPC), and all the security plumbing. You didn't pay for any worker computers yet because we asked for none.
+          <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-vpc" aria-label="What is a VPC">i</button>
+        </p>
+      </div>
+    </section>
+
+    <!-- STEP 2: NODE GROUPS -->
+    <section id="nodegroups" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 03</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 2 — Create the node groups ⭐</h3>
+      </div>
+      <p class="text-ink70 mb-4">A <strong>node group</strong> is a team of identical worker computers (EC2 machines) that join your cluster together. We'll use <strong>managed</strong> node groups, which means Amazon patches and replaces the machines for you.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-mng" aria-label="What is a managed node group">i</button>
+      </p>
+      <p class="text-ink70 mb-4">We spread the team across <strong>3 Availability Zones</strong>. An Availability Zone is a separate Amazon data center. If one zone has a power cut, the other two keep working — that's the foundation of failover.</p>
+
+      <p class="text-ink70 mb-2 font-medium">Save this as <span class="ic">nodegroup.yaml</span>:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">nodegroup.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: kafka-cluster
+  region: us-east-1
+
+managedNodeGroups:
+  - name: kafka-workers
+    instanceType: m5.xlarge      <span class="tok-c"># 4 CPU, 16 GB RAM — good starter size</span>
+    desiredCapacity: 3           <span class="tok-c"># start with 3 machines (one per zone)</span>
+    minSize: 3                   <span class="tok-c"># never go below 3</span>
+    maxSize: 6                   <span class="tok-c"># allowed to grow up to 6</span>
+    volumeSize: 100              <span class="tok-c"># 100 GB disk on each machine</span>
+    privateNetworking: true      <span class="tok-c"># keep workers off the public internet</span>
+    availabilityZones: ["us-east-1a", "us-east-1b", "us-east-1c"]
+    labels:
+      role: kafka                <span class="tok-c"># a name tag so Kafka pods land here</span>
+
+    <span class="tok-c"># Roll out upgrades one machine at a time (no downtime)</span>
+    updateConfig:
+      maxUnavailable: 1
+
+    <span class="tok-c"># Let AWS auto-replace a broken machine (node-level self-healing)</span>
+    nodeRepairConfig:
+      enabled: true
+
+    <span class="tok-c"># Use SSM for safe shell access instead of open SSH ports</span>
+    ssh:
+      enableSsm: true</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Add the node group to your existing cluster:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Create the node group from the file</span>
+eksctl create nodegroup -f nodegroup.yaml
+
+<span class="tok-c"># Watch the 3 machines show up and turn "Ready"</span>
+kubectl get nodes -o wide --watch
+
+<span class="tok-c"># See node groups Amazon knows about</span>
+eksctl get nodegroup --cluster kafka-cluster</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Prefer one line instead of a file? This does the same thing:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>eksctl create nodegroup \
+  --cluster kafka-cluster \
+  --region us-east-1 \
+  --name kafka-workers \
+  --node-type m5.xlarge \
+  --nodes 3 --nodes-min 3 --nodes-max 6 \
+  --node-volume-size 100 \
+  --managed</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>Why "managed"?</strong> Self-managed nodes give you more knobs, but managed node groups handle patching, draining, and replacing machines automatically. For most Kafka setups, managed is the calm choice.
+          <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-managed-vs" aria-label="Managed vs self-managed">i</button>
+        </p>
+      </div>
+    </section>
+
+    <!-- TERRAFORM (IaC) -->
+    <section id="terraform" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ IaC</span>
+        <h3 class="font-semibold text-2xl text-ink">Terraform — build the nodes (and Kafka) as code</h3>
+      </div>
+      <p class="text-ink70 mb-4">Prefer writing your setup once as text files instead of typing <span class="ic">eksctl</span> commands? <strong>Terraform</strong> lets you describe the cluster, the node groups, and even Kafka in files, then build it all with one command — and rebuild or delete it the same way.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-terraform" aria-label="Terraform vs eksctl">i</button>
+      </p>
+
+      <div class="bg-field border-l-4 border-ibmblue p-4 mb-6">
+        <p class="text-ink70"><strong>This is an alternative path.</strong> It replaces Steps 1–5 (cluster + node groups + operator + Kafka) with Terraform. Pick <em>one</em> approach — eksctl <em>or</em> Terraform — not both. If you already built things with eksctl, you can skip this section and continue at Step 3.</p>
+      </div>
+
+      <p class="text-ink70 mb-2">Versions used here (current as of June 2026 — pin these in your code):</p>
+      <div class="card border border-line overflow-x-auto mb-6">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="bg-ink text-white">
+              <th class="p-3 font-medium text-sm">Tool</th>
+              <th class="p-3 font-medium text-sm">Version</th>
+            </tr>
+          </thead>
+          <tbody class="text-ink70">
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Terraform</td><td class="p-3 font-mono text-sm">&gt;= 1.5.7</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">AWS provider</td><td class="p-3 font-mono text-sm">&gt;= 6.42</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">terraform-aws-modules/eks</td><td class="p-3 font-mono text-sm">~&gt; 21.0</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">hashicorp/helm provider</td><td class="p-3 font-mono text-sm">~&gt; 3.0</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">kubectl provider</td><td class="p-3 font-mono text-sm">alekc/kubectl &gt;= 2.0</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-ink70 mb-4">A Terraform project is just a folder of <span class="ic">.tf</span> files. Put these side by side, plus a <span class="ic">manifests/</span> folder holding the three YAML files from Step 5 (<span class="ic">controller-pool.yaml</span>, <span class="ic">broker-pool.yaml</span>, <span class="ic">kafka.yaml</span>).</p>
+
+      <!-- providers.tf -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">1. <span class="font-mono text-base">providers.tf</span> — tools and login</h4>
+      <p class="text-ink70 mb-2">Declares which providers to download and wires Helm and kubectl to the cluster Terraform is about to create.</p>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">providers.tf</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>terraform {
+  required_version = "&gt;= 1.5.7"
+
+  required_providers {
+    aws     = { source = "hashicorp/aws", version = "&gt;= 6.42" }
+    helm    = { source = "hashicorp/helm", version = "~&gt; 3.0" }
+    kubectl = { source = "alekc/kubectl", version = "&gt;= 2.0" }  <span class="tok-c"># maintained fork</span>
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+
+<span class="tok-c"># Helm v3 uses nested objects (kubernetes = { ... }), not blocks</span>
+provider "helm" {
+  kubernetes = {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+    }
+  }
+}
+
+provider "kubectl" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  load_config_file       = false
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+  }
+}</code></pre>
+      </div>
+
+      <!-- variables.tf -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">2. <span class="font-mono text-base">variables.tf</span> — settings you can change</h4>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">variables.tf</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>variable "region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "cluster_name" {
+  type    = string
+  default = "kafka-cluster"
+}
+
+variable "kubernetes_version" {
+  type    = string
+  default = "1.33"   <span class="tok-c"># Strimzi needs 1.30+; use the newest EKS offers</span>
+}</code></pre>
+      </div>
+
+      <!-- main.tf -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">3. <span class="font-mono text-base">main.tf</span> — network, cluster &amp; the node groups ⭐</h4>
+      <p class="text-ink70 mb-2">This is the heart of your request: the <strong>EKS cluster</strong> plus the <strong>managed node group and its nodes</strong>, spread across 3 zones, with rolling upgrades and node self-healing.</p>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">main.tf</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+locals {
+  azs = slice(data.aws_availability_zones.available.names, 0, 3)
+}
+
+<span class="tok-c"># ---------- Network (VPC across 3 zones) ----------</span>
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~&gt; 5.0"
+
+  name = "${var.cluster_name}-vpc"
+  cidr = "10.0.0.0/16"
+
+  azs             = local.azs
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+  enable_nat_gateway   = true
+  single_nat_gateway   = true
+  enable_dns_hostnames = true
+
+  <span class="tok-c"># Tags so AWS load balancers know which subnets to use (Step 6)</span>
+  public_subnet_tags  = { "kubernetes.io/role/elb" = "1" }
+  private_subnet_tags = { "kubernetes.io/role/internal-elb" = "1" }
+}
+
+<span class="tok-c"># ---------- EKS cluster + managed node group(s) ----------</span>
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~&gt; 21.0"
+
+  name               = var.cluster_name
+  kubernetes_version = var.kubernetes_version
+
+  endpoint_public_access                   = true
+  enable_cluster_creator_admin_permissions = true
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  <span class="tok-c"># Core add-ons (incl. EBS CSI so Kafka can get disks)</span>
+  addons = {
+    coredns                = {}
+    kube-proxy             = {}
+    vpc-cni                = { before_compute = true }
+    eks-pod-identity-agent = { before_compute = true }
+    aws-ebs-csi-driver     = {}
+  }
+
+  <span class="tok-c"># ===== THE NODE GROUPS AND NODES =====</span>
+  eks_managed_node_groups = {
+    kafka = {
+      ami_type       = "AL2023_x86_64_STANDARD"   <span class="tok-c"># default on 1.30+</span>
+      instance_types = ["m5.xlarge"]              <span class="tok-c"># 4 vCPU, 16 GB</span>
+
+      min_size     = 3   <span class="tok-c"># one per zone, never fewer</span>
+      desired_size = 3
+      max_size     = 6   <span class="tok-c"># allowed to grow</span>
+
+      subnet_ids = module.vpc.private_subnets     <span class="tok-c"># spread across 3 zones</span>
+      labels     = { role = "kafka" }
+
+      update_config      = { max_unavailable = 1 }  <span class="tok-c"># roll upgrades 1 node at a time</span>
+      node_repair_config = { enabled = true }       <span class="tok-c"># auto-replace broken machines</span>
+    }
+  }
+
+  tags = {
+    Project   = "kafka-on-eks"
+    ManagedBy = "terraform"
+  }
+}</code></pre>
+      </div>
+
+      <!-- storage.tf -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">4. <span class="font-mono text-base">storage.tf</span> — let Kafka create disks</h4>
+      <p class="text-ink70 mb-2">Kafka stores data on EBS volumes. The disk driver needs permission to make them. We grant it with an <strong>EKS Pod Identity</strong> link. Skip this and your Kafka pods get stuck waiting for storage.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-podidentity" aria-label="What is EKS Pod Identity">i</button>
+      </p>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">storage.tf</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>data "aws_iam_policy_document" "ebs_csi_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole", "sts:TagSession"]
+    principals {
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ebs_csi" {
+  name               = "${var.cluster_name}-ebs-csi"
+  assume_role_policy = data.aws_iam_policy_document.ebs_csi_trust.json
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  role       = aws_iam_role.ebs_csi.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+resource "aws_eks_pod_identity_association" "ebs_csi" {
+  cluster_name    = module.eks.cluster_name
+  namespace       = "kube-system"
+  service_account = "ebs-csi-controller-sa"
+  role_arn        = aws_iam_role.ebs_csi.arn
+}</code></pre>
+      </div>
+
+      <!-- strimzi.tf -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">5. <span class="font-mono text-base">strimzi.tf</span> — operator + Kafka</h4>
+      <p class="text-ink70 mb-2">Installs the Strimzi operator with Helm, then applies your Kafka YAML files. We use the <strong>kubectl</strong> provider (not <span class="ic">kubernetes_manifest</span>) on purpose — see the warning below.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-crd-order" aria-label="Why kubectl provider for CRDs">i</button>
+      </p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">strimzi.tf</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># ---------- Strimzi operator (Helm) ----------</span>
+resource "helm_release" "strimzi" {
+  name             = "strimzi-operator"
+  repository       = "https://strimzi.io/charts/"
+  chart            = "strimzi-kafka-operator"
+  version          = "1.0.1"
+  namespace        = "kafka"
+  create_namespace = true
+}
+
+<span class="tok-c"># ---------- Kafka node pools + cluster ----------</span>
+<span class="tok-c"># kubectl applies these AFTER the operator installs the CRDs.</span>
+resource "kubectl_manifest" "controller_pool" {
+  yaml_body  = file("${path.module}/manifests/controller-pool.yaml")
+  depends_on = [helm_release.strimzi]
+}
+
+resource "kubectl_manifest" "broker_pool" {
+  yaml_body  = file("${path.module}/manifests/broker-pool.yaml")
+  depends_on = [helm_release.strimzi]
+}
+
+resource "kubectl_manifest" "kafka" {
+  yaml_body  = file("${path.module}/manifests/kafka.yaml")
+  depends_on = [kubectl_manifest.controller_pool, kubectl_manifest.broker_pool]
+}</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4 mb-6">
+        <p class="text-ink70"><strong>⚠ Common Terraform gotcha:</strong> don't apply the Kafka resources with the built-in <span class="ic">kubernetes_manifest</span>. It checks the CRDs at <em>plan</em> time, but the operator hasn't created them yet — so the plan fails before anything is built. The <span class="ic">kubectl_manifest</span> resource applies at <em>apply</em> time, after the CRDs exist, which is why we use it here.</p>
+      </div>
+
+      <!-- run it -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">6. Build it</h4>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>terraform init        <span class="tok-c"># download providers + modules</span>
+terraform plan        <span class="tok-c"># preview what will be created</span>
+terraform apply       <span class="tok-c"># type "yes" to build it (~15-20 min)</span>
+
+<span class="tok-c"># Point kubectl at the new cluster, then verify</span>
+aws eks update-kubeconfig --name kafka-cluster --region us-east-1
+kubectl get nodes
+kubectl get kafka,kafkanodepool -n kafka</code></pre>
+      </div>
+
+      <!-- add more nodes -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">7. Add more nodes later</h4>
+      <p class="text-ink70 mb-2">Just change the numbers (or add another entry to <span class="ic">eks_managed_node_groups</span>) and apply again. Terraform figures out the difference.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">main.tf (edit the kafka node group)</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>      min_size     = 3
+      desired_size = 5   <span class="tok-c"># was 3</span>
+      max_size     = 8   <span class="tok-c"># was 6</span></code></pre>
+      </div>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>terraform apply</code></pre>
+      </div>
+
+      <!-- destroy -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-6">8. Tear it all down</h4>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>terraform destroy     <span class="tok-c"># removes everything this project created</span></code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>Two tips for real projects:</strong> store your state in a shared, locked backend (an S3 bucket) so a team can collaborate safely <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-tfstate" aria-label="What is Terraform state">i</button>, and if a load balancer lingers during destroy, delete the Kafka resource first with <span class="ic">kubectl delete kafka my-cluster -n kafka</span> so the operator can clean up its NLBs.</p>
+      </div>
+    </section>
+
+    <!-- STEP 3: SCALING + HEALING -->
+    <section id="scaling" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 04</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 3 — Add more nodes & auto-heal</h3>
+      </div>
+      <p class="text-ink70 mb-4">Three ways to get more muscle: change the size by hand, add a brand-new node group, or let the cluster grow itself automatically.</p>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">A) Scale by hand (fastest)</h4>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Grow from 3 to 5 machines, allow up to 8</span>
+eksctl scale nodegroup \
+  --cluster kafka-cluster \
+  --name kafka-workers \
+  --nodes 5 --nodes-min 3 --nodes-max 8 \
+  --wait</code></pre>
+      </div>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">B) Add a second node group</h4>
+      <p class="text-ink70 mb-2">Handy when you want different machines — for example bigger boxes, or cheaper Spot machines for non-critical work.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>eksctl create nodegroup \
+  --cluster kafka-cluster \
+  --name kafka-workers-2 \
+  --node-type m5.2xlarge \
+  --nodes 3 --nodes-min 3 --nodes-max 6 \
+  --managed</code></pre>
+      </div>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">C) Let it grow automatically</h4>
+      <p class="text-ink70 mb-2">When pods can't fit, an autoscaler adds machines; when machines sit empty, it removes them to save money. The modern tool is <strong>Karpenter</strong>; the classic one is <strong>Cluster Autoscaler</strong>.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-autoscale" aria-label="Karpenter vs Cluster Autoscaler">i</button>
+      </p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Quick start: turn on the classic Cluster Autoscaler for our node group.</span>
+<span class="tok-c"># (eksctl already tagged the node group for auto-discovery.)</span>
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler-autodiscover.yaml
+
+<span class="tok-c"># Edit the deployment and set your cluster name:</span>
+<span class="tok-c">#   --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/kafka-cluster</span>
+kubectl -n kube-system edit deployment cluster-autoscaler</code></pre>
+      </div>
+
+      <div class="bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>Two kinds of self-healing:</strong> <em>Node Repair</em> (which we turned on in Step 2) replaces a broken <strong>machine</strong>. Kubernetes itself replaces a broken <strong>pod</strong>. Together they keep Kafka standing without you waking up at 3 a.m.</p>
+      </div>
+    </section>
+
+    <!-- STEP 4: OPERATOR -->
+    <section id="operator" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 05</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 4 — Install the Strimzi operator</h3>
+      </div>
+      <p class="text-ink70 mb-4">The operator is the robot helper. We install it once with Helm. After this, building Kafka is as simple as writing a short YAML file.</p>
+
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Make a tidy room (namespace) just for Kafka</span>
+kubectl create namespace kafka
+
+<span class="tok-c"># Add the official Strimzi Helm chart and install the operator</span>
+helm repo add strimzi https://strimzi.io/charts/
+helm repo update
+
+helm install strimzi-operator strimzi/strimzi-kafka-operator \
+  --namespace kafka \
+  --version 1.0.1
+
+<span class="tok-c"># Wait for the operator pod to be Running</span>
+kubectl get pods -n kafka -w</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70">The operator also installs <strong>Custom Resource Definitions</strong> — new "word types" like <span class="ic">Kafka</span> and <span class="ic">KafkaNodePool</span> that Kubernetes now understands.
+          <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-crd" aria-label="What is a CRD">i</button>
+        </p>
+      </div>
+    </section>
+
+    <!-- STEP 5: DEPLOY KAFKA -->
+    <section id="deploy" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 06</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 5 — Deploy Kafka (KRaft + node pools)</h3>
+      </div>
+      <p class="text-ink70 mb-4">Modern Strimzi builds Kafka from <strong>node pools</strong>. We make two pools:</p>
+      <ul class="list-disc pl-6 text-ink70 mb-5 space-y-1">
+        <li><strong>Controllers</strong> — the bookkeepers that agree on who's in charge (KRaft). Usually 3.</li>
+        <li><strong>Brokers</strong> — the workers that actually store and serve your messages. Usually 3 or more.</li>
+      </ul>
+
+      <p class="text-ink70 mb-2 font-medium">1. Controller pool — save as <span class="ic">controller-pool.yaml</span>:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">controller-pool.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: controller
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles:
+    - controller
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 20Gi
+        kraftMetadata: shared
+        deleteClaim: false</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">2. Broker pool — save as <span class="ic">broker-pool.yaml</span>:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">broker-pool.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: broker
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 100Gi
+        deleteClaim: false</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">3. The Kafka cluster itself — save as <span class="ic">kafka.yaml</span>:</p>
+      <p class="text-ink70 mb-2">This one file also sets up <strong>failover</strong> (rack awareness + replication) and an <strong>external load balancer</strong>. We explain each part in Steps 6 and 7.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">kafka.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: my-cluster
+  namespace: kafka
+  annotations:
+    strimzi.io/node-pools: enabled    <span class="tok-c"># use node pools (default now)</span>
+    strimzi.io/kraft: enabled         <span class="tok-c"># use KRaft, no ZooKeeper</span>
+spec:
+  kafka:
+    version: 4.1.0
+    <span class="tok-c"># metadataVersion is optional; the operator picks one that matches</span>
+
+    listeners:
+      <span class="tok-c"># Inside-the-cluster, plain text (for our test apps)</span>
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      <span class="tok-c"># Inside-the-cluster, encrypted</span>
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+      <span class="tok-c"># Outside the cluster, via an AWS load balancer (see Step 6)</span>
+      - name: external
+        port: 9094
+        type: loadbalancer
+        tls: true
+
+    <span class="tok-c"># --- Failover settings (see Step 7) ---</span>
+    config:
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+
+    <span class="tok-c"># Spread brokers across the 3 zones automatically</span>
+    rack:
+      topologyKey: topology.kubernetes.io/zone
+
+  <span class="tok-c"># Lets us manage topics and users with YAML</span>
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">4. Apply all three and wait:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl apply -f controller-pool.yaml
+kubectl apply -f broker-pool.yaml
+kubectl apply -f kafka.yaml
+
+<span class="tok-c"># Wait until Kafka reports "Ready" (a few minutes)</span>
+kubectl wait kafka/my-cluster --for=condition=Ready --timeout=600s -n kafka
+
+<span class="tok-c"># Look at your shiny new pods</span>
+kubectl get pods -n kafka</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>You now have Kafka running!</strong> The operator created controller pods, broker pods, persistent disks, internal addresses, and TLS certificates — all from those three small files.</p>
+      </div>
+    </section>
+
+    <!-- STEP 6: LOAD BALANCING -->
+    <section id="loadbalancing" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 07</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 6 — Load balancing & outside access</h3>
+      </div>
+      <p class="text-ink70 mb-4">A <strong>load balancer</strong> is like a receptionist at the front door: visitors arrive at one address, and the receptionist sends each one to a free broker. For Kafka on AWS we use a <strong>Network Load Balancer (NLB)</strong>, not the web-style ALB.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-nlb" aria-label="Why NLB not ALB">i</button>
+      </p>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">1. Install the AWS Load Balancer Controller</h4>
+      <p class="text-ink70 mb-2">This is the piece that turns a Kubernetes "LoadBalancer" request into a real AWS NLB.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># 1) Make sure OIDC is on (we set withOIDC in Step 1)</span>
+eksctl utils associate-iam-oidc-provider --cluster kafka-cluster --approve
+
+<span class="tok-c"># 2) Download the permission policy AWS publishes</span>
+curl -o iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+
+aws iam create-policy \
+  --policy-name AWSLoadBalancerControllerIAMPolicy \
+  --policy-document file://iam_policy.json
+
+<span class="tok-c"># 3) Give the controller its own identity (replace ACCOUNT_ID)</span>
+eksctl create iamserviceaccount \
+  --cluster kafka-cluster \
+  --namespace kube-system \
+  --name aws-load-balancer-controller \
+  --attach-policy-arn arn:aws:iam::ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve
+
+<span class="tok-c"># 4) Install the controller with Helm</span>
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=kafka-cluster \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller</code></pre>
+      </div>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">2. Tell Strimzi to ask for an NLB</h4>
+      <p class="text-ink70 mb-2">Add annotations to the <span class="ic">external</span> listener in <span class="ic">kafka.yaml</span>, then re-apply. Annotations are little sticky notes that tell AWS what kind of load balancer you want.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">kafka.yaml (listener section)</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>      - name: external
+        port: 9094
+        type: loadbalancer
+        tls: true
+        configuration:
+          bootstrap:
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-type: "external"
+              service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+              service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+          brokers:
+            - broker: 0
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-type: "external"
+                service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+            - broker: 1
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-type: "external"
+                service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+            - broker: 2
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-type: "external"
+                service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"</code></pre>
+      </div>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl apply -f kafka.yaml
+
+<span class="tok-c"># Find the public address clients will connect to (port 9094)</span>
+kubectl get service my-cluster-kafka-external-bootstrap -n kafka</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>Why one address per broker?</strong> Kafka clients must reach <em>every</em> broker directly, not just one. So Strimzi creates a bootstrap address plus one address per broker. The NLB shares the load and routes traffic to healthy brokers.</p>
+      </div>
+    </section>
+
+    <!-- STEP 7: FAILOVER -->
+    <section id="failover" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 08</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 7 — Failover & high availability</h3>
+      </div>
+      <p class="text-ink70 mb-4">"Failover" means: when something breaks, the system keeps working. We already added the magic words in <span class="ic">kafka.yaml</span>. Here's what each one does, in plain English.</p>
+
+      <div class="grid gap-4">
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-1">default.replication.factor: 3</p>
+          <p class="text-ink70">Every message is copied to <strong>3 brokers</strong>. Lose one broker, your data is still safe on the other two. Like keeping three photocopies in three rooms.</p>
+        </div>
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-1">min.insync.replicas: 2</p>
+          <p class="text-ink70">A write only "counts" once <strong>2 copies</strong> are saved. This stops you from losing data if a broker dies right after a write.
+            <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-isr" aria-label="More about min.insync.replicas">i</button>
+          </p>
+        </div>
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-1">rack: topologyKey: topology.kubernetes.io/zone</p>
+          <p class="text-ink70"><strong>Rack awareness.</strong> Strimzi puts the 3 copies in 3 different zones (data centers). One whole zone can go dark and you still have copies elsewhere. Don't put all your eggs in one basket.
+            <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-rack" aria-label="More about rack awareness">i</button>
+          </p>
+        </div>
+      </div>
+
+      <p class="text-ink70 mt-6 mb-2 font-medium">Optional but smart: Cruise Control auto-balances your brokers.</p>
+      <p class="text-ink70 mb-2">Add this near the bottom of <span class="ic">kafka.yaml</span> (same level as <span class="ic">entityOperator</span>). It keeps data evenly spread, and re-spreads it after a broker is replaced.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">kafka.yaml (add to spec)</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>  cruiseControl: {}</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Test failover safely — delete a broker pod and watch it heal:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Kill one broker on purpose</span>
+kubectl delete pod my-cluster-broker-0 -n kafka
+
+<span class="tok-c"># Watch Kubernetes bring it right back, no data lost</span>
+kubectl get pods -n kafka -w</code></pre>
+      </div>
+    </section>
+
+    <!-- STEP 8: LOGGING -->
+    <section id="logging" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 09</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 8 — Logging</h3>
+      </div>
+      <p class="text-ink70 mb-4">Logs are the diary each broker writes about what it's doing. They're how you find out <em>why</em> something went wrong.</p>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">Read logs right now</h4>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Live logs from one broker (Ctrl+C to stop)</span>
+kubectl logs -f my-cluster-broker-0 -n kafka
+
+<span class="tok-c"># Logs from the operator (great for troubleshooting setup)</span>
+kubectl logs -f deployment/strimzi-cluster-operator -n kafka</code></pre>
+      </div>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">Set the log level (less noise, or more detail)</h4>
+      <p class="text-ink70 mb-2">Add a <span class="ic">logging</span> block under <span class="ic">spec.kafka</span> in <span class="ic">kafka.yaml</span>. Use <span class="ic">INFO</span> normally, <span class="ic">DEBUG</span> when hunting a bug, <span class="ic">WARN</span> to quiet things down.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">kafka.yaml (under spec.kafka)</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>    logging:
+      type: inline
+      loggers:
+        rootLogger.level: INFO
+        <span class="tok-c"># Quiet a chatty area as an example:</span>
+        logger.kafkacontroller.name: org.apache.kafka.controller
+        logger.kafkacontroller.level: WARN</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>Going to production?</strong> Send all these logs to one place (CloudWatch, Loki, or OpenSearch) with a log shipper like Fluent Bit, so you can search every broker at once instead of pod by pod.
+          <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-logship" aria-label="More about shipping logs">i</button>
+        </p>
+      </div>
+    </section>
+
+    <!-- STEP 9: MONITORING -->
+    <section id="monitoring" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 10</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 9 — Grafana & Prometheus dashboards</h3>
+      </div>
+      <p class="text-ink70 mb-4"><strong>Prometheus</strong> collects numbers (metrics) from Kafka. <strong>Grafana</strong> draws those numbers as pretty graphs. Together they're your dashboard — like the speedometer and fuel gauge in a car.
+        <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-prom" aria-label="More about Prometheus and Grafana">i</button>
+      </p>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">1. Turn on Kafka metrics</h4>
+      <p class="text-ink70 mb-2">Grab Strimzi's example metrics file, apply its ConfigMap, then point Kafka at it.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Strimzi ships ready-made metrics examples in its GitHub repo:</span>
+<span class="tok-c"># examples/metrics/  → kafka-metrics.yaml, strimzi-pod-monitor.yaml, grafana-dashboards/</span>
+<span class="tok-c"># Download kafka-metrics.yaml from there, then apply just the ConfigMap part:</span>
+kubectl apply -f kafka-metrics-configmap.yaml -n kafka</code></pre>
+      </div>
+      <p class="text-ink70 mb-2">Add this under <span class="ic">spec.kafka</span> in <span class="ic">kafka.yaml</span> and re-apply:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">kafka.yaml (under spec.kafka)</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: kafka-metrics
+          key: kafka-metrics-config.yml</code></pre>
+      </div>
+      <p class="text-ink70 mb-4 text-sm">There's also a newer option, the <strong>Strimzi Metrics Reporter</strong>, that skips JMX. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-reporter" aria-label="About the Strimzi Metrics Reporter">i</button></p>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">2. Install Prometheus + Grafana together</h4>
+      <p class="text-ink70 mb-2">The <span class="ic">kube-prometheus-stack</span> Helm chart installs both at once.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl create namespace monitoring
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+<span class="tok-c"># The last flag lets Prometheus find Strimzi's PodMonitors automatically</span>
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false</code></pre>
+      </div>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">3. Tell Prometheus where Kafka's metrics are</h4>
+      <p class="text-ink70 mb-2">A <strong>PodMonitor</strong> is a note that says "scrape these pods." Save as <span class="ic">kafka-podmonitor.yaml</span>:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">kafka-podmonitor.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kafka-resources-metrics
+  namespace: monitoring
+  labels:
+    app: strimzi
+spec:
+  namespaceSelector:
+    matchNames:
+      - kafka
+  selector:
+    matchLabels:
+      strimzi.io/kind: Kafka
+  podMetricsEndpoints:
+    - path: /metrics
+      port: tcp-prometheus
+      interval: 30s</code></pre>
+      </div>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl apply -f kafka-podmonitor.yaml</code></pre>
+      </div>
+
+      <h4 class="font-semibold text-ink mb-2 mt-6">4. Open Grafana & import Strimzi's dashboards</h4>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Get the Grafana admin password</span>
+kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+
+<span class="tok-c"># Open Grafana in your browser at http://localhost:3000  (user: admin)</span>
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80</code></pre>
+      </div>
+      <p class="text-ink70 mb-2">Inside Grafana: <strong>Dashboards → Import</strong>. Paste a Strimzi dashboard. The data source (Prometheus) is already set up for you. Good ones to start with:</p>
+      <ul class="list-disc pl-6 text-ink70 mb-3 space-y-1">
+        <li>Strimzi Kafka dashboard JSON from the Strimzi GitHub repo (<span class="ic">examples/metrics/grafana-dashboards/</span>).</li>
+        <li>Community "Strimzi Kafka" dashboards on Grafana.com (search the dashboard library).</li>
+      </ul>
+      <div class="bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70"><strong>No data on the graphs?</strong> Send a few test messages (Step 10) so there's something to measure, then refresh. Empty Kafka = empty charts.</p>
+      </div>
+    </section>
+
+    <!-- STEP 10: TEST -->
+    <section id="test" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ 11</span>
+        <h3 class="font-semibold text-2xl text-ink">Step 10 — Send your first messages</h3>
+      </div>
+      <p class="text-ink70 mb-4">Let's prove it all works: make a topic, type some messages, and read them back.</p>
+
+      <p class="text-ink70 mb-2 font-medium">1. Create a topic with YAML — save as <span class="ic">topic.yaml</span>:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">topic.yaml</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: my-topic
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2</code></pre>
+      </div>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl apply -f topic.yaml
+kubectl get kafkatopics -n kafka</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">2. Type messages (the producer). Each line you type is one message:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl -n kafka run kafka-producer -ti \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.1.0 \
+  --rm=true --restart=Never -- \
+  bin/kafka-console-producer.sh \
+  --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --topic my-topic</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">3. In another terminal, read them back (the consumer):</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code>kubectl -n kafka run kafka-consumer -ti \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.1.0 \
+  --rm=true --restart=Never -- \
+  bin/kafka-console-consumer.sh \
+  --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --topic my-topic --from-beginning</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ibmblue p-4">
+        <p class="text-ink70">If the consumer prints the messages you typed — <strong>congratulations, your Kafka is live!</strong> 🎉 Go check the Grafana dashboard; you'll see the traffic appear.</p>
+      </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section id="troubleshooting" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ FIX</span>
+        <h3 class="font-semibold text-2xl text-ink">Troubleshooting — find it, fix it, prove it</h3>
+      </div>
+      <p class="text-ink70 mb-4">Something not working? Don't panic. Almost every problem is found with a handful of commands. This section shows you how to <strong>(1)</strong> see what's running, <strong>(2)</strong> find what's broken, <strong>(3)</strong> fix the common ones, and <strong>(4)</strong> prove it's truly healthy.</p>
+
+      <div class="bg-field border-l-4 border-ibmblue p-4 mb-8">
+        <p class="text-ink70"><strong>Golden rule:</strong> when in doubt, run <span class="ic">kubectl describe</span> on the broken thing and read the <strong>Events</strong> at the very bottom — and check <span class="ic">status.conditions</span> on the Kafka object. They almost always say the real reason in plain words.</p>
+      </div>
+
+      <!-- 1. HEALTH CHECK -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">1. Is everything running? (the 30-second health check)</h4>
+      <p class="text-ink70 mb-3">Run these top to bottom. You want pods <span class="ic">Running</span> with full readiness (like <span class="ic">1/1</span>), and your Kafka object showing <span class="ic">Ready</span>.</p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · overall health</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Are the Kafka pods up? (controllers, brokers, operators)</span>
+kubectl get pods -n kafka
+
+<span class="tok-c"># Is the Kafka cluster itself Ready? Are the node pools healthy?</span>
+kubectl get kafka,kafkanodepool -n kafka
+
+<span class="tok-c"># Topics and users the operators manage</span>
+kubectl get kafkatopic,kafkauser -n kafka
+
+<span class="tok-c"># Are the worker machines Ready?</span>
+kubectl get nodes -o wide
+
+<span class="tok-c"># Did the disks (storage) get created and bound?</span>
+kubectl get pvc -n kafka
+
+<span class="tok-c"># Are the network addresses (including load balancers) up?</span>
+kubectl get svc -n kafka</code></pre>
+      </div>
+      <p class="text-ink70 mb-2">Pod status words and what they mean:</p>
+      <div class="card border border-line overflow-x-auto mb-6">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="bg-ink text-white">
+              <th class="p-3 font-medium text-sm">You see</th>
+              <th class="p-3 font-medium text-sm">It means</th>
+            </tr>
+          </thead>
+          <tbody class="text-ink70">
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Running 1/1</td><td class="p-3 text-sm">Healthy and ready. 🎉</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Pending</td><td class="p-3 text-sm">Can't be placed yet — usually no room on nodes, or a disk problem. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-pending" aria-label="Why Pending">i</button></td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">ContainerCreating</td><td class="p-3 text-sm">Starting up. Fine for a minute; stuck longer means a disk or image issue.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">CrashLoopBackOff</td><td class="p-3 text-sm">It starts, crashes, retries. A real error — read the logs. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-crashloop" aria-label="About CrashLoopBackOff">i</button></td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">ImagePullBackOff</td><td class="p-3 text-sm">Can't download the container image — wrong tag, or no internet/registry access.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Init:0/1</td><td class="p-3 text-sm">Waiting on a setup step before the main app starts.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Terminating (stuck)</td><td class="p-3 text-sm">Trying to shut down. If stuck, a volume or finalizer is holding it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 2. FIND THE PROBLEM -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">2. The 5 commands that find almost any problem</h4>
+      <p class="text-ink70 mb-3">When a pod or resource looks wrong, these five tell you <em>why</em>. Replace <span class="ic">POD</span> with the real name from <span class="ic">kubectl get pods</span> (for example <span class="ic">my-cluster-broker-0</span>).</p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · the detective toolkit</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># 1) DESCRIBE — read the Events at the bottom. This is the #1 tool.</span>
+kubectl describe pod POD -n kafka
+
+<span class="tok-c"># 2) LOGS — what the app itself printed. Add --previous to see a crashed run.</span>
+kubectl logs POD -n kafka
+kubectl logs POD -n kafka --previous
+kubectl logs POD -n kafka -c kafka          <span class="tok-c"># a specific container</span>
+
+<span class="tok-c"># 3) EVENTS — recent cluster-wide messages, newest last</span>
+kubectl get events -n kafka --sort-by='.lastTimestamp'
+
+<span class="tok-c"># 4) STATUS — the Kafka object explains itself in status.conditions</span>
+kubectl get kafka my-cluster -n kafka -o yaml | grep -A 30 "status:"
+
+<span class="tok-c"># 5) EXEC — open a shell inside a broker to look around / run Kafka tools</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- bash</code></pre>
+      </div>
+      <p class="text-ink70 mb-3">The operator log is gold when setup itself fails (bad YAML, unsupported version, cert trouble):</p>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · operator log</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Follow the Strimzi operator. Search it for WARN / ERROR.</span>
+kubectl logs -f deployment/strimzi-cluster-operator -n kafka | grep -i -E "warn|error|exception"</code></pre>
+      </div>
+
+      <!-- 3. COMMON PROBLEMS AND FIXES -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">3. Common problems &amp; how to fix them</h4>
+      <p class="text-ink70 mb-4">Each card is one real issue: <strong>what you see</strong>, <strong>why it happens</strong>, the command to <strong>confirm it</strong>, and the <strong>fix</strong>.</p>
+
+      <div class="space-y-4 mb-6">
+
+        <!-- pod pending -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ Pod stuck on <span class="text-ink">Pending</span></p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> no node has enough CPU/RAM, or the disk can't be placed in the broker's zone.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl describe pod POD -n kafka      <span class="tok-c"># Events say "Insufficient cpu" or "didn't match..."</span>
+kubectl describe pvc -n kafka          <span class="tok-c"># or a volume/zone message</span></code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> add capacity, then re-check. (More nodes = more room.)</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>eksctl scale nodegroup --cluster kafka-cluster --name kafka-workers \
+  --nodes 5 --nodes-min 3 --nodes-max 8 --wait</code></pre>
+          </div>
+        </div>
+
+        <!-- crashloop -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ <span class="text-ink">CrashLoopBackOff</span> on a broker or controller</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> bad config value, out-of-memory (OOMKilled), or a wrong Kafka/metadata version.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl logs POD -n kafka --previous     <span class="tok-c"># the crash message itself</span>
+kubectl describe pod POD -n kafka | grep -i -E "reason|oomkilled|exit"</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> if OOM, give it more memory in <span class="ic">kafka.yaml</span> and re-apply; if config, fix the bad key the log named.</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">kafka.yaml (under spec.kafka)</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>    resources:
+      requests:
+        memory: 4Gi
+        cpu: "1"
+      limits:
+        memory: 6Gi</code></pre>
+          </div>
+        </div>
+
+        <!-- image pull -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ <span class="text-ink">ImagePullBackOff</span> / ErrImagePull</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the image tag is wrong, or private-subnet nodes can't reach the registry (no NAT gateway / no ECR endpoints).</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl describe pod POD -n kafka | grep -A3 -i "failed to pull"</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> correct the image tag to one that exists (match your Kafka version, e.g. <span class="ic">latest-kafka-4.1.0</span>). If it's networking, give private subnets a NAT gateway or add ECR/S3 VPC endpoints.</p>
+        </div>
+
+        <!-- pvc -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ Disk (PVC) stuck on <span class="text-ink">Pending</span> / unbound</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> no default StorageClass, or the EBS CSI driver add-on isn't installed, or the volume's zone doesn't match the node.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get storageclass                 <span class="tok-c"># is one marked (default)?</span>
+kubectl get pods -n kube-system | grep ebs-csi   <span class="tok-c"># is the driver running?</span>
+kubectl describe pvc -n kafka            <span class="tok-c"># read the Events line</span></code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> install the EBS CSI driver add-on.</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>eksctl create addon --name aws-ebs-csi-driver --cluster kafka-cluster --force</code></pre>
+          </div>
+        </div>
+
+        <!-- kafka not ready -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ <span class="text-ink">Kafka</span> object never turns Ready</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the operator hit an error reconciling — invalid listener, bad config, or version mismatch.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code><span class="tok-c"># The status.conditions message usually names the exact problem</span>
+kubectl get kafka my-cluster -n kafka -o jsonpath='{.status.conditions[*].message}{"\n"}'
+
+<span class="tok-c"># And the operator log shows the full error / stack trace</span>
+kubectl logs deployment/strimzi-cluster-operator -n kafka --tail=100</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> correct what the message names in your YAML, then <span class="ic">kubectl apply -f kafka.yaml</span> again. (A classic one: <em>"Unsupported Kafka.spec.kafka.version"</em> — set a version your operator supports.)</p>
+        </div>
+
+        <!-- external IP pending -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ External address stuck on <span class="text-ink">&lt;pending&gt;</span> (no load balancer)</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the AWS Load Balancer Controller isn't installed/healthy, its IAM is missing, or your subnets aren't tagged for load balancers.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get pods -n kube-system | grep aws-load-balancer
+kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=80
+kubectl describe svc my-cluster-kafka-external-bootstrap -n kafka   <span class="tok-c"># Events show LB errors</span></code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> (re)install the controller from Step 6, and tag your public subnets so AWS knows where to put internet-facing load balancers:</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix · subnet tag</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>aws ec2 create-tags --resources SUBNET_ID \
+  --tags Key=kubernetes.io/role/elb,Value=1</code></pre>
+          </div>
+        </div>
+
+        <!-- cant connect from outside -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ Load balancer exists, but clients can't connect</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the NLB targets are unhealthy, a security group blocks the port, or the client doesn't trust the cluster's TLS certificate.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code><span class="tok-c"># Get the external bootstrap address and port (9094)</span>
+kubectl get svc my-cluster-kafka-external-bootstrap -n kafka
+
+<span class="tok-c"># Check the NLB target health in AWS (replace the ARN from the console)</span>
+aws elbv2 describe-target-health --target-group-arn TG_ARN</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> open the broker port to your client in the security group; for TLS, export and trust the cluster CA so your client accepts the certificate:</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix · grab the CA cert</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get secret my-cluster-cluster-ca-cert -n kafka \
+  -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt</code></pre>
+          </div>
+        </div>
+
+        <!-- topic not created -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ A <span class="text-ink">KafkaTopic</span> you applied never appears</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the Topic Operator is down, or the topic is missing the <span class="ic">strimzi.io/cluster</span> label, or it's in the wrong namespace.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get kafkatopic my-topic -n kafka -o yaml | grep -A5 "status:"
+kubectl logs my-cluster-entity-operator-XXXX -c topic-operator -n kafka --tail=50</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> make sure the topic YAML has <span class="ic">labels: strimzi.io/cluster: my-cluster</span> and lives in the <span class="ic">kafka</span> namespace, then re-apply.</p>
+        </div>
+
+        <!-- node not ready -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ A worker <span class="text-ink">node</span> shows NotReady</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the machine ran out of disk, lost network, or the kubelet is unhealthy.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl describe node NODE_NAME | grep -A10 "Conditions:"
+aws eks describe-nodegroup --cluster-name kafka-cluster \
+  --nodegroup-name kafka-workers --query 'nodegroup.health'</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> with Node Repair enabled (Step 2) AWS replaces it automatically. To force it now, drain and delete the node — the node group launches a fresh one:</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl drain NODE_NAME --ignore-daemonsets --delete-emptydir-data
+kubectl delete node NODE_NAME</code></pre>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 4. PROVE IT WORKS -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">4. Prove it's actually working</h4>
+      <p class="text-ink70 mb-3">"No errors" isn't the same as "working." These commands give you real proof.</p>
+
+      <p class="text-ink70 mb-2 font-medium">Cluster-level health:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · is it Ready?</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Wait for / confirm Ready</span>
+kubectl wait kafka/my-cluster --for=condition=Ready --timeout=300s -n kafka
+
+<span class="tok-c"># One-line Ready check</span>
+kubectl get kafka my-cluster -n kafka \
+  -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{"\n"}'
+
+<span class="tok-c"># See which node and ZONE each broker landed in (proves rack spread)</span>
+kubectl get pods -n kafka -o wide</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Kafka-level health (run inside a broker):</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · Kafka's own tools</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># List all topics</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+<span class="tok-c"># Describe a topic: check that Isr (in-sync replicas) equals Replicas</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic my-topic
+
+<span class="tok-c"># THE BIG ONE: any under-replicated partitions? Empty output = perfect health</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions
+
+<span class="tok-c"># Check a consumer group's lag (LAG column should stay small)</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --all-groups</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Metrics &amp; node usage:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · metrics + capacity</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Confirm the metrics endpoint Prometheus scrapes is alive</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  curl -s localhost:9404/metrics | head
+
+<span class="tok-c"># How busy are nodes and pods? (needs metrics-server)</span>
+kubectl top nodes
+kubectl top pods -n kafka</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">End-to-end smoke test (write one message, read it back):</p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · prove the round trip</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Send one message, then read the last one back. Seeing it = full success.</span>
+echo "hello-$(date +%s)" | kubectl exec -i my-cluster-broker-0 -n kafka -- \
+  bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic my-topic
+
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic my-topic --from-beginning --max-messages 1 --timeout-ms 10000</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>Still stuck?</strong> Copy the exact error from <span class="ic">describe</span> or the operator log into the Strimzi community (Slack/GitHub Discussions) linked in the docs below. A precise error message gets a fast answer; "it doesn't work" does not.</p>
+      </div>
+    </section>
+
+    <!-- CLEANUP -->
+    <section id="cleanup" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ END</span>
+        <h3 class="font-semibold text-2xl text-ink">Clean up (so you stop paying)</h3>
+      </div>
+      <p class="text-ink70 mb-4">EKS, EC2 machines, disks, and load balancers all cost money every hour. When you're done practising, delete everything in this order.</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># 1) Remove Kafka (this also removes its load balancers)</span>
+kubectl delete kafka my-cluster -n kafka
+
+<span class="tok-c"># 2) Remove the operators and monitoring</span>
+helm uninstall strimzi-operator -n kafka
+helm uninstall kube-prometheus-stack -n monitoring
+
+<span class="tok-c"># 3) Finally, delete the whole cluster, node groups and all</span>
+eksctl delete cluster --name kafka-cluster --region us-east-1</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>Double-check in the AWS console</strong> that no EC2 instances, EBS volumes, or load balancers are left running. A forgotten NLB or disk can quietly add to your bill.</p>
+      </div>
+    </section>
+
+    <!-- REFERENCES -->
+    <section id="refs" class="anchor-offset mb-10">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ DOCS</span>
+        <h3 class="font-semibold text-2xl text-ink">Official docs & references</h3>
+      </div>
+      <p class="text-ink70 mb-5">Always trust the official docs over any tutorial (including this one) — they're updated the moment things change.</p>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <a href="https://strimzi.io/docs/operators/latest/deploying" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">Strimzi — Deploying & Managing</p>
+          <p class="text-ink50 text-sm font-mono break-all">strimzi.io/docs/operators/latest</p>
+        </a>
+        <a href="https://strimzi.io/downloads/" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">Strimzi — Versions & downloads</p>
+          <p class="text-ink50 text-sm font-mono break-all">strimzi.io/downloads</p>
+        </a>
+        <a href="https://github.com/strimzi/strimzi-kafka-operator" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">Strimzi — GitHub (examples folder)</p>
+          <p class="text-ink50 text-sm font-mono break-all">github.com/strimzi/strimzi-kafka-operator</p>
+        </a>
+        <a href="https://strimzi.io/blog/2025/10/06/strimzi-metrics-reporter/" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">Strimzi Metrics Reporter (blog)</p>
+          <p class="text-ink50 text-sm font-mono break-all">strimzi.io/blog · metrics reporter</p>
+        </a>
+        <a href="https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">AWS — EKS managed node groups</p>
+          <p class="text-ink50 text-sm font-mono break-all">docs.aws.amazon.com/eks · managed-node-groups</p>
+        </a>
+        <a href="https://docs.aws.amazon.com/eks/latest/eksctl/nodegroup-managed.html" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">eksctl — Managed node groups</p>
+          <p class="text-ink50 text-sm font-mono break-all">docs.aws.amazon.com/eks/latest/eksctl</p>
+        </a>
+        <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">AWS Load Balancer Controller</p>
+          <p class="text-ink50 text-sm font-mono break-all">kubernetes-sigs.github.io/aws-load-balancer-controller</p>
+        </a>
+        <a href="https://karpenter.sh/" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">Karpenter — autoscaling</p>
+          <p class="text-ink50 text-sm font-mono break-all">karpenter.sh</p>
+        </a>
+        <a href="https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">kube-prometheus-stack (Helm)</p>
+          <p class="text-ink50 text-sm font-mono break-all">github.com · kube-prometheus-stack</p>
+        </a>
+        <a href="https://grafana.com/grafana/dashboards/" target="_blank" rel="noopener" class="card border border-line p-4 hover:border-ibmblue group">
+          <p class="font-medium text-ink group-hover:text-ibmblue">Grafana dashboard library</p>
+          <p class="text-ink50 text-sm font-mono break-all">grafana.com/grafana/dashboards</p>
+        </a>
+      </div>
+    </section>
+
+    <footer class="border-t border-line pt-6 text-sm text-ink50">
+      <p>Built as a learning guide. Versions current as of June 2026 — always confirm against the official docs above. Cloud resources cost money; remember to clean up.</p>
+    </footer>
+
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+    <div class="flex items-start justify-between gap-4 p-5 border-b border-line">
+      <h4 id="modalTitle" class="font-semibold text-lg text-ink"></h4>
+      <button id="modalClose" class="text-ink50 hover:text-ink text-2xl leading-none" aria-label="Close">&times;</button>
+    </div>
+    <div id="modalBody" class="modal-body p-5 text-ink70 space-y-3"></div>
+    <div class="p-5 pt-0">
+      <button id="modalCloseBtn" class="navbtn bg-ibmblue text-white px-5 py-2.5 text-sm font-medium hover:bg-ibmblue70">Got it</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HIDDEN MODAL CONTENT ============ -->
+<div class="hidden">
+  <div class="modal-src" id="m-kafka" data-title="More about Apache Kafka">
+    <p>Kafka stores messages in <strong>topics</strong>, and each topic is split into <strong>partitions</strong> so the work can spread across many brokers. Programs that send messages are <strong>producers</strong>; programs that read them are <strong>consumers</strong>.</p>
+    <p>The magic is that consumers can read at their own speed, replay old messages, and many consumers can read the same data. That's why Kafka is used for things like tracking clicks, moving payments, and feeding data pipelines.</p>
+  </div>
+  <div class="modal-src" id="m-k8s" data-title="More about Kubernetes">
+    <p>A <strong>container</strong> is an app packed up with everything it needs to run. Kubernetes runs containers inside <strong>pods</strong> (the smallest unit), schedules them onto worker machines (<strong>nodes</strong>), and restarts them if they crash.</p>
+    <p>You describe the result you want in YAML ("I want 3 copies of this app"), and Kubernetes constantly works to make reality match your description. That idea is called <em>desired state</em>.</p>
+  </div>
+  <div class="modal-src" id="m-eks" data-title="More about AWS EKS">
+    <p>With EKS, Amazon runs and protects the Kubernetes <strong>control plane</strong> (the brain) across multiple data centers. You don't patch it or babysit it.</p>
+    <p>You still provide the <strong>worker nodes</strong> (the EC2 machines that run your pods) — which is exactly what node groups are for. You pay for the control plane per hour, plus whatever machines and storage you use.</p>
+  </div>
+  <div class="modal-src" id="m-strimzi" data-title="More about Strimzi">
+    <p>Strimzi is an open-source project (part of the Cloud Native Computing Foundation). It installs an <strong>operator</strong> — a program that watches for special Kubernetes objects like <span class="ic">Kafka</span> and turns them into a real, running Kafka cluster.</p>
+    <p>It handles the hard parts: rolling upgrades with no downtime, TLS certificates, user and topic management, scaling, and recovery. You mostly just edit small YAML files.</p>
+  </div>
+  <div class="modal-src" id="m-kraft" data-title="What is KRaft?">
+    <p>Old Kafka needed a separate system called <strong>ZooKeeper</strong> to keep track of which broker was in charge and where data lived. It was one more thing to run and break.</p>
+    <p><strong>KRaft</strong> (Kafka Raft) moves that bookkeeping inside Kafka itself, handled by special <strong>controller</strong> nodes. Kafka 4.x is KRaft-only, and Strimzi dropped ZooKeeper support in version 0.46. That's why this guide creates a controller pool and a broker pool.</p>
+  </div>
+  <div class="modal-src" id="m-helm" data-title="What is Helm?">
+    <p>Helm is the "app store" for Kubernetes. Instead of applying dozens of YAML files by hand, you install a <strong>chart</strong> — a packaged app with sensible defaults.</p>
+    <p>You can override settings with <span class="ic">--set</span> flags or a values file, and upgrade or uninstall the whole thing with one command.</p>
+  </div>
+  <div class="modal-src" id="m-vpc" data-title="What is a VPC?">
+    <p>A <strong>VPC</strong> (Virtual Private Cloud) is your own private network inside AWS. It's split into <strong>subnets</strong>, and those subnets live in different Availability Zones.</p>
+    <p><strong>Private</strong> subnets have no direct door to the internet (safer for workers), while <strong>public</strong> subnets do (used by internet-facing load balancers). eksctl sets all of this up for you.</p>
+  </div>
+  <div class="modal-src" id="m-mng" data-title="What is a managed node group?">
+    <p>A managed node group is an <strong>Auto Scaling group</strong> of EC2 machines that AWS looks after for your cluster. AWS handles graceful draining when it patches or replaces a machine, so pods move safely.</p>
+    <p>It can span multiple Availability Zones for high availability, and there's no extra charge — you only pay for the EC2 machines, disks, and other resources you use.</p>
+  </div>
+  <div class="modal-src" id="m-managed-vs" data-title="Managed vs self-managed nodes">
+    <p><strong>Managed</strong> node groups: AWS patches, drains, and replaces machines; the Kubernetes version follows the control plane; simplest to run.</p>
+    <p><strong>Self-managed</strong> node groups: you control the launch template, the AMI, and the upgrade process — more flexible, but more work. For Windows nodes or very custom setups, you may need self-managed. Most Kafka clusters are happy on managed.</p>
+  </div>
+  <div class="modal-src" id="m-autoscale" data-title="Karpenter vs Cluster Autoscaler">
+    <p><strong>Cluster Autoscaler</strong> grows and shrinks existing node groups when pods can't be placed. It's mature and simple, but tied to node group sizes.</p>
+    <p><strong>Karpenter</strong> is newer and smarter: it launches right-sized machines on demand, picks cheaper instance types, and removes them quickly when idle. For bursty Kafka workloads, Karpenter often saves money — but it's a bit more to set up.</p>
+  </div>
+  <div class="modal-src" id="m-crd" data-title="What is a CRD?">
+    <p>A <strong>Custom Resource Definition</strong> teaches Kubernetes a new kind of object. Strimzi adds objects like <span class="ic">Kafka</span>, <span class="ic">KafkaNodePool</span>, <span class="ic">KafkaTopic</span>, and <span class="ic">KafkaUser</span>.</p>
+    <p>After the CRDs are installed, you can <span class="ic">kubectl apply</span> a <span class="ic">Kafka</span> object just like a built-in one, and the operator does the rest. This guide uses the modern <span class="ic">v1</span> API that Strimzi switched to in version 1.0.</p>
+  </div>
+  <div class="modal-src" id="m-nlb" data-title="Why NLB and not ALB?">
+    <p>An <strong>ALB</strong> (Application Load Balancer) only understands web traffic (HTTP/HTTPS). Kafka does not speak HTTP — it has its own binary protocol over plain TCP.</p>
+    <p>So Kafka needs a <strong>Network Load Balancer (NLB)</strong>, which works at the TCP level (Layer 4). The annotations in this guide tell the AWS Load Balancer Controller to build an NLB and route by IP for best performance.</p>
+  </div>
+  <div class="modal-src" id="m-isr" data-title="About min.insync.replicas">
+    <p>"ISR" means <strong>in-sync replicas</strong> — the copies that are fully caught up. <span class="ic">min.insync.replicas: 2</span> means a write is only accepted once at least 2 copies have it.</p>
+    <p>With replication factor 3 and min ISR 2, you can lose 1 broker and still accept writes safely. If you set min ISR equal to the replication factor, losing even one broker stops writes — so 2-of-3 is the common, balanced choice.</p>
+  </div>
+  <div class="modal-src" id="m-rack" data-title="About rack awareness">
+    <p>Rack awareness tells Kafka which "rack" each broker is in. On AWS we map a rack to an <strong>Availability Zone</strong> using the label <span class="ic">topology.kubernetes.io/zone</span>.</p>
+    <p>Kafka then makes sure the copies of a partition land in different zones. If one zone fails, another zone still has a full copy, and Kafka automatically picks a new leader there. This is the heart of zone-level failover.</p>
+  </div>
+  <div class="modal-src" id="m-logship" data-title="Shipping logs in production">
+    <p>Reading logs pod by pod is fine for learning, but painful at scale. A <strong>log shipper</strong> like Fluent Bit runs on every node, collects all container logs, and sends them to one searchable place.</p>
+    <p>On AWS that's often <strong>CloudWatch Logs</strong> or <strong>OpenSearch</strong>; many teams use <strong>Loki</strong>, which plugs right into the same Grafana you set up in Step 9.</p>
+  </div>
+  <div class="modal-src" id="m-prom" data-title="About Prometheus & Grafana">
+    <p><strong>Prometheus</strong> regularly "scrapes" numbers from your apps (called metrics) and stores them over time. Examples for Kafka: messages per second, under-replicated partitions, JVM memory.</p>
+    <p><strong>Grafana</strong> reads Prometheus and draws dashboards and alerts. The <span class="ic">kube-prometheus-stack</span> chart installs both, plus the operator that manages them, in one go.</p>
+  </div>
+  <div class="modal-src" id="m-reporter" data-title="Strimzi Metrics Reporter">
+    <p>The classic way to expose Kafka metrics is the <strong>JMX Prometheus Exporter</strong> (used in this guide) — well supported and reliable.</p>
+    <p>Newer Strimzi versions also offer the <strong>Strimzi Metrics Reporter</strong>, which exposes Prometheus metrics directly without JMX. It was announced in Strimzi 0.47 and aims to be lighter and faster. Either works; the JMX exporter is the safe default while the reporter matures.</p>
+  </div>
+  <div class="modal-src" id="m-pending" data-title="Why a pod stays Pending">
+    <p>"Pending" means Kubernetes accepted the pod but can't place it on any node yet. The two usual reasons:</p>
+    <p><strong>1. No room.</strong> Every node is already full on CPU or memory. The fix is more nodes (scale the node group) or smaller resource requests.</p>
+    <p><strong>2. Storage zone mismatch.</strong> A broker's disk (EBS volume) lives in one Availability Zone, and a pod can only run on a node in that same zone. If there's no node there, it waits. Running 3 nodes across 3 zones (as in this guide) avoids this.</p>
+    <p>Run <span class="ic">kubectl describe pod POD -n kafka</span> and read the <strong>Events</strong> — it will literally say "Insufficient cpu" or a volume/zone message.</p>
+  </div>
+  <div class="modal-src" id="m-crashloop" data-title="About CrashLoopBackOff">
+    <p>The container starts, crashes, and Kubernetes keeps restarting it — waiting a little longer each time (the "back-off"). It's a real error, not a temporary blip.</p>
+    <p>The crash reason is in the logs of the <em>previous</em> run: <span class="ic">kubectl logs POD -n kafka --previous</span>. Common causes for Kafka: <strong>OOMKilled</strong> (ran out of memory — give it more), a <strong>bad config value</strong> (the log names it), or a <strong>version mismatch</strong> between the Kafka version and the KRaft metadata version.</p>
+    <p>Check <span class="ic">kubectl describe pod POD -n kafka</span> for <span class="ic">Reason: OOMKilled</span> and the last exit code to tell memory problems from config problems.</p>
+  </div>
+  <div class="modal-src" id="m-terraform" data-title="Terraform vs eksctl">
+    <p>Both tools create the same AWS resources — the difference is the style.</p>
+    <p><strong>eksctl</strong> is quick and EKS-focused: great for getting started, demos, and one-off clusters. You run commands and it does the work.</p>
+    <p><strong>Terraform</strong> is "infrastructure as code." You describe the end result in files, and Terraform keeps a record (called <em>state</em>) of what it built. That makes it easy to review changes in a pull request, repeat the exact same setup across dev/staging/prod, and tear everything down cleanly. Most teams managing long-lived infrastructure prefer Terraform.</p>
+  </div>
+  <div class="modal-src" id="m-tfstate" data-title="What is Terraform state?">
+    <p>Terraform remembers what it created in a file called <span class="ic">terraform.tfstate</span>. Next time you run it, it compares your files to that record and only changes what's different.</p>
+    <p>By default the state sits on your laptop, which is risky for teams (two people could clash, or it could be lost). For real projects, store it in a shared <strong>backend</strong> — commonly an <strong>S3 bucket</strong> with locking — so everyone works from the same source of truth and can't overwrite each other.</p>
+  </div>
+  <div class="modal-src" id="m-crd-order" data-title="Why kubectl_manifest, not kubernetes_manifest">
+    <p>Strimzi adds new object types (CRDs) like <span class="ic">Kafka</span> and <span class="ic">KafkaNodePool</span>. Terraform's built-in <span class="ic">kubernetes_manifest</span> checks that those types exist during the <em>plan</em> step — but on a brand-new cluster the operator hasn't created them yet. So the plan fails before anything is built. It's a classic chicken-and-egg problem.</p>
+    <p>The <span class="ic">kubectl_manifest</span> resource (from the kubectl provider) applies your YAML at <em>apply</em> time instead, after the operator's Helm release has installed the CRDs. Pairing it with <span class="ic">depends_on</span> makes the order reliable. That's why this guide uses it for the Kafka resources.</p>
+  </div>
+  <div class="modal-src" id="m-podidentity" data-title="What is EKS Pod Identity?">
+    <p>Pods sometimes need AWS permissions — for example, the EBS disk driver needs permission to create volumes for Kafka.</p>
+    <p><strong>EKS Pod Identity</strong> is the modern, simple way to give a specific Kubernetes service account an AWS IAM role. You create the role, attach the policy it needs, and make an "association" linking the role to the service account. No long-lived keys, and it's cleaner than the older IRSA approach. The <span class="ic">eks-pod-identity-agent</span> add-on (installed in <span class="ic">main.tf</span>) makes it work.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ---------- Font size control (14–36px) ----------
+  var MIN = 14, MAX = 36;
+  var size = 18;
+  var root = document.documentElement;
+  var valEl = document.getElementById('fsVal');
+  var rangeEl = document.getElementById('fsRange');
+
+  function applySize() {
+    size = Math.max(MIN, Math.min(MAX, size));
+    root.style.setProperty('--fs', size + 'px');
+    valEl.textContent = size + 'px';
+    rangeEl.value = size;
+  }
+  document.getElementById('fsUp').addEventListener('click', function () { size += 2; applySize(); });
+  document.getElementById('fsDown').addEventListener('click', function () { size -= 2; applySize(); });
+  rangeEl.addEventListener('input', function () { size = parseInt(this.value, 10); applySize(); });
+  applySize();
+
+  // ---------- Mobile nav toggle ----------
+  var navToggle = document.getElementById('navToggle');
+  var navDrawer = document.getElementById('navDrawer');
+  navToggle.addEventListener('click', function () {
+    navDrawer.classList.toggle('hidden');
+  });
+  navDrawer.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function () { navDrawer.classList.add('hidden'); });
+  });
+
+  // ---------- Copy buttons ----------
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var wrap = btn.closest('.codewrap');
+      var code = wrap ? wrap.querySelector('code') : null;
+      if (!code) return;
+      var text = code.innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        var old = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = old; }, 1400);
+      }).catch(function () {
+        btn.textContent = 'Press Ctrl+C';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+      });
+    });
+  });
+
+  // ---------- Modal popups ----------
+  var modal = document.getElementById('modal');
+  var modalTitle = document.getElementById('modalTitle');
+  var modalBody = document.getElementById('modalBody');
+  var lastFocused = null;
+
+  function openModal(id) {
+    var src = document.getElementById(id);
+    if (!src) return;
+    lastFocused = document.activeElement;
+    modalTitle.textContent = src.getAttribute('data-title') || 'More info';
+    modalBody.innerHTML = src.innerHTML;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('modalClose').focus();
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    if (lastFocused) lastFocused.focus();
+  }
+
+  document.querySelectorAll('[data-modal]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openModal(btn.getAttribute('data-modal')); });
+  });
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+  });
+})();
+</script>
+</body>
+</html>
