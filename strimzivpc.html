@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building an AWS VPC with Terraform — A Complete Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ibm: {
+            blue:  '#0530ad',   // primary dark blue
+            blue2: '#0043ce',
+            ink:   '#0a0a0a',    // near-black body text
+            slate: '#161616',
+            line:  '#e0e0e0',
+            field: '#f4f4f4',    // IBM-style light grey panel
+          }
+        },
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        }
+      }
+    }
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body {
+    background:#ffffff;
+    color: var(--ink, #0a0a0a);
+    font-size: var(--fs, 18px);
+    line-height: 1.7;
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  code, pre, .font-mono {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  /* Font-size control drives this variable (14–36px) */
+  .fs-scale h1 { font-size: calc(var(--fs) * 2.0); line-height:1.15; }
+  .fs-scale h2 { font-size: calc(var(--fs) * 1.55); line-height:1.2; }
+  .fs-scale h3 { font-size: calc(var(--fs) * 1.2); line-height:1.3; }
+  .fs-scale .lead { font-size: calc(var(--fs) * 1.12); }
+  .fs-scale code, .fs-scale pre { font-size: calc(var(--fs) * 0.88); }
+  .fs-scale .small { font-size: calc(var(--fs) * 0.82); }
+
+  pre { background:#0a0a0a; color:#f2f4f8; border-radius:6px; overflow-x:auto; }
+  pre code { background:transparent; color:inherit; padding:0; }
+  code { background:#f4f4f4; color:#0530ad; padding:1px 5px; border-radius:4px; font-weight:500; }
+  pre code { font-weight:400; }
+  .anchor-pad { scroll-margin-top: 96px; }
+
+  /* Left border accent on cards — IBM-ish structural device */
+  .accent-l { border-left:4px solid #0530ad; }
+
+  /* Modal */
+  .modal-backdrop { background: rgba(10,10,10,.55); }
+  details > summary { cursor:pointer; list-style:none; }
+  details > summary::-webkit-details-marker { display:none; }
+
+  /* Active TOC link */
+  .toc-link.active { color:#0530ad; font-weight:600; border-left-color:#0530ad; }
+  .toc-link { font-size:14px !important; }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior:auto; }
+    * { transition:none !important; animation:none !important; }
+  }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid #e0e0e0; padding:8px 12px; text-align:left; vertical-align:top; }
+  th { background:#f4f4f4; font-weight:600; }
+
+  /* Robust layout (independent of Tailwind arbitrary-value JIT) */
+  .doc-grid { display:block; }
+  .hero-stats { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:.75rem; }
+  @media (min-width:640px){ .hero-stats { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+  @media (min-width:1024px){
+    .doc-grid { display:grid; grid-template-columns: 240px 1fr; gap:2.5rem; }
+  }
+</style>
+</head>
+<body class="fs-scale" style="--fs:18px; --ink:#0a0a0a;">
+
+<!-- ===================== STICKY TOP BAR ===================== -->
+<header class="sticky top-0 z-40 bg-white border-b border-ibm-line">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-2.5 h-8 bg-ibm-blue shrink-0"></div>
+      <div class="min-w-0">
+        <div class="font-semibold text-ibm-ink truncate">AWS VPC + Terraform</div>
+        <div class="small text-gray-500 truncate">A complete, plain-language guide · 2026</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <span class="small text-gray-500 hidden sm:inline">Text size</span>
+      <button id="fs-down" aria-label="Decrease text size"
+        class="w-9 h-9 border border-ibm-line rounded hover:bg-ibm-field font-semibold text-ibm-blue">A−</button>
+      <span id="fs-readout" class="small text-gray-600 w-10 text-center tabular-nums">18px</span>
+      <button id="fs-up" aria-label="Increase text size"
+        class="w-9 h-9 border border-ibm-line rounded hover:bg-ibm-field font-semibold text-ibm-blue">A+</button>
+    </div>
+  </div>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="border-b border-ibm-line">
+  <div class="max-w-6xl mx-auto px-4 py-14">
+    <p class="small uppercase tracking-widest text-ibm-blue font-semibold mb-3">Infrastructure as Code · Networking</p>
+    <h1 class="font-bold text-ibm-ink max-w-3xl">Build a secure AWS network with Terraform — explained from the ground up</h1>
+    <p class="lead text-gray-700 mt-5 max-w-2xl">
+      This guide builds a real, production-shaped private network on AWS: one VPC, public subnets,
+      and <strong>three sizes of private subnets</strong> (small, medium, large). You'll get the full Terraform code,
+      the matching AWS CLI commands, and a from-scratch explanation of <em>why</em> each piece exists — written so a
+      careful middle-schooler could follow it, but complete enough for a platform team.
+    </p>
+    <div class="flex flex-wrap gap-3 mt-7">
+      <a href="#big-picture" class="px-5 py-2.5 bg-ibm-blue text-white rounded font-medium hover:bg-ibm-blue2">Start with the big picture</a>
+      <a href="#terraform" class="px-5 py-2.5 border border-ibm-blue text-ibm-blue rounded font-medium hover:bg-ibm-field">Jump to the code</a>
+    </div>
+    <div class="hero-stats mt-8 max-w-3xl">
+      <div class="accent-l pl-3 py-1"><div class="font-semibold text-ibm-ink">1 VPC</div><div class="small text-gray-500">10.0.0.0/16</div></div>
+      <div class="accent-l pl-3 py-1"><div class="font-semibold text-ibm-ink">3 AZs</div><div class="small text-gray-500">high availability</div></div>
+      <div class="accent-l pl-3 py-1"><div class="font-semibold text-ibm-ink">4 tiers</div><div class="small text-gray-500">public + 3 private</div></div>
+      <div class="accent-l pl-3 py-1"><div class="font-semibold text-ibm-ink">2026</div><div class="small text-gray-500">AWS provider 6.x</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== LAYOUT: TOC + CONTENT ===================== -->
+<div class="doc-grid max-w-6xl mx-auto px-4 py-10">
+
+  <!-- TOC -->
+  <aside class="hidden lg:block">
+    <nav class="sticky top-24 space-y-1 border-l border-ibm-line" style="font-size:14px; line-height:1.4;">
+      <a href="#big-picture"  class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">1 · The big picture</a>
+      <a href="#networking-101" class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">2 · Networking 101</a>
+      <a href="#cidr"         class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">3 · CIDR explained</a>
+      <a href="#subnets"      class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">4 · Subnets &amp; sizing</a>
+      <a href="#security"     class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">5 · Security layers</a>
+      <a href="#terraform"    class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">6 · The Terraform code</a>
+      <a href="#cli"          class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">7 · Same thing in AWS CLI</a>
+      <a href="#workloads"    class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">8 · Placing real workloads</a>
+      <a href="#use-cases"    class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">9 · Use cases &amp; trade-offs</a>
+      <a href="#failover"     class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">10 · Failover &amp; controls</a>
+      <a href="#references"   class="toc-link block pl-4 py-1 border-l-2 border-transparent text-gray-600 hover:text-ibm-blue">11 · References</a>
+    </nav>
+  </aside>
+
+  <main class="min-w-0 space-y-16">
+
+<!-- ============ 1 · BIG PICTURE ============ -->
+<section id="big-picture" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 1</p>
+  <h2 class="font-bold text-ibm-ink mt-1">The big picture: what are we even building?</h2>
+  <p class="mt-4 text-gray-800">
+    Imagine you rent space in a giant shared building (that's AWS). You don't want strangers wandering through
+    your rooms, so the first thing you do is put up walls and lock the doors. In AWS, those walls are called a
+    <strong>VPC</strong> — a <em>Virtual Private Cloud</em>. It is your own private, fenced-off section of Amazon's cloud
+    where only the things you allow can talk to each other.
+  </p>
+  <p class="mt-4 text-gray-800">
+    Inside that fenced area, you divide the space into <strong>rooms</strong>. Some rooms have a door to the street
+    (the public internet) — we call those <strong>public subnets</strong>. Other rooms have no street door at all;
+    you can only reach them from inside the building — those are <strong>private subnets</strong>. Sensitive things
+    like your databases live in the private rooms. The friendly front desk that greets visitors lives in a public room.
+  </p>
+
+  <div class="bg-ibm-field rounded p-5 mt-6 accent-l">
+    <h3 class="font-semibold text-ibm-ink">A house analogy you can keep in your head</h3>
+    <ul class="mt-3 space-y-2 text-gray-800">
+      <li><strong>VPC</strong> = the whole house and its fence.</li>
+      <li><strong>Subnet</strong> = a room in the house.</li>
+      <li><strong>CIDR block</strong> = how many "addresses" (spots for furniture/people) a room can hold.</li>
+      <li><strong>Internet Gateway</strong> = the front door to the street.</li>
+      <li><strong>NAT Gateway</strong> = a one-way mail slot: people inside can send letters out, but no one outside can walk in.</li>
+      <li><strong>Route table</strong> = the signs that tell traffic which door to use.</li>
+      <li><strong>Security Group / NACL</strong> = the locks and the guard checking who's allowed through each door.</li>
+    </ul>
+  </div>
+
+  <p class="mt-6 text-gray-800">Here is the shape of what the Terraform in this guide creates:</p>
+
+  <!-- Inline SVG architecture diagram -->
+  <figure class="mt-5 border border-ibm-line rounded p-4 overflow-x-auto">
+    <svg viewBox="0 0 820 470" role="img" aria-label="VPC architecture diagram" class="w-full min-w-[640px]">
+      <rect x="10" y="10" width="800" height="450" rx="8" fill="#ffffff" stroke="#0530ad" stroke-width="2"/>
+      <text x="28" y="36" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="700" fill="#0530ad">VPC · 10.0.0.0/16</text>
+      <text x="640" y="36" font-family="IBM Plex Mono, monospace" font-size="12" fill="#525252">3 Availability Zones</text>
+
+      <!-- internet + IGW -->
+      <rect x="350" y="48" width="120" height="30" rx="4" fill="#0530ad"/>
+      <text x="410" y="68" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" fill="#fff">Internet Gateway</text>
+      <line x1="410" y1="48" x2="410" y2="20" stroke="#0530ad" stroke-width="2"/>
+      <text x="410" y="16" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" fill="#525252">Internet</text>
+
+      <!-- Column headers per AZ -->
+      <text x="160" y="100" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="#525252">AZ-a</text>
+      <text x="410" y="100" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="#525252">AZ-b</text>
+      <text x="660" y="100" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="#525252">AZ-c</text>
+
+      <!-- public row -->
+      <g font-family="IBM Plex Sans" font-size="11">
+        <rect x="40" y="108" width="240" height="44" rx="4" fill="#e8eefc" stroke="#0530ad"/>
+        <text x="52" y="126" font-weight="600" fill="#0530ad">Public /24</text>
+        <text x="52" y="143" fill="#161616">ALB · NAT GW</text>
+        <rect x="290" y="108" width="240" height="44" rx="4" fill="#e8eefc" stroke="#0530ad"/>
+        <text x="302" y="126" font-weight="600" fill="#0530ad">Public /24</text>
+        <text x="302" y="143" fill="#161616">ALB · NAT GW</text>
+        <rect x="540" y="108" width="240" height="44" rx="4" fill="#e8eefc" stroke="#0530ad"/>
+        <text x="552" y="126" font-weight="600" fill="#0530ad">Public /24</text>
+        <text x="552" y="143" fill="#161616">ALB · NAT GW</text>
+      </g>
+
+      <!-- private small -->
+      <g font-family="IBM Plex Sans" font-size="11">
+        <rect x="40" y="166" width="240" height="40" rx="4" fill="#f4f4f4" stroke="#8d8d8d"/>
+        <text x="52" y="183" font-weight="600" fill="#161616">Private-small /26</text>
+        <text x="52" y="199" fill="#525252">SNS/SQS endpoints · small svc</text>
+        <rect x="290" y="166" width="240" height="40" rx="4" fill="#f4f4f4" stroke="#8d8d8d"/>
+        <text x="302" y="183" font-weight="600" fill="#161616">Private-small /26</text>
+        <text x="302" y="199" fill="#525252">SNS/SQS endpoints</text>
+        <rect x="540" y="166" width="240" height="40" rx="4" fill="#f4f4f4" stroke="#8d8d8d"/>
+        <text x="552" y="183" font-weight="600" fill="#161616">Private-small /26</text>
+        <text x="552" y="199" fill="#525252">SNS/SQS endpoints</text>
+      </g>
+
+      <!-- private medium -->
+      <g font-family="IBM Plex Sans" font-size="11">
+        <rect x="40" y="214" width="240" height="40" rx="4" fill="#f4f4f4" stroke="#8d8d8d"/>
+        <text x="52" y="231" font-weight="600" fill="#161616">Private-medium /24</text>
+        <text x="52" y="247" fill="#525252">Java/Node apps · APIs · NiFi</text>
+        <rect x="290" y="214" width="240" height="40" rx="4" fill="#f4f4f4" stroke="#8d8d8d"/>
+        <text x="302" y="231" font-weight="600" fill="#161616">Private-medium /24</text>
+        <text x="302" y="247" fill="#525252">app servers</text>
+        <rect x="540" y="214" width="240" height="40" rx="4" fill="#f4f4f4" stroke="#8d8d8d"/>
+        <text x="552" y="231" font-weight="600" fill="#161616">Private-medium /24</text>
+        <text x="552" y="247" fill="#525252">app servers</text>
+      </g>
+
+      <!-- private large -->
+      <g font-family="IBM Plex Sans" font-size="11">
+        <rect x="40" y="262" width="240" height="40" rx="4" fill="#eef2ff" stroke="#0043ce"/>
+        <text x="52" y="279" font-weight="600" fill="#0043ce">Private-large /22</text>
+        <text x="52" y="295" fill="#525252">Kafka · Postgres · OpenSearch</text>
+        <rect x="290" y="262" width="240" height="40" rx="4" fill="#eef2ff" stroke="#0043ce"/>
+        <text x="302" y="279" font-weight="600" fill="#0043ce">Private-large /22</text>
+        <text x="302" y="295" fill="#525252">data + streaming</text>
+        <rect x="540" y="262" width="240" height="40" rx="4" fill="#eef2ff" stroke="#0043ce"/>
+        <text x="552" y="279" font-weight="600" fill="#0043ce">Private-large /22</text>
+        <text x="552" y="295" fill="#525252">data + streaming</text>
+      </g>
+
+      <!-- flow arrows -->
+      <g stroke="#0530ad" stroke-width="1.5" fill="none" marker-end="url(#arr)">
+        <line x1="160" y1="152" x2="160" y2="166"/>
+        <line x1="160" y1="206" x2="160" y2="214"/>
+        <line x1="160" y1="254" x2="160" y2="262"/>
+      </g>
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#0530ad"/>
+        </marker>
+      </defs>
+
+      <!-- reserved -->
+      <rect x="40" y="316" width="740" height="34" rx="4" fill="#ffffff" stroke="#e0e0e0" stroke-dasharray="4 3"/>
+      <text x="52" y="337" font-family="IBM Plex Sans" font-size="11" fill="#8d8d8d">Reserved 10.0.64.0/18 — left empty on purpose for future tiers / expansion</text>
+
+      <!-- legend -->
+      <g font-family="IBM Plex Sans" font-size="11" fill="#525252">
+        <rect x="40" y="368" width="16" height="12" fill="#e8eefc" stroke="#0530ad"/><text x="62" y="378">public (has internet door)</text>
+        <rect x="250" y="368" width="16" height="12" fill="#f4f4f4" stroke="#8d8d8d"/><text x="272" y="378">private (outbound via NAT only)</text>
+        <rect x="540" y="368" width="16" height="12" fill="#eef2ff" stroke="#0043ce"/><text x="562" y="378">private-large (data/stream)</text>
+      </g>
+      <text x="40" y="410" font-family="IBM Plex Sans" font-size="11" fill="#8d8d8d">Each subnet reserves 5 IPs for AWS (network, router, DNS, future, broadcast).</text>
+      <text x="40" y="430" font-family="IBM Plex Sans" font-size="11" fill="#8d8d8d">"Public" vs "private" is decided by the route table, not the CIDR size.</text>
+    </svg>
+    <figcaption class="small text-gray-500 mt-2">Figure 1 — The network this guide builds, repeated identically across three Availability Zones.</figcaption>
+  </figure>
+
+  <button data-modal="m-why-vpc" class="mt-5 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ Why bother with a custom VPC at all? (every AWS account already has a default one)
+  </button>
+</section>
+
+<!-- ============ 2 · NETWORKING 101 ============ -->
+<section id="networking-101" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 2</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Networking 101: IP addresses, in plain words</h2>
+  <p class="mt-4 text-gray-800">
+    Every device on a network needs an <strong>IP address</strong> — a number that works like a street address so
+    messages know where to go. The common form (IPv4) looks like <code>10.0.5.23</code>: four numbers from 0–255,
+    separated by dots. That gives about 4.3 billion possible addresses worldwide — which sounds like a lot until the
+    whole planet is online, which is why some addresses are set aside as <strong>private</strong>.
+  </p>
+  <p class="mt-4 text-gray-800">
+    Private addresses are reusable inside your own network and never travel on the open internet. A standards
+    document called <strong>RFC 1918</strong> reserves three private ranges that everyone uses for internal networks:
+  </p>
+  <table class="mt-4 small">
+    <thead><tr><th>Private range</th><th>Size</th><th>Typical use</th></tr></thead>
+    <tbody>
+      <tr><td><code>10.0.0.0/8</code></td><td>~16.7 million addresses</td><td>Big company networks &amp; most AWS VPCs</td></tr>
+      <tr><td><code>172.16.0.0/12</code></td><td>~1 million addresses</td><td>Medium networks (avoid <code>172.17.0.0/16</code> on AWS — see note)</td></tr>
+      <tr><td><code>192.168.0.0/16</code></td><td>~65,000 addresses</td><td>Home routers &amp; small networks</td></tr>
+    </tbody>
+  </table>
+  <div class="bg-ibm-field rounded p-4 mt-4 accent-l small text-gray-800">
+    <strong>⚠ AWS gotcha:</strong> avoid <code>172.17.0.0/16</code> for your VPC. Some AWS services (Cloud9, SageMaker)
+    and Docker use it internally, and overlapping it causes hard-to-debug connection failures.
+    <a class="text-ibm-blue underline" href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-cidr-blocks.html" target="_blank" rel="noopener">AWS docs ↗</a>
+  </div>
+  <p class="mt-4 text-gray-800">
+    We use <code>10.0.0.0/16</code> for our VPC because the <code>10.x</code> range is huge, leaves the most room to grow,
+    and is the convention almost every AWS team follows. The <code>/16</code> part is the magic — that's CIDR, and it's next.
+  </p>
+</section>
+
+<!-- ============ 3 · CIDR ============ -->
+<section id="cidr" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 3</p>
+  <h2 class="font-bold text-ibm-ink mt-1">CIDR: the <code>/16</code>, <code>/24</code>, <code>/26</code> mystery solved</h2>
+  <p class="mt-4 text-gray-800">
+    <strong>CIDR</strong> stands for <em>Classless Inter-Domain Routing</em>. Forget the scary name — it's just a way to
+    say "how big is this network?" The number after the slash tells you how many bits of the address are <em>fixed</em>
+    (the network part). The remaining bits are free to count up through individual addresses.
+  </p>
+  <p class="mt-4 text-gray-800">
+    An IPv4 address has 32 bits total. So:
+  </p>
+  <div class="bg-ibm-field rounded p-5 mt-4 font-mono small text-gray-800 space-y-1">
+    <div>/16  → 32 − 16 = 16 free bits → 2<sup>16</sup> = <strong>65,536</strong> addresses</div>
+    <div>/20  → 32 − 20 = 12 free bits → 2<sup>12</sup> = <strong>4,096</strong> addresses</div>
+    <div>/22  → 32 − 22 = 10 free bits → 2<sup>10</sup> = <strong>1,024</strong> addresses</div>
+    <div>/24  → 32 − 24 =  8 free bits → 2<sup>8</sup>  = <strong>256</strong> addresses</div>
+    <div>/26  → 32 − 26 =  6 free bits → 2<sup>6</sup>  = <strong>64</strong> addresses</div>
+    <div>/28  → 32 − 28 =  4 free bits → 2<sup>4</sup>  = <strong>16</strong> addresses (smallest AWS allows)</div>
+  </div>
+  <p class="mt-4 text-gray-800">
+    <strong>The rule of thumb:</strong> a <em>smaller</em> number after the slash means a <em>bigger</em> network.
+    <code>/16</code> is a mansion; <code>/28</code> is a closet. AWS lets a VPC be anywhere from <code>/16</code>
+    (biggest) to <code>/28</code> (smallest).
+  </p>
+
+  <div class="bg-white border border-ibm-line rounded p-5 mt-5 accent-l">
+    <h3 class="font-semibold text-ibm-ink">The "5 reserved IPs" tax — don't forget it</h3>
+    <p class="mt-3 text-gray-800 small">
+      In every subnet, AWS quietly keeps <strong>5 addresses</strong> for itself, so you never get the full count:
+    </p>
+    <table class="mt-3 small">
+      <thead><tr><th>Address</th><th>Reserved for</th></tr></thead>
+      <tbody>
+        <tr><td>.0 (first)</td><td>Network address</td></tr>
+        <tr><td>.1</td><td>The VPC router (the default gateway)</td></tr>
+        <tr><td>.2</td><td>AWS DNS server (base of range + 2)</td></tr>
+        <tr><td>.3</td><td>Reserved by AWS for future use</td></tr>
+        <tr><td>.255 (last)</td><td>Network broadcast (AWS doesn't support broadcast, but reserves it)</td></tr>
+      </tbody>
+    </table>
+    <p class="mt-3 text-gray-800 small">
+      So a <code>/24</code> (256 addresses) really gives you <strong>251 usable</strong>. A <code>/28</code> (16) gives
+      only <strong>11</strong>. This is exactly why you don't make production subnets too tiny.
+      <a class="text-ibm-blue underline" href="https://docs.aws.amazon.com/vpc/latest/userguide/subnet-sizing.html" target="_blank" rel="noopener">Subnet sizing docs ↗</a>
+    </p>
+  </div>
+
+  <button data-modal="m-cidr-math" class="mt-5 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ Show me how <code>cidrsubnet()</code> slices the /16 in Terraform
+  </button>
+</section>
+
+<!-- ============ 4 · SUBNETS & SIZING ============ -->
+<section id="subnets" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 4</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Subnets &amp; the three private sizes</h2>
+  <p class="mt-4 text-gray-800">
+    A <strong>subnet</strong> ("sub-network") is a slice of your VPC's address range that lives in exactly one
+    <strong>Availability Zone</strong> (AZ) — a physically separate datacenter. We repeat the same set of subnets in
+    three AZs so that if one datacenter has a problem, the other two keep serving. That's the foundation of high
+    availability, and it costs nothing extra to plan for.
+  </p>
+  <div class="bg-ibm-field rounded p-4 mt-4 accent-l small text-gray-800">
+    <strong>Key idea most beginners miss:</strong> AWS does <em>not</em> label a subnet "public" or "private." A subnet
+    is public <em>only because</em> its route table sends internet-bound traffic (<code>0.0.0.0/0</code>) to an
+    Internet Gateway. Remove that route and the exact same subnet becomes private. Routing decides behavior — not the name, not the size.
+  </div>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Why three private sizes instead of one?</h3>
+  <p class="mt-3 text-gray-800">
+    Different workloads need wildly different numbers of IP addresses. A tiny helper service might need 10 IPs forever;
+    an OpenSearch or Kafka cluster that auto-scales can chew through hundreds. If you give everything the same size you
+    either waste a huge range on small things or starve the big things. So we cut three right-sized tiers and stamp each
+    one into all three AZs:
+  </p>
+
+  <table class="mt-4 small">
+    <thead>
+      <tr><th>Tier</th><th>Per-AZ CIDR</th><th>Total / Usable IPs</th><th>What lives here &amp; why that size</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="font-semibold text-ibm-blue">Small</td>
+        <td><code>/26</code></td>
+        <td>64 / ~59</td>
+        <td>Low-IP services: VPC interface endpoints for <strong>SNS/SQS</strong>, small internal microservices, admin/utility pods. These rarely scale out, so a closet is plenty and you avoid wasting address space.</td>
+      </tr>
+      <tr>
+        <td class="font-semibold text-ibm-blue">Medium</td>
+        <td><code>/24</code></td>
+        <td>256 / ~251</td>
+        <td>The default home for most compute: <strong>Java &amp; Node.js web apps, backend APIs, NiFi</strong> dataflow nodes. Enough room for rolling deploys (old + new running together) and moderate auto-scaling.</td>
+      </tr>
+      <tr>
+        <td class="font-semibold text-ibm-blue">Large</td>
+        <td><code>/22</code></td>
+        <td>1,024 / ~1,019</td>
+        <td>IP-hungry clusters: <strong>Kafka (MSK) brokers, Postgres/RDS fleets, OpenSearch data nodes</strong>. These add nodes as data grows and each node + its cross-AZ replicas eats IPs fast. Roomy on purpose.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="mt-4 text-gray-800">
+    Notice the deliberate gaps in the plan below. Each tier sits on its own <code>/20</code> "lane," and a big
+    <code>/18</code> is left completely empty. Leaving gaps is a <strong>best practice</strong>: you cannot resize a
+    subnet after creation, so reserving room now means you can add a fourth tier later without renumbering everything.
+  </p>
+
+  <div class="bg-ibm-field rounded p-5 mt-4 font-mono small text-gray-800 space-y-1 overflow-x-auto">
+    <div>VPC               10.0.0.0/16   (65,536 addresses)</div>
+    <div>├─ public         10.0.0.0/20  →  /24 per AZ</div>
+    <div>├─ private-small  10.0.16.0/20 →  /26 per AZ</div>
+    <div>├─ private-medium 10.0.32.0/20 →  /24 per AZ</div>
+    <div>├─ private-large  10.0.48.0/20 →  /22 per AZ</div>
+    <div>└─ RESERVED       10.0.64.0/18 →  (left empty for the future)</div>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4 mt-6">
+    <div class="border border-ibm-line rounded p-4">
+      <h3 class="font-semibold text-ibm-ink">Best practices (do)</h3>
+      <ul class="mt-2 small text-gray-800 space-y-1.5">
+        <li>✓ Use one <code>/16</code> VPC and carve predictable tiers.</li>
+        <li>✓ Mirror subnets across ≥2 (ideally 3) AZs.</li>
+        <li>✓ Right-size each tier; leave numbering gaps.</li>
+        <li>✓ Keep databases &amp; brokers in private subnets only.</li>
+        <li>✓ Put only load balancers + NAT in public subnets.</li>
+      </ul>
+    </div>
+    <div class="border border-ibm-line rounded p-4">
+      <h3 class="font-semibold text-ibm-ink">Anti-patterns (avoid)</h3>
+      <ul class="mt-2 small text-gray-800 space-y-1.5">
+        <li>✗ One giant flat subnet for everything.</li>
+        <li>✗ Tiny <code>/28</code> subnets for things that scale.</li>
+        <li>✗ Overlapping CIDRs (breaks future VPC peering).</li>
+        <li>✗ Putting databases in public subnets.</li>
+        <li>✗ Allocating the whole <code>/16</code> with no room left.</li>
+      </ul>
+    </div>
+  </div>
+
+  <button data-modal="m-az" class="mt-5 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ What exactly is an Availability Zone, and why three?
+  </button>
+</section>
+
+<!-- ============ 5 · SECURITY ============ -->
+<section id="security" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 5</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Security in layers (internal &amp; external)</h2>
+  <p class="mt-4 text-gray-800">
+    Good cloud security is like an onion — many layers, so that if one fails, another still protects you. This is
+    called <strong>defense in depth</strong>. AWS gives you several independent controls; we use them together rather
+    than relying on any single one.
+  </p>
+
+  <div class="space-y-4 mt-6">
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Layer 1 — Security Groups (stateful, per-resource)</h3>
+      <p class="mt-2 small text-gray-800">
+        A Security Group is a firewall wrapped around a specific resource (an app server, a database). "Stateful" means
+        if you allow a request in, the reply is automatically allowed back out — you don't write a return rule. The
+        best-practice trick: rules reference <em>other security groups</em>, not IP ranges. Our database SG says "allow
+        Postgres <strong>from the app security group</strong>," so it doesn't matter what IPs the app servers get — only
+        members of the app tier can connect. This is <strong>internal</strong> segmentation between tiers.
+      </p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Layer 2 — Network ACLs (stateless, per-subnet)</h3>
+      <p class="mt-2 small text-gray-800">
+        A NACL is a coarser firewall at the subnet door. "Stateless" means it checks every packet in both directions
+        independently — you must explicitly allow return traffic on high-numbered "ephemeral" ports. We use a NACL as a
+        backstop on private subnets. Security Groups are your primary tool; the NACL is the extra layer in case a SG is
+        misconfigured.
+      </p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Layer 3 — Public vs private placement</h3>
+      <p class="mt-2 small text-gray-800">
+        The strongest control is simply <em>not being reachable</em>. Databases, Kafka, and OpenSearch sit in private
+        subnets with no route to the internet. The only thing exposed <strong>externally</strong> is a load balancer on
+        port 443 in the public subnet. Everything else is internal-only.
+      </p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Layer 4 — VPC Endpoints (private paths to AWS services)</h3>
+      <p class="mt-2 small text-gray-800">
+        Normally, calling SQS, SNS, or S3 sends traffic out to the public AWS endpoints. <strong>VPC Endpoints</strong>
+        create a private doorway directly from your subnets to those services, so messaging traffic never touches the
+        public internet. We add a free <strong>Gateway endpoint for S3</strong> and <strong>Interface endpoints for SQS
+        and SNS</strong>.
+      </p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Layer 5 — Flow Logs (visibility &amp; audit)</h3>
+      <p class="mt-2 small text-gray-800">
+        You can't secure what you can't see. <strong>VPC Flow Logs</strong> record every accepted and rejected
+        connection to CloudWatch, giving you an audit trail for investigations and a way to spot unexpected traffic.
+      </p>
+    </div>
+  </div>
+
+  <table class="mt-6 small">
+    <thead><tr><th></th><th>Security Group</th><th>Network ACL</th></tr></thead>
+    <tbody>
+      <tr><td class="font-semibold">Operates at</td><td>Resource / ENI</td><td>Subnet</td></tr>
+      <tr><td class="font-semibold">State</td><td>Stateful (returns auto-allowed)</td><td>Stateless (allow both ways)</td></tr>
+      <tr><td class="font-semibold">Rules</td><td>Allow only</td><td>Allow <em>and</em> Deny</td></tr>
+      <tr><td class="font-semibold">Can reference</td><td>Other security groups</td><td>CIDR ranges only</td></tr>
+      <tr><td class="font-semibold">Best used as</td><td>Primary firewall</td><td>Coarse backstop</td></tr>
+    </tbody>
+  </table>
+
+  <button data-modal="m-zero-trust" class="mt-5 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ How does this map to "zero trust" and least privilege?
+  </button>
+</section>
+
+<!-- ============ 6 · TERRAFORM ============ -->
+<section id="terraform" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 6</p>
+  <h2 class="font-bold text-ibm-ink mt-1">The Terraform code, file by file</h2>
+  <p class="mt-4 text-gray-800">
+    Terraform lets you describe infrastructure as text files. You write <em>what you want</em>; Terraform figures out
+    the API calls to make it real, and remembers state so it only changes what's needed. We split the project into
+    focused files — a common best practice that keeps each concern readable. The download button at the very bottom
+    gives you all of these as ready-to-run files.
+  </p>
+  <div class="bg-ibm-field rounded p-4 mt-4 accent-l small text-gray-800">
+    <strong>The whole workflow is three commands:</strong>
+    <code>terraform init</code> (download the provider) →
+    <code>terraform plan</code> (preview changes) →
+    <code>terraform apply</code> (make them real). Always read the plan before you apply.
+  </div>
+
+  <div class="mt-8">
+    <div class="flex items-center gap-3">
+      <span class="font-mono text-ibm-blue font-semibold">versions.tf</span>
+      <span class="h-px flex-1 bg-ibm-line"></span>
+    </div>
+    <p class="mt-2 small text-gray-700">Pins Terraform and the AWS provider. Pinning to <code>~&gt; 6.0</code> means "any 6.x, but never auto-jump to 7.0" — protecting you from surprise breaking changes.</p>
+    <pre class="mt-3 p-4"><code># versions.tf
+# Pin Terraform and the AWS provider so applies are reproducible.
+# AWS provider 6.x is the current major line (6.52.0 latest as of June 2026).
+# Pinning protects you from surprise breaking changes in a future major (7.x).
+
+terraform {
+  required_version = &quot;&gt;= 1.9.0&quot;
+
+  required_providers {
+    aws = {
+      source  = &quot;hashicorp/aws&quot;
+      version = &quot;~&gt; 6.0&quot; # allows 6.x, blocks 7.0 breaking changes
+    }
+  }
+
+  # Recommended for teams: store state remotely with locking instead of locally.
+  # Uncomment and fill in once you have an S3 bucket + DynamoDB lock table.
+  # backend &quot;s3&quot; {
+  #   bucket         = &quot;my-tfstate-bucket&quot;
+  #   key            = &quot;network/vpc/terraform.tfstate&quot;
+  #   region         = &quot;us-east-1&quot;
+  #   dynamodb_table = &quot;tf-locks&quot;
+  #   encrypt        = true
+  # }
+}
+
+provider &quot;aws&quot; {
+  region = var.aws_region
+
+  # Tags applied to every taggable resource automatically.
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = &quot;Terraform&quot;
+    }
+  }
+}
+</code></pre>
+  </div>
+  <div class="mt-8">
+    <div class="flex items-center gap-3">
+      <span class="font-mono text-ibm-blue font-semibold">variables.tf</span>
+      <span class="h-px flex-1 bg-ibm-line"></span>
+    </div>
+    <p class="mt-2 small text-gray-700">Every knob you can turn lives here. You change values in <code>terraform.tfvars</code>, never in the code itself — that keeps the code reusable across dev/staging/prod.</p>
+    <pre class="mt-3 p-4"><code># variables.tf
+# All tunable inputs live here. Change values in terraform.tfvars, not in code.
+
+variable &quot;aws_region&quot; {
+  description = &quot;AWS region to deploy into.&quot;
+  type        = string
+  default     = &quot;us-east-1&quot;
+}
+
+variable &quot;project_name&quot; {
+  description = &quot;Short project/system name used in resource names and tags.&quot;
+  type        = string
+  default     = &quot;platform&quot;
+}
+
+variable &quot;environment&quot; {
+  description = &quot;Deployment environment (dev, staging, prod).&quot;
+  type        = string
+  default     = &quot;prod&quot;
+}
+
+variable &quot;vpc_cidr&quot; {
+  description = &lt;&lt;-EOT
+    Primary IPv4 CIDR for the VPC. /16 gives 65,536 addresses and leaves
+    plenty of room to grow. Must be inside an RFC 1918 private range
+    (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Avoid 172.17.0.0/16 because
+    some AWS services (Cloud9, SageMaker, Docker) use it internally.
+  EOT
+  type        = string
+  default     = &quot;10.0.0.0/16&quot;
+
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = &quot;vpc_cidr must be a valid IPv4 CIDR (e.g. 10.0.0.0/16).&quot;
+  }
+}
+
+variable &quot;az_count&quot; {
+  description = &lt;&lt;-EOT
+    Number of Availability Zones to spread subnets across. 3 is the standard
+    for production high availability. 2 is acceptable for cost-sensitive dev.
+  EOT
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.az_count &gt;= 2 &amp;&amp; var.az_count &lt;= 4
+    error_message = &quot;az_count must be between 2 and 4.&quot;
+  }
+}
+
+variable &quot;single_nat_gateway&quot; {
+  description = &lt;&lt;-EOT
+    true  = one NAT Gateway shared by all AZs (cheaper, but a single AZ
+            failure removes outbound internet for private subnets).
+    false = one NAT Gateway per AZ (resilient, recommended for prod, costs
+            roughly one NAT hourly + data charge per AZ).
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable &quot;enable_flow_logs&quot; {
+  description = &quot;Capture VPC Flow Logs to CloudWatch for security/audit visibility.&quot;
+  type        = bool
+  default     = true
+}
+</code></pre>
+  </div>
+  <div class="mt-8">
+    <div class="flex items-center gap-3">
+      <span class="font-mono text-ibm-blue font-semibold">main.tf</span>
+      <span class="h-px flex-1 bg-ibm-line"></span>
+    </div>
+    <p class="mt-2 small text-gray-700">The heart of it: the VPC, all four subnet tiers across three AZs, the Internet Gateway, NAT Gateways, and the route tables that decide public vs private.</p>
+    <pre class="mt-3 p-4"><code># main.tf
+# ---------------------------------------------------------------------------
+# CIDR PLAN (VPC 10.0.0.0/16 = 65,536 addresses)
+# Each subnet loses 5 usable IPs to AWS (.0 network, .1 router, .2 DNS,
+# .3 future, and the last broadcast address).
+#
+# We carve the /16 into named &quot;tiers&quot; by the SECOND octet group so the plan is
+# readable at a glance and leaves big gaps for future expansion.
+#
+#   PUBLIC          10.0.0.0/20   -&gt; /24 per AZ  (256 IPs each, ~251 usable)
+#   PRIVATE-SMALL   10.0.16.0/20  -&gt; /26 per AZ  (64 IPs,  ~59 usable)  small svcs
+#   PRIVATE-MEDIUM  10.0.32.0/20  -&gt; /24 per AZ  (256 IPs, ~251 usable) general
+#   PRIVATE-LARGE   10.0.48.0/20  -&gt; /22 per AZ  (1024 IPs,~1019 usable) big data
+#   RESERVED        10.0.64.0/18  -&gt; untouched, room to grow / future tiers
+#
+# WHY THREE PRIVATE SIZES?
+#   small  -&gt; low-IP-count workloads: SNS/SQS access points, small APIs,
+#             bastion-free admin endpoints, lightweight microservices.
+#   medium -&gt; the default home for most app servers: Java/Node web apps,
+#             backend APIs, NiFi nodes.
+#   large  -&gt; IP-hungry clustered systems: Kafka (MSK) brokers, RDS/Postgres
+#             fleets, OpenSearch data nodes, search clusters that scale out.
+# ---------------------------------------------------------------------------
+
+# Look up which AZs actually exist in the chosen region (don&#x27;t hard-code).
+data &quot;aws_availability_zones&quot; &quot;available&quot; {
+  state = &quot;available&quot;
+}
+
+locals {
+  azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
+
+  # cidrsubnet(base, newbits, netnum) splits a block deterministically.
+  # Public: 4 newbits on a /20 base -&gt; /24 subnets.
+  public_subnets = {
+    for i, az in local.azs : az =&gt; cidrsubnet(&quot;10.0.0.0/20&quot;, 4, i)
+  }
+
+  # Small: 6 newbits on /20 -&gt; /26 subnets (64 IPs).
+  private_small_subnets = {
+    for i, az in local.azs : az =&gt; cidrsubnet(&quot;10.0.16.0/20&quot;, 6, i)
+  }
+
+  # Medium: 4 newbits on /20 -&gt; /24 subnets (256 IPs).
+  private_medium_subnets = {
+    for i, az in local.azs : az =&gt; cidrsubnet(&quot;10.0.32.0/20&quot;, 4, i)
+  }
+
+  # Large: 2 newbits on /20 -&gt; /22 subnets (1024 IPs).
+  private_large_subnets = {
+    for i, az in local.azs : az =&gt; cidrsubnet(&quot;10.0.48.0/20&quot;, 2, i)
+  }
+
+  name_prefix = &quot;${var.project_name}-${var.environment}&quot;
+}
+
+# ---------------------------------------------------------------------------
+# VPC
+# ---------------------------------------------------------------------------
+resource &quot;aws_vpc&quot; &quot;this&quot; {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true # lets resources resolve names via the .2 resolver
+  enable_dns_hostnames = true # gives instances public DNS names when applicable
+
+  tags = { Name = &quot;${local.name_prefix}-vpc&quot; }
+}
+
+# ---------------------------------------------------------------------------
+# Internet Gateway — the door to the public internet for public subnets.
+# ---------------------------------------------------------------------------
+resource &quot;aws_internet_gateway&quot; &quot;this&quot; {
+  vpc_id = aws_vpc.this.id
+  tags   = { Name = &quot;${local.name_prefix}-igw&quot; }
+}
+
+# ---------------------------------------------------------------------------
+# PUBLIC SUBNETS (one per AZ) — hold load balancers and NAT Gateways only.
+# ---------------------------------------------------------------------------
+resource &quot;aws_subnet&quot; &quot;public&quot; {
+  for_each                = local.public_subnets
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = each.value
+  availability_zone       = each.key
+  map_public_ip_on_launch = true # public tier: auto-assign public IPs
+
+  tags = {
+    Name = &quot;${local.name_prefix}-public-${each.key}&quot;
+    Tier = &quot;public&quot;
+  }
+}
+
+# ---------------------------------------------------------------------------
+# PRIVATE SUBNETS — three sized groups, all internet-isolated (no public IP).
+# ---------------------------------------------------------------------------
+resource &quot;aws_subnet&quot; &quot;private_small&quot; {
+  for_each          = local.private_small_subnets
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = each.value
+  availability_zone = each.key
+  tags = {
+    Name = &quot;${local.name_prefix}-private-small-${each.key}&quot;
+    Tier = &quot;private-small&quot;
+  }
+}
+
+resource &quot;aws_subnet&quot; &quot;private_medium&quot; {
+  for_each          = local.private_medium_subnets
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = each.value
+  availability_zone = each.key
+  tags = {
+    Name = &quot;${local.name_prefix}-private-medium-${each.key}&quot;
+    Tier = &quot;private-medium&quot;
+  }
+}
+
+resource &quot;aws_subnet&quot; &quot;private_large&quot; {
+  for_each          = local.private_large_subnets
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = each.value
+  availability_zone = each.key
+  tags = {
+    Name = &quot;${local.name_prefix}-private-large-${each.key}&quot;
+    Tier = &quot;private-large&quot;
+  }
+}
+
+# ---------------------------------------------------------------------------
+# NAT GATEWAYS — let private subnets make OUTBOUND connections (patch
+# downloads, calling external APIs) without being reachable from the internet.
+# Each NAT needs a public Elastic IP and lives in a PUBLIC subnet.
+# ---------------------------------------------------------------------------
+locals {
+  nat_azs = var.single_nat_gateway ? slice(local.azs, 0, 1) : local.azs
+}
+
+resource &quot;aws_eip&quot; &quot;nat&quot; {
+  for_each = toset(local.nat_azs)
+  domain   = &quot;vpc&quot;
+  tags     = { Name = &quot;${local.name_prefix}-nat-eip-${each.key}&quot; }
+}
+
+resource &quot;aws_nat_gateway&quot; &quot;this&quot; {
+  for_each      = toset(local.nat_azs)
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = aws_subnet.public[each.key].id
+  tags          = { Name = &quot;${local.name_prefix}-nat-${each.key}&quot; }
+
+  depends_on = [aws_internet_gateway.this]
+}
+
+# ---------------------------------------------------------------------------
+# ROUTE TABLES
+# A subnet is &quot;public&quot; only because its route table sends 0.0.0.0/0 to the IGW.
+# Private subnets send 0.0.0.0/0 to a NAT Gateway instead.
+# ---------------------------------------------------------------------------
+
+# Public route table (shared by all public subnets).
+resource &quot;aws_route_table&quot; &quot;public&quot; {
+  vpc_id = aws_vpc.this.id
+  tags   = { Name = &quot;${local.name_prefix}-rt-public&quot; }
+}
+
+resource &quot;aws_route&quot; &quot;public_internet&quot; {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = &quot;0.0.0.0/0&quot;
+  gateway_id             = aws_internet_gateway.this.id
+}
+
+resource &quot;aws_route_table_association&quot; &quot;public&quot; {
+  for_each       = aws_subnet.public
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.public.id
+}
+
+# Private route tables — one per AZ so each AZ uses its own local NAT.
+# This is what gives you AZ-level failover: AZ-a traffic never depends on AZ-b.
+resource &quot;aws_route_table&quot; &quot;private&quot; {
+  for_each = toset(local.azs)
+  vpc_id   = aws_vpc.this.id
+  tags     = { Name = &quot;${local.name_prefix}-rt-private-${each.key}&quot; }
+}
+
+resource &quot;aws_route&quot; &quot;private_nat&quot; {
+  for_each               = aws_route_table.private
+  route_table_id         = each.value.id
+  destination_cidr_block = &quot;0.0.0.0/0&quot;
+  # If single_nat_gateway, every AZ points at the one NAT; otherwise its own.
+  nat_gateway_id = var.single_nat_gateway ? aws_nat_gateway.this[local.nat_azs[0]].id : aws_nat_gateway.this[each.key].id
+}
+
+# Associate all three private tiers in each AZ with that AZ&#x27;s private table.
+resource &quot;aws_route_table_association&quot; &quot;private_small&quot; {
+  for_each       = aws_subnet.private_small
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[each.key].id
+}
+
+resource &quot;aws_route_table_association&quot; &quot;private_medium&quot; {
+  for_each       = aws_subnet.private_medium
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[each.key].id
+}
+
+resource &quot;aws_route_table_association&quot; &quot;private_large&quot; {
+  for_each       = aws_subnet.private_large
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[each.key].id
+}
+</code></pre>
+  </div>
+  <div class="mt-8">
+    <div class="flex items-center gap-3">
+      <span class="font-mono text-ibm-blue font-semibold">security.tf</span>
+      <span class="h-px flex-1 bg-ibm-line"></span>
+    </div>
+    <p class="mt-2 small text-gray-700">All five security layers: tier-by-tier Security Groups, the private-subnet NACL backstop, S3/SQS/SNS VPC endpoints, and Flow Logs.</p>
+    <pre class="mt-3 p-4"><code># security.tf
+# ---------------------------------------------------------------------------
+# Layered security: Security Groups (stateful, instance-level) +
+# Network ACLs (stateless, subnet-level) + VPC Endpoints (keep AWS-service
+# traffic off the public internet) + Flow Logs (audit/visibility).
+# ---------------------------------------------------------------------------
+
+# === SECURITY GROUPS (the primary firewall; stateful) =====================
+
+# Public-facing load balancer: accepts HTTPS from the internet.
+resource &quot;aws_security_group&quot; &quot;alb&quot; {
+  name_prefix = &quot;${local.name_prefix}-alb-&quot;
+  description = &quot;Public ALB - allow 443 from internet&quot;
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = &quot;HTTPS from anywhere&quot;
+    from_port   = 443
+    to_port     = 443
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = [&quot;0.0.0.0/0&quot;]
+  }
+
+  egress {
+    description = &quot;All outbound&quot;
+    from_port   = 0
+    to_port     = 0
+    protocol    = &quot;-1&quot;
+    cidr_blocks = [&quot;0.0.0.0/0&quot;]
+  }
+
+  tags       = { Name = &quot;${local.name_prefix}-sg-alb&quot; }
+  lifecycle { create_before_destroy = true }
+}
+
+# Web/app tier (Java + Node apps, backend APIs). Only the ALB may reach it.
+resource &quot;aws_security_group&quot; &quot;app&quot; {
+  name_prefix = &quot;${local.name_prefix}-app-&quot;
+  description = &quot;App tier - traffic only from the ALB&quot;
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = &quot;App port from ALB only&quot;
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = &quot;tcp&quot;
+    security_groups = [aws_security_group.alb.id] # reference, not CIDR
+  }
+
+  egress {
+    description = &quot;All outbound (to DB, cache, NAT, endpoints)&quot;
+    from_port   = 0
+    to_port     = 0
+    protocol    = &quot;-1&quot;
+    cidr_blocks = [&quot;0.0.0.0/0&quot;]
+  }
+
+  tags       = { Name = &quot;${local.name_prefix}-sg-app&quot; }
+  lifecycle { create_before_destroy = true }
+}
+
+# Data tier (Postgres/RDS). Only the app tier may reach 5432. No egress to net.
+resource &quot;aws_security_group&quot; &quot;data&quot; {
+  name_prefix = &quot;${local.name_prefix}-data-&quot;
+  description = &quot;Data tier - Postgres from app tier only&quot;
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = &quot;Postgres from app tier&quot;
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = &quot;tcp&quot;
+    security_groups = [aws_security_group.app.id]
+  }
+
+  # Tight egress: databases rarely need to call out.
+  egress {
+    description = &quot;Responses within VPC&quot;
+    from_port   = 0
+    to_port     = 0
+    protocol    = &quot;-1&quot;
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  tags       = { Name = &quot;${local.name_prefix}-sg-data&quot; }
+  lifecycle { create_before_destroy = true }
+}
+
+# Messaging / streaming tier (Kafka/MSK). App tier produces/consumes.
+resource &quot;aws_security_group&quot; &quot;messaging&quot; {
+  name_prefix = &quot;${local.name_prefix}-msg-&quot;
+  description = &quot;Kafka/MSK - broker ports from app tier&quot;
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = &quot;Kafka TLS brokers from app tier&quot;
+    from_port       = 9092
+    to_port         = 9098
+    protocol        = &quot;tcp&quot;
+    security_groups = [aws_security_group.app.id]
+  }
+
+  # Brokers must talk to each other for replication.
+  ingress {
+    description = &quot;Inter-broker replication&quot;
+    from_port   = 9092
+    to_port     = 9098
+    protocol    = &quot;tcp&quot;
+    self        = true
+  }
+
+  egress {
+    description = &quot;All outbound within VPC&quot;
+    from_port   = 0
+    to_port     = 0
+    protocol    = &quot;-1&quot;
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  tags       = { Name = &quot;${local.name_prefix}-sg-messaging&quot; }
+  lifecycle { create_before_destroy = true }
+}
+
+# Search tier (OpenSearch). App tier queries 443.
+resource &quot;aws_security_group&quot; &quot;search&quot; {
+  name_prefix = &quot;${local.name_prefix}-search-&quot;
+  description = &quot;OpenSearch - HTTPS from app tier&quot;
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = &quot;OpenSearch HTTPS from app tier&quot;
+    from_port       = 443
+    to_port         = 443
+    protocol        = &quot;tcp&quot;
+    security_groups = [aws_security_group.app.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = &quot;-1&quot;
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  tags       = { Name = &quot;${local.name_prefix}-sg-search&quot; }
+  lifecycle { create_before_destroy = true }
+}
+
+# Security group used by Interface VPC Endpoints (below).
+resource &quot;aws_security_group&quot; &quot;vpce&quot; {
+  name_prefix = &quot;${local.name_prefix}-vpce-&quot;
+  description = &quot;Allow HTTPS from inside the VPC to interface endpoints&quot;
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = &quot;HTTPS from within VPC&quot;
+    from_port   = 443
+    to_port     = 443
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = &quot;-1&quot;
+    cidr_blocks = [&quot;0.0.0.0/0&quot;]
+  }
+
+  tags       = { Name = &quot;${local.name_prefix}-sg-vpce&quot; }
+  lifecycle { create_before_destroy = true }
+}
+
+# === NETWORK ACL for private subnets (stateless, subnet-level backstop) ===
+# Defense in depth. SGs are your main control; this NACL blocks inbound SSH/RDP
+# from anywhere as a coarse extra layer. Stateless = you must allow return
+# traffic on ephemeral ports explicitly.
+resource &quot;aws_network_acl&quot; &quot;private&quot; {
+  vpc_id = aws_vpc.this.id
+  subnet_ids = concat(
+    [for s in aws_subnet.private_small : s.id],
+    [for s in aws_subnet.private_medium : s.id],
+    [for s in aws_subnet.private_large : s.id],
+  )
+  tags = { Name = &quot;${local.name_prefix}-nacl-private&quot; }
+}
+
+resource &quot;aws_network_acl_rule&quot; &quot;private_in_vpc&quot; {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 100
+  egress         = false
+  protocol       = &quot;-1&quot;
+  rule_action    = &quot;allow&quot;
+  cidr_block     = var.vpc_cidr
+}
+
+resource &quot;aws_network_acl_rule&quot; &quot;private_in_ephemeral&quot; {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 110
+  egress         = false
+  protocol       = &quot;tcp&quot;
+  rule_action    = &quot;allow&quot;
+  cidr_block     = &quot;0.0.0.0/0&quot;
+  from_port      = 1024
+  to_port        = 65535
+}
+
+resource &quot;aws_network_acl_rule&quot; &quot;private_out_all&quot; {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 100
+  egress         = true
+  protocol       = &quot;-1&quot;
+  rule_action    = &quot;allow&quot;
+  cidr_block     = &quot;0.0.0.0/0&quot;
+}
+
+# === VPC ENDPOINTS (keep S3 / SQS / SNS traffic off the public internet) ==
+
+# Gateway endpoint for S3 (free). Adds an S3 route to private route tables.
+resource &quot;aws_vpc_endpoint&quot; &quot;s3&quot; {
+  vpc_id            = aws_vpc.this.id
+  service_name      = &quot;com.amazonaws.${var.aws_region}.s3&quot;
+  vpc_endpoint_type = &quot;Gateway&quot;
+  route_table_ids   = [for rt in aws_route_table.private : rt.id]
+  tags              = { Name = &quot;${local.name_prefix}-vpce-s3&quot; }
+}
+
+# Interface endpoints for SQS and SNS so messaging stays private.
+resource &quot;aws_vpc_endpoint&quot; &quot;sqs&quot; {
+  vpc_id              = aws_vpc.this.id
+  service_name        = &quot;com.amazonaws.${var.aws_region}.sqs&quot;
+  vpc_endpoint_type   = &quot;Interface&quot;
+  private_dns_enabled = true
+  security_group_ids  = [aws_security_group.vpce.id]
+  subnet_ids          = [for s in aws_subnet.private_small : s.id]
+  tags                = { Name = &quot;${local.name_prefix}-vpce-sqs&quot; }
+}
+
+resource &quot;aws_vpc_endpoint&quot; &quot;sns&quot; {
+  vpc_id              = aws_vpc.this.id
+  service_name        = &quot;com.amazonaws.${var.aws_region}.sns&quot;
+  vpc_endpoint_type   = &quot;Interface&quot;
+  private_dns_enabled = true
+  security_group_ids  = [aws_security_group.vpce.id]
+  subnet_ids          = [for s in aws_subnet.private_small : s.id]
+  tags                = { Name = &quot;${local.name_prefix}-vpce-sns&quot; }
+}
+
+# === VPC FLOW LOGS (visibility/audit) =====================================
+resource &quot;aws_cloudwatch_log_group&quot; &quot;flow&quot; {
+  count             = var.enable_flow_logs ? 1 : 0
+  name              = &quot;/vpc/flowlogs/${local.name_prefix}&quot;
+  retention_in_days = 90
+}
+
+data &quot;aws_iam_policy_document&quot; &quot;flow_assume&quot; {
+  count = var.enable_flow_logs ? 1 : 0
+  statement {
+    actions = [&quot;sts:AssumeRole&quot;]
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;vpc-flow-logs.amazonaws.com&quot;]
+    }
+  }
+}
+
+resource &quot;aws_iam_role&quot; &quot;flow&quot; {
+  count              = var.enable_flow_logs ? 1 : 0
+  name_prefix        = &quot;${local.name_prefix}-flow-&quot;
+  assume_role_policy = data.aws_iam_policy_document.flow_assume[0].json
+}
+
+data &quot;aws_iam_policy_document&quot; &quot;flow_perms&quot; {
+  count = var.enable_flow_logs ? 1 : 0
+  statement {
+    actions = [
+      &quot;logs:CreateLogStream&quot;,
+      &quot;logs:PutLogEvents&quot;,
+      &quot;logs:DescribeLogGroups&quot;,
+      &quot;logs:DescribeLogStreams&quot;,
+    ]
+    resources = [&quot;${aws_cloudwatch_log_group.flow[0].arn}:*&quot;]
+  }
+}
+
+resource &quot;aws_iam_role_policy&quot; &quot;flow&quot; {
+  count  = var.enable_flow_logs ? 1 : 0
+  role   = aws_iam_role.flow[0].id
+  policy = data.aws_iam_policy_document.flow_perms[0].json
+}
+
+resource &quot;aws_flow_log&quot; &quot;this&quot; {
+  count           = var.enable_flow_logs ? 1 : 0
+  iam_role_arn    = aws_iam_role.flow[0].arn
+  log_destination = aws_cloudwatch_log_group.flow[0].arn
+  traffic_type    = &quot;ALL&quot;
+  vpc_id          = aws_vpc.this.id
+  tags            = { Name = &quot;${local.name_prefix}-flowlog&quot; }
+}
+</code></pre>
+  </div>
+  <div class="mt-8">
+    <div class="flex items-center gap-3">
+      <span class="font-mono text-ibm-blue font-semibold">outputs.tf</span>
+      <span class="h-px flex-1 bg-ibm-line"></span>
+    </div>
+    <p class="mt-2 small text-gray-700">The values other Terraform modules (compute, RDS, MSK, OpenSearch) will consume — subnet IDs grouped by tier, security group IDs, and so on.</p>
+    <pre class="mt-3 p-4"><code># outputs.tf
+# Values you&#x27;ll feed into other modules (compute, RDS, MSK, OpenSearch, etc.).
+
+output &quot;vpc_id&quot; {
+  description = &quot;ID of the VPC.&quot;
+  value       = aws_vpc.this.id
+}
+
+output &quot;vpc_cidr&quot; {
+  description = &quot;Primary CIDR of the VPC.&quot;
+  value       = aws_vpc.this.cidr_block
+}
+
+output &quot;public_subnet_ids&quot; {
+  description = &quot;Public subnet IDs (load balancers, NAT).&quot;
+  value       = [for s in aws_subnet.public : s.id]
+}
+
+output &quot;private_small_subnet_ids&quot; {
+  description = &quot;Small private subnet IDs (small services, SNS/SQS endpoints).&quot;
+  value       = [for s in aws_subnet.private_small : s.id]
+}
+
+output &quot;private_medium_subnet_ids&quot; {
+  description = &quot;Medium private subnet IDs (Java/Node apps, APIs, NiFi).&quot;
+  value       = [for s in aws_subnet.private_medium : s.id]
+}
+
+output &quot;private_large_subnet_ids&quot; {
+  description = &quot;Large private subnet IDs (Kafka, Postgres, OpenSearch).&quot;
+  value       = [for s in aws_subnet.private_large : s.id]
+}
+
+output &quot;nat_gateway_ids&quot; {
+  description = &quot;NAT Gateway IDs.&quot;
+  value       = [for n in aws_nat_gateway.this : n.id]
+}
+
+output &quot;security_group_ids&quot; {
+  description = &quot;Map of tier -&gt; security group ID.&quot;
+  value = {
+    alb       = aws_security_group.alb.id
+    app       = aws_security_group.app.id
+    data      = aws_security_group.data.id
+    messaging = aws_security_group.messaging.id
+    search    = aws_security_group.search.id
+  }
+}
+</code></pre>
+  </div>
+  <button data-modal="m-state" class="mt-6 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ What is "Terraform state" and why does the team need remote state?
+  </button>
+</section>
+
+<!-- ============ 7 · AWS CLI ============ -->
+<section id="cli" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 7</p>
+  <h2 class="font-bold text-ibm-ink mt-1">The same network, built by hand with the AWS CLI</h2>
+  <p class="mt-4 text-gray-800">
+    Terraform is the recommended way (it remembers state and can undo cleanly). But seeing the raw AWS CLI commands
+    makes it crystal clear <em>what Terraform is doing for you</em>. Below is the same build, step by step. Each command
+    prints an ID; we capture it in a shell variable and feed it to the next command. This shows just AZ-a's subnets to
+    stay readable — repeat the subnet/route steps for AZ-b and AZ-c.
+  </p>
+  <div class="bg-ibm-field rounded p-4 mt-4 accent-l small text-gray-800">
+    <strong>Before you start:</strong> install the AWS CLI v2 and run <code>aws configure</code> with credentials that
+    can create VPC resources. Set your region with <code>export AWS_REGION=us-east-1</code>.
+  </div>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 1 — Create the VPC</h3>
+  <pre class="mt-2 p-4"><code>VPC_ID=$(aws ec2 create-vpc \
+  --cidr-block 10.0.0.0/16 \
+  --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=platform-prod-vpc}]' \
+  --query 'Vpc.VpcId' --output text)
+
+# Turn on DNS so resources can resolve names and get DNS hostnames
+aws ec2 modify-vpc-attribute --vpc-id "$VPC_ID" --enable-dns-support
+aws ec2 modify-vpc-attribute --vpc-id "$VPC_ID" --enable-dns-hostnames
+echo "VPC: $VPC_ID"</code></pre>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 2 — Internet Gateway (the public front door)</h3>
+  <pre class="mt-2 p-4"><code>IGW_ID=$(aws ec2 create-internet-gateway \
+  --query 'InternetGateway.InternetGatewayId' --output text)
+aws ec2 attach-internet-gateway --vpc-id "$VPC_ID" --internet-gateway-id "$IGW_ID"</code></pre>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 3 — The four subnets in AZ-a</h3>
+  <pre class="mt-2 p-4"><code># Public /24
+PUB_A=$(aws ec2 create-subnet --vpc-id "$VPC_ID" --availability-zone us-east-1a \
+  --cidr-block 10.0.0.0/24 \
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1a},{Key=Tier,Value=public}]' \
+  --query 'Subnet.SubnetId' --output text)
+
+# Auto-assign public IPs in the public subnet (this is a per-subnet setting)
+aws ec2 modify-subnet-attribute --subnet-id "$PUB_A" --map-public-ip-on-launch
+
+# Private-small /26
+PS_A=$(aws ec2 create-subnet --vpc-id "$VPC_ID" --availability-zone us-east-1a \
+  --cidr-block 10.0.16.0/26 \
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-small-1a}]' \
+  --query 'Subnet.SubnetId' --output text)
+
+# Private-medium /24
+PM_A=$(aws ec2 create-subnet --vpc-id "$VPC_ID" --availability-zone us-east-1a \
+  --cidr-block 10.0.32.0/24 \
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-medium-1a}]' \
+  --query 'Subnet.SubnetId' --output text)
+
+# Private-large /22
+PL_A=$(aws ec2 create-subnet --vpc-id "$VPC_ID" --availability-zone us-east-1a \
+  --cidr-block 10.0.48.0/22 \
+  --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-large-1a}]' \
+  --query 'Subnet.SubnetId' --output text)</code></pre>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 4 — NAT Gateway (one-way outbound for private subnets)</h3>
+  <pre class="mt-2 p-4"><code># A NAT needs a public Elastic IP and lives in a PUBLIC subnet
+EIP_A=$(aws ec2 allocate-address --domain vpc --query 'AllocationId' --output text)
+
+NAT_A=$(aws ec2 create-nat-gateway \
+  --subnet-id "$PUB_A" \
+  --allocation-id "$EIP_A" \
+  --tag-specifications 'ResourceType=natgateway,Tags=[{Key=Name,Value=nat-1a}]' \
+  --query 'NatGateway.NatGatewayId' --output text)
+
+# NAT creation takes ~2 minutes; wait until it is available
+aws ec2 wait nat-gateway-available --nat-gateway-ids "$NAT_A"</code></pre>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 5 — Route tables (this is what makes a subnet public or private)</h3>
+  <pre class="mt-2 p-4"><code># --- PUBLIC route table: send internet traffic to the Internet Gateway ---
+RT_PUB=$(aws ec2 create-route-table --vpc-id "$VPC_ID" \
+  --query 'RouteTable.RouteTableId' --output text)
+aws ec2 create-route --route-table-id "$RT_PUB" \
+  --destination-cidr-block 0.0.0.0/0 --gateway-id "$IGW_ID"
+aws ec2 associate-route-table --route-table-id "$RT_PUB" --subnet-id "$PUB_A"
+
+# --- PRIVATE route table for AZ-a: send internet traffic to the NAT ---
+RT_PRIV_A=$(aws ec2 create-route-table --vpc-id "$VPC_ID" \
+  --query 'RouteTable.RouteTableId' --output text)
+aws ec2 create-route --route-table-id "$RT_PRIV_A" \
+  --destination-cidr-block 0.0.0.0/0 --nat-gateway-id "$NAT_A"
+
+# All three private tiers in AZ-a share AZ-a's private route table
+aws ec2 associate-route-table --route-table-id "$RT_PRIV_A" --subnet-id "$PS_A"
+aws ec2 associate-route-table --route-table-id "$RT_PRIV_A" --subnet-id "$PM_A"
+aws ec2 associate-route-table --route-table-id "$RT_PRIV_A" --subnet-id "$PL_A"</code></pre>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 6 — A security group (app tier reachable only from the ALB SG)</h3>
+  <pre class="mt-2 p-4"><code>SG_ALB=$(aws ec2 create-security-group --vpc-id "$VPC_ID" \
+  --group-name platform-alb --description "Public ALB 443" \
+  --query 'GroupId' --output text)
+aws ec2 authorize-security-group-ingress --group-id "$SG_ALB" \
+  --protocol tcp --port 443 --cidr 0.0.0.0/0
+
+SG_APP=$(aws ec2 create-security-group --vpc-id "$VPC_ID" \
+  --group-name platform-app --description "App tier from ALB only" \
+  --query 'GroupId' --output text)
+# Reference the ALB security group as the source — not an IP range
+aws ec2 authorize-security-group-ingress --group-id "$SG_APP" \
+  --protocol tcp --port 8080 --source-group "$SG_ALB"</code></pre>
+
+  <h3 class="font-semibold text-ibm-ink mt-7">Step 7 — Free S3 Gateway endpoint (keep S3 traffic private)</h3>
+  <pre class="mt-2 p-4"><code>aws ec2 create-vpc-endpoint \
+  --vpc-id "$VPC_ID" \
+  --service-name com.amazonaws.us-east-1.s3 \
+  --vpc-endpoint-type Gateway \
+  --route-table-ids "$RT_PRIV_A"</code></pre>
+
+  <div class="bg-ibm-field rounded p-4 mt-6 accent-l small text-gray-800">
+    <strong>Notice the difference:</strong> the CLI version is imperative — you run each step in order, capture IDs, and
+    if step 9 fails you must manually clean up steps 1–8. Terraform is declarative: you describe the end state once, and
+    it handles ordering, IDs, and clean teardown with <code>terraform destroy</code>. That's why teams prefer it for anything they keep.
+  </div>
+
+  <button data-modal="m-cli-vs-tf" class="mt-5 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ When is the CLI actually the better choice?
+  </button>
+</section>
+
+<!-- ============ 8 · WORKLOADS ============ -->
+<section id="workloads" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 8</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Placing real workloads in this network</h2>
+  <p class="mt-4 text-gray-800">
+    Now the payoff: where does each piece of a real platform actually go? Below is a tier-by-tier home for messaging
+    (Kafka, SNS, SQS), databases (Postgres), search (OpenSearch), dataflow (NiFi), and the web/API layer
+    (Java &amp; Node.js). The rule repeats: anything stateful or sensitive goes in private subnets; only the load
+    balancer faces the world.
+  </p>
+
+  <div class="space-y-4 mt-6">
+    <div class="border border-ibm-line rounded overflow-hidden">
+      <div class="bg-ibm-blue text-white px-4 py-2 font-semibold flex items-center justify-between">
+        <span>Web &amp; API tier — Java + Node.js</span><span class="small font-normal">private-medium /24</span>
+      </div>
+      <div class="p-4 small text-gray-800 space-y-2">
+        <p>Your Spring Boot / Express services run on EC2, ECS, or EKS in the <strong>medium</strong> subnets. They never
+        get public IPs. Public users hit an <strong>Application Load Balancer</strong> in the public subnet on 443; the
+        ALB forwards to the app SG on 8080. Rolling deploys briefly double your running tasks, so the /24 (≈251 usable)
+        gives breathing room.</p>
+        <p><strong>Why medium:</strong> stateless app servers scale moderately and recycle often; they don't need the huge address space the data tier does.</p>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded overflow-hidden">
+      <div class="bg-ibm-blue text-white px-4 py-2 font-semibold flex items-center justify-between">
+        <span>Streaming — Apache Kafka (Amazon MSK)</span><span class="small font-normal">private-large /22</span>
+      </div>
+      <div class="p-4 small text-gray-800 space-y-2">
+        <p>MSK brokers spread one per AZ (3 brokers minimum for production). Each broker needs an IP; clients
+        (your app tier) open many connections; partitions replicate across AZs. Broker ports 9092–9098 are open only
+        <em>from the app SG</em> and <em>broker-to-broker</em> (the <code>self = true</code> rule). As you add brokers and
+        partitions, IP usage climbs — hence the <strong>large</strong> /22.</p>
+        <p><strong>Failover:</strong> with brokers in 3 AZs and replication factor 3, losing one AZ keeps the cluster writable.</p>
+        <a class="text-ibm-blue underline" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank" rel="noopener">Amazon MSK docs ↗</a>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded overflow-hidden">
+      <div class="bg-ibm-blue text-white px-4 py-2 font-semibold flex items-center justify-between">
+        <span>Messaging — Amazon SNS &amp; SQS</span><span class="small font-normal">private-small /26 (via VPC endpoints)</span>
+      </div>
+      <div class="p-4 small text-gray-800 space-y-2">
+        <p>SNS (publish/subscribe fan-out) and SQS (durable queues) are <em>managed</em> services — you don't run servers
+        for them. But to reach them <strong>without leaving the private network</strong>, you place <strong>Interface VPC
+        Endpoints</strong> in the small subnets. Your apps then call SQS/SNS over a private path, so message traffic never
+        touches the public internet. The endpoints need very few IPs, so a /26 closet is perfect.</p>
+        <p><strong>Pattern:</strong> SNS topic → fans out to multiple SQS queues → each consumed by a different service. This decouples producers from consumers and absorbs traffic spikes.</p>
+        <a class="text-ibm-blue underline" href="https://docs.aws.amazon.com/sns/latest/dg/sns-internal-vpc-endpoints.html" target="_blank" rel="noopener">SNS via VPC endpoints ↗</a>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded overflow-hidden">
+      <div class="bg-ibm-blue text-white px-4 py-2 font-semibold flex items-center justify-between">
+        <span>Database — PostgreSQL (Amazon RDS / Aurora)</span><span class="small font-normal">private-large /22</span>
+      </div>
+      <div class="p-4 small text-gray-800 space-y-2">
+        <p>Postgres lives in the large subnets, reachable only on 5432 <em>from the app SG</em>. You give RDS a "DB subnet
+        group" spanning all three AZs and enable <strong>Multi-AZ</strong>: AWS keeps a synchronous standby in a second
+        AZ and fails over automatically if the primary's AZ dies. Read replicas (which also consume IPs) scale reads.</p>
+        <p><strong>Why large:</strong> a primary + standby + several read replicas + future growth adds up; the /22 leaves room. Databases get tight egress — they rarely need to call the internet.</p>
+        <a class="text-ibm-blue underline" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html" target="_blank" rel="noopener">RDS Multi-AZ docs ↗</a>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded overflow-hidden">
+      <div class="bg-ibm-blue text-white px-4 py-2 font-semibold flex items-center justify-between">
+        <span>Search — Amazon OpenSearch Service</span><span class="small font-normal">private-large /22</span>
+      </div>
+      <div class="p-4 small text-gray-800 space-y-2">
+        <p>An OpenSearch domain placed inside the VPC (the secure choice) puts data nodes across 3 AZs with dedicated
+        master nodes for stability. Each node takes an IP, and clusters grow node-by-node as your index grows — classic
+        IP-hungry workload, so it sits in <strong>large</strong>. App tier queries it on 443 via the search SG.</p>
+        <p><strong>Note:</strong> modern OpenSearch uses <em>Dashboards</em> at <code>/_dashboards/</code> (the old Kibana endpoint was removed in newer provider/service versions).</p>
+        <a class="text-ibm-blue underline" href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/vpc.html" target="_blank" rel="noopener">OpenSearch in a VPC ↗</a>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded overflow-hidden">
+      <div class="bg-ibm-blue text-white px-4 py-2 font-semibold flex items-center justify-between">
+        <span>Dataflow — Apache NiFi</span><span class="small font-normal">private-medium /24</span>
+      </div>
+      <div class="p-4 small text-gray-800 space-y-2">
+        <p>NiFi moves and transforms data between systems (e.g., pulling from Kafka, writing to OpenSearch or Postgres).
+        A clustered NiFi of a few nodes fits comfortably in <strong>medium</strong>. It sits privately and talks to the
+        large tier (Kafka/DB/search) over internal SG rules. If your NiFi cluster is very large or ingests massive
+        volumes, promote it to the large tier.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="font-semibold text-ibm-ink mt-8">Quick placement reference</h3>
+  <table class="mt-3 small">
+    <thead><tr><th>Workload</th><th>Subnet tier</th><th>Reached on</th><th>Source allowed</th></tr></thead>
+    <tbody>
+      <tr><td>Public ALB</td><td>public</td><td>443</td><td>Internet</td></tr>
+      <tr><td>Java / Node apps, APIs</td><td>private-medium</td><td>8080</td><td>ALB SG only</td></tr>
+      <tr><td>NiFi</td><td>private-medium</td><td>internal</td><td>app/data SGs</td></tr>
+      <tr><td>SNS / SQS endpoints</td><td>private-small</td><td>443</td><td>VPC CIDR</td></tr>
+      <tr><td>Kafka / MSK</td><td>private-large</td><td>9092–9098</td><td>app SG + self</td></tr>
+      <tr><td>PostgreSQL / RDS</td><td>private-large</td><td>5432</td><td>app SG only</td></tr>
+      <tr><td>OpenSearch</td><td>private-large</td><td>443</td><td>app SG only</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 9 · USE CASES & TRADE-OFFS ============ -->
+<section id="use-cases" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 9</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Real-world use cases, pros &amp; cons</h2>
+  <p class="mt-4 text-gray-800">
+    A company that needs <strong>different levels of security internally and externally</strong> is exactly who this
+    design serves. Here are three common shapes, with honest trade-offs.
+  </p>
+
+  <div class="space-y-5 mt-6">
+    <div class="border border-ibm-line rounded p-5">
+      <h3 class="font-semibold text-ibm-ink">Use case A — Customer-facing SaaS with sensitive data</h3>
+      <p class="mt-2 small text-gray-800">Public web app, private data. Externally only the ALB on 443 is reachable; internally, tiers are isolated so a compromised web server still can't reach the database directly (it must come through the app SG on 5432).</p>
+      <div class="grid sm:grid-cols-2 gap-3 mt-3 small">
+        <div class="bg-ibm-field rounded p-3"><strong class="text-ibm-blue">Pros</strong><ul class="mt-1 space-y-1"><li>+ Tiny external attack surface.</li><li>+ Clear blast-radius limits between tiers.</li><li>+ Easy to pass audits (PCI/SOC 2) thanks to segmentation + Flow Logs.</li></ul></div>
+        <div class="bg-ibm-field rounded p-3"><strong class="text-ibm-blue">Cons</strong><ul class="mt-1 space-y-1"><li>− More moving parts than one flat subnet.</li><li>− NAT + endpoints add cost.</li><li>− Cross-AZ data transfer charges apply.</li></ul></div>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded p-5">
+      <h3 class="font-semibold text-ibm-ink">Use case B — Internal-only enterprise platform (no public access)</h3>
+      <p class="mt-2 small text-gray-800">No Internet Gateway at all for app traffic; users arrive over a VPN or AWS Direct Connect from the corporate network. Everything lives in private subnets. The "external" boundary is your corporate edge, not the open internet.</p>
+      <div class="grid sm:grid-cols-2 gap-3 mt-3 small">
+        <div class="bg-ibm-field rounded p-3"><strong class="text-ibm-blue">Pros</strong><ul class="mt-1 space-y-1"><li>+ Strongest posture — nothing is internet-reachable.</li><li>+ Natural fit for regulated industries.</li><li>+ Simple mental model: all private.</li></ul></div>
+        <div class="bg-ibm-field rounded p-3"><strong class="text-ibm-blue">Cons</strong><ul class="mt-1 space-y-1"><li>− Requires VPN/Direct Connect plumbing.</li><li>− Patching/updates rely on NAT or endpoints.</li><li>− Harder for third parties to integrate.</li></ul></div>
+      </div>
+    </div>
+
+    <div class="border border-ibm-line rounded p-5">
+      <h3 class="font-semibold text-ibm-ink">Use case C — Event-driven data platform (Kafka + SNS/SQS + OpenSearch)</h3>
+      <p class="mt-2 small text-gray-800">High-throughput ingestion: producers publish to Kafka/SNS, consumers process via SQS, results land in OpenSearch and Postgres, NiFi orchestrates flows. The large tier does the heavy lifting; messaging stays private via endpoints.</p>
+      <div class="grid sm:grid-cols-2 gap-3 mt-3 small">
+        <div class="bg-ibm-field rounded p-3"><strong class="text-ibm-blue">Pros</strong><ul class="mt-1 space-y-1"><li>+ Decoupled, spike-tolerant (queues buffer load).</li><li>+ Scales each tier independently.</li><li>+ Large subnets absorb cluster growth.</li></ul></div>
+        <div class="bg-ibm-field rounded p-3"><strong class="text-ibm-blue">Cons</strong><ul class="mt-1 space-y-1"><li>− Most complex to operate &amp; reason about.</li><li>− Many Interface endpoints add hourly cost.</li><li>− Cross-AZ replication increases data charges.</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-ibm-field rounded p-4 mt-6 accent-l small text-gray-800">
+    <strong>The honest summary:</strong> tiered, multi-AZ, private-by-default networking costs more (NAT gateways,
+    endpoints, cross-AZ transfer) and has more parts than a single flat subnet. You buy real security isolation and
+    resilience with that complexity. For a throwaway demo, a default VPC is fine. For anything holding customer data or
+    needing uptime, this structure pays for itself the first time it contains an incident or survives an AZ outage.
+  </div>
+
+  <button data-modal="m-cost" class="mt-5 text-ibm-blue font-medium underline underline-offset-2 hover:text-ibm-blue2">
+    ⓘ Where does the money actually go? (cost breakdown)
+  </button>
+</section>
+
+<!-- ============ 10 · FAILOVER & CONTROLS ============ -->
+<section id="failover" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 10</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Failover &amp; operational controls</h2>
+  <p class="mt-4 text-gray-800">
+    "Failover" means: when one part breaks, another quietly takes over so users barely notice. Our design builds this in
+    at the network layer; you then layer service-level redundancy on top.
+  </p>
+
+  <div class="space-y-4 mt-6">
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Multi-AZ everything</h3>
+      <p class="mt-2 small text-gray-800">Every tier exists in all three AZs. The ALB health-checks targets and stops
+      routing to a dead AZ automatically. RDS Multi-AZ promotes a standby in seconds. Kafka replication keeps data
+      available. OpenSearch rebalances shards. One datacenter can fail and the system keeps serving.</p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">NAT per AZ vs single NAT — the explicit trade-off</h3>
+      <p class="mt-2 small text-gray-800">Our <code>single_nat_gateway</code> variable controls this. <strong>One NAT
+      per AZ</strong> (prod default) means AZ-a's outbound traffic never depends on AZ-b — true isolation, at roughly one
+      NAT's hourly + data cost per AZ. <strong>One shared NAT</strong> (dev) is cheaper but if its AZ fails, every private
+      subnet loses outbound internet. Flip the flag per environment.</p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Per-AZ private route tables</h3>
+      <p class="mt-2 small text-gray-800">We give each AZ its own private route table pointing at that AZ's local NAT.
+      This is the subtle detail that makes NAT-per-AZ actually isolate failures instead of silently cross-wiring AZs.</p>
+    </div>
+    <div class="border border-ibm-line rounded p-4 accent-l">
+      <h3 class="font-semibold text-ibm-ink">Visibility &amp; guardrails</h3>
+      <ul class="mt-2 small text-gray-800 space-y-1.5">
+        <li><strong>Flow Logs</strong> → audit trail of every accepted/rejected connection.</li>
+        <li><strong>Default tags</strong> → every resource tagged with environment/project/ManagedBy for cost tracking and ownership.</li>
+        <li><strong>Pinned provider</strong> → reproducible applies, no surprise upgrades.</li>
+        <li><strong>Remote state + locking</strong> (commented in <code>versions.tf</code>) → safe team collaboration.</li>
+        <li><strong>CIDR validation</strong> in variables → catch typos at <code>plan</code> time, not after a broken apply.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="font-semibold text-ibm-ink mt-8">Where to grow next</h3>
+  <p class="mt-2 text-gray-800 small">
+    Natural follow-ons that fit this foundation: <strong>AWS WAF</strong> on the ALB for L7 protection,
+    <strong>AWS Network Firewall</strong> for deep packet inspection, <strong>Transit Gateway</strong> to connect
+    multiple VPCs/accounts, <strong>PrivateLink</strong> to expose internal services privately to partners, and
+    <strong>GuardDuty</strong> for threat detection reading those Flow Logs.
+  </p>
+</section>
+
+<!-- ============ 11 · REFERENCES ============ -->
+<section id="references" class="anchor-pad">
+  <p class="small uppercase tracking-widest text-ibm-blue font-semibold">Section 11</p>
+  <h2 class="font-bold text-ibm-ink mt-1">Official references (current, 2026)</h2>
+  <p class="mt-4 text-gray-800 small">Always prefer the official docs — AWS and Terraform update frequently. These were current as of mid-2026.</p>
+  <div class="grid sm:grid-cols-2 gap-3 mt-5 small">
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">Amazon VPC User Guide ↗</span><br>The authoritative VPC reference.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-cidr-blocks.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">VPC CIDR blocks ↗</span><br>Allowed sizes, restrictions, the 172.17 warning.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/vpc/latest/userguide/subnet-sizing.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">Subnet sizing &amp; reserved IPs ↗</span><br>The 5-reserved-addresses rule.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">Terraform AWS provider docs ↗</span><br>Every resource, current 6.x.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://developer.hashicorp.com/terraform/language/functions/cidrsubnet" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">cidrsubnet() function ↗</span><br>How the subnet math works.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/vpc/latest/userguide/create-a-vpc-with-private-subnets-and-nat-gateways-using-aws-cli.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">VPC via AWS CLI tutorial ↗</span><br>Official CLI walkthrough.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">Amazon MSK (Kafka) ↗</span><br>Managed Kafka networking.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">RDS Multi-AZ ↗</span><br>Database failover.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/vpc.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">OpenSearch in a VPC ↗</span><br>Private search domains.</a>
+    <a class="block border border-ibm-line rounded p-3 hover:bg-ibm-field" href="https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/welcome.html" target="_blank" rel="noopener"><span class="text-ibm-blue font-semibold">VPC connectivity options ↗</span><br>VPN, Direct Connect, peering, TGW.</a>
+  </div>
+</section>
+
+  </main>
+</div>
+
+<!-- ===================== DOWNLOAD / FOOTER ===================== -->
+<footer class="border-t border-ibm-line bg-ibm-field mt-10">
+  <div class="max-w-6xl mx-auto px-4 py-10">
+    <h2 class="font-bold text-ibm-ink">Get the code</h2>
+    <p class="mt-2 text-gray-700 small max-w-2xl">All five Terraform files plus an example <code>terraform.tfvars</code> are bundled for you. Drop them in a folder and run <code>terraform init &amp;&amp; terraform plan</code>.</p>
+    <div class="mt-4 font-mono small bg-white border border-ibm-line rounded p-4 max-w-md">
+      terraform/<br>
+      &nbsp;├─ versions.tf<br>
+      &nbsp;├─ variables.tf<br>
+      &nbsp;├─ main.tf<br>
+      &nbsp;├─ security.tf<br>
+      &nbsp;├─ outputs.tf<br>
+      &nbsp;└─ terraform.tfvars.example
+    </div>
+    <p class="mt-6 small text-gray-500">Educational reference · verify against the official AWS &amp; Terraform docs before production use · costs apply for NAT gateways, endpoints, and cross-AZ data transfer.</p>
+  </div>
+</footer>
+
+<!-- ===================== MODALS ===================== -->
+<div id="modal-root"></div>
+<template id="tpl-modals">
+
+  <div data-id="m-why-vpc" class="modal">
+    <h3>Why build a custom VPC when a default one exists?</h3>
+    <p>Every new AWS account ships with a <strong>default VPC</strong> so you can launch something instantly. It's convenient but deliberately permissive: all its subnets are public, and it's not laid out for tiers, sizing, or least-privilege. For anything real you want control over CIDR ranges, public/private separation, multi-AZ layout, and security boundaries — none of which the default VPC gives you cleanly. A purpose-built VPC is the foundation everything else (security, compliance, failover) rests on.</p>
+    <p class="ref">Docs: <a href="https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html" target="_blank" rel="noopener">Default VPCs ↗</a></p>
+  </div>
+
+  <div data-id="m-cidr-math" class="modal">
+    <h3>How <code>cidrsubnet()</code> slices the /16</h3>
+    <p>Terraform's <code>cidrsubnet(prefix, newbits, netnum)</code> takes a base block, borrows <em>newbits</em> more bits to make smaller subnets, and returns the <em>netnum</em>-th one.</p>
+    <pre><code>cidrsubnet("10.0.0.0/20", 4, 0) = 10.0.0.0/24   # public AZ-a
+cidrsubnet("10.0.0.0/20", 4, 1) = 10.0.1.0/24   # public AZ-b
+cidrsubnet("10.0.16.0/20",6, 0) = 10.0.16.0/26  # small  AZ-a
+cidrsubnet("10.0.48.0/20",2, 0) = 10.0.48.0/22  # large  AZ-a</code></pre>
+    <p>Because we loop over the AZ list with the index as <em>netnum</em>, each AZ deterministically gets the next non-overlapping slice — no manual IP math, no typos.</p>
+    <p class="ref">Docs: <a href="https://developer.hashicorp.com/terraform/language/functions/cidrsubnet" target="_blank" rel="noopener">cidrsubnet() ↗</a></p>
+  </div>
+
+  <div data-id="m-az" class="modal">
+    <h3>What is an Availability Zone, and why three?</h3>
+    <p>An AWS <strong>Region</strong> (like us-east-1) contains several <strong>Availability Zones</strong> — physically separate datacenters with independent power, cooling, and networking, a few miles apart and linked by fast private fiber. Putting copies of your system in multiple AZs means a fire, flood, or power loss in one building doesn't take you down.</p>
+    <p><strong>Why three and not two?</strong> Many quorum-based systems (Kafka, etcd, databases doing leader election) need a majority to stay healthy. With three AZs you can lose one and still have a 2-of-3 majority. With only two, losing one leaves you at 1-of-2 — no majority. Three is the production sweet spot.</p>
+  </div>
+
+  <div data-id="m-zero-trust" class="modal">
+    <h3>Zero trust &amp; least privilege here</h3>
+    <p><strong>Least privilege</strong> means each thing can reach only what it strictly needs. Our SGs encode this literally: the database accepts 5432 <em>only</em> from the app SG; the app accepts 8080 <em>only</em> from the ALB SG. Nothing is open to "everything."</p>
+    <p><strong>Zero trust</strong> means not trusting traffic just because it's "inside the network." By segmenting tiers with SGs that reference each other (not broad CIDRs), a breach of one tier doesn't automatically grant access to the next. The network being private is one layer; the per-tier SG rules are the layer that contains lateral movement.</p>
+  </div>
+
+  <div data-id="m-state" class="modal">
+    <h3>Terraform state &amp; remote state</h3>
+    <p>Terraform records what it created in a <strong>state file</strong> so it knows the difference between "what exists" and "what you want." By default that file is local. On a team, a local file is dangerous: two people applying at once can corrupt it, and nobody shares the truth.</p>
+    <p><strong>Remote state</strong> (e.g., an S3 bucket) with <strong>locking</strong> (DynamoDB or S3-native locking) fixes this: state lives in one shared, encrypted place, and a lock prevents two applies from colliding. We left a ready-to-use backend block commented in <code>versions.tf</code>.</p>
+    <p class="ref">Docs: <a href="https://developer.hashicorp.com/terraform/language/backend/s3" target="_blank" rel="noopener">S3 backend ↗</a></p>
+  </div>
+
+  <div data-id="m-cli-vs-tf" class="modal">
+    <h3>When is the CLI the better choice?</h3>
+    <p>The AWS CLI shines for <strong>one-off investigation and quick reads</strong> ("what subnets exist?", "describe this NAT"), for <strong>scripting glue</strong> in CI that isn't managing long-lived infrastructure, and for <strong>learning</strong> exactly what each API does. For anything you <em>keep and evolve</em>, Terraform wins: it tracks state, previews changes, handles dependency ordering, and tears down cleanly. Rule of thumb: CLI to look and poke; Terraform to build and own.</p>
+  </div>
+
+  <div data-id="m-cost" class="modal">
+    <h3>Where the money goes</h3>
+    <p>The VPC, subnets, route tables, Internet Gateway, security groups, NACLs, and the S3 Gateway endpoint are <strong>free</strong>. The recurring costs are:</p>
+    <p>• <strong>NAT Gateways</strong> — an hourly charge per NAT plus a per-GB data-processing charge. Three NATs (one per AZ) is the biggest line item; a single shared NAT cuts it but reduces resilience.<br>
+    • <strong>Interface VPC Endpoints</strong> (SQS, SNS) — an hourly charge per endpoint per AZ plus per-GB.<br>
+    • <strong>Cross-AZ data transfer</strong> — moving data between AZs (Kafka replication, DB standby sync, app↔DB across AZs) carries a per-GB charge.<br>
+    • <strong>Elastic IPs</strong> — free while attached to a running NAT, charged when idle.</p>
+    <p>Tip: in dev, set <code>single_nat_gateway = true</code> and disable endpoints you don't need. In prod, keep them — the resilience and private paths are usually worth it. Always confirm current numbers on the AWS pricing pages.</p>
+    <p class="ref">Pricing: <a href="https://aws.amazon.com/vpc/pricing/" target="_blank" rel="noopener">Amazon VPC pricing ↗</a></p>
+  </div>
+
+</template>
+
+<!-- Active modal overlay -->
+<div id="overlay" class="is-hidden modal-backdrop">
+  <div id="overlay-card" class="bg-white max-w-xl w-full rounded-lg shadow-xl max-h-[85vh] overflow-y-auto">
+    <div class="flex items-start justify-between p-5 border-b border-ibm-line">
+      <h3 id="overlay-title" class="font-semibold text-ibm-ink pr-6"></h3>
+      <button id="overlay-close" aria-label="Close" class="text-gray-500 hover:text-ibm-ink text-2xl leading-none shrink-0">&times;</button>
+    </div>
+    <div id="overlay-body" class="p-5 text-gray-800 space-y-3"></div>
+  </div>
+</div>
+
+<style>
+  #overlay-body p { font-size: calc(var(--fs) * 0.92); }
+  #overlay-body pre { font-size: calc(var(--fs) * 0.82); padding: 12px; margin:8px 0; }
+  #overlay-body .ref { font-size: calc(var(--fs) * 0.8); color:#525252; }
+  #overlay-body a { color:#0530ad; text-decoration: underline; }
+  .modal h3 { display:none; } /* templates are not shown directly */
+
+  /* Bulletproof overlay (does not rely on Tailwind utility classes) */
+  #overlay { position:fixed; inset:0; z-index:50; padding:16px;
+             align-items:center; justify-content:center; }
+  #overlay.is-hidden { display:none !important; }
+  #overlay.is-open   { display:flex !important; }
+</style>
+
+<script>
+(function () {
+  // ---------- Font size control (14–36px) ----------
+  var FS_MIN = 14, FS_MAX = 36, fs = 18;
+  var root = document.body;
+  var readout = document.getElementById('fs-readout');
+  function applyFs() {
+    root.style.setProperty('--fs', fs + 'px');
+    readout.textContent = fs + 'px';
+    document.getElementById('fs-down').disabled = (fs <= FS_MIN);
+    document.getElementById('fs-up').disabled = (fs >= FS_MAX);
+  }
+  document.getElementById('fs-up').addEventListener('click', function () {
+    fs = Math.min(FS_MAX, fs + 2); applyFs();
+  });
+  document.getElementById('fs-down').addEventListener('click', function () {
+    fs = Math.max(FS_MIN, fs - 2); applyFs();
+  });
+  applyFs();
+
+  // ---------- Modals ----------
+  var tpl = document.getElementById('tpl-modals').content;
+  var overlay = document.getElementById('overlay');
+  var titleEl = document.getElementById('overlay-title');
+  var bodyEl  = document.getElementById('overlay-body');
+
+  function openModal(id) {
+    var src = tpl.querySelector('[data-id="' + id + '"]');
+    if (!src) return;
+    var h = src.querySelector('h3');
+    titleEl.innerHTML = h ? h.innerHTML : '';
+    // body = everything except the first h3
+    var clone = src.cloneNode(true);
+    var firstH3 = clone.querySelector('h3');
+    if (firstH3) firstH3.remove();
+    bodyEl.innerHTML = clone.innerHTML;
+    overlay.classList.remove('is-hidden');
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    overlay.classList.add('is-hidden');
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+  }
+  document.querySelectorAll('[data-modal]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openModal(btn.getAttribute('data-modal')); });
+  });
+  document.getElementById('overlay-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+  // ---------- TOC scroll-spy ----------
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc-link'));
+  var sections = links.map(function (l) {
+    return document.querySelector(l.getAttribute('href'));
+  });
+  function onScroll() {
+    var pos = window.scrollY + 120;
+    var idx = 0;
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i] && sections[i].offsetTop <= pos) idx = i;
+    }
+    links.forEach(function (l, i) { l.classList.toggle('active', i === idx); });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+
+</body>
+</html>
