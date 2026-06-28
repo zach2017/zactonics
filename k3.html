@@ -121,6 +121,7 @@
     <a class="py-1 text-ink70 hover:text-ibmblue" href="#logging">Step 8 · Logging</a>
     <a class="py-1 text-ink70 hover:text-ibmblue" href="#monitoring">Step 9 · Grafana & Prometheus</a>
     <a class="py-1 text-ink70 hover:text-ibmblue" href="#test">Step 10 · Test it</a>
+    <a class="py-1 text-ink70 hover:text-ibmblue" href="#troubleshooting">Troubleshooting</a>
     <a class="py-1 text-ink70 hover:text-ibmblue" href="#cleanup">Clean up</a>
     <a class="py-1 text-ink70 hover:text-ibmblue" href="#refs">Official docs</a>
   </div>
@@ -146,6 +147,7 @@
         <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#logging">8 · Logging</a>
         <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#monitoring">9 · Grafana</a>
         <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#test">10 · Test it</a>
+        <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#troubleshooting">Troubleshooting</a>
         <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#cleanup">Clean up</a>
         <a class="navlink block py-1 pl-3 border-l-2 border-line text-ink70" href="#refs">Official docs</a>
       </nav>
@@ -1033,6 +1035,335 @@ kubectl get kafkatopics -n kafka</code></pre>
       </div>
     </section>
 
+    <!-- TROUBLESHOOTING -->
+    <section id="troubleshooting" class="anchor-offset mb-16">
+      <div class="flex items-baseline gap-3 mb-5">
+        <span class="stepnum text-ibmblue text-sm">/ FIX</span>
+        <h3 class="font-semibold text-2xl text-ink">Troubleshooting — find it, fix it, prove it</h3>
+      </div>
+      <p class="text-ink70 mb-4">Something not working? Don't panic. Almost every problem is found with a handful of commands. This section shows you how to <strong>(1)</strong> see what's running, <strong>(2)</strong> find what's broken, <strong>(3)</strong> fix the common ones, and <strong>(4)</strong> prove it's truly healthy.</p>
+
+      <div class="bg-field border-l-4 border-ibmblue p-4 mb-8">
+        <p class="text-ink70"><strong>Golden rule:</strong> when in doubt, run <span class="ic">kubectl describe</span> on the broken thing and read the <strong>Events</strong> at the very bottom — and check <span class="ic">status.conditions</span> on the Kafka object. They almost always say the real reason in plain words.</p>
+      </div>
+
+      <!-- 1. HEALTH CHECK -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">1. Is everything running? (the 30-second health check)</h4>
+      <p class="text-ink70 mb-3">Run these top to bottom. You want pods <span class="ic">Running</span> with full readiness (like <span class="ic">1/1</span>), and your Kafka object showing <span class="ic">Ready</span>.</p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · overall health</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Are the Kafka pods up? (controllers, brokers, operators)</span>
+kubectl get pods -n kafka
+
+<span class="tok-c"># Is the Kafka cluster itself Ready? Are the node pools healthy?</span>
+kubectl get kafka,kafkanodepool -n kafka
+
+<span class="tok-c"># Topics and users the operators manage</span>
+kubectl get kafkatopic,kafkauser -n kafka
+
+<span class="tok-c"># Are the worker machines Ready?</span>
+kubectl get nodes -o wide
+
+<span class="tok-c"># Did the disks (storage) get created and bound?</span>
+kubectl get pvc -n kafka
+
+<span class="tok-c"># Are the network addresses (including load balancers) up?</span>
+kubectl get svc -n kafka</code></pre>
+      </div>
+      <p class="text-ink70 mb-2">Pod status words and what they mean:</p>
+      <div class="card border border-line overflow-x-auto mb-6">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="bg-ink text-white">
+              <th class="p-3 font-medium text-sm">You see</th>
+              <th class="p-3 font-medium text-sm">It means</th>
+            </tr>
+          </thead>
+          <tbody class="text-ink70">
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Running 1/1</td><td class="p-3 text-sm">Healthy and ready. 🎉</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Pending</td><td class="p-3 text-sm">Can't be placed yet — usually no room on nodes, or a disk problem. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-pending" aria-label="Why Pending">i</button></td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">ContainerCreating</td><td class="p-3 text-sm">Starting up. Fine for a minute; stuck longer means a disk or image issue.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">CrashLoopBackOff</td><td class="p-3 text-sm">It starts, crashes, retries. A real error — read the logs. <button class="chip inline-flex items-center justify-center w-5 h-5 font-mono text-xs align-middle" data-modal="m-crashloop" aria-label="About CrashLoopBackOff">i</button></td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">ImagePullBackOff</td><td class="p-3 text-sm">Can't download the container image — wrong tag, or no internet/registry access.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Init:0/1</td><td class="p-3 text-sm">Waiting on a setup step before the main app starts.</td></tr>
+            <tr class="border-t border-line"><td class="p-3 font-mono text-sm">Terminating (stuck)</td><td class="p-3 text-sm">Trying to shut down. If stuck, a volume or finalizer is holding it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 2. FIND THE PROBLEM -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">2. The 5 commands that find almost any problem</h4>
+      <p class="text-ink70 mb-3">When a pod or resource looks wrong, these five tell you <em>why</em>. Replace <span class="ic">POD</span> with the real name from <span class="ic">kubectl get pods</span> (for example <span class="ic">my-cluster-broker-0</span>).</p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · the detective toolkit</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># 1) DESCRIBE — read the Events at the bottom. This is the #1 tool.</span>
+kubectl describe pod POD -n kafka
+
+<span class="tok-c"># 2) LOGS — what the app itself printed. Add --previous to see a crashed run.</span>
+kubectl logs POD -n kafka
+kubectl logs POD -n kafka --previous
+kubectl logs POD -n kafka -c kafka          <span class="tok-c"># a specific container</span>
+
+<span class="tok-c"># 3) EVENTS — recent cluster-wide messages, newest last</span>
+kubectl get events -n kafka --sort-by='.lastTimestamp'
+
+<span class="tok-c"># 4) STATUS — the Kafka object explains itself in status.conditions</span>
+kubectl get kafka my-cluster -n kafka -o yaml | grep -A 30 "status:"
+
+<span class="tok-c"># 5) EXEC — open a shell inside a broker to look around / run Kafka tools</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- bash</code></pre>
+      </div>
+      <p class="text-ink70 mb-3">The operator log is gold when setup itself fails (bad YAML, unsupported version, cert trouble):</p>
+      <div class="codewrap mb-6">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · operator log</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Follow the Strimzi operator. Search it for WARN / ERROR.</span>
+kubectl logs -f deployment/strimzi-cluster-operator -n kafka | grep -i -E "warn|error|exception"</code></pre>
+      </div>
+
+      <!-- 3. COMMON PROBLEMS AND FIXES -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">3. Common problems &amp; how to fix them</h4>
+      <p class="text-ink70 mb-4">Each card is one real issue: <strong>what you see</strong>, <strong>why it happens</strong>, the command to <strong>confirm it</strong>, and the <strong>fix</strong>.</p>
+
+      <div class="space-y-4 mb-6">
+
+        <!-- pod pending -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ Pod stuck on <span class="text-ink">Pending</span></p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> no node has enough CPU/RAM, or the disk can't be placed in the broker's zone.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl describe pod POD -n kafka      <span class="tok-c"># Events say "Insufficient cpu" or "didn't match..."</span>
+kubectl describe pvc -n kafka          <span class="tok-c"># or a volume/zone message</span></code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> add capacity, then re-check. (More nodes = more room.)</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>eksctl scale nodegroup --cluster kafka-cluster --name kafka-workers \
+  --nodes 5 --nodes-min 3 --nodes-max 8 --wait</code></pre>
+          </div>
+        </div>
+
+        <!-- crashloop -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ <span class="text-ink">CrashLoopBackOff</span> on a broker or controller</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> bad config value, out-of-memory (OOMKilled), or a wrong Kafka/metadata version.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl logs POD -n kafka --previous     <span class="tok-c"># the crash message itself</span>
+kubectl describe pod POD -n kafka | grep -i -E "reason|oomkilled|exit"</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> if OOM, give it more memory in <span class="ic">kafka.yaml</span> and re-apply; if config, fix the bad key the log named.</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">kafka.yaml (under spec.kafka)</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>    resources:
+      requests:
+        memory: 4Gi
+        cpu: "1"
+      limits:
+        memory: 6Gi</code></pre>
+          </div>
+        </div>
+
+        <!-- image pull -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ <span class="text-ink">ImagePullBackOff</span> / ErrImagePull</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the image tag is wrong, or private-subnet nodes can't reach the registry (no NAT gateway / no ECR endpoints).</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl describe pod POD -n kafka | grep -A3 -i "failed to pull"</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> correct the image tag to one that exists (match your Kafka version, e.g. <span class="ic">latest-kafka-4.1.0</span>). If it's networking, give private subnets a NAT gateway or add ECR/S3 VPC endpoints.</p>
+        </div>
+
+        <!-- pvc -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ Disk (PVC) stuck on <span class="text-ink">Pending</span> / unbound</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> no default StorageClass, or the EBS CSI driver add-on isn't installed, or the volume's zone doesn't match the node.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get storageclass                 <span class="tok-c"># is one marked (default)?</span>
+kubectl get pods -n kube-system | grep ebs-csi   <span class="tok-c"># is the driver running?</span>
+kubectl describe pvc -n kafka            <span class="tok-c"># read the Events line</span></code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> install the EBS CSI driver add-on.</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>eksctl create addon --name aws-ebs-csi-driver --cluster kafka-cluster --force</code></pre>
+          </div>
+        </div>
+
+        <!-- kafka not ready -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ <span class="text-ink">Kafka</span> object never turns Ready</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the operator hit an error reconciling — invalid listener, bad config, or version mismatch.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code><span class="tok-c"># The status.conditions message usually names the exact problem</span>
+kubectl get kafka my-cluster -n kafka -o jsonpath='{.status.conditions[*].message}{"\n"}'
+
+<span class="tok-c"># And the operator log shows the full error / stack trace</span>
+kubectl logs deployment/strimzi-cluster-operator -n kafka --tail=100</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> correct what the message names in your YAML, then <span class="ic">kubectl apply -f kafka.yaml</span> again. (A classic one: <em>"Unsupported Kafka.spec.kafka.version"</em> — set a version your operator supports.)</p>
+        </div>
+
+        <!-- external IP pending -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ External address stuck on <span class="text-ink">&lt;pending&gt;</span> (no load balancer)</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the AWS Load Balancer Controller isn't installed/healthy, its IAM is missing, or your subnets aren't tagged for load balancers.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get pods -n kube-system | grep aws-load-balancer
+kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=80
+kubectl describe svc my-cluster-kafka-external-bootstrap -n kafka   <span class="tok-c"># Events show LB errors</span></code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> (re)install the controller from Step 6, and tag your public subnets so AWS knows where to put internet-facing load balancers:</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix · subnet tag</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>aws ec2 create-tags --resources SUBNET_ID \
+  --tags Key=kubernetes.io/role/elb,Value=1</code></pre>
+          </div>
+        </div>
+
+        <!-- cant connect from outside -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ Load balancer exists, but clients can't connect</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the NLB targets are unhealthy, a security group blocks the port, or the client doesn't trust the cluster's TLS certificate.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code><span class="tok-c"># Get the external bootstrap address and port (9094)</span>
+kubectl get svc my-cluster-kafka-external-bootstrap -n kafka
+
+<span class="tok-c"># Check the NLB target health in AWS (replace the ARN from the console)</span>
+aws elbv2 describe-target-health --target-group-arn TG_ARN</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> open the broker port to your client in the security group; for TLS, export and trust the cluster CA so your client accepts the certificate:</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix · grab the CA cert</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get secret my-cluster-cluster-ca-cert -n kafka \
+  -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt</code></pre>
+          </div>
+        </div>
+
+        <!-- topic not created -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ A <span class="text-ink">KafkaTopic</span> you applied never appears</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the Topic Operator is down, or the topic is missing the <span class="ic">strimzi.io/cluster</span> label, or it's in the wrong namespace.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl get kafkatopic my-topic -n kafka -o yaml | grep -A5 "status:"
+kubectl logs my-cluster-entity-operator-XXXX -c topic-operator -n kafka --tail=50</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> make sure the topic YAML has <span class="ic">labels: strimzi.io/cluster: my-cluster</span> and lives in the <span class="ic">kafka</span> namespace, then re-apply.</p>
+        </div>
+
+        <!-- node not ready -->
+        <div class="card border border-line p-5">
+          <p class="font-mono text-sm text-ibmblue mb-2">⚠ A worker <span class="text-ink">node</span> shows NotReady</p>
+          <p class="text-ink70 mb-2"><strong>Why:</strong> the machine ran out of disk, lost network, or the kubelet is unhealthy.</p>
+          <div class="codewrap mb-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">confirm</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl describe node NODE_NAME | grep -A10 "Conditions:"
+aws eks describe-nodegroup --cluster-name kafka-cluster \
+  --nodegroup-name kafka-workers --query 'nodegroup.health'</code></pre>
+          </div>
+          <p class="text-ink70"><strong>Fix:</strong> with Node Repair enabled (Step 2) AWS replaces it automatically. To force it now, drain and delete the node — the node group launches a fresh one:</p>
+          <div class="codewrap mt-2">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-ink70"><span class="font-mono text-[11px] text-ink50">fix</span><button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button></div>
+<pre><code>kubectl drain NODE_NAME --ignore-daemonsets --delete-emptydir-data
+kubectl delete node NODE_NAME</code></pre>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 4. PROVE IT WORKS -->
+      <h4 class="font-semibold text-xl text-ink mb-2 mt-4">4. Prove it's actually working</h4>
+      <p class="text-ink70 mb-3">"No errors" isn't the same as "working." These commands give you real proof.</p>
+
+      <p class="text-ink70 mb-2 font-medium">Cluster-level health:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · is it Ready?</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Wait for / confirm Ready</span>
+kubectl wait kafka/my-cluster --for=condition=Ready --timeout=300s -n kafka
+
+<span class="tok-c"># One-line Ready check</span>
+kubectl get kafka my-cluster -n kafka \
+  -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{"\n"}'
+
+<span class="tok-c"># See which node and ZONE each broker landed in (proves rack spread)</span>
+kubectl get pods -n kafka -o wide</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Kafka-level health (run inside a broker):</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · Kafka's own tools</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># List all topics</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+<span class="tok-c"># Describe a topic: check that Isr (in-sync replicas) equals Replicas</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic my-topic
+
+<span class="tok-c"># THE BIG ONE: any under-replicated partitions? Empty output = perfect health</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions
+
+<span class="tok-c"># Check a consumer group's lag (LAG column should stay small)</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --all-groups</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">Metrics &amp; node usage:</p>
+      <div class="codewrap mb-4">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · metrics + capacity</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Confirm the metrics endpoint Prometheus scrapes is alive</span>
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  curl -s localhost:9404/metrics | head
+
+<span class="tok-c"># How busy are nodes and pods? (needs metrics-server)</span>
+kubectl top nodes
+kubectl top pods -n kafka</code></pre>
+      </div>
+
+      <p class="text-ink70 mb-2 font-medium">End-to-end smoke test (write one message, read it back):</p>
+      <div class="codewrap mb-3">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-ink70">
+          <span class="font-mono text-[11px] text-ink50">bash · prove the round trip</span>
+          <button class="copybtn text-[11px] px-2 py-1" data-copy>Copy</button>
+        </div>
+<pre><code><span class="tok-c"># Send one message, then read the last one back. Seeing it = full success.</span>
+echo "hello-$(date +%s)" | kubectl exec -i my-cluster-broker-0 -n kafka -- \
+  bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic my-topic
+
+kubectl exec -ti my-cluster-broker-0 -n kafka -- \
+  bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic my-topic --from-beginning --max-messages 1 --timeout-ms 10000</code></pre>
+      </div>
+      <div class="bg-field border-l-4 border-ink p-4">
+        <p class="text-ink70"><strong>Still stuck?</strong> Copy the exact error from <span class="ic">describe</span> or the operator log into the Strimzi community (Slack/GitHub Discussions) linked in the docs below. A precise error message gets a fast answer; "it doesn't work" does not.</p>
+      </div>
+    </section>
+
     <!-- CLEANUP -->
     <section id="cleanup" class="anchor-offset mb-16">
       <div class="flex items-baseline gap-3 mb-5">
@@ -1202,6 +1533,17 @@ eksctl delete cluster --name kafka-cluster --region us-east-1</code></pre>
   <div class="modal-src" id="m-reporter" data-title="Strimzi Metrics Reporter">
     <p>The classic way to expose Kafka metrics is the <strong>JMX Prometheus Exporter</strong> (used in this guide) — well supported and reliable.</p>
     <p>Newer Strimzi versions also offer the <strong>Strimzi Metrics Reporter</strong>, which exposes Prometheus metrics directly without JMX. It was announced in Strimzi 0.47 and aims to be lighter and faster. Either works; the JMX exporter is the safe default while the reporter matures.</p>
+  </div>
+  <div class="modal-src" id="m-pending" data-title="Why a pod stays Pending">
+    <p>"Pending" means Kubernetes accepted the pod but can't place it on any node yet. The two usual reasons:</p>
+    <p><strong>1. No room.</strong> Every node is already full on CPU or memory. The fix is more nodes (scale the node group) or smaller resource requests.</p>
+    <p><strong>2. Storage zone mismatch.</strong> A broker's disk (EBS volume) lives in one Availability Zone, and a pod can only run on a node in that same zone. If there's no node there, it waits. Running 3 nodes across 3 zones (as in this guide) avoids this.</p>
+    <p>Run <span class="ic">kubectl describe pod POD -n kafka</span> and read the <strong>Events</strong> — it will literally say "Insufficient cpu" or a volume/zone message.</p>
+  </div>
+  <div class="modal-src" id="m-crashloop" data-title="About CrashLoopBackOff">
+    <p>The container starts, crashes, and Kubernetes keeps restarting it — waiting a little longer each time (the "back-off"). It's a real error, not a temporary blip.</p>
+    <p>The crash reason is in the logs of the <em>previous</em> run: <span class="ic">kubectl logs POD -n kafka --previous</span>. Common causes for Kafka: <strong>OOMKilled</strong> (ran out of memory — give it more), a <strong>bad config value</strong> (the log names it), or a <strong>version mismatch</strong> between the Kafka version and the KRaft metadata version.</p>
+    <p>Check <span class="ic">kubectl describe pod POD -n kafka</span> for <span class="ic">Reason: OOMKilled</span> and the last exit code to tell memory problems from config problems.</p>
   </div>
 </div>
 
