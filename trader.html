@@ -3,24 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
 <title>MNQ Micro Nasdaq Futures — Simple Trading Plan &amp; Simulator</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --ibm-blue:#0f62fe; --ibm-navy:#001141; --ibm-ink:#161616; --ibm-rule:#e0e0e0; --ibm-tint:#edf5ff; }
-  body { font-family:'IBM Plex Sans',sans-serif; background:#ffffff; color:var(--ibm-ink); }
+  :root { --ibm-blue:#0f62fe; --ibm-navy:#001141; --ibm-ink:#161616; --ibm-rule:#e0e0e0; --ibm-tint:#edf5ff; --ibm-bg:#ffffff; --ibm-surface:#ffffff; }
+  body.dark { --ibm-blue:#78a9ff; --ibm-navy:#d0e2ff; --ibm-ink:#f4f4f4; --ibm-rule:#393939; --ibm-tint:#1f2937; --ibm-bg:#161616; --ibm-surface:#262626; }
+  body { font-family:'IBM Plex Sans',sans-serif; background:var(--ibm-bg); color:var(--ibm-ink); }
   .mono { font-family:'IBM Plex Mono',monospace; }
   #content { font-size:16px; }
   .up { color:#198038; } .down { color:#da1e28; }
+  body.dark .up { color:#42be65; } body.dark .down { color:#fa4d56; }
   .card { border:1px solid var(--ibm-rule); border-radius:0; }
-  .btn-blue { background:var(--ibm-blue); color:#fff; }
+  .btn-blue { background:#0f62fe; color:#fff; }
   .btn-blue:hover { background:#0043ce; }
   .modal-bg { background:rgba(22,22,22,.55); }
+  body.dark .modal-bg { background:rgba(0,0,0,.7); }
   table { border-collapse:collapse; }
   th, td { border:1px solid var(--ibm-rule); padding:.5em .6em; text-align:left; }
   thead th { background:var(--ibm-tint); color:var(--ibm-navy); font-weight:600; }
   a.doclink { color:var(--ibm-blue); text-decoration:underline; word-break:break-all; }
+  /* Dark-mode overrides for Tailwind utility backgrounds */
+  body.dark .bg-white, body.dark header { background:var(--ibm-bg) !important; }
+  body.dark .modal > div { background:var(--ibm-surface) !important; }
+  body.dark select, body.dark input[type="range"] { background:var(--ibm-surface); color:var(--ibm-ink); }
+  select { background:var(--ibm-surface); color:var(--ibm-ink); }
+  body.dark section[style], body.dark header { border-color:var(--ibm-rule) !important; }
   @media (prefers-reduced-motion: reduce){ *{ transition:none!important; animation:none!important; } }
 </style>
 </head>
@@ -33,12 +43,15 @@
       <div class="mono text-xs" style="color:var(--ibm-blue)">CME · MNQ · $2 × Nasdaq-100</div>
       <h1 class="font-semibold leading-tight" style="color:var(--ibm-navy); font-size:1.15em">Micro Nasdaq Futures — Simple Plan</h1>
     </div>
-    <!-- Font size control 14–36 -->
-    <div class="flex items-center gap-2 card px-3 py-2 bg-white">
-      <button onclick="fontStep(-2)" aria-label="Smaller text" class="btn-blue w-8 h-8 font-bold">A−</button>
-      <input id="fontSlider" type="range" min="14" max="36" step="1" value="16" oninput="setFont(this.value)" class="w-24" aria-label="Font size">
-      <button onclick="fontStep(2)" aria-label="Bigger text" class="btn-blue w-8 h-8 font-bold">A+</button>
-      <span id="fontLabel" class="mono text-xs w-10 text-right">16px</span>
+    <!-- Theme + font size controls -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="themeBtn" onclick="toggleTheme()" aria-label="Switch light or dark mode" class="card w-9 h-9 text-lg leading-none" title="Light / dark mode">🌙</button>
+      <div class="flex items-center gap-2 card px-2 sm:px-3 py-2 bg-white">
+        <button onclick="fontStep(-2)" aria-label="Smaller text" class="btn-blue w-9 h-9 font-bold">A−</button>
+        <input id="fontSlider" type="range" min="14" max="36" step="1" value="16" oninput="setFont(this.value)" class="w-16 sm:w-24" aria-label="Font size">
+        <button onclick="fontStep(2)" aria-label="Bigger text" class="btn-blue w-9 h-9 font-bold">A+</button>
+        <span id="fontLabel" class="mono text-xs w-10 text-right hidden sm:inline">16px</span>
+      </div>
     </div>
   </div>
 </header>
@@ -295,7 +308,7 @@
 
 <div id="m-risk" class="modal fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" onclick="bgClose(event,this)">
   <div class="bg-white card max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
-    <h3 class="font-semibold mb-2" style="color:#da1e28">Risk warning — read this twice</h3>
+    <h3 class="font-semibold mb-2 down">Risk warning — read this twice</h3>
     <p class="mb-2">Futures use leverage: you control ~$58,000 of index value with a small deposit. Prices can jump many points in one second on news. A "$20 plan" can lose $100+ if you skip the stop-loss or the market gaps through it. Most short-term day traders lose money over time.</p>
     <ul class="list-disc ml-5 space-y-1 mb-3">
       <li>Practice on a free demo/paper account for at least a month first.</li>
@@ -420,7 +433,7 @@ function runSim(){
       <div class="overflow-x-auto"><table class="w-full text-sm mono mt-2">
         <thead><tr><th>Time CST</th><th>Price</th><th>Your action</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="mt-3" style="font-size:1.2em">Result: <strong class="${win?'up':'down'} mono">${pnl>=0?'+':''}$${pnl.toFixed(2)}</strong> (${pts>=0?'+':''}${pts.toFixed(2)} pts × $2) — before ~$1.50 fees.</p>
-      <p class="text-sm mt-1">${mood==='NO-TRADE'?'⚠️ Gap was under 30 pts — the rulebook says skip this day.':(withMood?'✅ You traded WITH the day\\'s mood — that\\'s the plan.':'⚠️ You traded AGAINST the mood — riskier, per the rulebook.')}</p>
+      <p class="text-sm mt-1">${mood==='NO-TRADE'?'⚠️ Gap was under 30 pts — the rulebook says skip this day.':(withMood?'✅ You traded WITH the day’s mood — that’s the plan.':'⚠️ You traded AGAINST the mood — riskier, per the rulebook.')}</p>
     </div>`;
 
   const h=JSON.parse(store.get('mnq_history')||'[]');
@@ -447,8 +460,20 @@ function closeModal(id){ const m=document.getElementById(id); m.classList.add('h
 function bgClose(e,m){ if(e.target===m) closeModal(m.id); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.modal').forEach(m=>closeModal(m.id)); });
 
+/* ===== Light / dark mode ===== */
+function applyTheme(t){
+  document.body.classList.toggle('dark', t==='dark');
+  const b=document.getElementById('themeBtn');
+  if(b) b.textContent = t==='dark' ? '☀️' : '🌙';
+  store.set('mnq_theme', t);
+}
+function toggleTheme(){ applyTheme(document.body.classList.contains('dark') ? 'light' : 'dark'); }
+
 /* ===== Init ===== */
 (function(){
+  const saved=store.get('mnq_theme');
+  const sysDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved || (sysDark ? 'dark' : 'light'));
   const f=store.get('mnq_font'); if(f) setFont(f);
   document.getElementById('storageNote').textContent = store.persistent ? ' to your browser (localStorage)' : ' for this session (preview mode — download the file for permanent saving)';
   renderHistory();
