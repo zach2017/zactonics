@@ -65,6 +65,387 @@
   </div>
 </header>
 
+<!-- ===================== 00 LIVE SIMULATOR ===================== -->
+<section id="simulator" class="border-b border-line bg-mist/40">
+  <div class="max-w-6xl mx-auto px-4 py-10">
+    <p class="eyebrow">Section 00 · Interactive simulator</p>
+    <h2 class="text-2xl sm:text-4xl font-light mt-2 mb-2">Trade Micro Nasdaq (MNQ) — right here, right now</h2>
+    <p class="text-ink/70 max-w-2xl mb-2">A practice trading game with fake money. The prices here are <strong>made up by the computer</strong> (a random walk plus pretend news shocks) — they are not real market data. One MNQ point = <span class="font-mono">$2</span> per contract. Your balance and trade history save automatically in your browser (localStorage), so they’re still here when you come back.</p>
+    <p class="text-xs text-ink/50 mb-6 font-mono">Note: localStorage persists when this file is opened in your own browser; some embedded previews (e.g., inside Claude) block it — the sim then falls back to in-memory for the session.</p>
+
+    <!-- News banner -->
+    <div id="newsBanner" class="hidden mb-4 p-3 border text-sm font-medium rule-l" role="status" aria-live="polite"></div>
+
+    <div class="grid lg:grid-cols-3 gap-6">
+      <!-- ============ CHART + EVENT TRIGGERS ============ -->
+      <div class="lg:col-span-2 border border-line bg-white">
+        <div class="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-line">
+          <div class="font-mono text-sm">
+            <span class="font-semibold">MNQ 09-26</span>
+            <span class="text-ink/50">· Micro E-mini Nasdaq-100 · SIM</span>
+          </div>
+          <div class="font-mono text-lg">
+            <span id="pxNow">24800.00</span>
+            <span id="pxChg" class="text-sm ml-2 text-ink/60">+0.00</span>
+          </div>
+        </div>
+        <svg id="chart" viewBox="0 0 600 240" class="w-full block" preserveAspectRatio="none" aria-label="Simulated MNQ price chart">
+          <defs>
+            <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0f62fe" stop-opacity="0.18"/>
+              <stop offset="100%" stop-color="#0f62fe" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <g id="gridLines"></g>
+          <path id="areaPath" fill="url(#areaFill)" d=""></path>
+          <polyline id="pricePath" fill="none" stroke="#0f62fe" stroke-width="1.8" points=""></polyline>
+          <g id="eventMarkers"></g>
+          <line id="entryLine" x1="0" x2="600" y1="-10" y2="-10" stroke="#24a148" stroke-width="1" stroke-dasharray="4 3"></line>
+          <text id="yMax" x="4" y="12" font-size="10" font-family="IBM Plex Mono" fill="#8d8d8d"></text>
+          <text id="yMin" x="4" y="234" font-size="10" font-family="IBM Plex Mono" fill="#8d8d8d"></text>
+        </svg>
+        <div class="flex flex-wrap items-center gap-2 p-3 border-t border-line">
+          <span class="font-mono text-xs text-ink/50 mr-1">TRIGGER NEWS:</span>
+          <button onclick="triggerEvent('bull')" class="border border-ok text-ok px-3 py-1.5 text-xs font-medium hover:bg-ok hover:text-white">▲ Bullish event</button>
+          <button onclick="triggerEvent('bear')" class="border border-danger text-danger px-3 py-1.5 text-xs font-medium hover:bg-danger hover:text-white">▼ Bearish event</button>
+          <button onclick="triggerEvent('rand')" class="border border-ink px-3 py-1.5 text-xs font-medium hover:bg-mist">? Surprise (random)</button>
+          <button id="pauseBtn" onclick="togglePause()" class="ml-auto border border-ink px-3 py-1.5 text-xs font-medium hover:bg-mist">Pause</button>
+        </div>
+        <div class="p-3 border-t border-line">
+          <p class="font-mono text-xs text-ink/50 mb-1">NEWS TAPE (simulated — random events also fire on their own)</p>
+          <ul id="newsFeed" class="text-xs space-y-1 max-h-24 overflow-y-auto font-mono"></ul>
+        </div>
+      </div>
+
+      <!-- ============ ORDER TICKET / ACCOUNT ============ -->
+      <div class="border border-ink bg-white flex flex-col">
+        <div class="bg-ink text-white p-3 font-mono text-xs flex justify-between">
+          <span>SIM ACCOUNT</span><span>MNQ · $2/pt</span>
+        </div>
+        <div class="p-4 space-y-3 text-sm flex-1">
+          <div class="flex justify-between border-b border-line pb-2"><span>Balance</span><span id="accBal" class="font-mono font-semibold">$5,000.00</span></div>
+          <div class="flex justify-between border-b border-line pb-2"><span>Position</span><span id="accPos" class="font-mono">FLAT</span></div>
+          <div class="flex justify-between border-b border-line pb-2"><span>Avg entry</span><span id="accAvg" class="font-mono">—</span></div>
+          <div class="flex justify-between border-b border-line pb-2"><span>Unrealized P&amp;L</span><span id="accUpl" class="font-mono">$0.00</span></div>
+          <div class="flex justify-between"><span>Realized P&amp;L (session+saved)</span><span id="accRpl" class="font-mono">$0.00</span></div>
+
+          <div class="pt-2">
+            <label class="block text-xs font-semibold mb-1" for="qty">Contracts</label>
+            <select id="qty" class="w-full border border-line p-2 font-mono bg-white">
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="trade(1)" class="bg-ok text-white py-3 font-semibold hover:opacity-90">BUY</button>
+            <button onclick="trade(-1)" class="bg-danger text-white py-3 font-semibold hover:opacity-90">SELL</button>
+          </div>
+          <button onclick="flatten()" class="w-full border border-ink py-2 text-sm font-medium hover:bg-mist">Flatten (close position)</button>
+          <button onclick="resetSim()" class="w-full text-xs text-ink/50 underline underline-offset-4 hover:text-ink">Reset simulator &amp; clear saved data</button>
+        </div>
+        <div class="border-t border-line p-3">
+          <p class="font-mono text-xs text-ink/50 mb-1">TRADE LOG (saved locally)</p>
+          <ul id="tradeLog" class="text-xs font-mono space-y-1 max-h-28 overflow-y-auto"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREENER ============ -->
+    <div class="mt-6 border border-line bg-white">
+      <div class="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-line">
+        <div>
+          <span class="font-semibold text-sm">Micro futures screener</span>
+          <span class="text-xs text-ink/50 ml-2">simulated momentum &amp; trend signals · rescans every 5s</span>
+        </div>
+        <button onclick="runScreen(true)" class="bg-ibmblue text-white px-4 py-1.5 text-xs font-medium hover:bg-ibmblue70">Scan now</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[560px]">
+          <thead class="text-left font-mono text-xs bg-mist">
+            <tr><th class="p-3">INSTRUMENT</th><th class="p-3">LAST</th><th class="p-3">FAST/SLOW EMA</th><th class="p-3">MOMENTUM</th><th class="p-3">SIGNAL</th></tr>
+          </thead>
+          <tbody id="screenBody" class="divide-y divide-line font-mono text-xs"></tbody>
+        </table>
+      </div>
+      <p class="p-3 text-xs text-ink/50 border-t border-line">Signal logic (same idea you'd build in Strategy Builder): fast EMA above slow EMA <em>and</em> positive momentum → LONG bias; the inverse → SHORT bias; disagreement → WAIT. Simulated data for learning only.</p>
+    </div>
+
+    <!-- ============ WORKED EXAMPLE ============ -->
+    <div class="mt-6 grid md:grid-cols-2 gap-4">
+      <div class="rule-l bg-white border border-line p-5">
+        <h3 class="font-semibold mb-2">Worked example: one MNQ trade</h3>
+        <ol class="text-sm text-ink/80 space-y-1 list-decimal pl-5">
+          <li>Screener shows MNQ: fast EMA &gt; slow EMA, momentum positive → LONG bias.</li>
+          <li>Buy 1 MNQ at 24,800. Plan: stop −20 pts (−$40), target +30 pts (+$60). That's 1.5R.</li>
+          <li>A bullish news shock hits (try the ▲ button) — price pops to 24,830. Unrealized: +$60.</li>
+          <li>Flatten. Realized +$60 lands in your balance and the trade log — both saved to localStorage.</li>
+        </ol>
+      </div>
+      <div class="rule-l bg-white border border-line p-5" style="border-left-color:#f1c21b">
+        <h3 class="font-semibold mb-2">Now do the honest version</h3>
+        <p class="text-sm text-ink/80">Take the same trade and hit the ▼ bearish button instead. Watch −$40 arrive instantly. That asymmetry — planned, capped losses vs. news you can't predict — is the whole lesson, and exactly why the risk calculator below says "1 contract" for small accounts and why agents keep you flat through CPI.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* ============================================================
+   SECTION 00 — MNQ SIMULATOR  (simulated data, educational)
+   ============================================================ */
+(function () {
+  /* ---- safe storage wrapper (localStorage → in-memory fallback) ---- */
+  const mem = {};
+  const store = {
+    get(k) { try { return window.localStorage.getItem(k); } catch (e) { return (k in mem) ? mem[k] : null; } },
+    set(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { mem[k] = v; } },
+    del(k) { try { window.localStorage.removeItem(k); } catch (e) { delete mem[k]; } }
+  };
+  const KEY = 'mnqSimV1';
+
+  /* ---- state ---- */
+  const PT_VALUE = 2;            // $ per MNQ point per contract
+  let price = 24800, prices = [], events = []; // events: {idx, dir}
+  let drift = 0, driftTicks = 0, paused = false;
+  let pos = 0, avg = 0, balance = 5000, realized = 0, trades = [];
+  let sessionOpen = price;
+
+  /* ---- load saved ---- */
+  try {
+    const saved = JSON.parse(store.get(KEY) || 'null');
+    if (saved) {
+      balance = saved.balance ?? 5000;
+      realized = saved.realized ?? 0;
+      trades = saved.trades ?? [];
+      pos = saved.pos ?? 0;
+      avg = saved.avg ?? 0;
+      price = saved.lastPrice ?? 24800;
+      sessionOpen = price;
+    }
+  } catch (e) { /* corrupt save → start fresh */ }
+
+  function save() {
+    store.set(KEY, JSON.stringify({ balance, realized, trades: trades.slice(-30), pos, avg, lastPrice: price }));
+  }
+
+  /* ---- news events ---- */
+  const NEWS = {
+    bull: [
+      ['CPI cooler than expected — rate-cut odds jump', 25, 55],
+      ['Fed chair signals easing bias in testimony', 20, 45],
+      ['NVDA earnings beat; guidance raised', 35, 70],
+      ['Mega-cap tech upgraded by major bank', 12, 30],
+      ['Soft PPI print calms inflation fears', 15, 35]
+    ],
+    bear: [
+      ['CPI hotter than expected — cuts repriced', 25, 55],
+      ['Fed minutes strike hawkish tone', 20, 45],
+      ['NVDA guidance disappoints', 35, 70],
+      ['Geopolitical flare-up hits risk assets', 18, 40],
+      ['Jobs report runs hot; yields spike', 15, 35]
+    ]
+  };
+
+  window.triggerEvent = function (kind) {
+    const dir = kind === 'rand' ? (Math.random() < 0.5 ? 'bull' : 'bear') : kind;
+    const list = NEWS[dir];
+    const ev = list[Math.floor(Math.random() * list.length)];
+    const mag = ev[1] + Math.random() * (ev[2] - ev[1]);
+    const sign = dir === 'bull' ? 1 : -1;
+    price += sign * mag * 0.35;                 // instant shock
+    drift = sign * mag * 0.65 / 18; driftTicks = 18;  // then drift
+    events.push({ idx: prices.length, dir });
+    logNews((dir === 'bull' ? '▲ ' : '▼ ') + ev[0]);
+    banner(dir, ev[0]);
+  };
+
+  function banner(dir, text) {
+    const b = document.getElementById('newsBanner');
+    b.textContent = (dir === 'bull' ? 'BREAKING ▲  ' : 'BREAKING ▼  ') + text;
+    b.className = 'mb-4 p-3 border text-sm font-medium rule-l ' +
+      (dir === 'bull' ? 'border-ok bg-ok/10' : 'border-danger bg-danger/10');
+    b.style.borderLeftColor = dir === 'bull' ? '#24a148' : '#da1e28';
+    clearTimeout(banner.t);
+    banner.t = setTimeout(() => b.classList.add('hidden'), 6000);
+    b.classList.remove('hidden');
+  }
+
+  function logNews(text) {
+    const li = document.createElement('li');
+    li.textContent = new Date().toLocaleTimeString() + '  ' + text;
+    const feed = document.getElementById('newsFeed');
+    feed.prepend(li);
+    while (feed.children.length > 12) feed.removeChild(feed.lastChild);
+  }
+
+  /* ---- price engine ---- */
+  function gauss() { return (Math.random() + Math.random() + Math.random()) - 1.5; }
+
+  function tick() {
+    if (paused) return;
+    let step = gauss() * 3.2;
+    if (driftTicks > 0) { step += drift; driftTicks--; }
+    price = Math.max(1000, price + step);
+    prices.push(price);
+    if (prices.length > 150) {
+      prices.shift();
+      events.forEach(e => e.idx--);
+      events = events.filter(e => e.idx >= 0);
+    }
+    // random autonomous news, ~ every 30s on average
+    if (Math.random() < 0.013) window.triggerEvent('rand');
+    draw(); updateAccount();
+  }
+
+  /* ---- SVG chart ---- */
+  const W = 600, H = 240, PAD = 8;
+  function draw() {
+    if (prices.length < 2) return;
+    const min = Math.min(...prices), max = Math.max(...prices);
+    const span = Math.max(max - min, 4);
+    const x = i => (i / (prices.length - 1)) * W;
+    const y = p => PAD + (1 - (p - min) / span) * (H - 2 * PAD);
+
+    const pts = prices.map((p, i) => x(i).toFixed(1) + ',' + y(p).toFixed(1)).join(' ');
+    document.getElementById('pricePath').setAttribute('points', pts);
+    document.getElementById('areaPath').setAttribute('d',
+      'M0,' + H + ' L' + pts.replace(/ /g, ' L') + ' L' + W + ',' + H + ' Z');
+
+    const mk = document.getElementById('eventMarkers');
+    mk.innerHTML = events.map(e => {
+      const p = prices[Math.min(e.idx, prices.length - 1)];
+      return '<circle cx="' + x(e.idx).toFixed(1) + '" cy="' + y(p).toFixed(1) +
+        '" r="4" fill="' + (e.dir === 'bull' ? '#24a148' : '#da1e28') + '" opacity="0.85"/>';
+    }).join('');
+
+    const el = document.getElementById('entryLine');
+    if (pos !== 0 && avg >= min && avg <= max) { el.setAttribute('y1', y(avg)); el.setAttribute('y2', y(avg)); }
+    else { el.setAttribute('y1', -10); el.setAttribute('y2', -10); }
+
+    document.getElementById('yMax').textContent = max.toFixed(1);
+    document.getElementById('yMin').textContent = min.toFixed(1);
+
+    const chg = price - sessionOpen;
+    document.getElementById('pxNow').textContent = price.toFixed(2);
+    const c = document.getElementById('pxChg');
+    c.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2);
+    c.className = 'text-sm ml-2 ' + (chg >= 0 ? 'text-ok' : 'text-danger');
+  }
+
+  /* ---- grid lines (static) ---- */
+  document.getElementById('gridLines').innerHTML =
+    [0.25, 0.5, 0.75].map(f => '<line x1="0" x2="600" y1="' + (H * f) + '" y2="' + (H * f) + '" stroke="#e0e0e0" stroke-width="0.5"/>').join('');
+
+  /* ---- trading ---- */
+  const fmt = n => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  window.trade = function (side) {
+    const q = parseInt(document.getElementById('qty').value) * side;
+    executeFill(q);
+  };
+  window.flatten = function () { if (pos !== 0) executeFill(-pos); };
+
+  function executeFill(q) {
+    if (q === 0) return;
+    const px = price;
+    let realizedNow = 0;
+    if (pos === 0 || Math.sign(q) === Math.sign(pos)) {
+      avg = pos === 0 ? px : (avg * Math.abs(pos) + px * Math.abs(q)) / (Math.abs(pos) + Math.abs(q));
+      pos += q;
+    } else {
+      const closing = Math.min(Math.abs(q), Math.abs(pos));
+      realizedNow = (px - avg) * Math.sign(pos) * closing * PT_VALUE;
+      balance += realizedNow; realized += realizedNow;
+      pos += q;
+      if (pos !== 0 && Math.sign(pos) === Math.sign(q)) avg = px; // flipped
+      if (pos === 0) avg = 0;
+    }
+    trades.push({ t: new Date().toLocaleTimeString(), side: q > 0 ? 'BUY' : 'SELL', q: Math.abs(q), px: px.toFixed(2), pnl: realizedNow });
+    renderLog(); updateAccount(); save();
+  }
+
+  function renderLog() {
+    document.getElementById('tradeLog').innerHTML = trades.slice(-10).reverse().map(tr =>
+      '<li>' + tr.t + ' ' + tr.side + ' ' + tr.q + ' @ ' + tr.px +
+      (tr.pnl ? ' <span class="' + (tr.pnl >= 0 ? 'text-ok' : 'text-danger') + '">' + fmt(tr.pnl) + '</span>' : '') + '</li>'
+    ).join('');
+  }
+
+  function updateAccount() {
+    const upl = pos !== 0 ? (price - avg) * pos * PT_VALUE : 0;
+    document.getElementById('accBal').textContent = fmt(balance);
+    document.getElementById('accPos').textContent = pos === 0 ? 'FLAT' : (pos > 0 ? 'LONG ' : 'SHORT ') + Math.abs(pos);
+    document.getElementById('accAvg').textContent = pos === 0 ? '—' : avg.toFixed(2);
+    const u = document.getElementById('accUpl');
+    u.textContent = fmt(upl);
+    u.className = 'font-mono ' + (upl > 0 ? 'text-ok' : upl < 0 ? 'text-danger' : '');
+    const r = document.getElementById('accRpl');
+    r.textContent = fmt(realized);
+    r.className = 'font-mono ' + (realized > 0 ? 'text-ok' : realized < 0 ? 'text-danger' : '');
+  }
+
+  window.resetSim = function () {
+    if (!confirm('Reset the simulator? Balance, position, and trade history will be cleared.')) return;
+    store.del(KEY);
+    pos = 0; avg = 0; balance = 5000; realized = 0; trades = [];
+    price = 24800; prices = []; events = []; sessionOpen = price;
+    renderLog(); updateAccount(); logNews('Simulator reset — fresh $5,000 SIM account');
+  };
+
+  window.togglePause = function () {
+    paused = !paused;
+    document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+  };
+
+  /* ---- screener ---- */
+  const instruments = [
+    { sym: 'MNQ', name: 'Micro Nasdaq-100', px: 24800, vol: 3.2 },
+    { sym: 'MES', name: 'Micro S&P 500', px: 6850, vol: 0.9 },
+    { sym: 'MYM', name: 'Micro Dow', px: 45200, vol: 5.5 },
+    { sym: 'M2K', name: 'Micro Russell 2000', px: 2380, vol: 0.5 }
+  ];
+  instruments.forEach(it => { it.fast = it.px; it.slow = it.px; it.mom = 0; });
+
+  function stepScreener() {
+    instruments.forEach(it => {
+      if (it.sym === 'MNQ') { it.px = price; }
+      else { it.px = Math.max(1, it.px + gauss() * it.vol); }
+      it.fast += (it.px - it.fast) * 0.25;   // fast EMA
+      it.slow += (it.px - it.slow) * 0.06;   // slow EMA
+      it.mom = it.mom * 0.9 + (it.px - it.slow) * 0.1;
+    });
+  }
+
+  window.runScreen = function (manual) {
+    const rows = instruments.map(it => {
+      const trendUp = it.fast > it.slow, momUp = it.mom > 0;
+      let sig, cls;
+      if (trendUp && momUp) { sig = 'LONG bias'; cls = 'text-ok'; }
+      else if (!trendUp && !momUp) { sig = 'SHORT bias'; cls = 'text-danger'; }
+      else { sig = 'WAIT'; cls = 'text-ink/50'; }
+      return '<tr>' +
+        '<td class="p-3"><span class="font-semibold">' + it.sym + '</span> <span class="text-ink/50">' + it.name + '</span></td>' +
+        '<td class="p-3">' + it.px.toFixed(2) + '</td>' +
+        '<td class="p-3">' + it.fast.toFixed(1) + ' / ' + it.slow.toFixed(1) + ' ' + (trendUp ? '▲' : '▼') + '</td>' +
+        '<td class="p-3 ' + (momUp ? 'text-ok' : 'text-danger') + '">' + (momUp ? '+' : '') + it.mom.toFixed(2) + '</td>' +
+        '<td class="p-3 font-semibold ' + cls + '">' + sig + '</td></tr>';
+    }).join('');
+    document.getElementById('screenBody').innerHTML = rows;
+    if (manual) logNews('Screener scan complete');
+  };
+
+  /* ---- boot ---- */
+  for (let i = 0; i < 60; i++) { prices.push(price); price += gauss() * 3.2; } // seed history
+  sessionOpen = prices[0];
+  renderLog(); updateAccount(); draw(); runScreen(false);
+  logNews('SIM session started — MNQ ' + price.toFixed(2));
+
+  setInterval(tick, 400);
+  setInterval(() => { stepScreener(); }, 400);
+  setInterval(() => runScreen(false), 5000);
+  setInterval(save, 8000); // periodic save of lastPrice/position
+})();
+</script>
+
 <!-- ===================== HERO ===================== -->
 <section class="border-b border-line">
   <div class="max-w-6xl mx-auto px-4 py-12 sm:py-16">
@@ -73,10 +454,11 @@
       Trading stock index futures with <span class="text-ibmblue font-medium">NinjaTrader</span>, planned and managed by <span class="text-ibmblue font-medium">AI agents</span>.
     </h1>
     <p class="mt-6 max-w-2xl text-base sm:text-lg text-ink/80">
-      A practical walkthrough: platform setup, automation strategies, using AI agents to plan trades around scheduled events and market conditions, best practices from real deployments, and a simple micro-trading calculator for beginners.
+      A step-by-step guide in plain language: how to set up NinjaTrader, how trading robots and AI agents work, how to plan around big news days, what real traders learned in 2025–2026, plus a practice simulator and a beginner calculator.
     </p>
     <div class="mt-8 flex flex-wrap gap-3">
-      <a href="#setup" class="bg-ibmblue text-white px-5 py-3 text-sm font-medium hover:bg-ibmblue70">Start with setup →</a>
+      <a href="#simulator" class="bg-ibmblue text-white px-5 py-3 text-sm font-medium hover:bg-ibmblue70">↑ Try the MNQ simulator</a>
+      <a href="#setup" class="border border-ink px-5 py-3 text-sm font-medium hover:bg-mist">Setup steps</a>
       <a href="#calculator" class="border border-ink px-5 py-3 text-sm font-medium hover:bg-mist">Micro-trade calculator</a>
     </div>
     <div class="mt-10 border border-warn bg-warn/10 p-4 max-w-2xl text-sm rule-l" style="border-left-color:#f1c21b">
@@ -94,22 +476,22 @@
   <div class="grid md:grid-cols-2 gap-6">
     <div class="rule-l bg-mist p-5">
       <h3 class="font-semibold mb-2">Stock index futures</h3>
-      <p class="text-sm text-ink/80">Contracts that track an index (S&amp;P 500, Nasdaq-100, Dow, Russell 2000). You trade the direction of the index with leverage, nearly 23 hours a day, without owning any stocks. Popular tickers: ES, NQ, YM, RTY — and their micro versions MES, MNQ, MYM, M2K.</p>
+      <p class="text-sm text-ink/80">A futures contract is a bet on which way a whole stock index (like the S&amp;P 500 or Nasdaq-100) will move. You never buy any actual stocks — you just trade the direction, almost 23 hours a day. Common symbols: ES, NQ, YM, RTY — and their smaller “micro” versions MES, MNQ, MYM, M2K.</p>
       <button class="mt-3 text-ibmblue text-sm font-medium underline underline-offset-4" onclick="openModal('m-futures')">More info + official docs</button>
     </div>
     <div class="rule-l bg-mist p-5">
       <h3 class="font-semibold mb-2">Micro futures — the beginner's entry point</h3>
-      <p class="text-sm text-ink/80">Micro E-mini contracts (MES, MNQ) are 1/10th the size of standard E-minis. One MES point = $5 instead of $50. Smaller margins, smaller losses while you learn — the standard on-ramp for new futures traders.</p>
+      <p class="text-sm text-ink/80">Micro contracts are 1/10th the size of the regular ones. If the market moves 1 point, an MES trade changes by $5 instead of $50. Smaller size means smaller mistakes while you learn. Every beginner should start here.</p>
       <button class="mt-3 text-ibmblue text-sm font-medium underline underline-offset-4" onclick="openModal('m-micro')">More info + official docs</button>
     </div>
     <div class="rule-l bg-mist p-5">
       <h3 class="font-semibold mb-2">Options on futures</h3>
-      <p class="text-sm text-ink/80">Calls and puts on futures contracts let you define risk around events (Fed meetings, CPI releases, earnings weeks). Buying options caps your maximum loss at the premium paid — useful when planning around binary events.</p>
+      <p class="text-sm text-ink/80">An option is like paying a small fee for the chance to profit if the market moves your way. If you’re wrong, the most you can lose is that fee. That known, limited loss makes options a safer tool around big news days like Fed meetings.</p>
       <button class="mt-3 text-ibmblue text-sm font-medium underline underline-offset-4" onclick="openModal('m-options')">More info + official docs</button>
     </div>
     <div class="rule-l bg-mist p-5">
       <h3 class="font-semibold mb-2">Leverage cuts both ways</h3>
-      <p class="text-sm text-ink/80">Futures margin lets you control a large notional value with little capital. A 1% index move can be a large % move on your account. Risk management is not optional — it is the strategy.</p>
+      <p class="text-sm text-ink/80">Futures let you control a lot of money with a little money. That means a small market move makes a big change in your account — in both directions. Protecting yourself from losses isn’t extra credit. It is the job.</p>
       <button class="mt-3 text-ibmblue text-sm font-medium underline underline-offset-4" onclick="openModal('m-risk')">Risk rules of thumb</button>
     </div>
   </div>
@@ -119,42 +501,42 @@
 <section id="setup" class="py-12 border-b border-line">
   <p class="eyebrow">Section 02</p>
   <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-2">NinjaTrader setup, step by step</h2>
-  <p class="text-ink/70 mb-8 max-w-2xl">NinjaTrader 8 is free to download and use in simulation mode. Do everything below in SIM before any live account exists.</p>
+  <p class="text-ink/70 mb-8 max-w-2xl">NinjaTrader is free to download and practice on. “SIM” means simulator: fake money, realistic platform. Do every step below with fake money first — no exceptions.</p>
 
   <ol class="space-y-4">
     <li class="border border-line p-5 flex gap-4">
       <span class="font-mono text-ibmblue font-semibold shrink-0">01</span>
       <div>
         <h3 class="font-semibold">Download &amp; install</h3>
-        <p class="text-sm text-ink/80 mt-1">Get the desktop platform from <a class="doclink" href="https://ninjatrader.com/trading-platform/desktop/" target="_blank" rel="noopener">ninjatrader.com</a> (Windows; Mac users typically run it via a VPS or Parallels). Create a free account — this unlocks the simulator and free real-time futures data for sim trading.</p>
+        <p class="text-sm text-ink/80 mt-1">Go to <a class="doclink" href="https://ninjatrader.com/" target="_blank" rel="noopener">ninjatrader.com</a> and download the free desktop platform (it runs on Windows; Mac users use a virtual machine or an online server). Make a free account — that unlocks the practice simulator with free data.</p>
       </div>
     </li>
     <li class="border border-line p-5 flex gap-4">
       <span class="font-mono text-ibmblue font-semibold shrink-0">02</span>
       <div>
         <h3 class="font-semibold">Connect a data feed</h3>
-        <p class="text-sm text-ink/80 mt-1">Control Center → Connections. Use the free NinjaTrader/Kinetick sim data to start. Serious latency-sensitive automation later tends to move to Rithmic or CQG feeds for reliability.</p>
+        <p class="text-sm text-ink/80 mt-1">In the app: Control Center → Connections. Connect to the free practice data — this streams prices into your charts. (Serious traders later pay for faster feeds like Rithmic or CQG, but you don’t need that yet.)</p>
       </div>
     </li>
     <li class="border border-line p-5 flex gap-4">
       <span class="font-mono text-ibmblue font-semibold shrink-0">03</span>
       <div>
         <h3 class="font-semibold">Open a chart &amp; learn the DOM</h3>
-        <p class="text-sm text-ink/80 mt-1">New → Chart → instrument <span class="font-mono">MES 09-26</span> (front month). Add a 5-minute chart plus the SuperDOM for order entry. Practice placing bracket orders (entry + stop + target as one unit) in SIM.</p>
+        <p class="text-sm text-ink/80 mt-1">New → Chart → type <span class="font-mono">MES 09-26</span>. Also open the SuperDOM — the order window. Practice “bracket orders”: one click that sets your entry, your stop-loss (your maximum loss), and your target (your goal) all together.</p>
       </div>
     </li>
     <li class="border border-line p-5 flex gap-4">
       <span class="font-mono text-ibmblue font-semibold shrink-0">04</span>
       <div>
         <h3 class="font-semibold">Set ATM strategies (automatic risk)</h3>
-        <p class="text-sm text-ink/80 mt-1">Create an ATM template so every entry automatically attaches a stop-loss and profit target — e.g., 10-tick stop / 15-tick target on MES. This is your seatbelt; never trade without it.</p>
+        <p class="text-sm text-ink/80 mt-1">An ATM template automatically attaches a stop-loss and a profit target to every trade you make — for example, risk 10 ticks to try to make 15. It’s your seatbelt. Never trade without it.</p>
       </div>
     </li>
     <li class="border border-line p-5 flex gap-4">
       <span class="font-mono text-ibmblue font-semibold shrink-0">05</span>
       <div>
         <h3 class="font-semibold">Build your first automated strategy — no code</h3>
-        <p class="text-sm text-ink/80 mt-1">Control Center → New → Strategy Builder. <span class="text-ink">NinjaTrader's Strategy Builder lets you create rule-based strategies with point-and-click logic — entries, exits, stops, targets — and it generates NinjaScript (C#) behind the scenes that you can open and edit later if you outgrow the visual tool.</span></p>
+        <p class="text-sm text-ink/80 mt-1">Control Center → New → Strategy Builder. <span class="text-ink">This tool lets you build a trading robot using menus and clicks — no coding. You pick the rules (like “buy when the fast average crosses above the slow average”) and it writes the actual code for you behind the scenes, which you can open and edit later if you want.</span></p>
         <button class="mt-2 text-ibmblue text-sm font-medium underline underline-offset-4" onclick="openModal('m-builder')">Strategy Builder details + docs</button>
       </div>
     </li>
@@ -162,14 +544,14 @@
       <span class="font-mono text-ibmblue font-semibold shrink-0">06</span>
       <div>
         <h3 class="font-semibold">Backtest in Strategy Analyzer</h3>
-        <p class="text-sm text-ink/80 mt-1">New → Strategy Analyzer. Run your strategy over 1–2 years of historical data with realistic commissions and slippage. Check profit factor, max drawdown, and trade count. Then walk it forward on data the optimizer never saw.</p>
+        <p class="text-sm text-ink/80 mt-1">Backtesting asks: “If my robot had run for the last two years, would it have made or lost money?” Use New → Strategy Analyzer, and include fees in the test — they matter. Then test again on data the robot has never seen, to make sure it didn’t just memorize the past.</p>
       </div>
     </li>
     <li class="border border-line p-5 flex gap-4">
       <span class="font-mono text-ibmblue font-semibold shrink-0">07</span>
       <div>
         <h3 class="font-semibold">Run live in SIM for weeks, then go micro</h3>
-        <p class="text-sm text-ink/80 mt-1">Enable the strategy on your SIM account from the chart (right-click → Strategies). Only after weeks of stable sim results, fund a live account and start with a single micro contract (MES/MNQ).</p>
+        <p class="text-sm text-ink/80 mt-1">Turn the robot on with fake money (right-click the chart → Strategies) and let it run for weeks. Only if it stays good do you try real money — starting with exactly ONE micro contract.</p>
       </div>
     </li>
   </ol>
@@ -179,42 +561,43 @@
 <!-- ===================== 03 AUTOMATION STRATEGIES ===================== -->
 <section id="automation" class="py-12 border-b border-line">
   <p class="eyebrow">Section 03</p>
-  <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-6">Automation strategies that traders actually run</h2>
+  <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-2">Automation strategies that traders actually run</h2>
+  <p class="text-ink/70 mb-6 max-w-2xl">These are the robot styles real traders use, explained simply. Tap any card for more detail and how it can fail.</p>
   <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
     <article class="border border-line p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">TREND</p>
       <h3 class="font-semibold">Opening Range Breakout (ORB)</h3>
-      <p class="text-sm text-ink/80 mt-2">Mark the first 15–30 minutes' high/low; enter on a break with volume confirmation, stop on the other side of the range. One of the most automated setups on index futures.</p>
+      <p class="text-sm text-ink/80 mt-2">Watch the first 15–30 minutes of the day and mark the high and low. If price breaks above that early high, buy; if it breaks below the low, sell. Simple rules — easy to turn into a robot.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-orb')">Details</button>
     </article>
     <article class="border border-line p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">TREND</p>
       <h3 class="font-semibold">EMA crossover trend following</h3>
-      <p class="text-sm text-ink/80 mt-2">Fast EMA crosses slow EMA (e.g., 50/200 or 9/21 intraday) → enter with trend; exit on reverse cross or trailing stop. The classic first Strategy Builder project.</p>
+      <p class="text-sm text-ink/80 mt-2">Draw a fast average and a slow average of the price. When the fast one crosses above the slow one, the market may be trending up — buy. When it crosses back down — sell. The classic first robot to build.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-ema')">Details</button>
     </article>
     <article class="border border-line p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">REVERSION</p>
       <h3 class="font-semibold">VWAP mean reversion</h3>
-      <p class="text-sm text-ink/80 mt-2">Fade stretched moves back toward the volume-weighted average price in range-bound sessions. Works best with a regime filter that turns it off on trend days.</p>
+      <p class="text-sm text-ink/80 mt-2">Some days price stretches too far from its average, then snaps back like a rubber band. This robot bets on the snap-back. It works on calm days and loses on strong trend days — so it needs a filter that turns it off.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-vwap')">Details</button>
     </article>
     <article class="border border-line p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">HYBRID</p>
       <h3 class="font-semibold">Partial automation</h3>
-      <p class="text-sm text-ink/80 mt-2">Human picks the level or setup; the machine handles entry execution, stop placement, sizing, and exits. In practice this human-in-the-loop model is what most serious retail algo traders run.</p>
+      <p class="text-sm text-ink/80 mt-2">You pick the trade; the computer presses the buttons — instant entry, exact stop-loss, correct size. You keep the thinking; the computer removes the fumbling and the fear. This mix is what most serious home traders actually run.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-partial')">Details</button>
     </article>
     <article class="border border-line p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">ML</p>
       <h3 class="font-semibold">AI trade filter</h3>
-      <p class="text-sm text-ink/80 mt-2">Keep your rule-based strategy, but add a machine-learning model that scores each setup's probability and skips low-quality signals. Enhances an edge instead of inventing one.</p>
+      <p class="text-sm text-ink/80 mt-2">Keep your simple robot, but add an AI “grader” that scores every trade idea. The robot only takes trades with a high grade and skips the weak ones. The AI improves a working plan — it doesn’t invent one from nothing.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-mlfilter')">Details</button>
     </article>
     <article class="border border-line p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">SEARCH</p>
       <h3 class="font-semibold">AI Generate (built into NinjaTrader)</h3>
-      <p class="text-sm text-ink/80 mt-2">NinjaTrader's experimental AI Generate optimizer uses a genetic algorithm across 70+ indicators and candlestick patterns to search for entry/exit combinations, with Monte Carlo checks against overfitting.</p>
+      <p class="text-sm text-ink/80 mt-2">NinjaTrader’s built-in experiment: it automatically mixes and tests thousands of rule combinations and shows you the best ones, with math checks to avoid fooling itself. Treat its results as ideas to test — not buried treasure.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-aigen')">Details + docs</button>
     </article>
   </div>
@@ -224,24 +607,24 @@
 <section id="agents" class="py-12 border-b border-line">
   <p class="eyebrow">Section 04</p>
   <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-2">AI agents: planning trades around events &amp; conditions</h2>
-  <p class="text-ink/70 mb-8 max-w-2xl">A trading agent is more than a bot. A bot follows fixed rules ("RSI &lt; 30 → buy"). An agent has three layers and can reason about context — the Fed statement released five minutes ago, not just the indicator on the chart.</p>
+  <p class="text-ink/70 mb-8 max-w-2xl">A bot follows one fixed rule (“if this number drops, buy”). An agent is smarter: it can read the news, check the calendar, and adjust the plan — and then it must follow strict safety rules before any trade happens. Three layers make that work:</p>
 
   <!-- Architecture diagram -->
   <div class="grid md:grid-cols-3 gap-px bg-line border border-line mb-8">
     <div class="bg-white p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">LAYER 1</p>
       <h3 class="font-semibold">Research &amp; reasoning (LLM)</h3>
-      <p class="text-sm text-ink/80 mt-2">A large language model (Claude, GPT, or an open-source model) ingests the economic calendar, news, earnings, Fed statements, and sentiment, and produces a market thesis and event plan.</p>
+      <p class="text-sm text-ink/80 mt-2">An AI model (like Claude) reads the news, the economic calendar, earnings dates, and Fed statements, then writes a simple plan: what’s happening this week and what to watch out for.</p>
     </div>
     <div class="bg-white p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">LAYER 2</p>
       <h3 class="font-semibold">Decision framework</h3>
-      <p class="text-sm text-ink/80 mt-2">Hard-coded rules translate the thesis into signals with guardrails: max position size, daily loss limit, "flat before CPI," allowed instruments, allowed hours. The LLM proposes; the rules dispose.</p>
+      <p class="text-sm text-ink/80 mt-2">Hard rules act like a parent signing a permission slip: maximum trade size, daily loss limit, “no trades during big news,” allowed markets and hours. The AI can suggest anything — the rules decide what’s actually allowed.</p>
     </div>
     <div class="bg-white p-5">
       <p class="font-mono text-xs text-ibmblue70 mb-2">LAYER 3</p>
       <h3 class="font-semibold">Execution</h3>
-      <p class="text-sm text-ink/80 mt-2">Broker/platform APIs place, modify, and close orders — a NinjaScript strategy, NinjaTrader's ATI interface, or a broker API for options (e.g., Alpaca, Tradier, Interactive Brokers).</p>
+      <p class="text-sm text-ink/80 mt-2">Software that actually presses the buttons — placing and closing orders through NinjaTrader or a broker’s connection. It only ever does what layers 1 and 2 approved.</p>
     </div>
   </div>
 
@@ -265,12 +648,12 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rule-l bg-mist p-5">
       <h3 class="font-semibold mb-2">Why events matter for options</h3>
-      <p class="text-sm text-ink/80">Scheduled events (FOMC, CPI, jobs reports, mega-cap earnings) are when implied volatility and gap risk spike. Agents are good at the bookkeeping humans skip: knowing every event, its historical average move, and whether current option prices over- or under-price it — then choosing defined-risk structures instead of naked exposure.</p>
+      <p class="text-sm text-ink/80">Big scheduled news — Fed meetings, inflation reports, giant tech earnings — makes markets jump. An AI agent never forgets a date. It can list every event, look up how big the moves usually are, and plan ahead: either stay out, or use an option where the most you can lose is known in advance.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-events')">Event playbook + calendar links</button>
     </div>
     <div class="rule-l bg-mist p-5">
       <h3 class="font-semibold mb-2">Open-source agent frameworks</h3>
-      <p class="text-sm text-ink/80">Projects like TradingAgents, FinRL, FinRobot, and ai-hedge-fund show multi-agent designs — analyst agents, a risk agent, a trader agent debating each decision. They're research and decision-support tools, not profit machines; their real value is learning and paper-trading workflows.</p>
+      <p class="text-sm text-ink/80">Free projects like TradingAgents, FinRL, FinRobot, and ai-hedge-fund let you watch teams of AI “analysts” debate each trade decision. They are great for learning and practicing with fake money — they are not money machines.</p>
       <button class="mt-3 text-ibmblue text-sm underline underline-offset-4" onclick="openModal('m-frameworks')">Frameworks + GitHub links</button>
     </div>
   </div>
@@ -280,7 +663,7 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
 <section id="stories" class="py-12 border-b border-line">
   <p class="eyebrow">Section 05</p>
   <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-2">What's actually working: examples &amp; lessons from 2025–2026</h2>
-  <p class="text-ink/70 mb-8 max-w-2xl">Real reported outcomes are mixed — that's the honest headline. The wins share a pattern: automation used for <em>discipline and coverage</em>, not for magic predictions.</p>
+  <p class="text-ink/70 mb-8 max-w-2xl">Honest headline: results are mixed. The real wins come from computers enforcing good habits — not from predicting the future.</p>
 
   <div class="space-y-4">
     <article class="border border-line p-5">
@@ -308,14 +691,14 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <p class="eyebrow">Section 06</p>
   <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-6">Best practices — the non-negotiables</h2>
   <div class="grid sm:grid-cols-2 gap-px bg-line border border-line">
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">1 · Simulate first, always</h3><p class="text-sm text-ink/80 mt-1">Weeks in SIM, then micros with one contract. No strategy touches real money on backtest results alone.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">2 · Risk ≤ 1–2% per trade</h3><p class="text-sm text-ink/80 mt-1">Position size from your stop distance, not from what margin allows. Hard daily loss limit; the platform enforces it, not willpower.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">3 · Guard against overfitting</h3><p class="text-sm text-ink/80 mt-1">Out-of-sample and walk-forward testing are mandatory. A strategy tuned to look perfect on history usually fails live. Fewer rules, more robustness.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">4 · Model costs &amp; slippage</h3><p class="text-sm text-ink/80 mt-1">Commissions and slippage are first-class variables in expected value — backtests without them are fiction, especially for scalping.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">5 · LLM proposes, rules dispose</h3><p class="text-sm text-ink/80 mt-1">Never let a language model place unconstrained orders. Wrap it in hard limits: instruments, size, hours, loss caps, and (early on) human approval.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">6 · Plan around events</h3><p class="text-sm text-ink/80 mt-1">Know every FOMC/CPI/NFP release. Default: flat or defined-risk options through binary events. Undefined risk into a Fed decision is gambling.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">7 · Production infrastructure</h3><p class="text-sm text-ink/80 mt-1">Automated strategies need state management, reconnect logic, and uptime — many run on a VPS near the exchange. A crashed PC with an open position is a real risk mode.</p></div>
-    <div class="bg-white p-5"><h3 class="font-semibold text-sm">8 · Log everything, review weekly</h3><p class="text-sm text-ink/80 mt-1">Every decision, every fill, every agent rationale gets logged. If win rate degrades below your tested band, pause and investigate — don't tweak live.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">1 · Simulate first, always</h3><p class="text-sm text-ink/80 mt-1">Practice with fake money for weeks. Then trade exactly one micro contract. A good backtest alone is never permission to use real money.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">2 · Risk ≤ 1–2% per trade</h3><p class="text-sm text-ink/80 mt-1">Never risk more than 1–2% of your account on one trade. Pick your stop-loss first, then figure out how many contracts fit. Set a daily loss limit the platform enforces — not your willpower.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">3 · Guard against overfitting</h3><p class="text-sm text-ink/80 mt-1">Don’t let your robot “teach the test.” A robot tuned to look perfect on old data usually fails on new data. Always test on data it has never seen, and prefer fewer, simpler rules.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">4 · Model costs &amp; slippage</h3><p class="text-sm text-ink/80 mt-1">Fees and slippage (getting a slightly worse price than you wanted) quietly eat profits. Include them in every test, or your results are make-believe.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">5 · LLM proposes, rules dispose</h3><p class="text-sm text-ink/80 mt-1">Never let an AI place trades without limits. The AI suggests; strict rules approve. When starting out, a human should say yes to every single trade.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">6 · Plan around events</h3><p class="text-sm text-ink/80 mt-1">Know the news calendar. On big report days (Fed, inflation, jobs), beginners should be out of the market — or only in trades where the maximum loss is known. Anything else is gambling.</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">7 · Production infrastructure</h3><p class="text-sm text-ink/80 mt-1">Robots need reliable computers. If your PC crashes while a trade is open, that’s real money at risk. Serious traders run robots on an always-on rented server (a VPS).</p></div>
+    <div class="bg-white p-5"><h3 class="font-semibold text-sm">8 · Log everything, review weekly</h3><p class="text-sm text-ink/80 mt-1">Write everything down: every trade, every reason. Review it weekly. If results get worse than your tests predicted, stop the robot and investigate — don’t fiddle with it while it’s live.</p></div>
   </div>
 </section>
 
@@ -323,7 +706,7 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
 <section id="calculator" class="py-12 border-b border-line">
   <p class="eyebrow">Section 07 · Interactive tool</p>
   <h2 class="text-2xl sm:text-3xl font-light mt-2 mb-2">Micro-futures risk &amp; position-size calculator</h2>
-  <p class="text-ink/70 mb-8 max-w-2xl">The single most useful "simple tool" for a beginner. Enter your account size, risk tolerance, and stop distance — it tells you how many micro contracts you can trade and what a loss actually costs. If it says 0, the trade is too big for your account. That's the tool working.</p>
+  <p class="text-ink/70 mb-8 max-w-2xl">This answers the most important beginner question: “how many contracts can I safely trade?” Enter your account size, how much you’re willing to risk, and where your stop-loss goes. It tells you how many micro contracts fit — and what a loss really costs. If it says 0, the trade is too big for your account. That’s the tool doing its job.</p>
 
   <div class="grid lg:grid-cols-2 gap-6">
     <div class="border border-ink p-6">
@@ -380,7 +763,7 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
       <p class="font-mono text-xs text-white/40 mt-6">Educational estimate. Excludes commissions, fees, slippage &amp; margin requirements.</p>
     </div>
   </div>
-  <p class="mt-4 text-sm">Contract specs: <a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.html" target="_blank" rel="noopener">CME Micro E-mini S&amp;P 500</a> · <a class="doclink" href="https://www.cmegroup.com/markets/equities/nasdaq/micro-e-mini-nasdaq-100.html" target="_blank" rel="noopener">CME Micro E-mini Nasdaq-100</a></p>
+  <p class="mt-4 text-sm">Contract specs: <a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.contractSpecs.html" target="_blank" rel="noopener">CME Micro E-mini S&amp;P 500</a> · <a class="doclink" href="https://www.cmegroup.com/markets/equities/nasdaq/micro-e-mini-nasdaq-100.html" target="_blank" rel="noopener">CME Micro E-mini Nasdaq-100</a></p>
 </section>
 
 <!-- ===================== 08 TOOLS ===================== -->
@@ -447,8 +830,8 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <p class="text-sm font-semibold mb-1">Official docs</p>
   <ul class="text-sm space-y-1 mb-4">
     <li><a class="doclink" href="https://www.cmegroup.com/markets/equities.html" target="_blank" rel="noopener">CME Equity Index products</a></li>
-    <li><a class="doclink" href="https://www.cmegroup.com/education/courses/introduction-to-futures.html" target="_blank" rel="noopener">CME: Introduction to Futures (free course)</a></li>
-    <li><a class="doclink" href="https://ninjatrader.com/futures/" target="_blank" rel="noopener">NinjaTrader futures overview</a></li>
+    <li><a class="doclink" href="https://www.cmegroup.com/education/courses/micro-e-mini-futures/micro-e-mini-futures-products-overview" target="_blank" rel="noopener">CME: Micro E-mini futures overview (free course)</a></li>
+    <li><a class="doclink" href="https://ninjatrader.com/" target="_blank" rel="noopener">NinjaTrader official site</a></li>
   </ul>
   <button class="bg-ibmblue text-white px-4 py-2 text-sm" onclick="this.closest('dialog').close()">Close</button>
 </div></dialog>
@@ -458,9 +841,9 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <p class="text-sm text-ink/80 mb-3">Launched by CME in 2019, micros are 1/10th of E-minis: MES ≈ $5/point ($1.25/tick), MNQ ≈ $2/point ($0.50/tick). Typical intraday margins at futures brokers run roughly $40–$200 per micro contract (varies by broker and volatility). A beginner risking $20–$40 per trade on one MES contract can survive the learning curve that would destroy an account trading full-size ES.</p>
   <p class="text-sm font-semibold mb-1">Official docs</p>
   <ul class="text-sm space-y-1 mb-4">
-    <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.html" target="_blank" rel="noopener">CME: Micro E-mini S&amp;P 500 specs</a></li>
+    <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.contractSpecs.html" target="_blank" rel="noopener">CME: Micro E-mini S&amp;P 500 specs</a></li>
     <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/nasdaq/micro-e-mini-nasdaq-100.html" target="_blank" rel="noopener">CME: Micro E-mini Nasdaq-100 specs</a></li>
-    <li><a class="doclink" href="https://ninjatrader.com/futures/micro-futures/" target="_blank" rel="noopener">NinjaTrader: Micro futures</a></li>
+    <li><a class="doclink" href="https://ninjatrader.com/futures/futures-contracts/micro-futures/" target="_blank" rel="noopener">NinjaTrader: Micro futures</a></li>
   </ul>
   <button class="bg-ibmblue text-white px-4 py-2 text-sm" onclick="this.closest('dialog').close()">Close</button>
 </div></dialog>
@@ -470,8 +853,8 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <p class="text-sm text-ink/80 mb-3">Buying a call/put on ES defines your worst case: the premium. Around binary events, common defined-risk structures include long straddles/strangles (betting on a big move either way), vertical spreads (directional with capped risk), and iron condors (betting the move stays inside a range — riskier around events). CME also lists Micro E-mini options for smaller accounts. Selling naked options into events is where accounts die; beginners should stick to long or spread structures.</p>
   <p class="text-sm font-semibold mb-1">Official docs</p>
   <ul class="text-sm space-y-1 mb-4">
-    <li><a class="doclink" href="https://www.cmegroup.com/education/courses/introduction-to-options.html" target="_blank" rel="noopener">CME: Introduction to Options (free course)</a></li>
-    <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/e-mini-sandp500.contractSpecs.options.html" target="_blank" rel="noopener">CME: E-mini S&amp;P options specs</a></li>
+    <li><a class="doclink" href="https://www.cmegroup.com/education/courses/micro-e-mini-options/get-to-know-options-on-micro-e-mini-futures" target="_blank" rel="noopener">CME: Options on Micro E-minis (free course)</a></li>
+    <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/e-mini-sandp500.contractSpecs.html" target="_blank" rel="noopener">CME: E-mini S&amp;P 500 contract specs</a></li>
     <li><a class="doclink" href="https://www.optionseducation.org/" target="_blank" rel="noopener">OIC — Options Industry Council education</a></li>
   </ul>
   <button class="bg-ibmblue text-white px-4 py-2 text-sm" onclick="this.closest('dialog').close()">Close</button>
@@ -480,11 +863,11 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
 <dialog id="m-risk"><div class="p-6">
   <h3 class="font-semibold text-lg mb-3">Risk rules of thumb</h3>
   <ul class="text-sm text-ink/80 space-y-2 mb-4 list-disc pl-5">
-    <li>Risk 1% (max 2%) of the account per trade; size positions from stop distance.</li>
-    <li>Set a hard daily loss limit (2–3R). When hit, the platform locks you out — not tomorrow-you.</li>
-    <li>Never average down a losing futures position.</li>
-    <li>Be flat, or defined-risk-only, through FOMC/CPI/NFP if you're a beginner.</li>
-    <li>Expect losing streaks: a 50%-win-rate system will hit 6+ losses in a row regularly. Size so that's survivable and boring.</li>
+    <li>Risk only 1% (2% max) of your account on any single trade. Choose the stop first; the position size comes from it.</li>
+    <li>Set a daily loss limit (about 2–3 losing trades’ worth). When it’s hit, the platform locks you out for the day — automatically.</li>
+    <li>Never add more contracts to a losing trade hoping it comes back. That’s how accounts blow up.</li>
+    <li>Beginners: be out of the market during big news (Fed, inflation, jobs reports), or only in trades where your maximum loss is known.</li>
+    <li>Losing streaks are normal: even a coin-flip system will lose 6+ times in a row sometimes. Trade small enough that a streak like that is boring, not scary.</li>
   </ul>
   <p class="text-sm mb-4">Regulator resources: <a class="doclink" href="https://www.cftc.gov/LearnAndProtect" target="_blank" rel="noopener">CFTC Learn &amp; Protect</a> · <a class="doclink" href="https://www.nfa.futures.org/investors/index.html" target="_blank" rel="noopener">NFA investor info</a></p>
   <button class="bg-ibmblue text-white px-4 py-2 text-sm" onclick="this.closest('dialog').close()">Close</button>
@@ -495,8 +878,8 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <p class="text-sm text-ink/80 mb-3">The Builder's Condition Builder supports multi-condition and nested logic: indicators, price conditions, time filters, and market-position checks (e.g., "only enter if flat"). Actions range from alerts to fully automated bracket entries. Since it emits NinjaScript, the standard growth path is: build visually → backtest → open the generated C# → add what the visual tool can't express (state machines, daily loss limits, reconnection handling).</p>
   <p class="text-sm font-semibold mb-1">Official docs</p>
   <ul class="text-sm space-y-1 mb-4">
-    <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/strategy_builder_301.htm" target="_blank" rel="noopener">Help Guide: Strategy Builder</a></li>
-    <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/ninjascript.htm" target="_blank" rel="noopener">Help Guide: NinjaScript reference</a></li>
+    <li><a class="doclink" href="https://ninjatrader.com/support/helpGuides/nt8/strategy_builder.htm" target="_blank" rel="noopener">Help Guide: Strategy Builder</a></li>
+    <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/strategy.htm" target="_blank" rel="noopener">Help Guide: NinjaScript strategy reference</a></li>
     <li><a class="doclink" href="https://developer.ninjatrader.com/" target="_blank" rel="noopener">NinjaTrader Developer portal</a></li>
     <li><a class="doclink" href="https://forum.ninjatrader.com/" target="_blank" rel="noopener">NinjaTrader community forum</a></li>
   </ul>
@@ -550,7 +933,7 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
     <li><strong>Mega-cap earnings weeks:</strong> NQ/MNQ volatility clusters around NVDA/AAPL/MSFT reports after the close.</li>
   </ul>
   <p class="text-sm text-ink/80 mb-3">An agent's job: pull the calendar weekly, compute the instrument's average historical move per event type, compare to what the options market is pricing, and pre-write the plan (flat / straddle / reduce size) so the decision is made before adrenaline exists.</p>
-  <p class="text-sm mb-4">Calendars: <a class="doclink" href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">Federal Reserve FOMC calendar</a> · <a class="doclink" href="https://www.bls.gov/schedule/news_release/cpi.htm" target="_blank" rel="noopener">BLS CPI schedule</a> · <a class="doclink" href="https://www.cmegroup.com/education/events/economic-releases-calendar.html" target="_blank" rel="noopener">CME economic calendar</a></p>
+  <p class="text-sm mb-4">Calendars: <a class="doclink" href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">Federal Reserve FOMC calendar</a> · <a class="doclink" href="https://www.bls.gov/schedule/news_release/cpi.htm" target="_blank" rel="noopener">BLS CPI schedule</a> · <a class="doclink" href="https://www.cmegroup.com/education.html" target="_blank" rel="noopener">CME Group Education</a></p>
   <button class="bg-ibmblue text-white px-4 py-2 text-sm" onclick="this.closest('dialog').close()">Close</button>
 </div></dialog>
 
@@ -584,11 +967,11 @@ DAILY LOOP (agent runs pre-market, e.g. 07:30 ET)
   <ul class="text-sm space-y-2 mb-4">
     <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/" target="_blank" rel="noopener">NinjaTrader 8 Help Guide (full)</a></li>
     <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/automated_trading.htm" target="_blank" rel="noopener">NT8: Automated Trading</a></li>
-    <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/strategy_builder_301.htm" target="_blank" rel="noopener">NT8: Strategy Builder</a></li>
+    <li><a class="doclink" href="https://ninjatrader.com/support/helpGuides/nt8/strategy_builder.htm" target="_blank" rel="noopener">NT8: Strategy Builder</a></li>
     <li><a class="doclink" href="https://ninjatrader.com/support/helpguides/nt8/ai-generate.htm" target="_blank" rel="noopener">NT8: AI Generate</a></li>
     <li><a class="doclink" href="https://developer.ninjatrader.com/" target="_blank" rel="noopener">NinjaTrader Developer (NinjaScript)</a></li>
     <li><a class="doclink" href="https://www.cmegroup.com/education.html" target="_blank" rel="noopener">CME Group Education</a></li>
-    <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.html" target="_blank" rel="noopener">CME: MES contract specs</a></li>
+    <li><a class="doclink" href="https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.contractSpecs.html" target="_blank" rel="noopener">CME: MES contract specs</a></li>
     <li><a class="doclink" href="https://www.cftc.gov/LearnAndProtect" target="_blank" rel="noopener">CFTC: Learn &amp; Protect</a></li>
     <li><a class="doclink" href="https://www.nfa.futures.org/investors/index.html" target="_blank" rel="noopener">NFA: Investor Information</a></li>
   </ul>
