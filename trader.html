@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MNQ Micro Nasdaq Futures — Simple Trading Plan &amp; Simulator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ibm-blue:#0f62fe; --ibm-navy:#001141; --ibm-ink:#161616; --ibm-rule:#e0e0e0; --ibm-tint:#edf5ff; }
+  body { font-family:'IBM Plex Sans',sans-serif; background:#ffffff; color:var(--ibm-ink); }
+  .mono { font-family:'IBM Plex Mono',monospace; }
+  #content { font-size:16px; }
+  .up { color:#198038; } .down { color:#da1e28; }
+  .card { border:1px solid var(--ibm-rule); border-radius:0; }
+  .btn-blue { background:var(--ibm-blue); color:#fff; }
+  .btn-blue:hover { background:#0043ce; }
+  .modal-bg { background:rgba(22,22,22,.55); }
+  table { border-collapse:collapse; }
+  th, td { border:1px solid var(--ibm-rule); padding:.5em .6em; text-align:left; }
+  thead th { background:var(--ibm-tint); color:var(--ibm-navy); font-weight:600; }
+  a.doclink { color:var(--ibm-blue); text-decoration:underline; word-break:break-all; }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none!important; animation:none!important; } }
+</style>
+</head>
+<body>
+
+<!-- ===== TOP BAR ===== -->
+<header class="sticky top-0 z-40 bg-white border-b" style="border-color:var(--ibm-rule)">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+    <div class="flex-1 min-w-[180px]">
+      <div class="mono text-xs" style="color:var(--ibm-blue)">CME · MNQ · $2 × Nasdaq-100</div>
+      <h1 class="font-semibold leading-tight" style="color:var(--ibm-navy); font-size:1.15em">Micro Nasdaq Futures — Simple Plan</h1>
+    </div>
+    <!-- Font size control 14–36 -->
+    <div class="flex items-center gap-2 card px-3 py-2 bg-white">
+      <button onclick="fontStep(-2)" aria-label="Smaller text" class="btn-blue w-8 h-8 font-bold">A−</button>
+      <input id="fontSlider" type="range" min="14" max="36" step="1" value="16" oninput="setFont(this.value)" class="w-24" aria-label="Font size">
+      <button onclick="fontStep(2)" aria-label="Bigger text" class="btn-blue w-8 h-8 font-bold">A+</button>
+      <span id="fontLabel" class="mono text-xs w-10 text-right">16px</span>
+    </div>
+  </div>
+</header>
+
+<main id="content" class="max-w-5xl mx-auto px-4 pb-24">
+
+<!-- ===== HERO ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <p class="mono text-sm mb-2" style="color:var(--ibm-blue)">The one-sentence goal</p>
+  <p class="font-light leading-snug" style="font-size:1.7em; color:var(--ibm-navy)">
+    MNQ pays <span class="font-semibold mono">$2 for every 1 point</span> it moves.
+    To make <span class="font-semibold mono">$20</span>, you need it to move
+    <span class="font-semibold mono">10 points</span> in your direction — that can happen in one minute.
+  </p>
+  <p class="mt-4 text-sm px-3 py-2 card" style="background:var(--ibm-tint)">
+    ⚠️ <strong>This is a learning page, not financial advice.</strong> Futures are risky — you can lose money just as fast as you can make it. Practice on a demo (paper trading) account first.
+    <button class="doclink underline ml-1" onclick="openModal('m-risk')">Read the risk warning →</button>
+  </p>
+</section>
+
+<!-- ===== SECTION 1: BASICS ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <h2 class="font-semibold mb-3" style="font-size:1.35em; color:var(--ibm-navy)">1. What is MNQ? (middle-school version)</h2>
+  <p class="mb-3">Imagine the 100 biggest tech companies (Apple, Microsoft, Nvidia, Amazon…) put together into one giant "score" called the <strong>Nasdaq-100</strong>. The score right now is around <span class="mono">29,400 points</span>. MNQ is a contract that lets you bet on whether that score will go <strong>up</strong> or <strong>down</strong>.</p>
+  <div class="grid sm:grid-cols-3 gap-3 my-4">
+    <div class="card p-4"><div class="mono font-semibold" style="color:var(--ibm-blue)">$2</div>You earn or lose $2 every time the score moves 1 point.</div>
+    <div class="card p-4"><div class="mono font-semibold" style="color:var(--ibm-blue)">0.25</div>The smallest move (a "tick") is 0.25 points = $0.50.</div>
+    <div class="card p-4"><div class="mono font-semibold" style="color:var(--ibm-blue)">2 ways</div><strong>Buy first</strong> (go long) if you think it rises. <strong>Sell first</strong> (go short) if you think it falls. Yes — you can sell something first and buy it back cheaper!</div>
+  </div>
+  <button class="btn-blue px-4 py-2" onclick="openModal('m-basics')">More info &amp; official docs</button>
+</section>
+
+<!-- ===== SECTION 2: THE 10AM PATTERN ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <h2 class="font-semibold mb-3" style="font-size:1.35em; color:var(--ibm-navy)">2. The 8:30 → 10:00 → 12:00 CST rhythm</h2>
+  <p class="mb-3">The stock market opens at <strong>8:30 AM CST</strong>. The first 90 minutes are usually the wildest. By <strong>10:00 AM CST</strong> the market has "picked a mood," and by <strong>12:00 noon CST</strong> (lunch) it usually calms down and moves less.</p>
+  <div class="card p-4 mb-4" style="background:var(--ibm-tint)">
+    <p class="font-semibold mb-1" style="color:var(--ibm-navy)">Why 10:00 AM CST matters</p>
+    <p>Two things collide around then: (1) the morning rush of orders is finishing, and (2) big U.S. economic reports land at <span class="mono">9:00 AM CST</span> (like Consumer Confidence or ISM) after the <span class="mono">7:30 AM CST</span> reports (CPI inflation, jobs). By 10:00 the market has digested the news, so the <strong>gap between the open price and the 10:00 price tells you the day's direction</strong>. Many days, the noon price continues in that same direction — just slower.</p>
+  </div>
+  <p class="mb-2 font-semibold" style="color:var(--ibm-navy)">Typical pattern over the last 6 months (Jan–Jun 2026), simplified:</p>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm mono">
+    <thead><tr><th>Month</th><th>Big event moving 10AM price</th><th>Open → 10AM CST (typical)</th><th>10AM → Noon CST (typical)</th><th>Lesson</th></tr></thead>
+    <tbody>
+      <tr><td>Jan 2026</td><td>Big-tech earnings season</td><td class="up">+60 to +150 pts on beats</td><td class="up">drifted same direction</td><td>Earnings mornings trend</td></tr>
+      <tr><td>Feb 2026</td><td>CPI inflation report (7:30 AM CST)</td><td class="down">−100+ pts on hot CPI</td><td>flat / small bounce</td><td>Bad news = fast morning drop</td></tr>
+      <tr><td>Mar 2026</td><td>Fed (FOMC) meeting week</td><td>choppy, small range</td><td>choppy</td><td>Market waits — hard day for this plan</td></tr>
+      <tr><td>Apr 2026</td><td>Tariff / trade headlines</td><td class="down">sharp drops, then snapback</td><td>reversals common</td><td>Headline days whipsaw — smaller size</td></tr>
+      <tr><td>May 2026</td><td>Nvidia &amp; AI earnings</td><td class="up">strong up mornings</td><td class="up">continued up</td><td>AI news = momentum days</td></tr>
+      <tr><td>Jun 2026</td><td>US–Iran tension, chip selloff, then cool CPI</td><td>both directions, big ranges</td><td>followed 10AM direction</td><td>10AM direction was a good compass</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="text-xs mt-2 opacity-80">These are simplified, representative patterns for learning — real day-by-day numbers vary. Always check a real chart. <button class="doclink" onclick="openModal('m-events')">Event calendar &amp; sources →</button></p>
+</section>
+
+<!-- ===== SECTION 3: THE $20 MATH ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <h2 class="font-semibold mb-3" style="font-size:1.35em; color:var(--ibm-navy)">3. The $20-in-1-minute math</h2>
+  <p class="mb-3">One MNQ contract = <span class="mono">$2 per point</span>. So:</p>
+  <div class="grid sm:grid-cols-2 gap-3 mb-4">
+    <div class="card p-4"><span class="mono font-semibold up">BUY → SELL (long):</span> Buy at 29,400. Price rises 10 points to 29,410. Sell. <span class="mono">10 × $2 = <strong>+$20</strong></span> ✅</div>
+    <div class="card p-4"><span class="mono font-semibold down">SELL → BUY (short):</span> Sell at 29,400. Price falls 10 points to 29,390. Buy it back. <span class="mono">10 × $2 = <strong>+$20</strong></span> ✅</div>
+  </div>
+  <p class="mb-3">MNQ often moves 10–30 points in a single minute during the busy morning (8:30–10:30 CST). That's why a 1-minute "in and out" for $20 is <em>possible</em> — but the exact same math works against you: 10 points the wrong way = <strong class="down">−$20</strong>, plus commissions (about $1–3 per round trip).</p>
+  <button class="btn-blue px-4 py-2" onclick="openModal('m-math')">Show the full math with fees</button>
+</section>
+
+<!-- ===== SECTION 4: WHAT-IF TABLE ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <h2 class="font-semibold mb-3" style="font-size:1.35em; color:var(--ibm-navy)">4. What-if table: a 5-minute window, 1-minute trades</h2>
+  <p class="mb-3">Example morning: MNQ opened at <span class="mono">29,440</span>. By 10:00 AM CST it's at <span class="mono">29,500</span> (up 60 pts — the day's "mood" is UP). Here's a made-up but realistic 5-minute window starting 10:00 AM, with what each 1-minute trade would earn (1 contract, before fees):</p>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm mono">
+    <thead><tr><th>Time (CST)</th><th>Price</th><th>1-min move</th><th>If you BOUGHT this minute, sold next</th><th>If you SOLD this minute, bought next</th></tr></thead>
+    <tbody>
+      <tr><td>10:00</td><td>29,500</td><td>—</td><td class="up">+$24 (→29,512)</td><td class="down">−$24</td></tr>
+      <tr><td>10:01</td><td>29,512</td><td class="up">+12</td><td class="down">−$14 (→29,505)</td><td class="up">+$14</td></tr>
+      <tr><td>10:02</td><td>29,505</td><td class="down">−7</td><td class="up">+$30 (→29,520)</td><td class="down">−$30</td></tr>
+      <tr><td>10:03</td><td>29,520</td><td class="up">+15</td><td class="up">+$16 (→29,528)</td><td class="down">−$16</td></tr>
+      <tr><td>10:04</td><td>29,528</td><td class="up">+8</td><td class="down">−$10 (→29,523)</td><td class="up">+$10</td></tr>
+      <tr><td>10:05</td><td>29,523</td><td class="down">−5</td><td>window closed</td><td>window closed</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="card p-4 mt-4" style="background:var(--ibm-tint)">
+    <p class="font-semibold" style="color:var(--ibm-navy)">What the table teaches:</p>
+    <ul class="list-disc ml-5 mt-1 space-y-1">
+      <li>On an "UP mood" day (10AM above open), <strong>buying</strong> won 3 of 5 minutes; <strong>selling</strong> won only 2.</li>
+      <li>The plan: <strong>trade in the direction of the open→10AM gap.</strong> Gap up = look to buy dips. Gap down = look to sell bounces.</li>
+      <li>Set a target of <span class="mono">+10 pts (+$20)</span> and a stop-loss of <span class="mono">−10 pts (−$20)</span>. If neither hits in ~1 minute, exit anyway.</li>
+    </ul>
+  </div>
+  <button class="btn-blue px-4 py-2 mt-4" onclick="openModal('m-plan')">The full step-by-step plan</button>
+</section>
+
+<!-- ===== SECTION 5: SIMULATOR ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <h2 class="font-semibold mb-1" style="font-size:1.35em; color:var(--ibm-navy)">5. Practice simulator (saves your results)</h2>
+  <p class="mb-3 text-sm">Pick a scenario and a direction, then press <strong>Run 5 minutes</strong>. Prices tick minute by minute. Your trade enters at your chosen minute and exits one minute later. Results save automatically<span id="storageNote"></span>.</p>
+
+  <div class="card p-4 grid gap-3 sm:grid-cols-2">
+    <label class="block">Scenario (day mood)
+      <select id="simScenario" class="card w-full p-2 mt-1">
+        <option value="up">Gap UP day — 10AM above the open</option>
+        <option value="down">Gap DOWN day — bad news at 7:30 CPI</option>
+        <option value="chop">Choppy Fed-wait day — no clear mood</option>
+      </select>
+    </label>
+    <label class="block">Your trade
+      <select id="simSide" class="card w-full p-2 mt-1">
+        <option value="long">BUY then SELL (long)</option>
+        <option value="short">SELL then BUY (short)</option>
+      </select>
+    </label>
+    <label class="block">Enter at minute
+      <select id="simEntry" class="card w-full p-2 mt-1">
+        <option>10:00</option><option>10:01</option><option>10:02</option><option>10:03</option><option>10:04</option>
+      </select>
+    </label>
+    <div class="flex items-end">
+      <button class="btn-blue px-5 py-2 w-full font-semibold" onclick="runSim()">▶ Run 5 minutes</button>
+    </div>
+  </div>
+
+  <div id="simOut" class="mt-4"></div>
+
+  <div class="mt-6 flex items-center justify-between flex-wrap gap-2">
+    <h3 class="font-semibold" style="color:var(--ibm-navy)">Saved practice history</h3>
+    <button class="card px-3 py-1 text-sm" onclick="clearHistory()">Clear history</button>
+  </div>
+  <div id="history" class="mt-2 overflow-x-auto"></div>
+</section>
+
+<!-- ===== SECTION 6: RULES ===== -->
+<section class="py-8 border-b" style="border-color:var(--ibm-rule)">
+  <h2 class="font-semibold mb-3" style="font-size:1.35em; color:var(--ibm-navy)">6. The simple rulebook</h2>
+  <ol class="list-decimal ml-5 space-y-2">
+    <li><strong>Check the calendar first.</strong> CPI, jobs report (7:30 AM CST), and Fed days move prices violently. Beginners should watch, not trade, those mornings.</li>
+    <li><strong>At 10:00 AM CST, compare to the 8:30 open.</strong> Up 30+ points = up mood. Down 30+ = down mood. Within ±30 = no trade.</li>
+    <li><strong>Trade with the mood.</strong> Up mood → buy a small dip. Down mood → sell a small bounce.</li>
+    <li><strong>$20 target, $20 stop, 1 minute max.</strong> Whichever comes first, you're out. No "hoping."</li>
+    <li><strong>Stop after 2 losses.</strong> −$40 plus fees is your daily maximum. Close the laptop.</li>
+    <li><strong>By noon CST, stop anyway.</strong> Lunch chop eats 1-minute traders alive.</li>
+  </ol>
+  <button class="btn-blue px-4 py-2 mt-4" onclick="openModal('m-risk')">Why the stop-loss matters (popup)</button>
+</section>
+
+<!-- ===== SECTION 7: REFERENCES ===== -->
+<section class="py-8">
+  <h2 class="font-semibold mb-3" style="font-size:1.35em; color:var(--ibm-navy)">7. Official docs &amp; references</h2>
+  <ul class="space-y-2">
+    <li>📘 MNQ contract specs — <a class="doclink" href="https://www.cmegroup.com/markets/equities/nasdaq/micro-e-mini-nasdaq-100.html" target="_blank" rel="noopener">cmegroup.com — Micro E-mini Nasdaq-100</a></li>
+    <li>📘 Micro E-mini education — <a class="doclink" href="https://www.cmegroup.com/education.html" target="_blank" rel="noopener">CME Group Education</a></li>
+    <li>🏛️ Futures basics &amp; risks — <a class="doclink" href="https://www.cftc.gov/LearnAndProtect" target="_blank" rel="noopener">CFTC — Learn &amp; Protect</a></li>
+    <li>🏛️ Day-trading risk — <a class="doclink" href="https://www.finra.org/investors/investing/investment-products/day-trading" target="_blank" rel="noopener">FINRA — Day Trading</a></li>
+    <li>📅 CPI release schedule — <a class="doclink" href="https://www.bls.gov/schedule/news_release/cpi.htm" target="_blank" rel="noopener">BLS — CPI Schedule</a></li>
+    <li>📅 Fed meeting calendar — <a class="doclink" href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">federalreserve.gov — FOMC Calendars</a></li>
+  </ul>
+</section>
+</main>
+
+<!-- ===== MODALS ===== -->
+<div id="m-basics" class="modal fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" onclick="bgClose(event,this)">
+  <div class="bg-white card max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+    <h3 class="font-semibold mb-2" style="color:var(--ibm-navy)">MNQ basics — a bit deeper</h3>
+    <p class="mb-2">MNQ trades on the CME exchange almost 23 hours a day, Sunday evening to Friday. It's 1/10 the size of the big NQ contract, which is why beginners use it. You need a futures broker account and "margin" (a deposit, often $50–$2,000+ per contract depending on broker and time of day).</p>
+    <p class="mb-2"><strong>Long</strong> = buy first, profit if price rises. <strong>Short</strong> = sell first, profit if price falls. Every contract you open must eventually be closed with the opposite action.</p>
+    <p class="text-sm">Official spec: <a class="doclink" href="https://www.cmegroup.com/markets/equities/nasdaq/micro-e-mini-nasdaq-100.contractSpecs.html" target="_blank" rel="noopener">CME MNQ contract specs</a></p>
+    <button class="btn-blue px-4 py-2 mt-4" onclick="closeModal('m-basics')">Close</button>
+  </div>
+</div>
+
+<div id="m-events" class="modal fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" onclick="bgClose(event,this)">
+  <div class="bg-white card max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+    <h3 class="font-semibold mb-2" style="color:var(--ibm-navy)">Events that hit the 10AM CST price</h3>
+    <ul class="list-disc ml-5 space-y-1 mb-3">
+      <li><strong>7:30 AM CST:</strong> CPI (inflation), jobs report, PPI, retail sales — the biggest movers. Their shockwave is still rippling at 10AM.</li>
+      <li><strong>9:00 AM CST:</strong> ISM surveys, consumer sentiment, home sales — land right before 10AM, often set the 10AM direction.</li>
+      <li><strong>1:00 PM CST (Fed days):</strong> FOMC rate decision — mornings before it are usually quiet and choppy.</li>
+      <li><strong>Earnings:</strong> Nvidia, Apple, Microsoft report after the close; the <em>next morning</em> gaps hard.</li>
+      <li><strong>Surprise headlines:</strong> tariffs, geopolitics (e.g., mid-2026 US–Iran tensions) — can reverse a morning instantly.</li>
+    </ul>
+    <p class="text-sm">Check schedules: <a class="doclink" href="https://www.bls.gov/schedule/news_release/" target="_blank" rel="noopener">BLS release calendar</a> · <a class="doclink" href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">FOMC calendar</a></p>
+    <button class="btn-blue px-4 py-2 mt-4" onclick="closeModal('m-events')">Close</button>
+  </div>
+</div>
+
+<div id="m-math" class="modal fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" onclick="bgClose(event,this)">
+  <div class="bg-white card max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+    <h3 class="font-semibold mb-2" style="color:var(--ibm-navy)">Full math with fees</h3>
+    <div class="mono text-sm card p-3 mb-3" style="background:var(--ibm-tint)">
+      Buy 1 MNQ @ 29,400.00<br>
+      Sell 1 MNQ @ 29,410.00<br>
+      Move: +10.00 pts × $2 = +$20.00<br>
+      Commission + fees (round trip): ≈ −$1.50<br>
+      <strong>Net: ≈ +$18.50</strong>
+    </div>
+    <p class="mb-2">Losing side of the coin: a 10-point move against you = <span class="down mono">−$20.00 − $1.50 = −$21.50</span>. Because fees always subtract, you must win <em>more often</em> than you lose just to break even. That's why the plan filters for "mood" days instead of trading every minute.</p>
+    <p class="text-sm">Fee schedules vary by broker; exchange fees: <a class="doclink" href="https://www.cmegroup.com/company/clearing-fees.html" target="_blank" rel="noopener">CME fee info</a></p>
+    <button class="btn-blue px-4 py-2 mt-4" onclick="closeModal('m-math')">Close</button>
+  </div>
+</div>
+
+<div id="m-plan" class="modal fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" onclick="bgClose(event,this)">
+  <div class="bg-white card max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+    <h3 class="font-semibold mb-2" style="color:var(--ibm-navy)">Step-by-step: the 10AM $20 plan</h3>
+    <ol class="list-decimal ml-5 space-y-2">
+      <li><strong>9:55 AM CST:</strong> write down the 8:30 open price and the current price.</li>
+      <li><strong>10:00 AM:</strong> compute the gap. ≥ +30 pts = UP day. ≤ −30 = DOWN day. Otherwise no trade today.</li>
+      <li><strong>10:00–10:30:</strong> UP day → wait for a 1-minute red candle (a dip), then BUY. DOWN day → wait for a green bounce, then SELL.</li>
+      <li><strong>Immediately</strong> place a bracket order: take-profit +10 pts, stop-loss −10 pts.</li>
+      <li><strong>60 seconds later:</strong> if neither fired, close at market. Log the result.</li>
+      <li>Max 3 trades, stop after 2 losses, done by noon CST.</li>
+    </ol>
+    <button class="btn-blue px-4 py-2 mt-4" onclick="closeModal('m-plan')">Close</button>
+  </div>
+</div>
+
+<div id="m-risk" class="modal fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" onclick="bgClose(event,this)">
+  <div class="bg-white card max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto">
+    <h3 class="font-semibold mb-2" style="color:#da1e28">Risk warning — read this twice</h3>
+    <p class="mb-2">Futures use leverage: you control ~$58,000 of index value with a small deposit. Prices can jump many points in one second on news. A "$20 plan" can lose $100+ if you skip the stop-loss or the market gaps through it. Most short-term day traders lose money over time.</p>
+    <ul class="list-disc ml-5 space-y-1 mb-3">
+      <li>Practice on a free demo/paper account for at least a month first.</li>
+      <li>Never trade money you need for rent, school, or bills.</li>
+      <li>A stop-loss order is not a guarantee — fast markets can skip past it ("slippage").</li>
+    </ul>
+    <p class="text-sm">Regulator resources: <a class="doclink" href="https://www.cftc.gov/LearnAndProtect" target="_blank" rel="noopener">CFTC Learn &amp; Protect</a> · <a class="doclink" href="https://www.finra.org/investors/investing/investment-products/day-trading" target="_blank" rel="noopener">FINRA Day Trading</a></p>
+    <button class="btn-blue px-4 py-2 mt-4" onclick="closeModal('m-risk')">Close</button>
+  </div>
+</div>
+
+<script>
+/* ===== Font size 14–36 ===== */
+function setFont(v){ v=Math.min(36,Math.max(14,+v));
+  document.getElementById('content').style.fontSize=v+'px';
+  document.getElementById('fontSlider').value=v;
+  document.getElementById('fontLabel').textContent=v+'px';
+  store.set('mnq_font', String(v));
+}
+function fontStep(d){ setFont(+document.getElementById('fontSlider').value+d); }
+
+/* ===== Storage wrapper: localStorage when opened as a real file, in-memory fallback in sandboxed previews ===== */
+const store=(function(){
+  const mem={};
+  try{ localStorage.setItem('_t','1'); localStorage.removeItem('_t');
+    return { set:(k,v)=>localStorage.setItem(k,v), get:k=>localStorage.getItem(k), del:k=>localStorage.removeItem(k), persistent:true };
+  }catch(e){
+    return { set:(k,v)=>{mem[k]=v;}, get:k=>(k in mem?mem[k]:null), del:k=>{delete mem[k];}, persistent:false };
+  }
+})();
+
+/* ===== Scenario price paths (minute closes from 10:00, 1 contract, $2/pt) ===== */
+const PATHS={
+  up:   { label:'Gap UP day',   open:29440, prices:[29500,29512,29505,29520,29528,29523] },
+  down: { label:'Gap DOWN day', open:29520, prices:[29400,29385,29392,29374,29368,29372] },
+  chop: { label:'Choppy Fed day',open:29450, prices:[29455,29448,29456,29449,29454,29450] }
+};
+const TIMES=['10:00','10:01','10:02','10:03','10:04','10:05'];
+
+function runSim(){
+  const sc=document.getElementById('simScenario').value;
+  const side=document.getElementById('simSide').value;
+  const entryT=document.getElementById('simEntry').value;
+  const i=TIMES.indexOf(entryT);
+  const p=PATHS[sc];
+  const entry=p.prices[i], exit=p.prices[i+1];
+  const pts=(side==='long')?(exit-entry):(entry-exit);
+  const pnl=pts*2;
+  const win=pnl>0;
+  const gap=p.prices[0]-p.open;
+  const mood=gap>=30?'UP':(gap<=-30?'DOWN':'NO-TRADE');
+  const withMood=(mood==='UP'&&side==='long')||(mood==='DOWN'&&side==='short');
+
+  let rows=p.prices.map((pr,k)=>`<tr class="${k===i||k===i+1?'font-semibold':''}"><td>${TIMES[k]}</td><td>${pr.toLocaleString()}</td><td>${k===i?(side==='long'?'🟢 BUY here':'🔴 SELL here'):(k===i+1?(side==='long'?'SELL here':'BUY back here'):'')}</td></tr>`).join('');
+
+  document.getElementById('simOut').innerHTML=`
+    <div class="card p-4">
+      <p class="mono text-sm mb-1">${p.label} · open ${p.open.toLocaleString()} · 10AM ${p.prices[0].toLocaleString()} · gap ${gap>=0?'+':''}${gap} pts · mood: <strong>${mood}</strong></p>
+      <div class="overflow-x-auto"><table class="w-full text-sm mono mt-2">
+        <thead><tr><th>Time CST</th><th>Price</th><th>Your action</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="mt-3" style="font-size:1.2em">Result: <strong class="${win?'up':'down'} mono">${pnl>=0?'+':''}$${pnl.toFixed(2)}</strong> (${pts>=0?'+':''}${pts.toFixed(2)} pts × $2) — before ~$1.50 fees.</p>
+      <p class="text-sm mt-1">${mood==='NO-TRADE'?'⚠️ Gap was under 30 pts — the rulebook says skip this day.':(withMood?'✅ You traded WITH the day\\'s mood — that\\'s the plan.':'⚠️ You traded AGAINST the mood — riskier, per the rulebook.')}</p>
+    </div>`;
+
+  const h=JSON.parse(store.get('mnq_history')||'[]');
+  h.unshift({t:new Date().toLocaleString(), sc:p.label, side:side==='long'?'Buy→Sell':'Sell→Buy', entryT, entry, exit, pnl});
+  store.set('mnq_history', JSON.stringify(h.slice(0,50)));
+  renderHistory();
+}
+
+function renderHistory(){
+  const h=JSON.parse(store.get('mnq_history')||'[]');
+  const el=document.getElementById('history');
+  if(!h.length){ el.innerHTML='<p class="text-sm opacity-70">No practice runs saved yet. Run the simulator above!</p>'; return; }
+  const tot=h.reduce((s,r)=>s+r.pnl,0);
+  el.innerHTML=`<p class="mono text-sm mb-2">Runs: ${h.length} · Total P&amp;L: <strong class="${tot>=0?'up':'down'}">${tot>=0?'+':''}$${tot.toFixed(2)}</strong></p>
+  <table class="w-full text-xs mono"><thead><tr><th>When</th><th>Scenario</th><th>Trade</th><th>Entry min</th><th>In → Out</th><th>P&amp;L</th></tr></thead><tbody>
+  ${h.map(r=>`<tr><td>${r.t}</td><td>${r.sc}</td><td>${r.side}</td><td>${r.entryT}</td><td>${r.entry.toLocaleString()} → ${r.exit.toLocaleString()}</td><td class="${r.pnl>=0?'up':'down'}">${r.pnl>=0?'+':''}$${r.pnl.toFixed(2)}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+function clearHistory(){ store.del('mnq_history'); renderHistory(); }
+
+/* ===== Modals ===== */
+function openModal(id){ const m=document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
+function closeModal(id){ const m=document.getElementById(id); m.classList.add('hidden'); m.classList.remove('flex'); }
+function bgClose(e,m){ if(e.target===m) closeModal(m.id); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.modal').forEach(m=>closeModal(m.id)); });
+
+/* ===== Init ===== */
+(function(){
+  const f=store.get('mnq_font'); if(f) setFont(f);
+  document.getElementById('storageNote').textContent = store.persistent ? ' to your browser (localStorage)' : ' for this session (preview mode — download the file for permanent saving)';
+  renderHistory();
+})();
+</script>
+</body>
+</html>
