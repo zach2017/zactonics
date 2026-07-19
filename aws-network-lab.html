@@ -1718,347 +1718,338 @@ function calcCost(){
    REFERENCE LIBRARY + MODALS
    ============================================================ */
 const REF = {
-  vpc:{cat:'Foundations', title:'VPC — Virtual Private Cloud', kicker:'FOUNDATIONS',
+  vpc:{
+    cat:'Foundations',
+    kicker:'FOUNDATIONS',
+    title:'VPC — Virtual Private Cloud',
     blurb:'Your own isolated network inside AWS. Everything else is built on it.',
-    body:`<p class="mb-3">AWS runs enormous shared data centers. Your servers might sit in the same rack as another company's. The VPC is the software layer that makes it behave like a private data center of your own.</p>
-    <p class="mb-3">Under the hood AWS uses a distributed mapping service. When your instance sends a packet to 10.0.10.6, the hypervisor looks up which physical host owns that VPC-and-address pair, wraps the packet in an outer packet addressed to that host, and sends it. The receiver unwraps and delivers. Your 10.0.10.6 and another customer's never collide because the VPC ID is part of the lookup.</p>
-    <p class="mb-3">That design explains three things people find surprising: other tenants cannot sniff your traffic, broadcast and multicast do not behave normally, and you cannot run your own DHCP server on a subnet.</p>
-    <p><strong>A VPC spans an entire region.</strong> A subnet lives in exactly one Availability Zone. That single constraint drives most architecture decisions.</p>`,
-    ex:`aws ec2 create-vpc --cidr-block 10.0.0.0/16
-aws ec2 modify-vpc-attribute --vpc-id vpc-xxx --enable-dns-hostnames
+    plain:'Think of AWS as an enormous office building shared by thousands of companies. A VPC is your floor of that building: your own walls, your own door, your own room numbers. Another company can have a "Room 101" too, and the two never get confused.',
+    body:'<p class="mb-3">AWS runs enormous shared data centers. Your servers might sit in the same rack as another company\'s. The VPC is the software layer that makes it behave like a private data center of your own.</p>\n    <p class="mb-3">Under the hood AWS uses a distributed mapping service. When your instance sends a packet to 10.0.10.6, the hypervisor looks up which physical host owns that VPC-and-address pair, wraps the packet in an outer packet addressed to that host, and sends it. The receiver unwraps and delivers. Your 10.0.10.6 and another customer\'s never collide because the VPC ID is part of the lookup.</p>\n    <p class="mb-3">That design explains three things people find surprising: other tenants cannot sniff your traffic, broadcast and multicast do not behave normally, and you cannot run your own DHCP server on a subnet.</p>\n    <p><strong>A VPC spans an entire region.</strong> A subnet lives in exactly one Availability Zone. That single constraint drives most architecture decisions.</p>',
+    gotcha:'<span class="mono">enableDnsHostnames</span> defaults to <strong>false</strong> on a VPC you create yourself. Forget it and VPC endpoints, RDS private names, and EKS service discovery all fail in confusing ways. Turn it on immediately after creating the VPC.',
+    check:'# List every VPC with its CIDR, and which one is the default\naws ec2 describe-vpcs \\\n  --query \'Vpcs[].{ID:VpcId,CIDR:CidrBlock,Default:IsDefault,Name:Tags[?Key==`Name`]|[0].Value}\' \\\n  --output table\n\n# Confirm the two DNS attributes are ON (both must say true)\naws ec2 describe-vpc-attribute --vpc-id VPC_ID --attribute enableDnsSupport\naws ec2 describe-vpc-attribute --vpc-id VPC_ID --attribute enableDnsHostnames',
+    checkHint:'Start here. These commands only read, so they are safe to run on production.',
+    create:'aws ec2 create-vpc \\\n  --cidr-block 10.0.0.0/16 \\\n  --tag-specifications \'ResourceType=vpc,Tags=[{Key=Name,Value=my-vpc}]\'\n\n# Save the returned VpcId, then turn DNS on straight away\nexport VPC_ID=vpc-0abc123\naws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-support\naws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-hostnames',
+    update:'# Add a secondary CIDR when you run out of addresses (max 5 total)\naws ec2 associate-vpc-cidr-block \\\n  --vpc-id VPC_ID --cidr-block 100.64.0.0/16\n\n# Delete a VPC — only works once every resource inside it is gone\naws ec2 delete-vpc --vpc-id VPC_ID',
+    updateHint:'You cannot change a VPC\'s primary CIDR after creation. Adding a secondary block is the only way to grow.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/configure-your-vpc.html'
+  },
 
-# enable-dns-hostnames defaults to FALSE on VPCs you create.
-# Forget it and VPC endpoints and RDS private names silently fail.`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/configure-your-vpc.html'},
-
-  subnet:{cat:'Foundations', title:'Public vs private subnets', kicker:'FOUNDATIONS',
+  subnet:{
+    cat:'Foundations',
+    kicker:'FOUNDATIONS',
+    title:'Public vs private subnets',
     blurb:'There is no "make public" checkbox. It is purely a routing consequence.',
-    body:`<p class="mb-3">A subnet is <strong>public</strong> if and only if its route table sends 0.0.0.0/0 to an internet gateway. It is <strong>private</strong> if it does not. That is the entire distinction.</p>
-    <p class="mb-3">Route tables do not isolate subnets from each other. Every VPC has an undeletable local route covering its whole CIDR, so every subnet can reach every other subnet at the routing level. Putting a database in a private subnet isolates it from the internet, not from your other subnets. Security groups do that job.</p>
-    <p class="mb-3"><strong>Sizing:</strong> a /24 gives 251 usable addresses. Fine for EC2, tight for EKS where every pod consumes one. Use /20 or larger for EKS subnets.</p>
-    <p><strong>You cannot resize a subnet after creating it.</strong> Err large — unused private addresses cost nothing.</p>`,
-    ex:`# Public subnet route table
-10.0.0.0/16   →  local          (automatic, cannot be removed)
-0.0.0.0/0     →  igw-xxx        ← this line is what "public" means
+    plain:'A subnet is a room on your floor. Whether it is "public" has nothing to do with a setting on the room — it depends entirely on whether there is a corridor leading from that room to the front door of the building.',
+    body:'<p class="mb-3">A subnet is <strong>public</strong> if and only if its route table sends 0.0.0.0/0 to an internet gateway. It is <strong>private</strong> if it does not. That is the entire distinction.</p>\n    <p class="mb-3">Route tables do not isolate subnets from each other. Every VPC has an undeletable local route covering its whole CIDR, so every subnet can reach every other subnet at the routing level. Putting a database in a private subnet isolates it from the internet, not from your other subnets. Security groups do that job.</p>\n    <p class="mb-3"><strong>Sizing:</strong> a /24 gives 251 usable addresses. Fine for EC2, tight for EKS where every pod consumes one. Use /20 or larger for EKS subnets.</p>\n    <p><strong>You cannot resize a subnet after creating it.</strong> Err large — unused private addresses cost nothing.</p>',
+    ex:'# Public subnet route table\n10.0.0.0/16   →  local          (automatic, cannot be removed)\n0.0.0.0/0     →  igw-xxx        ← this line is what "public" means\n\n# Private subnet route table\n10.0.0.0/16   →  local\n0.0.0.0/0     →  nat-xxx        ← outbound only',
+    gotcha:'AWS silently reserves <strong>5 addresses in every subnet</strong>: the network address, the VPC router, the DNS resolver, one held for future use, and the broadcast address. A /24 therefore gives you 251 usable addresses, not 256.',
+    check:'# List subnets with AZ, free IPs, and auto-assign-public-IP setting\naws ec2 describe-subnets --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'Subnets[].{ID:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone,\n           FreeIPs:AvailableIpAddressCount,AutoPublicIP:MapPublicIpOnLaunch}\' \\\n  --output table\n\n# The real test of "is this subnet public?" — look for an igw- target\naws ec2 describe-route-tables \\\n  --filters Name=association.subnet-id,Values=SUBNET_ID \\\n  --query \'RouteTables[].Routes[?GatewayId!=`local`]\' --output table',
+    checkHint:'FreeIPs is the column to watch on EKS clusters — it is how you catch IP exhaustion before pods start failing.',
+    create:'# Two AZs minimum. An ALB will not launch with only one.\naws ec2 create-subnet --vpc-id VPC_ID --cidr-block 10.0.1.0/24 \\\n  --availability-zone us-east-1a \\\n  --tag-specifications \'ResourceType=subnet,Tags=[{Key=Name,Value=public-1a}]\'\n\naws ec2 create-subnet --vpc-id VPC_ID --cidr-block 10.0.10.0/24 \\\n  --availability-zone us-east-1a \\\n  --tag-specifications \'ResourceType=subnet,Tags=[{Key=Name,Value=private-1a}]\'',
+    update:'# Turn auto-assign public IP OFF (the safe default for every subnet)\naws ec2 modify-subnet-attribute \\\n  --subnet-id SUBNET_ID --no-map-public-ip-on-launch\n\n# Only ever turn it ON for genuine public subnets\naws ec2 modify-subnet-attribute \\\n  --subnet-id SUBNET_ID --map-public-ip-on-launch',
+    updateHint:'Subnet size is fixed forever. To resize you create a new subnet and migrate resources into it.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html'
+  },
 
-# Private subnet route table
-10.0.0.0/16   →  local
-0.0.0.0/0     →  nat-xxx        ← outbound only`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html'},
-
-  route:{cat:'Foundations', title:'Route tables and longest prefix', kicker:'FOUNDATIONS',
+  route:{
+    cat:'Foundations',
+    kicker:'FOUNDATIONS',
+    title:'Route tables and longest prefix',
     blurb:'The most specific matching route wins. Bigger slash beats smaller.',
-    body:`<p class="mb-3">Every packet leaving a network interface hits the route table. The rule never changes: the longest matching prefix wins.</p>
-    <p class="mb-3">This is exactly why a gateway endpoint works. Adding S3's prefix list to your route table creates a more specific match than 0.0.0.0/0, so S3 traffic silently switches to the endpoint and stops paying NAT charges. You change nothing in your application.</p>
-    <p><strong>Watch the main route table.</strong> Any subnet you create without explicitly associating a route table uses it. If someone adds an internet gateway route there, every unassociated subnet quietly becomes public. Leave it with only the local route and associate every subnet deliberately.</p>`,
-    ex:`Destination        Target       Wins for
-10.0.0.0/16        local        10.0.10.7   (/16 match)
-10.0.5.0/24        vpce-xxx     10.0.5.20   (/24 beats /16)
-pl-63a5400 (S3)    vpce-s3      S3 ranges   (specific beats /0)
-0.0.0.0/0          nat-xxx      everything else`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html'},
+    plain:'A route table is a list of signposts at the door of each room. When a packet leaves, it reads the signs and takes the most specific one that matches. "Everything for building 5, floor 3" beats "everything else".',
+    body:'<p class="mb-3">Every packet leaving a network interface hits the route table. The rule never changes: the longest matching prefix wins.</p>\n    <p class="mb-3">This is exactly why a gateway endpoint works. Adding S3\'s prefix list to your route table creates a more specific match than 0.0.0.0/0, so S3 traffic silently switches to the endpoint and stops paying NAT charges. You change nothing in your application.</p>\n    <p><strong>Watch the main route table.</strong> Any subnet you create without explicitly associating a route table uses it. If someone adds an internet gateway route there, every unassociated subnet quietly becomes public. Leave it with only the local route and associate every subnet deliberately.</p>',
+    ex:'Destination        Target       Wins for\n10.0.0.0/16        local        10.0.10.7   (/16 match)\n10.0.5.0/24        vpce-xxx     10.0.5.20   (/24 beats /16)\npl-63a5400 (S3)    vpce-s3      S3 ranges   (specific beats /0)\n0.0.0.0/0          nat-xxx      everything else',
+    gotcha:'The <strong>main route table</strong> is the silent one. Any subnet you forget to associate falls back to it. Keep it empty except the local route, so a forgotten subnet defaults to private rather than public.',
+    check:'# Every route table in the VPC, with its routes and subnet associations\naws ec2 describe-route-tables --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'RouteTables[].{ID:RouteTableId,Main:Associations[0].Main,\n           Routes:Routes[].{To:DestinationCidrBlock,Via:GatewayId||NatGatewayId}}\' \\\n  --output json\n\n# Which subnets have NO explicit association (they fall back to main)\naws ec2 describe-route-tables --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'RouteTables[?Associations[0].Main==`true`].RouteTableId\'',
+    create:'aws ec2 create-route-table --vpc-id VPC_ID \\\n  --tag-specifications \'ResourceType=route-table,Tags=[{Key=Name,Value=private-rt}]\'\n\n# Associate it with a subnet — do this explicitly for every subnet\naws ec2 associate-route-table \\\n  --route-table-id RTB_ID --subnet-id SUBNET_ID',
+    update:'# Add the outbound route for a private subnet\naws ec2 create-route --route-table-id RTB_ID \\\n  --destination-cidr-block 0.0.0.0/0 --nat-gateway-id NAT_ID\n\n# Repoint an existing route (e.g. failing over to a new NAT gateway)\naws ec2 replace-route --route-table-id RTB_ID \\\n  --destination-cidr-block 0.0.0.0/0 --nat-gateway-id NEW_NAT_ID\n\n# Remove a route\naws ec2 delete-route --route-table-id RTB_ID --destination-cidr-block 0.0.0.0/0',
+    updateHint:'replace-route swaps the target atomically — safer than delete-then-create, which leaves a gap with no route.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html'
+  },
 
-  sg:{cat:'Security', title:'Security groups', kicker:'SECURITY',
-    blurb:'Stateful firewalls on resources. Reference other groups, not IP ranges.',
-    body:`<p class="mb-3">Security groups attach to network interfaces and only contain allow rules. They are <strong>stateful</strong> — permit traffic in and the reply is automatically permitted out. No matching outbound rule needed.</p>
-    <p class="mb-3">The single best practice in AWS networking: set the source of a rule to <em>another security group</em> instead of a CIDR block. Then the policy reads like a sentence — load balancers accept from the internet, app servers accept from load balancers, databases accept from app servers. It never needs updating when IPs change, and autoscaling just works.</p>
-    <p><strong>Defaults:</strong> inbound denies everything, outbound allows everything. Limits: 60 inbound and 60 outbound rules per group, 5 groups per interface.</p>`,
-    ex:`# Right — reference the group
-aws ec2 authorize-security-group-ingress \\
-  --group-id $APP_SG --protocol tcp --port 8080 \\
-  --source-group $ALB_SG
-
-# Wrong — hardcoded IPs break when the ALB scales
-  --cidr 10.0.1.0/24
-
-# Self-referencing, for clusters that gossip (Redis, Kafka, EKS)
-  --group-id $CLUSTER_SG --source-group $CLUSTER_SG`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html'},
-
-  nacl:{cat:'Security', title:'Network ACLs', kicker:'SECURITY',
-    blurb:'Stateless subnet firewalls. You probably do not need them.',
-    body:`<p class="mb-3">NACLs sit at the subnet boundary, support both allow and deny, and are evaluated in ascending rule-number order where <strong>the first match wins</strong> and everything after is ignored.</p>
-    <p class="mb-3">Being <strong>stateless</strong> is what catches people. Allow inbound 443 and the reply is still blocked, because it leaves from port 443 to a random high port on the client. You need an outbound rule for 1024–65535. Miss it and connections hang with nothing in the logs.</p>
-    <p><strong>When to use them:</strong> only when you need an explicit deny, which security groups cannot express. Blocking a known-bad IP range, or enforcing a compliance rule at a second independent layer. Otherwise leave the default NACL alone.</p>`,
-    ex:`Rule 50:   DENY   tcp/443 from 1.2.3.4/32   ← must be BELOW 100
-Rule 100:  ALLOW  tcp/443 from 0.0.0.0/0
-Rule 200:  DENY   tcp/443 from 1.2.3.4/32   ← dead code, never reached
-Rule *:    DENY   everything (implicit)
-
-# Required or nothing works:
-Outbound 100: ALLOW tcp/1024-65535 to 0.0.0.0/0`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html'},
-
-  imds:{cat:'Security', title:'Instance metadata and IMDSv2', kicker:'SECURITY',
-    blurb:'The link-local address that leaked Capital One\u2019s data.',
-    body:`<p class="mb-3">Every instance can query 169.254.169.254 for facts about itself, including temporary IAM credentials. The address is link-local: it never leaves the host and is unreachable from anywhere else.</p>
-    <p class="mb-3">IMDSv1 answered any plain HTTP GET with no authentication. If an attacker found a server-side request forgery bug in your application, they could make your own app fetch the credentials path and hand over your AWS keys. This is the mechanism behind the 2019 Capital One breach.</p>
-    <p><strong>IMDSv2 requires a PUT to obtain a token first</strong>, which SSRF attacks generally cannot perform. Enforce it everywhere, and set the hop limit to 1 so containers on the instance cannot reach it either.</p>`,
-    ex:`aws ec2 modify-instance-metadata-options \\
-  --instance-id i-xxx \\
-  --http-tokens required \\
-  --http-put-response-hop-limit 1
-
-TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \\
-  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-curl -sH "X-aws-ec2-metadata-token: $TOKEN" \\
-  http://169.254.169.254/latest/meta-data/instance-id`,
-    doc:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html'},
-
-  alb:{cat:'Load balancing', title:'Application Load Balancer', kicker:'LOAD BALANCING',
-    blurb:'Layer 7 routing by path, host, header, or method. The default choice.',
-    body:`<p class="mb-3">An ALB terminates TLS, inspects HTTP, and forwards to target groups based on listener rules evaluated in priority order. It requires at least two Availability Zones — AWS will not create one otherwise.</p>
-    <p class="mb-3">Listener rules can match on path, host header, any HTTP header, method, query string, or source IP. Actions include forward, redirect, fixed response, and authenticate via Cognito or OIDC before the request ever reaches your code.</p>
-    <p><strong>Weighted forwarding</strong> is how blue/green and canary deploys work: send 10% to the new target group, watch error rates, then shift. Rolling back takes seconds.</p>`,
-    ex:`# Canary: 10% of traffic to the new version
-aws elbv2 modify-listener --listener-arn $L \\
-  --default-actions '[{"Type":"forward","ForwardConfig":{
-    "TargetGroups":[
-      {"TargetGroupArn":"'$BLUE'","Weight":90},
-      {"TargetGroupArn":"'$GREEN'","Weight":10}]}}]'
-
-# Always redirect 80 → 443
---default-actions '[{"Type":"redirect","RedirectConfig":
-  {"Protocol":"HTTPS","Port":"443","StatusCode":"HTTP_301"}}]'`,
-    doc:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html'},
-
-  tg:{cat:'Load balancing', title:'Target groups and health checks', kicker:'LOAD BALANCING',
-    blurb:'Where most ALB problems actually live.',
-    body:`<p class="mb-3">A target group is a list of destinations plus health check rules. Four target types: instance IDs, raw IPs (needed for Fargate and EKS), a Lambda function, or another ALB.</p>
-    <p class="mb-3"><strong>Use shallow health checks on the load balancer.</strong> A deep check that queries the database sounds thorough, but when the database hiccups every target fails simultaneously, the target group empties, and the ALB returns 503 to everyone. A slow database becomes a total outage. Keep the LB check shallow and put deep checks in your monitoring and in Kubernetes readiness probes.</p>
-    <p><strong>Deregistration delay</strong> defaults to 300 seconds. For fast APIs drop it to 30 and deploys get much quicker.</p>`,
-    ex:`# Shallow — right for the load balancer
-GET /health  →  200 {"status":"ok"}
-
-# Deep — right for monitoring, wrong for the LB
-GET /health/ready  →  checks DB + cache
-
-# Faster failover
---health-check-interval-seconds 5 \\
---unhealthy-threshold-count 2      # detects failure in 10s`,
-    doc:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html'},
-
-  nat:{cat:'Connectivity', title:'NAT gateway', kicker:'CONNECTIVITY',
-    blurb:'One-way outbound access — and the biggest surprise on most AWS bills.',
-    body:`<p class="mb-3">A NAT gateway lets private instances reach out while blocking anything reaching in. It rewrites the source address to its own public IP and remembers the conversation so replies find their way back. Nothing outside can start a new connection inward.</p>
-    <p class="mb-3"><strong>It lives in a public subnet but serves the private ones.</strong> This is the detail everyone gets wrong. Think of a receptionist in the lobby carrying mail out for the back offices — she sits at the front, but works for the back.</p>
-    <p class="mb-3"><strong>The charges stack.</strong> Hourly (~$32/mo), plus per-GB processing (~$0.045), plus standard internet egress (~$0.09/GB). A gigabyte leaving a private subnet costs about $0.135 all in.</p>
-    <p>A newer <strong>Provisioned</strong> mode charges per Gbps-hour with free data processing, breaking even around 16 TB/month per gateway.</p>`,
-    ex:`# Must be created IN a public subnet
-aws ec2 create-nat-gateway \\
-  --subnet-id subnet-PUBLIC-1a \\
-  --allocation-id $EIP
-
-# Then routed from the PRIVATE table
-aws ec2 create-route --route-table-id $PRIVATE_RT \\
-  --destination-cidr-block 0.0.0.0/0 \\
-  --nat-gateway-id $NAT
-
-# Cross-AZ costs ~$0.01/GB each way — one NAT per AZ
-# is often cheaper than one shared NAT at volume.`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html'},
-
-  vpce:{cat:'Connectivity', title:'VPC endpoints', kicker:'CONNECTIVITY',
-    blurb:'Private doors to AWS services. The S3 one is free — create it today.',
-    body:`<p class="mb-3"><strong>Gateway endpoints</strong> serve S3 and DynamoDB only. They cost nothing, have no bandwidth limit, and work by adding a prefix-list route more specific than 0.0.0.0/0. There is no downside to creating them.</p>
-    <p class="mb-3"><strong>Interface endpoints</strong> (PrivateLink) cover roughly a hundred other services by placing a real ENI with a private IP in your subnet. With private DNS enabled, the normal service hostname resolves to that private IP, so your code needs zero changes.</p>
-    <p class="mb-3">Worth creating: ecr.api and ecr.dkr, logs, ssm plus ssmmessages and ec2messages, secretsmanager, sts, kms.</p>
-    <p><strong>The fully private pattern:</strong> with those endpoints in place, a cluster can run with no NAT gateway at all and no 0.0.0.0/0 route anywhere. Endpoint policies can also restrict access to only your own buckets, closing a real exfiltration path.</p>`,
-    ex:`# Free. Do this on day one.
-aws ec2 create-vpc-endpoint --vpc-id $VPC \\
-  --service-name com.amazonaws.us-east-1.s3 \\
-  --route-table-ids $PRIVATE_RT \\
-  --vpc-endpoint-type Gateway
-
-# Interface endpoint — private DNS is the magic flag
-aws ec2 create-vpc-endpoint --vpc-id $VPC \\
-  --service-name com.amazonaws.us-east-1.secretsmanager \\
-  --vpc-endpoint-type Interface \\
-  --subnet-ids subnet-a subnet-b --private-dns-enabled`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html'},
-
-  peering:{cat:'Connectivity', title:'Peering vs Transit Gateway', kicker:'CONNECTIVITY',
-    blurb:'Peering does not chain. That limitation decides the architecture.',
-    body:`<p class="mb-3"><strong>VPC peering</strong> is a direct link with no hourly charge and very low latency. But it is <em>not transitive</em>: if A peers with B and B peers with C, A still cannot reach C. Ten VPCs would need 45 connections and 45 sets of route entries.</p>
-    <p class="mb-3"><strong>Transit Gateway</strong> is a hub every VPC attaches to once, and it <em>is</em> transitive. It costs about $36/month per attachment plus $0.02/GB, but it scales to thousands of VPCs and also terminates VPN and Direct Connect.</p>
-    <p class="mb-3">Its multiple route tables enable real segmentation: production and development can each reach shared services while being unable to reach each other.</p>
-    <p><strong>Switch to a transit gateway</strong> at roughly four or five VPCs, the first time you need transitive routing, or when an office network joins.</p>`,
-    ex:`# Peering needs routes on BOTH sides
-aws ec2 create-route --route-table-id $RT_A \\
-  --destination-cidr-block 10.1.0.0/16 \\
-  --vpc-peering-connection-id $PCX
-aws ec2 create-route --route-table-id $RT_B \\
-  --destination-cidr-block 10.0.0.0/16 \\
-  --vpc-peering-connection-id $PCX
-
-# Overlapping CIDRs can never be peered.
-# PrivateLink is the workaround — it needs no routing.`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/tgw/what-is-transit-gateway.html'},
-
-  dns:{cat:'DNS', title:'Private hosted zones', kicker:'DNS',
-    blurb:'Internal names that resolve only inside your VPC.',
-    body:`<p class="mb-3">Every VPC has a resolver at the base of its CIDR plus two — 10.0.0.2 for a 10.0.0.0/16 VPC — and also at 169.254.169.253. Instances are pointed at it automatically by DHCP.</p>
-    <p class="mb-3">A private hosted zone lets you create your own internal names. Your application connects to db.internal.mycompany.com instead of an IP; move the database and you update one record rather than redeploying anything.</p>
-    <p class="mb-3"><strong>Split-horizon DNS</strong> is the powerful case: run a public and a private zone with the same name. Outside callers get the public IP, callers inside the VPC get the private one. Traffic stays internal, skips the NAT charge, and is faster.</p>
-    <p><strong>Requires both enableDnsSupport and enableDnsHostnames.</strong> The second defaults to false on VPCs you create yourself.</p>`,
-    ex:`aws route53 create-hosted-zone \\
-  --name internal.mycompany.com \\
-  --vpc VPCRegion=us-east-1,VPCId=$VPC \\
-  --hosted-zone-config PrivateZone=true \\
-  --caller-reference $(date +%s)
-
-# Split horizon — same name, two answers
-public  api.example.com → 203.0.113.50  (public ALB)
-private api.example.com → 10.0.10.99    (internal ALB)`,
-    doc:'https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zones-private.html'},
-
-  alias:{cat:'DNS', title:'ALIAS records', kicker:'DNS',
-    blurb:'How you point a bare domain at a load balancer.',
-    body:`<p class="mb-3">DNS forbids a CNAME at the root of a domain, because the root must also carry NS and SOA records and CNAME cannot coexist with others. But a load balancer only gives you a hostname, never a fixed IP. That is a genuine conflict.</p>
-    <p class="mb-3">Route 53's ALIAS record solves it. Route 53 resolves the target internally and hands the client an A record with the current addresses.</p>
-    <p class="mb-3">Compared to a CNAME it works at the domain root, costs nothing for queries to AWS resources, resolves in one lookup instead of two, and tracks the target's IPs automatically.</p>
-    <p><strong>TTL migration trick:</strong> before changing a record, lower its TTL to 60 and wait for the <em>old</em> TTL to expire everywhere. Then the change propagates in a minute instead of an hour.</p>`,
-    ex:`example.com  ALIAS → my-alb-1234.us-east-1.elb.amazonaws.com
-
-# Works for: ALB, NLB, CloudFront, S3 website
-# endpoints, API Gateway, another Route 53 record
-
-# TTL guidance
-60s    fast changes, more queries
-300s   sensible default
-3600s  changes take an hour to reach everyone`,
-    doc:'https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html'},
-
-  cni:{cat:'EKS', title:'VPC CNI — pods get real IPs', kicker:'EKS',
-    blurb:'No overlay network. Every pod holds an address from your subnet.',
-    body:`<p class="mb-3">Most Kubernetes distributions give pods fake IPs on a virtual network and wrap traffic in extra packet layers. AWS does not. The VPC CNI plugin hands each pod a genuine address from your actual subnet.</p>
-    <p class="mb-3">That buys you full network performance with no encapsulation, pod-level visibility in Flow Logs, ALBs that target pods directly, and security groups that can apply to individual pods.</p>
-    <p class="mb-3"><strong>The cost is address consumption.</strong> Pods per node is (ENIs × (IPs per ENI − 1)) + 2, so an m5.large tops out at 29 pods and ten of them exhaust a /24.</p>
-    <p><strong>Prefix delegation</strong> assigns /28 blocks instead of single addresses, lifting an m5.large to the 110-pod Kubernetes ceiling and speeding up pod startup. It needs contiguous free /28s — a fragmented subnet throws InsufficientCidrBlocks, so build new subnets for prefix-mode node groups rather than converting old ones.</p>`,
-    ex:`kubectl set env daemonset aws-node -n kube-system \\
-  ENABLE_PREFIX_DELEGATION=true
-
-# m5.large:  29 pods  →  110 pods
-
-# Or move pods to CGNAT space entirely
-aws ec2 associate-vpc-cidr-block \\
-  --vpc-id $VPC --cidr-block 100.64.0.0/16
-
-# EKS Auto Mode enables prefix delegation by default
-# and computes max-pods for you.`,
-    doc:'https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html'},
-
-  ndots:{cat:'EKS', title:'CoreDNS and the ndots:5 trap', kicker:'EKS',
-    blurb:'Why every external lookup costs four DNS queries.',
-    body:`<p class="mb-3">Every pod's resolv.conf carries <span class="mono">options ndots:5</span>, meaning any name with fewer than five dots gets the search domains tried first.</p>
-    <p class="mb-3">So looking up api.stripe.com — two dots — actually generates four queries: three NXDOMAIN responses against cluster.local suffixes before the real one succeeds. At scale this saturates CoreDNS and surfaces as unexplained latency that looks like a network problem.</p>
-    <p class="mb-3"><strong>Two fixes.</strong> Add a trailing dot to make a name fully qualified, which skips the search list entirely. Or lower ndots for that pod via dnsConfig.</p>
-    <p>Also consider NodeLocal DNSCache, which runs a small cache on every node and cuts CoreDNS load sharply.</p>`,
-    ex:`# The problem
-api.stripe.com.default.svc.cluster.local  NXDOMAIN
-api.stripe.com.svc.cluster.local          NXDOMAIN
-api.stripe.com.cluster.local              NXDOMAIN
-api.stripe.com                            ✓ finally
-
-# Fix 1 — trailing dot makes it fully qualified
-value: "https://api.stripe.com./v1"
-
-# Fix 2 — lower ndots for this pod
-dnsConfig:
-  options:
-    - name: ndots
-      value: "2"`,
-    doc:'https://docs.aws.amazon.com/eks/latest/best-practices/dns.html'},
-
-  albgroup:{cat:'EKS', title:'AWS Load Balancer Controller', kicker:'EKS',
-    blurb:'Ingress objects become real ALBs. Share them or pay per service.',
-    body:`<p class="mb-3">The controller watches Ingress and Service objects and builds the corresponding AWS load balancers, target groups, and listener rules.</p>
-    <p class="mb-3"><strong>Use target-type ip, not instance.</strong> IP mode sends traffic straight to the pod: one hop instead of two, accurate per-pod health checks, and it is the only mode that works with Fargate.</p>
-    <p class="mb-3"><strong>The group.name annotation is a large cost saver.</strong> Without it every Ingress provisions its own ALB at $16+/month. Give several Ingresses the same group name and they share one load balancer with merged rules.</p>
-    <p>For pod-level isolation, SecurityGroupPolicy assigns specific security groups to labelled pods. Each such pod consumes a full ENI, reducing node capacity.</p>`,
-    ex:`annotations:
-  alb.ingress.kubernetes.io/scheme: internet-facing
-  alb.ingress.kubernetes.io/target-type: ip
-  alb.ingress.kubernetes.io/group.name: shared
-  alb.ingress.kubernetes.io/healthcheck-path: /health
-
-# 20 Ingresses, 1 ALB instead of 20.
-# Saves roughly $300/month on a busy cluster.`,
-    doc:'https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html'},
-
-  netpol:{cat:'EKS', title:'Network policies', kicker:'EKS',
-    blurb:'Pod-to-pod firewalls. Default is allow-everything.',
-    body:`<p class="mb-3">By default every pod in a cluster can reach every other pod. That is usually too permissive, and network policies are the Kubernetes-native way to lock it down.</p>
-    <p class="mb-3">Since 2023 the VPC CNI enforces them natively — Calico is no longer required. Enable ENABLE_NETWORK_POLICY on the aws-node daemonset.</p>
-    <p class="mb-3">The pattern is default-deny first, then allow specific paths. Start in one namespace so a mistake does not take down the cluster.</p>
-    <p><strong>These solve a different problem from security groups.</strong> Security groups govern traffic at the VPC boundary — pod to RDS, pod to internet. Network policies govern pod to pod inside the cluster. Use both.</p>`,
-    ex:`# Deny all ingress in the namespace
-spec:
-  podSelector: {}
-  policyTypes: [Ingress]
----
-# Then allow just the frontend
-spec:
-  podSelector:
-    matchLabels: {app: api}
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: {app: frontend}
-      ports: [{protocol: TCP, port: 8080}]`,
-    doc:'https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html'},
-
-  ssm:{cat:'Operations', title:'Session Manager over bastions', kicker:'OPERATIONS',
-    blurb:'Shell access with no open ports and no SSH keys.',
-    body:`<p class="mb-3">The old pattern puts a small public server in a public subnet, you SSH into it, then SSH onward to private instances. It works, but it is another machine to patch, another key to lose, and port 22 facing the internet.</p>
-    <p class="mb-3">Session Manager removes all three. An agent on the instance makes an <strong>outbound</strong> connection to the SSM service; you connect to the service too and it bridges you. Because the instance dialled out, no inbound rule is needed anywhere.</p>
-    <p class="mb-3">Every command is logged to CloudWatch or S3 automatically, which a bastion only does if someone set that up.</p>
-    <p><strong>Requirements:</strong> the AmazonSSMManagedInstanceCore policy on the instance role, and a path to the SSM service — either NAT or the ssm, ssmmessages and ec2messages interface endpoints.</p>`,
-    ex:`aws ssm start-session --target i-0a1b2c3d4e5f
-
-# Port forwarding works too — reach a private
-# database from your laptop with nothing exposed:
-aws ssm start-session --target i-xxx \\
-  --document-name AWS-StartPortForwardingSession \\
-  --parameters '{"portNumber":["5432"],
-                 "localPortNumber":["5432"]}'`,
-    doc:'https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html'},
-
-  debug:{cat:'Operations', title:'Reachability Analyzer and Flow Logs', kicker:'OPERATIONS',
-    blurb:'Stop guessing which rule broke it.',
-    body:`<p class="mb-3"><strong>Reachability Analyzer</strong> takes a source and a destination and tells you precisely which route table entry, security group, or NACL rule blocks the path. Use it first, not after an hour of manual checking.</p>
-    <p class="mb-3"><strong>VPC Flow Logs</strong> record every connection attempt with source, destination, ports, and an ACCEPT or REJECT verdict. You cannot investigate an incident without them, and they should be on before you need them.</p>
-    <p class="mb-3"><strong>Network Access Analyzer</strong> scans for unintended paths — "show me everything that can reach the internet" — which is the fastest way to find a subnet somebody quietly made public.</p>
-    <p><strong>Reading symptoms:</strong> a timeout with total silence is almost always a security group or NACL, because firewalls discard rather than reject. An actual error response means you reached something and the problem is further up the stack.</p>`,
-    ex:`aws ec2 create-network-insights-path \\
-  --source i-0aaa --destination i-0bbb \\
-  --protocol tcp --destination-port 443
-aws ec2 start-network-insights-analysis \\
-  --network-insights-path-id nip-xxx
-
-# Flow log fields that matter
-srcaddr dstaddr srcport dstport action
-10.0.10.5  10.0.20.100  41234  5432  REJECT
-#                                    ↑ an SG or NACL blocked it`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/what-is-reachability-analyzer.html'},
-
-  overlap:{cat:'Foundations', title:'Why CIDR overlap is fatal', kicker:'FOUNDATIONS',
+  overlap:{
+    cat:'Foundations',
+    kicker:'FOUNDATIONS',
+    title:'Why CIDR overlap is fatal',
     blurb:'Plan the whole scheme before creating the first VPC.',
-    body:`<p class="mb-3">Two VPCs with overlapping ranges can never be peered or joined by a transit gateway. Routing would be ambiguous — a packet for 10.0.5.20 could belong to either side and there is no way to decide.</p>
-    <p class="mb-3">This is not a limitation you work around later. Fixing it means rebuilding one VPC and migrating everything in it. Companies have spent months on this after a merger.</p>
-    <p class="mb-3"><strong>Write the scheme down before you build anything.</strong> Allocate ranges per environment and per region, and reserve space for the office network.</p>
-    <p>You can add up to five secondary CIDR blocks to a VPC later, which helps with exhaustion but not with overlap. <strong>PrivateLink is the genuine workaround</strong> — it exposes one service across accounts with no routing at all, so overlapping ranges stop mattering.</p>`,
-    ex:`10.0.0.0/16     prod · us-east-1
-10.1.0.0/16     prod · eu-west-1
-10.10.0.0/16    staging
-10.20.0.0/16    dev
-10.100.0.0/16   shared services
-172.16.0.0/16   on-premises office
-100.64.0.0/16   EKS pod space (CGNAT)
+    plain:'If two office buildings both number their rooms 101–200, you cannot build a corridor between them — "go to room 150" becomes ambiguous. Same with VPCs: overlapping address ranges can never be connected.',
+    body:'<p class="mb-3">Two VPCs with overlapping ranges can never be peered or joined by a transit gateway. Routing would be ambiguous — a packet for 10.0.5.20 could belong to either side and there is no way to decide.</p>\n    <p class="mb-3">This is not a limitation you work around later. Fixing it means rebuilding one VPC and migrating everything in it. Companies have spent months on this after a merger.</p>\n    <p class="mb-3"><strong>Write the scheme down before you build anything.</strong> Allocate ranges per environment and per region, and reserve space for the office network.</p>\n    <p>You can add up to five secondary CIDR blocks to a VPC later, which helps with exhaustion but not with overlap. <strong>PrivateLink is the genuine workaround</strong> — it exposes one service across accounts with no routing at all, so overlapping ranges stop mattering.</p>',
+    ex:'10.0.0.0/16     prod · us-east-1\n10.1.0.0/16     prod · eu-west-1\n10.10.0.0/16    staging\n10.20.0.0/16    dev\n10.100.0.0/16   shared services\n172.16.0.0/16   on-premises office\n100.64.0.0/16   EKS pod space (CGNAT)\n\n# Sized /16 by default. Addresses are free; running out is not.',
+    gotcha:'Default VPCs all use <span class="mono">172.31.0.0/16</span>. If you peer two accounts that both still have their default VPCs, they collide immediately. This is the single most common overlap surprise.',
+    check:'# Every CIDR in use in this account and region — run before allocating a new one\naws ec2 describe-vpcs \\\n  --query \'Vpcs[].{VPC:VpcId,Primary:CidrBlock,\n           All:CidrBlockAssociationSet[].CidrBlock}\' --output table\n\n# Across all regions (catches the forgotten default VPCs)\nfor r in $(aws ec2 describe-regions --query \'Regions[].RegionName\' --output text); do\n  echo "== $r"; aws ec2 describe-vpcs --region $r \\\n    --query \'Vpcs[].[VpcId,CidrBlock,IsDefault]\' --output text\ndone',
+    checkHint:'Run the multi-region loop once a quarter. Unused default VPCs are the usual source of collisions.',
+    update:'# IPAM is the managed way to prevent overlap across many accounts\naws ec2 create-ipam --description "org address plan" \\\n  --operating-regions RegionName=us-east-1\n\n# Delete an unused default VPC to free up 172.31.0.0/16\naws ec2 delete-vpc --vpc-id DEFAULT_VPC_ID',
+    updateHint:'For more than a handful of accounts, AWS IPAM allocates non-overlapping ranges automatically.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-cidr-blocks.html'
+  },
 
-# Sized /16 by default. Addresses are free;
-# running out is not.`,
-    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-cidr-blocks.html'}
+  sg:{
+    cat:'Security',
+    kicker:'SECURITY',
+    title:'Security groups',
+    blurb:'Stateful firewalls on resources. Reference other groups, not IP ranges.',
+    plain:'A security group is a guest list attached to a specific machine. It only ever says who may come in — there is no "banned" list. And it remembers: if someone is let in, their reply is automatically let back out.',
+    body:'<p class="mb-3">Security groups attach to network interfaces and only contain allow rules. They are <strong>stateful</strong> — permit traffic in and the reply is automatically permitted out. No matching outbound rule needed.</p>\n    <p class="mb-3">The single best practice in AWS networking: set the source of a rule to <em>another security group</em> instead of a CIDR block. Then the policy reads like a sentence — load balancers accept from the internet, app servers accept from load balancers, databases accept from app servers. It never needs updating when IPs change, and autoscaling just works.</p>\n    <p><strong>Defaults:</strong> inbound denies everything, outbound allows everything. Limits: 60 inbound and 60 outbound rules per group, 5 groups per interface.</p>',
+    ex:'# Right — reference the group\n--source-group sg-alb        ← survives the ALB changing IPs\n\n# Wrong — hardcoded IPs break when the ALB scales\n--cidr 10.0.1.0/24\n\n# Reads like a sentence:\nalb-sg  ← 0.0.0.0/0 on 443\napp-sg  ← alb-sg    on 8080\ndb-sg   ← app-sg    on 5432',
+    gotcha:'Security groups <strong>cannot deny</strong> anything. If you need to block one specific IP address, a security group is the wrong tool — you need a NACL. Adding an "allow everyone except X" rule is impossible here.',
+    check:'# Find the dangerous ones: anything open to the whole internet\naws ec2 describe-security-groups --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'SecurityGroups[?IpPermissions[?IpRanges[?CidrIp==`0.0.0.0/0`]]]\n           .{Name:GroupName,ID:GroupId}\' --output table\n\n# Full rules for one group\naws ec2 describe-security-groups --group-ids SG_ID \\\n  --query \'SecurityGroups[0].IpPermissions[].{Port:FromPort,\n           Proto:IpProtocol,From:IpRanges[].CidrIp,FromSG:UserIdGroupPairs[].GroupId}\' \\\n  --output json\n\n# What is this security group actually attached to?\naws ec2 describe-network-interfaces --filters Name=group-id,Values=SG_ID \\\n  --query \'NetworkInterfaces[].{ENI:NetworkInterfaceId,Desc:Description}\' --output table',
+    checkHint:'The first command is the one to run on any account you have just inherited.',
+    create:'aws ec2 create-security-group --group-name app-sg \\\n  --description "App servers — accepts only from the load balancer" --vpc-id VPC_ID\n\n# The important part: source is a GROUP, not a CIDR\naws ec2 authorize-security-group-ingress --group-id APP_SG \\\n  --protocol tcp --port 8080 --source-group ALB_SG\n\n# Self-referencing, for clusters whose members talk to each other\naws ec2 authorize-security-group-ingress --group-id CLUSTER_SG \\\n  --protocol tcp --port 0-65535 --source-group CLUSTER_SG',
+    update:'# Remove a rule (same syntax as authorize, but revoke)\naws ec2 revoke-security-group-ingress --group-id SG_ID \\\n  --protocol tcp --port 22 --cidr 0.0.0.0/0\n\n# Swap the groups on a running instance — takes effect immediately,\n# no restart, no dropped connections\naws ec2 modify-instance-attribute \\\n  --instance-id INSTANCE_ID --groups SG_ID_1 SG_ID_2',
+    updateHint:'Security group changes apply live. That makes them the fastest way to contain an incident.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html'
+  },
+
+  nacl:{
+    cat:'Security',
+    kicker:'SECURITY',
+    title:'Network ACLs',
+    blurb:'Stateless subnet firewalls. You probably do not need them.',
+    plain:'A NACL is a guard at the door of the whole room, not one machine. Unlike a security group it can say "no" to specific people — but it has no memory, so you must separately allow the reply on its way out.',
+    body:'<p class="mb-3">NACLs sit at the subnet boundary, support both allow and deny, and are evaluated in ascending rule-number order where <strong>the first match wins</strong> and everything after is ignored.</p>\n    <p class="mb-3">Being <strong>stateless</strong> is what catches people. Allow inbound 443 and the reply is still blocked, because it leaves from port 443 to a random high port on the client. You need an outbound rule for 1024–65535. Miss it and connections hang with nothing in the logs.</p>\n    <p><strong>When to use them:</strong> only when you need an explicit deny, which security groups cannot express. Blocking a known-bad IP range, or enforcing a compliance rule at a second independent layer. Otherwise leave the default NACL alone.</p>',
+    ex:'Rule 50:   DENY   tcp/443 from 1.2.3.4/32   ← must be BELOW 100\nRule 100:  ALLOW  tcp/443 from 0.0.0.0/0\nRule 200:  DENY   tcp/443 from 1.2.3.4/32   ← dead code, never reached\nRule *:    DENY   everything (implicit, cannot be removed)\n\n# Required outbound or nothing works:\nOutbound 100: ALLOW tcp/1024-65535 to 0.0.0.0/0',
+    gotcha:'Forgetting the outbound rule for ephemeral ports <span class="mono">1024–65535</span> is the classic NACL mistake. The request arrives, your server answers, and the answer is silently dropped on the way out. Connections just hang.',
+    check:'# All NACLs and their rules, in evaluation order\naws ec2 describe-network-acls --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'NetworkAcls[].{ID:NetworkAclId,Default:IsDefault,\n           Rules:Entries[].{N:RuleNumber,Egress:Egress,Action:RuleAction,\n           Proto:Protocol,CIDR:CidrBlock,Ports:PortRange}}\' --output json\n\n# Which NACL governs a given subnet\naws ec2 describe-network-acls \\\n  --filters Name=association.subnet-id,Values=SUBNET_ID \\\n  --query \'NetworkAcls[].NetworkAclId\'',
+    checkHint:'Read the rules sorted by number. The first match wins, so anything after a matching rule is dead code.',
+    create:'aws ec2 create-network-acl --vpc-id VPC_ID\n\n# Inbound HTTPS\naws ec2 create-network-acl-entry --network-acl-id ACL_ID \\\n  --rule-number 100 --protocol tcp --port-range From=443,To=443 \\\n  --cidr-block 0.0.0.0/0 --rule-action allow --ingress\n\n# The outbound rule everyone forgets\naws ec2 create-network-acl-entry --network-acl-id ACL_ID \\\n  --rule-number 100 --protocol tcp --port-range From=1024,To=65535 \\\n  --cidr-block 0.0.0.0/0 --rule-action allow --egress',
+    createHint:'Number rules in steps of 100 so you can insert new ones between them later.',
+    update:'# Block a bad actor — the number must be LOWER than the allow rule\naws ec2 create-network-acl-entry --network-acl-id ACL_ID \\\n  --rule-number 50 --protocol tcp --port-range From=443,To=443 \\\n  --cidr-block 198.51.100.7/32 --rule-action deny --ingress\n\n# Change an existing rule in place\naws ec2 replace-network-acl-entry --network-acl-id ACL_ID \\\n  --rule-number 50 --protocol tcp --port-range From=443,To=443 \\\n  --cidr-block 198.51.100.0/24 --rule-action deny --ingress\n\naws ec2 delete-network-acl-entry --network-acl-id ACL_ID --rule-number 50 --ingress',
+    updateHint:'A deny rule numbered above your allow rule does nothing at all. Always check the ordering.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html'
+  },
+
+  imds:{
+    cat:'Security',
+    kicker:'SECURITY',
+    title:'Instance metadata and IMDSv2',
+    blurb:'The link-local address that leaked Capital One’s data.',
+    plain:'Every EC2 instance can ask a special address what it is and what permissions it holds. Handy — but if an attacker can trick your app into asking on their behalf, they walk away with your AWS credentials. IMDSv2 requires a handshake first, which most such tricks cannot perform.',
+    body:'<p class="mb-3">Every instance can query 169.254.169.254 for facts about itself, including temporary IAM credentials. The address is link-local: it never leaves the host and is unreachable from anywhere else.</p>\n    <p class="mb-3">IMDSv1 answered any plain HTTP GET with no authentication. If an attacker found a server-side request forgery bug in your application, they could make your own app fetch the credentials path and hand over your AWS keys. This is the mechanism behind the 2019 Capital One breach.</p>\n    <p><strong>IMDSv2 requires a PUT to obtain a token first</strong>, which SSRF attacks generally cannot perform. Enforce it everywhere, and set the hop limit to 1 so containers on the instance cannot reach it either.</p>',
+    ex:'TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \\\n  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")\n\ncurl -sH "X-aws-ec2-metadata-token: $TOKEN" \\\n  http://169.254.169.254/latest/meta-data/instance-id',
+    gotcha:'Setting <span class="mono">--http-put-response-hop-limit 1</span> blocks containers from reaching the metadata service. That is usually what you want — but if your pods use IAM roles for service accounts on EKS, test before rolling it out fleet-wide.',
+    check:'# Find every instance still allowing the insecure IMDSv1\naws ec2 describe-instances \\\n  --filters Name=metadata-options.http-tokens,Values=optional \\\n  --query \'Reservations[].Instances[].{ID:InstanceId,\n           Tokens:MetadataOptions.HttpTokens,Hops:MetadataOptions.HttpPutResponseHopLimit}\' \\\n  --output table\n\n# Count how much of the fleet is still exposed\naws ec2 describe-instances \\\n  --filters Name=metadata-options.http-tokens,Values=optional \\\n  --query \'length(Reservations[].Instances[])\'',
+    checkHint:'If the first command returns rows, those instances are vulnerable to the Capital One attack pattern.',
+    create:'# Launch with IMDSv2 enforced from the start\naws ec2 run-instances --image-id AMI_ID --instance-type t3.micro \\\n  --subnet-id SUBNET_ID \\\n  --metadata-options \'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled\'',
+    update:'# Enforce on one running instance — no restart needed\naws ec2 modify-instance-metadata-options --instance-id INSTANCE_ID \\\n  --http-tokens required --http-endpoint enabled \\\n  --http-put-response-hop-limit 1\n\n# Fix the whole fleet at once\nfor id in $(aws ec2 describe-instances \\\n  --filters Name=metadata-options.http-tokens,Values=optional \\\n  --query \'Reservations[].Instances[].InstanceId\' --output text); do\n    aws ec2 modify-instance-metadata-options --instance-id $id \\\n      --http-tokens required --http-put-response-hop-limit 1\ndone',
+    updateHint:'Applies instantly with no reboot. Test on one instance first in case an old SDK still uses IMDSv1.',
+    doc:'https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html'
+  },
+
+  alb:{
+    cat:'Load balancing',
+    kicker:'LOAD BALANCING',
+    title:'Application Load Balancer',
+    blurb:'Layer 7 routing by path, host, header, or method. The default choice.',
+    plain:'A receptionist who reads the actual request before deciding where to send it. "/api goes to the API team, /admin goes to the admin team." It is also the only thing in your setup facing the internet.',
+    body:'<p class="mb-3">An ALB terminates TLS, inspects HTTP, and forwards to target groups based on listener rules evaluated in priority order. It requires at least two Availability Zones — AWS will not create one otherwise.</p>\n    <p class="mb-3">Listener rules can match on path, host header, any HTTP header, method, query string, or source IP. Actions include forward, redirect, fixed response, and authenticate via Cognito or OIDC before the request ever reaches your code.</p>\n    <p><strong>Weighted forwarding</strong> is how blue/green and canary deploys work: send 10% to the new target group, watch error rates, then shift. Rolling back takes seconds.</p>',
+    gotcha:'An ALB gives you a DNS name, never a fixed IP, and the underlying addresses change without warning. Never hardcode them. If a partner needs a static IP for their allowlist, you need an NLB instead.',
+    check:'# All load balancers with their DNS names and scheme\naws elbv2 describe-load-balancers \\\n  --query \'LoadBalancers[].{Name:LoadBalancerName,DNS:DNSName,\n           Type:Type,Scheme:Scheme,State:State.Code}\' --output table\n\n# Listener rules in priority order — first match wins\naws elbv2 describe-rules --listener-arn LISTENER_ARN \\\n  --query \'Rules[].{Priority:Priority,Conditions:Conditions[].Values,\n           Action:Actions[0].Type}\' --output json',
+    create:'aws elbv2 create-load-balancer --name my-alb --type application \\\n  --scheme internet-facing \\\n  --subnets SUBNET_PUBLIC_1A SUBNET_PUBLIC_1B \\\n  --security-groups ALB_SG\n\n# A load balancer with no listener does nothing at all\naws elbv2 create-listener --load-balancer-arn ALB_ARN \\\n  --protocol HTTPS --port 443 \\\n  --certificates CertificateArn=ACM_ARN \\\n  --default-actions Type=forward,TargetGroupArn=TG_ARN',
+    createHint:'--subnets must be your PUBLIC subnets. The servers behind stay private.',
+    update:'# Redirect all HTTP to HTTPS — there is no reason to serve port 80 plain\naws elbv2 create-listener --load-balancer-arn ALB_ARN --protocol HTTP --port 80 \\\n  --default-actions \'[{"Type":"redirect","RedirectConfig":\n    {"Protocol":"HTTPS","Port":"443","StatusCode":"HTTP_301"}}]\'\n\n# Canary: shift 10% of traffic to the new version\naws elbv2 modify-listener --listener-arn LISTENER_ARN \\\n  --default-actions \'[{"Type":"forward","ForwardConfig":{"TargetGroups":[\n    {"TargetGroupArn":"BLUE_TG","Weight":90},\n    {"TargetGroupArn":"GREEN_TG","Weight":10}]}}]\'\n\n# Route /api to a different service\naws elbv2 create-rule --listener-arn LISTENER_ARN --priority 10 \\\n  --conditions Field=path-pattern,Values=\'/api/*\' \\\n  --actions Type=forward,TargetGroupArn=API_TG',
+    updateHint:'Weight changes take effect in seconds, which makes rollback almost instant.',
+    doc:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html'
+  },
+
+  tg:{
+    cat:'Load balancing',
+    kicker:'LOAD BALANCING',
+    title:'Target groups and health checks',
+    blurb:'Where most ALB problems actually live.',
+    plain:'A target group is the list of servers the load balancer may send work to, plus a rule for checking each one is alive. If every server fails its check the list is empty, and visitors get a 503.',
+    body:'<p class="mb-3">A target group is a list of destinations plus health check rules. Four target types: instance IDs, raw IPs (needed for Fargate and EKS), a Lambda function, or another ALB.</p>\n    <p class="mb-3"><strong>Use shallow health checks on the load balancer.</strong> A deep check that queries the database sounds thorough, but when the database hiccups every target fails simultaneously, the target group empties, and the ALB returns 503 to everyone. A slow database becomes a total outage. Keep the LB check shallow and put deep checks in your monitoring and in Kubernetes readiness probes.</p>\n    <p><strong>Deregistration delay</strong> defaults to 300 seconds. For fast APIs drop it to 30 and deploys get much quicker.</p>',
+    ex:'# Shallow — right for the load balancer\nGET /health  →  200 {"status":"ok"}\n\n# Deep — right for monitoring, WRONG for the LB\nGET /health/ready  →  also checks DB + cache\n                      one slow query = every target unhealthy = total outage',
+    gotcha:'If health checks fail while the app works fine when you curl it locally, the cause is almost always the <strong>security group</strong> — the target is not allowing the health check port from the load balancer\'s group.',
+    check:'# THE command to run when an ALB returns 503\naws elbv2 describe-target-health --target-group-arn TG_ARN \\\n  --query \'TargetHealthDescriptions[].{Target:Target.Id,Port:Target.Port,\n           State:TargetHealth.State,Reason:TargetHealth.Reason,\n           Detail:TargetHealth.Description}\' --output table\n\n# Reason codes and what they mean:\n#   Target.NotRegistered        nothing registered at all\n#   Target.Timeout              security group blocking, or app not listening\n#   Target.ResponseCodeMismatch app is up, /health returns a non-200\n#   Target.FailedHealthChecks   the health path does not exist\n\n# Current health check settings\naws elbv2 describe-target-groups --target-group-arns TG_ARN \\\n  --query \'TargetGroups[0].{Path:HealthCheckPath,Interval:HealthCheckIntervalSeconds,\n           Timeout:HealthCheckTimeoutSeconds,Healthy:HealthyThresholdCount}\'',
+    checkHint:'The Reason field tells you exactly which of the four common causes you are dealing with.',
+    create:'aws elbv2 create-target-group --name app-tg \\\n  --protocol HTTP --port 8080 --vpc-id VPC_ID \\\n  --target-type instance \\\n  --health-check-path /health \\\n  --health-check-interval-seconds 15 \\\n  --healthy-threshold-count 2 --unhealthy-threshold-count 2\n\naws elbv2 register-targets --target-group-arn TG_ARN \\\n  --targets Id=INSTANCE_1 Id=INSTANCE_2',
+    createHint:'Use --target-type ip for Fargate and EKS. instance mode does not work with Fargate.',
+    update:'# Faster failover: detect a dead target in 10s instead of 90s\naws elbv2 modify-target-group --target-group-arn TG_ARN \\\n  --health-check-interval-seconds 5 --unhealthy-threshold-count 2\n\n# Speed up deploys — default drain is 300s\naws elbv2 modify-target-group-attributes --target-group-arn TG_ARN \\\n  --attributes Key=deregistration_delay.timeout_seconds,Value=30\n\naws elbv2 deregister-targets --target-group-arn TG_ARN --targets Id=INSTANCE_ID',
+    updateHint:'Keep the drain delay high if you serve long uploads or WebSockets.',
+    doc:'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html'
+  },
+
+  nat:{
+    cat:'Connectivity',
+    kicker:'CONNECTIVITY',
+    title:'NAT gateway',
+    blurb:'One-way outbound access — and the biggest surprise on most AWS bills.',
+    plain:'A receptionist in the lobby who will carry your mail out to the post box, but will not let strangers walk in. She sits at the front of the building, yet she works for the people in the back offices.',
+    body:'<p class="mb-3">A NAT gateway lets private instances reach out while blocking anything reaching in. It rewrites the source address to its own public IP and remembers the conversation so replies find their way back. Nothing outside can start a new connection inward.</p>\n    <p class="mb-3"><strong>It lives in a public subnet but serves the private ones.</strong> This is the detail everyone gets wrong.</p>\n    <p class="mb-3"><strong>The charges stack.</strong> Hourly (~$32/mo), plus per-GB processing (~$0.045), plus standard internet egress (~$0.09/GB). A gigabyte leaving a private subnet costs about $0.135 all in.</p>\n    <p>A newer <strong>Provisioned</strong> mode charges per Gbps-hour with free data processing, breaking even around 16 TB/month per gateway.</p>',
+    gotcha:'Creating a NAT gateway in a <strong>private</strong> subnet is the classic error. It will show as "available" and route traffic to nowhere, because it has no path to the internet itself. It must sit in a public subnet.',
+    check:'# All NAT gateways, their subnet, and their public IP\naws ec2 describe-nat-gateways \\\n  --filter Name=vpc-id,Values=VPC_ID \\\n  --query \'NatGateways[].{ID:NatGatewayId,State:State,Subnet:SubnetId,\n           PublicIP:NatGatewayAddresses[0].PublicIp}\' --output table\n\n# Prove the NAT\'s own subnet is public (must show an igw- target)\naws ec2 describe-route-tables \\\n  --filters Name=association.subnet-id,Values=NAT_SUBNET_ID \\\n  --query \'RouteTables[].Routes[?DestinationCidrBlock==`0.0.0.0/0`]\'\n\n# What is it actually costing? Bytes processed over the last day\naws cloudwatch get-metric-statistics --namespace AWS/NATGateway \\\n  --metric-name BytesOutToDestination \\\n  --dimensions Name=NatGatewayId,Value=NAT_ID \\\n  --start-time $(date -u -d \'1 day ago\' +%Y-%m-%dT%H:%M:%S) \\\n  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \\\n  --period 86400 --statistics Sum',
+    checkHint:'The second command is the fastest way to confirm a NAT gateway is in the right kind of subnet.',
+    create:'# A NAT gateway needs its own public IP\naws ec2 allocate-address --domain vpc\n\n# Create it in a PUBLIC subnet\naws ec2 create-nat-gateway \\\n  --subnet-id SUBNET_PUBLIC_ID \\\n  --allocation-id EIP_ALLOC_ID \\\n  --tag-specifications \'ResourceType=natgateway,Tags=[{Key=Name,Value=nat-1a}]\'\n\n# Then route the PRIVATE subnets at it\naws ec2 create-route --route-table-id PRIVATE_RTB \\\n  --destination-cidr-block 0.0.0.0/0 --nat-gateway-id NAT_ID',
+    update:'# Delete it — billing stops only once it is fully deleted\naws ec2 delete-nat-gateway --nat-gateway-id NAT_ID\n\n# The Elastic IP keeps charging until released. Do not skip this.\naws ec2 release-address --allocation-id EIP_ALLOC_ID\n\n# Failover: point the route at a different NAT gateway\naws ec2 replace-route --route-table-id PRIVATE_RTB \\\n  --destination-cidr-block 0.0.0.0/0 --nat-gateway-id OTHER_NAT_ID',
+    updateHint:'Releasing the Elastic IP is the step people forget. Unattached addresses still bill ~$3.60/month.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html'
+  },
+
+  vpce:{
+    cat:'Connectivity',
+    kicker:'CONNECTIVITY',
+    title:'VPC endpoints',
+    blurb:'Private doors to AWS services. The S3 one is free — create it today.',
+    plain:'Normally, reaching S3 from a private server means going out to the public internet and back into AWS — paying for the round trip. An endpoint is an internal door straight to the service. For S3 it costs nothing.',
+    body:'<p class="mb-3"><strong>Gateway endpoints</strong> serve S3 and DynamoDB only. They cost nothing, have no bandwidth limit, and work by adding a prefix-list route more specific than 0.0.0.0/0. There is no downside to creating them.</p>\n    <p class="mb-3"><strong>Interface endpoints</strong> (PrivateLink) cover roughly a hundred other services by placing a real ENI with a private IP in your subnet. With private DNS enabled, the normal service hostname resolves to that private IP, so your code needs zero changes.</p>\n    <p class="mb-3">Worth creating: ecr.api and ecr.dkr, logs, ssm plus ssmmessages and ec2messages, secretsmanager, sts, kms.</p>\n    <p><strong>The fully private pattern:</strong> with those endpoints in place, a cluster can run with no NAT gateway at all and no 0.0.0.0/0 route anywhere.</p>',
+    gotcha:'Interface endpoints need <span class="mono">--private-dns-enabled</span> to be useful. Without it the service hostname still resolves to a public IP and your traffic keeps going out through the NAT gateway.',
+    check:'# What endpoints exist already?\naws ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'VpcEndpoints[].{Service:ServiceName,Type:VpcEndpointType,\n           State:State,PrivateDNS:PrivateDnsEnabled}\' --output table\n\n# Which services can you create an endpoint for in this region?\naws ec2 describe-vpc-endpoint-services \\\n  --query \'ServiceNames[?contains(@,`ecr`) || contains(@,`ssm`) || contains(@,`logs`)]\' \\\n  --output table\n\n# From inside an instance — does the name resolve privately (10.x) or publicly?\ndig +short s3.us-east-1.amazonaws.com',
+    checkHint:'If dig returns a public address from a private instance, you are paying NAT charges for AWS-internal traffic.',
+    create:'# S3 gateway endpoint — FREE. There is no reason not to have this.\naws ec2 create-vpc-endpoint --vpc-id VPC_ID \\\n  --service-name com.amazonaws.us-east-1.s3 \\\n  --vpc-endpoint-type Gateway \\\n  --route-table-ids PRIVATE_RTB_1 PRIVATE_RTB_2\n\n# Interface endpoint — note the private DNS flag\naws ec2 create-vpc-endpoint --vpc-id VPC_ID \\\n  --service-name com.amazonaws.us-east-1.secretsmanager \\\n  --vpc-endpoint-type Interface \\\n  --subnet-ids SUBNET_A SUBNET_B \\\n  --security-group-ids ENDPOINT_SG \\\n  --private-dns-enabled\n\n# The trio that lets Session Manager work with no NAT gateway at all\nfor s in ssm ssmmessages ec2messages; do\n  aws ec2 create-vpc-endpoint --vpc-id VPC_ID \\\n    --service-name com.amazonaws.us-east-1.$s \\\n    --vpc-endpoint-type Interface --subnet-ids SUBNET_A SUBNET_B \\\n    --security-group-ids ENDPOINT_SG --private-dns-enabled\ndone',
+    createHint:'Create the S3 gateway endpoint on day one of any new VPC. It is free and saves money immediately.',
+    update:'# Add a route table to an existing gateway endpoint\naws ec2 modify-vpc-endpoint --vpc-endpoint-id VPCE_ID \\\n  --add-route-table-ids NEW_RTB_ID\n\n# Turn on private DNS if it was missed at creation\naws ec2 modify-vpc-endpoint --vpc-endpoint-id VPCE_ID --private-dns-enabled\n\n# Restrict an endpoint to your own buckets — closes a data exfiltration path\naws ec2 modify-vpc-endpoint --vpc-endpoint-id VPCE_ID --policy-document \'{\n  "Statement":[{"Effect":"Allow","Principal":"*",\n    "Action":["s3:GetObject","s3:PutObject"],\n    "Resource":"arn:aws:s3:::my-company-bucket/*"}]}\'',
+    updateHint:'The endpoint policy stops an attacker on your server copying data to their own S3 bucket.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html'
+  },
+
+  peering:{
+    cat:'Connectivity',
+    kicker:'CONNECTIVITY',
+    title:'Peering vs Transit Gateway',
+    blurb:'Peering does not chain. That limitation decides the architecture.',
+    plain:'Peering is a private corridor between two buildings. Useful — but corridors do not chain: if A connects to B and B connects to C, people in A still cannot reach C. A transit gateway is a central hub everyone plugs into once.',
+    body:'<p class="mb-3"><strong>VPC peering</strong> is a direct link with no hourly charge and very low latency. But it is <em>not transitive</em>: if A peers with B and B peers with C, A still cannot reach C. Ten VPCs would need 45 connections and 45 sets of route entries.</p>\n    <p class="mb-3"><strong>Transit Gateway</strong> is a hub every VPC attaches to once, and it <em>is</em> transitive. It costs about $36/month per attachment plus $0.02/GB, but it scales to thousands of VPCs and also terminates VPN and Direct Connect.</p>\n    <p class="mb-3">Its multiple route tables enable real segmentation: production and development can each reach shared services while being unable to reach each other.</p>\n    <p><strong>Switch to a transit gateway</strong> at roughly four or five VPCs, the first time you need transitive routing, or when an office network joins.</p>',
+    gotcha:'Peering needs routes on <strong>both</strong> sides plus security group rules on both sides. Accepting the peering request alone does nothing — traffic still will not flow until you add the routes.',
+    check:'# Peering connections and their state\naws ec2 describe-vpc-peering-connections \\\n  --query \'VpcPeeringConnections[].{ID:VpcPeeringConnectionId,Status:Status.Code,\n           Requester:RequesterVpcInfo.CidrBlock,Accepter:AccepterVpcInfo.CidrBlock}\' \\\n  --output table\n\n# Transit gateway attachments\naws ec2 describe-transit-gateway-attachments \\\n  --query \'TransitGatewayAttachments[].{ID:TransitGatewayAttachmentId,\n           Type:ResourceType,State:State,Resource:ResourceId}\' --output table\n\n# Verify the routes actually exist on BOTH sides\naws ec2 describe-route-tables --route-table-id RTB_A \\\n  --query \'RouteTables[0].Routes[?VpcPeeringConnectionId!=null]\'',
+    create:'# 1. Request\naws ec2 create-vpc-peering-connection \\\n  --vpc-id VPC_A --peer-vpc-id VPC_B\n\n# 2. Accept (from the other side / account)\naws ec2 accept-vpc-peering-connection --vpc-peering-connection-id PCX_ID\n\n# 3. Routes on BOTH sides — without these nothing works\naws ec2 create-route --route-table-id RTB_A \\\n  --destination-cidr-block 10.1.0.0/16 --vpc-peering-connection-id PCX_ID\naws ec2 create-route --route-table-id RTB_B \\\n  --destination-cidr-block 10.0.0.0/16 --vpc-peering-connection-id PCX_ID\n\n# Transit gateway instead\naws ec2 create-transit-gateway --description "network hub"\naws ec2 create-transit-gateway-vpc-attachment \\\n  --transit-gateway-id TGW_ID --vpc-id VPC_ID --subnet-ids SUBNET_A SUBNET_B',
+    update:'# Allow DNS names to resolve across the peering link\naws ec2 modify-vpc-peering-connection-options \\\n  --vpc-peering-connection-id PCX_ID \\\n  --requester-peering-connection-options AllowDnsResolutionFromRemoteVpc=true\n\naws ec2 delete-vpc-peering-connection --vpc-peering-connection-id PCX_ID',
+    updateHint:'Without DNS resolution enabled, a private hosted zone in one VPC will not resolve from the other.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/tgw/what-is-transit-gateway.html'
+  },
+
+  dns:{
+    cat:'DNS',
+    kicker:'DNS',
+    title:'Private hosted zones',
+    blurb:'Internal names that resolve only inside your VPC.',
+    plain:'Instead of hardcoding 10.0.20.100 in your app, you call it "db.internal". Move the database, update one DNS record, and everything follows. No redeploy, no config change.',
+    body:'<p class="mb-3">Every VPC has a resolver at the base of its CIDR plus two — 10.0.0.2 for a 10.0.0.0/16 VPC — and also at 169.254.169.253. Instances are pointed at it automatically by DHCP.</p>\n    <p class="mb-3">A private hosted zone lets you create your own internal names. Your application connects to db.internal.mycompany.com instead of an IP; move the database and you update one record rather than redeploying anything.</p>\n    <p class="mb-3"><strong>Split-horizon DNS</strong> is the powerful case: run a public and a private zone with the same name. Outside callers get the public IP, callers inside the VPC get the private one. Traffic stays internal, skips the NAT charge, and is faster.</p>\n    <p><strong>Requires both enableDnsSupport and enableDnsHostnames.</strong> The second defaults to false on VPCs you create yourself.</p>',
+    ex:'# Split horizon — same name, two different answers\npublic zone  api.example.com → 203.0.113.50  (public ALB)\nprivate zone api.example.com → 10.0.10.99    (internal ALB)\n\n# Inside the VPC you get the private answer, so traffic\n# never leaves the network and never touches the NAT gateway.',
+    gotcha:'A private hosted zone only works in VPCs it is explicitly <strong>associated</strong> with. Creating the zone is not enough — if names do not resolve from a second VPC, the association is what is missing.',
+    check:'# List private zones\naws route53 list-hosted-zones \\\n  --query \'HostedZones[?Config.PrivateZone==`true`].{Name:Name,ID:Id}\' --output table\n\n# Records in a zone\naws route53 list-resource-record-sets --hosted-zone-id ZONE_ID \\\n  --query \'ResourceRecordSets[].{Name:Name,Type:Type,\n           Value:ResourceRecords[0].Value,TTL:TTL}\' --output table\n\n# Which VPCs is this zone associated with?\naws route53 get-hosted-zone --id ZONE_ID --query \'VPCs\'\n\n# Test resolution from inside an instance\ndig +short db.internal.mycompany.com',
+    checkHint:'Run dig from an actual instance in the VPC. Resolution behaves differently from outside.',
+    create:'aws route53 create-hosted-zone \\\n  --name internal.mycompany.com \\\n  --vpc VPCRegion=us-east-1,VPCId=VPC_ID \\\n  --hosted-zone-config PrivateZone=true \\\n  --caller-reference $(date +%s)\n\n# Add a record\naws route53 change-resource-record-sets --hosted-zone-id ZONE_ID \\\n  --change-batch \'{"Changes":[{"Action":"CREATE","ResourceRecordSet":{\n    "Name":"db.internal.mycompany.com","Type":"A","TTL":300,\n    "ResourceRecords":[{"Value":"10.0.20.100"}]}}]}\'',
+    update:'# UPSERT creates or replaces — the safe verb for automation\naws route53 change-resource-record-sets --hosted-zone-id ZONE_ID \\\n  --change-batch \'{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{\n    "Name":"db.internal.mycompany.com","Type":"A","TTL":60,\n    "ResourceRecords":[{"Value":"10.0.20.200"}]}}]}\'\n\n# Share the zone with a second VPC\naws route53 associate-vpc-with-hosted-zone --hosted-zone-id ZONE_ID \\\n  --vpc VPCRegion=us-east-1,VPCId=OTHER_VPC_ID',
+    updateHint:'Before a planned change, drop the TTL to 60 and wait for the OLD TTL to expire. Then the switch propagates in a minute.',
+    doc:'https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zones-private.html'
+  },
+
+  alias:{
+    cat:'DNS',
+    kicker:'DNS',
+    title:'ALIAS records',
+    blurb:'How you point a bare domain at a load balancer.',
+    plain:'DNS rules forbid pointing a bare domain like example.com at another name. But a load balancer only gives you a name, never a fixed IP. ALIAS is Route 53’s way around that deadlock — and it is free.',
+    body:'<p class="mb-3">DNS forbids a CNAME at the root of a domain, because the root must also carry NS and SOA records and CNAME cannot coexist with others. But a load balancer only gives you a hostname, never a fixed IP. That is a genuine conflict.</p>\n    <p class="mb-3">Route 53\'s ALIAS record solves it. Route 53 resolves the target internally and hands the client an A record with the current addresses.</p>\n    <p class="mb-3">Compared to a CNAME it works at the domain root, costs nothing for queries to AWS resources, resolves in one lookup instead of two, and tracks the target\'s IPs automatically.</p>\n    <p><strong>TTL migration trick:</strong> before changing a record, lower its TTL to 60 and wait for the <em>old</em> TTL to expire everywhere. Then the change propagates in a minute instead of an hour.</p>',
+    gotcha:'An ALIAS record takes no TTL of its own — it inherits from the target. And it only points at AWS resources; for anything external you still need a CNAME on a subdomain.',
+    check:'# Find ALIAS records (they have AliasTarget instead of ResourceRecords)\naws route53 list-resource-record-sets --hosted-zone-id ZONE_ID \\\n  --query \'ResourceRecordSets[?AliasTarget!=null].{Name:Name,\n           Target:AliasTarget.DNSName}\' --output table\n\n# You need the load balancer\'s hosted zone ID, not just its DNS name\naws elbv2 describe-load-balancers --names my-alb \\\n  --query \'LoadBalancers[0].{DNS:DNSName,ZoneID:CanonicalHostedZoneId}\'',
+    checkHint:'CanonicalHostedZoneId is the value that goes in HostedZoneId below. It is easy to confuse with your own zone ID.',
+    create:'aws route53 change-resource-record-sets --hosted-zone-id ZONE_ID \\\n  --change-batch \'{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{\n    "Name":"example.com","Type":"A",\n    "AliasTarget":{\n      "HostedZoneId":"ALB_CANONICAL_ZONE_ID",\n      "DNSName":"my-alb-1234.us-east-1.elb.amazonaws.com",\n      "EvaluateTargetHealth":true}}}]}\'',
+    update:'# Failover: primary answers unless its health check fails\naws route53 change-resource-record-sets --hosted-zone-id ZONE_ID \\\n  --change-batch \'{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{\n    "Name":"example.com","Type":"A","SetIdentifier":"primary",\n    "Failover":"PRIMARY","HealthCheckId":"HC_ID",\n    "AliasTarget":{"HostedZoneId":"ALB_ZONE","DNSName":"primary-alb...",\n      "EvaluateTargetHealth":true}}}]}\'\n\n# Weighted split for a canary release\n# ...same shape, with "SetIdentifier":"green","Weight":10',
+    doc:'https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html'
+  },
+
+  cni:{
+    cat:'EKS',
+    kicker:'EKS',
+    title:'VPC CNI — pods get real IPs',
+    blurb:'No overlay network. Every pod holds an address from your subnet.',
+    plain:'In most Kubernetes setups pods get pretend IP addresses on a virtual network. On EKS they get real ones from your actual subnet. Faster and easier to debug — but you can run out of addresses, which is the number one EKS problem.',
+    body:'<p class="mb-3">Most Kubernetes distributions give pods fake IPs on a virtual network and wrap traffic in extra packet layers. AWS does not. The VPC CNI plugin hands each pod a genuine address from your actual subnet.</p>\n    <p class="mb-3">That buys you full network performance with no encapsulation, pod-level visibility in Flow Logs, ALBs that target pods directly, and security groups that can apply to individual pods.</p>\n    <p class="mb-3"><strong>The cost is address consumption.</strong> Pods per node is (ENIs × (IPs per ENI − 1)) + 2, so an m5.large tops out at 29 pods and ten of them exhaust a /24.</p>\n    <p><strong>Prefix delegation</strong> assigns /28 blocks instead of single addresses, lifting an m5.large to the 110-pod Kubernetes ceiling and speeding up pod startup.</p>',
+    ex:'m5.large = 3 ENIs × 10 IPs each\n\n  default:            3 × (10-1) + 2  =  29 pods\n  prefix delegation:  raw 434, capped =  110 pods\n  custom networking:  primary ENI unused = 20 pods\n\n10 nodes × 29 pods = 300 IPs, but a /24 has only 251.\n→ pods stick in ContainerCreating',
+    gotcha:'Prefix delegation needs <strong>contiguous free /28 blocks</strong>. On a fragmented subnet it fails with <span class="mono">InsufficientCidrBlocks</span>. Build fresh subnets for prefix-mode node groups rather than converting old ones.',
+    check:'# Free IPs per subnet — the early warning for exhaustion\naws ec2 describe-subnets --filters Name=vpc-id,Values=VPC_ID \\\n  --query \'Subnets[].{Subnet:SubnetId,CIDR:CidrBlock,\n           Free:AvailableIpAddressCount}\' --output table\n\n# Is prefix delegation on?\nkubectl get daemonset aws-node -n kube-system \\\n  -o jsonpath=\'{.spec.template.spec.containers[0].env}\' | tr \',\' \'\\n\' | grep -i prefix\n\n# What is this node\'s pod ceiling, and how full is it?\nkubectl describe node NODE_NAME | grep -A2 "Allocatable\\|Allocated resources"\n\n# The symptom of exhaustion\nkubectl get pods -A --field-selector status.phase=Pending\nkubectl describe pod POD_NAME | grep -i "failed to assign an IP"\n\n# CNI version\nkubectl describe daemonset aws-node -n kube-system | grep Image:',
+    checkHint:'If AvailableIpAddressCount is dropping toward zero, act before pods start failing.',
+    create:'# Turn on prefix delegation — m5.large goes from 29 to 110 pods\nkubectl set env daemonset aws-node -n kube-system \\\n  ENABLE_PREFIX_DELEGATION=true\n\n# Add a big secondary CIDR just for pods (CGNAT space)\naws ec2 associate-vpc-cidr-block \\\n  --vpc-id VPC_ID --cidr-block 100.64.0.0/16\n\n# Reserve contiguous space so prefix allocation cannot fragment\naws ec2 create-subnet-cidr-reservation \\\n  --subnet-id SUBNET_ID --cidr 10.0.10.0/25 --reservation-type prefix',
+    createHint:'Existing nodes keep their old limits. Roll the node group after enabling prefix delegation.',
+    update:'# Update the CNI addon to the latest version\naws eks update-addon --cluster-name CLUSTER --addon-name vpc-cni \\\n  --addon-version v1.19.0-eksbuild.1 --resolve-conflicts PRESERVE\n\n# Roll nodes so the new settings take effect\nkubectl rollout restart daemonset aws-node -n kube-system\n\n# Check what versions are available\naws eks describe-addon-versions --addon-name vpc-cni \\\n  --kubernetes-version 1.31 \\\n  --query \'addons[0].addonVersions[].addonVersion\' --output table',
+    doc:'https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html'
+  },
+
+  ndots:{
+    cat:'EKS',
+    kicker:'EKS',
+    title:'CoreDNS and the ndots:5 trap',
+    blurb:'Why every external lookup costs four DNS queries.',
+    plain:'Kubernetes tries to be helpful by guessing that short names are internal. The side effect: looking up api.stripe.com makes three wrong guesses first. At scale that quadruples your DNS traffic for no benefit.',
+    body:'<p class="mb-3">Every pod\'s resolv.conf carries <span class="mono">options ndots:5</span>, meaning any name with fewer than five dots gets the search domains tried first.</p>\n    <p class="mb-3">So looking up api.stripe.com — two dots — actually generates four queries: three NXDOMAIN responses against cluster.local suffixes before the real one succeeds. At scale this saturates CoreDNS and surfaces as unexplained latency that looks like a network problem.</p>\n    <p class="mb-3"><strong>Two fixes.</strong> Add a trailing dot to make a name fully qualified, which skips the search list entirely. Or lower ndots for that pod via dnsConfig.</p>\n    <p>Also consider NodeLocal DNSCache, which runs a small cache on every node and cuts CoreDNS load sharply.</p>',
+    ex:'# Looking up api.stripe.com from a pod actually does:\napi.stripe.com.default.svc.cluster.local  → NXDOMAIN\napi.stripe.com.svc.cluster.local          → NXDOMAIN\napi.stripe.com.cluster.local              → NXDOMAIN\napi.stripe.com                            → ✓ finally\n\n# Fix 1 — trailing dot skips the search list\nvalue: "https://api.stripe.com./v1"\n\n# Fix 2 — lower ndots for this pod\ndnsConfig:\n  options:\n    - name: ndots\n      value: "2" ',
+    gotcha:'This looks like a network fault, not a DNS config issue. Latency spikes, occasional timeouts, CoreDNS pods burning CPU — and the cause is one line in resolv.conf that nobody wrote.',
+    check:'# See the setting for yourself\nkubectl run dnstest --rm -it --image=busybox:1.36 --restart=Never -- cat /etc/resolv.conf\n\n# Is CoreDNS under strain?\nkubectl top pods -n kube-system -l k8s-app=kube-dns\nkubectl get deployment coredns -n kube-system\n\n# Count the queries a single lookup generates\nkubectl run dnstest --rm -it --image=busybox:1.36 --restart=Never -- \\\n  nslookup api.stripe.com\n\n# CoreDNS errors\nkubectl logs -n kube-system -l k8s-app=kube-dns --tail=50 | grep -i "error\\|timeout" ',
+    checkHint:'If CoreDNS CPU is high and external lookups feel slow, this is the first thing to check.',
+    update:'# Scale CoreDNS up if it is the bottleneck\nkubectl scale deployment coredns -n kube-system --replicas=4\n\n# Better: cache DNS on every node\nkubectl apply -f https://raw.githubusercontent.com/kubernetes/kubernetes/master/cluster/addons/dns/nodelocaldns/nodelocaldns.yaml\n\n# Update the CoreDNS addon\naws eks update-addon --cluster-name CLUSTER --addon-name coredns \\\n  --addon-version v1.11.3-eksbuild.1 --resolve-conflicts PRESERVE',
+    updateHint:'NodeLocal DNSCache usually helps more than scaling CoreDNS, because it removes the network hop entirely.',
+    doc:'https://docs.aws.amazon.com/eks/latest/best-practices/dns.html'
+  },
+
+  albgroup:{
+    cat:'EKS',
+    kicker:'EKS',
+    title:'AWS Load Balancer Controller',
+    blurb:'Ingress objects become real ALBs. Share them or pay per service.',
+    plain:'This controller watches Kubernetes for Ingress objects and builds real AWS load balancers to match. Without one shared group name, twenty services build twenty load balancers and twenty monthly bills.',
+    body:'<p class="mb-3">The controller watches Ingress and Service objects and builds the corresponding AWS load balancers, target groups, and listener rules.</p>\n    <p class="mb-3"><strong>Use target-type ip, not instance.</strong> IP mode sends traffic straight to the pod: one hop instead of two, accurate per-pod health checks, and it is the only mode that works with Fargate.</p>\n    <p class="mb-3"><strong>The group.name annotation is a large cost saver.</strong> Without it every Ingress provisions its own ALB at $16+/month. Give several Ingresses the same group name and they share one load balancer with merged rules.</p>\n    <p>For pod-level isolation, SecurityGroupPolicy assigns specific security groups to labelled pods.</p>',
+    ex:'annotations:\n  alb.ingress.kubernetes.io/scheme: internet-facing\n  alb.ingress.kubernetes.io/target-type: ip\n  alb.ingress.kubernetes.io/group.name: shared     ← the money saver\n  alb.ingress.kubernetes.io/healthcheck-path: /health\n\n# 20 Ingresses → 1 ALB instead of 20.\n# Roughly $300/month saved on a busy cluster.',
+    gotcha:'Deleting an Ingress deletes its ALB — including any DNS record pointing at it. With a shared <span class="mono">group.name</span> the ALB survives until the last Ingress in the group is removed.',
+    check:'# Is the controller running?\nkubectl get deployment -n kube-system aws-load-balancer-controller\nkubectl logs -n kube-system deploy/aws-load-balancer-controller --tail=50\n\n# Ingresses and the ALBs they created\nkubectl get ingress -A\n\n# Match a Kubernetes Ingress to its real AWS load balancer\naws elbv2 describe-load-balancers \\\n  --query \'LoadBalancers[?contains(LoadBalancerName,`k8s`)].{Name:LoadBalancerName,DNS:DNSName}\' \\\n  --output table\n\n# Why is an Ingress not working?\nkubectl describe ingress INGRESS_NAME',
+    checkHint:'The controller logs name the exact AWS error — usually a missing IAM permission.',
+    create:'# The controller needs an IAM role via IRSA\neksctl create iamserviceaccount --cluster CLUSTER \\\n  --namespace kube-system --name aws-load-balancer-controller \\\n  --attach-policy-arn arn:aws:iam::ACCOUNT:policy/AWSLoadBalancerControllerIAMPolicy \\\n  --approve\n\nhelm repo add eks https://aws.github.io/eks-charts\nhelm install aws-load-balancer-controller eks/aws-load-balancer-controller \\\n  -n kube-system --set clusterName=CLUSTER \\\n  --set serviceAccount.create=false \\\n  --set serviceAccount.name=aws-load-balancer-controller',
+    update:'# Add an existing Ingress to a shared ALB group\nkubectl annotate ingress INGRESS_NAME \\\n  alb.ingress.kubernetes.io/group.name=shared --overwrite\n\n# Switch to ip target mode (faster, works with Fargate)\nkubectl annotate ingress INGRESS_NAME \\\n  alb.ingress.kubernetes.io/target-type=ip --overwrite\n\nhelm upgrade aws-load-balancer-controller eks/aws-load-balancer-controller \\\n  -n kube-system --set clusterName=CLUSTER',
+    updateHint:'Changing group.name on a live Ingress moves it to a different ALB, so the DNS name changes. Update Route 53 too.',
+    doc:'https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html'
+  },
+
+  netpol:{
+    cat:'EKS',
+    kicker:'EKS',
+    title:'Network policies',
+    blurb:'Pod-to-pod firewalls. Default is allow-everything.',
+    plain:'By default every pod in your cluster can talk to every other pod — including your payments service. Network policies are how you stop that, and the pattern is to block everything first, then allow specific paths.',
+    body:'<p class="mb-3">By default every pod in a cluster can reach every other pod. That is usually too permissive, and network policies are the Kubernetes-native way to lock it down.</p>\n    <p class="mb-3">Since 2023 the VPC CNI enforces them natively — Calico is no longer required. Enable ENABLE_NETWORK_POLICY on the aws-node daemonset.</p>\n    <p class="mb-3">The pattern is default-deny first, then allow specific paths. Start in one namespace so a mistake does not take down the cluster.</p>\n    <p><strong>These solve a different problem from security groups.</strong> Security groups govern traffic at the VPC boundary — pod to RDS, pod to internet. Network policies govern pod to pod inside the cluster. Use both.</p>',
+    ex:'# 1. Deny all ingress in the namespace\nspec:\n  podSelector: {}\n  policyTypes: [Ingress]\n\n# 2. Then allow only what you need\nspec:\n  podSelector:\n    matchLabels: {app: api}\n  ingress:\n    - from:\n        - podSelector:\n            matchLabels: {app: frontend}\n      ports: [{protocol: TCP, port: 8080}]',
+    gotcha:'A default-deny policy also blocks <strong>DNS</strong>, because CoreDNS is just another pod. Always pair it with an egress rule allowing UDP 53 to kube-system, or every pod in the namespace loses name resolution.',
+    check:'# Is enforcement even turned on?\nkubectl get daemonset aws-node -n kube-system \\\n  -o jsonpath=\'{.spec.template.spec.containers[0].env}\' | tr \',\' \'\\n\' | grep -i policy\n\n# What policies exist?\nkubectl get networkpolicy -A\nkubectl describe networkpolicy POLICY_NAME -n NAMESPACE\n\n# Test connectivity between two pods\nkubectl exec -it SOURCE_POD -- nc -zv TARGET_SERVICE 8080\n\n# Enforcement logs\nkubectl logs -n kube-system -l k8s-app=aws-node -c aws-eks-nodeagent --tail=50',
+    checkHint:'If policies exist but are not enforced, ENABLE_NETWORK_POLICY is almost certainly off.',
+    create:'# Enable native enforcement (no Calico needed)\nkubectl set env daemonset aws-node -n kube-system \\\n  ENABLE_NETWORK_POLICY=true\n\n# Default deny, plus the DNS exception people forget\ncat <<\'EOF\' | kubectl apply -f -\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata: {name: default-deny, namespace: production}\nspec:\n  podSelector: {}\n  policyTypes: [Ingress, Egress]\n  egress:\n    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]\n      ports: [{protocol: UDP, port: 53}]\nEOF',
+    createHint:'Roll this out one namespace at a time. A cluster-wide default-deny with no DNS exception breaks everything at once.',
+    update:'kubectl apply -f updated-policy.yaml\nkubectl delete networkpolicy POLICY_NAME -n NAMESPACE\n\n# Emergency: remove every policy in a namespace\nkubectl delete networkpolicy --all -n NAMESPACE',
+    updateHint:'Keep that last command handy. It is the fastest rollback if a policy locks out production traffic.',
+    doc:'https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html'
+  },
+
+  ssm:{
+    cat:'Operations',
+    kicker:'OPERATIONS',
+    title:'Session Manager over bastions',
+    blurb:'Shell access with no open ports and no SSH keys.',
+    plain:'The old way was a jump server with port 22 open to the internet and a shared SSH key. Session Manager gets you a shell with neither — the instance calls out to AWS, and you meet it there. Every command is logged.',
+    body:'<p class="mb-3">The old pattern puts a small public server in a public subnet, you SSH into it, then SSH onward to private instances. It works, but it is another machine to patch, another key to lose, and port 22 facing the internet.</p>\n    <p class="mb-3">Session Manager removes all three. An agent on the instance makes an <strong>outbound</strong> connection to the SSM service; you connect to the service too and it bridges you. Because the instance dialled out, no inbound rule is needed anywhere.</p>\n    <p class="mb-3">Every command is logged to CloudWatch or S3 automatically, which a bastion only does if someone set that up.</p>\n    <p><strong>Requirements:</strong> the AmazonSSMManagedInstanceCore policy on the instance role, and a path to the SSM service — either NAT or the ssm, ssmmessages and ec2messages interface endpoints.</p>',
+    gotcha:'If an instance does not appear in Session Manager, it is nearly always one of two things: the IAM role is missing <span class="mono">AmazonSSMManagedInstanceCore</span>, or the instance has no route to the SSM service.',
+    check:'# Which instances are actually manageable?\naws ssm describe-instance-information \\\n  --query \'InstanceInformationList[].{ID:InstanceId,Ping:PingStatus,\n           Agent:AgentVersion,Platform:PlatformName}\' --output table\n\n# An instance missing from that list is not connected. Check its role:\naws ec2 describe-instances --instance-ids INSTANCE_ID \\\n  --query \'Reservations[0].Instances[0].IamInstanceProfile\'\n\n# Session history — the audit trail a bastion does not give you\naws ssm describe-sessions --state History \\\n  --query \'Sessions[].{User:Owner,Target:Target,Start:StartDate}\' --output table',
+    checkHint:'PingStatus must be Online. Anything else means the agent cannot reach the SSM service.',
+    create:'# Attach the required policy to the instance role\naws iam attach-role-policy --role-name EC2_ROLE_NAME \\\n  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore\n\n# Connect — no key, no open port\naws ssm start-session --target INSTANCE_ID\n\n# Reach a private database from your laptop through the instance\naws ssm start-session --target INSTANCE_ID \\\n  --document-name AWS-StartPortForwardingSessionToRemoteHost \\\n  --parameters \'{"host":["db.internal"],"portNumber":["5432"],\n                 "localPortNumber":["5432"]}\'',
+    createHint:'Port forwarding is the feature that finally makes bastions unnecessary — you get local psql against a private RDS.',
+    update:'# Update the agent fleet-wide\naws ssm send-command --document-name "AWS-UpdateSSMAgent" \\\n  --targets Key=tag:Environment,Values=production\n\n# Log every session to S3 for audit\naws ssm update-document --name SSM-SessionManagerRunShell \\\n  --content file://session-prefs.json --document-version \'$LATEST\'\n\n# Now delete the bastion you no longer need\naws ec2 terminate-instances --instance-ids BASTION_INSTANCE_ID',
+    doc:'https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html'
+  },
+
+  debug:{
+    cat:'Operations',
+    kicker:'OPERATIONS',
+    title:'Reachability Analyzer and Flow Logs',
+    blurb:'Stop guessing which rule broke it.',
+    plain:'Instead of manually checking route tables, security groups and NACLs one by one, ask AWS to trace the path and tell you exactly which rule blocked it. This turns an hour of guessing into about thirty seconds.',
+    body:'<p class="mb-3"><strong>Reachability Analyzer</strong> takes a source and a destination and tells you precisely which route table entry, security group, or NACL rule blocks the path. Use it first, not after an hour of manual checking.</p>\n    <p class="mb-3"><strong>VPC Flow Logs</strong> record every connection attempt with source, destination, ports, and an ACCEPT or REJECT verdict. You cannot investigate an incident without them, and they should be on before you need them.</p>\n    <p class="mb-3"><strong>Network Access Analyzer</strong> scans for unintended paths — "show me everything that can reach the internet" — which is the fastest way to find a subnet somebody quietly made public.</p>\n    <p><strong>Reading symptoms:</strong> a timeout with total silence is almost always a security group or NACL, because firewalls discard rather than reject. An actual error response means you reached something and the problem is further up the stack.</p>',
+    ex:'# Symptom → likely cause\n\ntotal silence, connection times out\n  → security group or NACL (firewalls discard, they do not reply)\n\n"connection refused"\n  → you reached the host; nothing is listening on that port\n\n503 from a load balancer\n  → no healthy targets in the target group\n\nworks by IP but not by name\n  → DNS: check enableDnsHostnames and zone association',
+    gotcha:'Flow Logs are not retroactive. If they were not enabled when the incident happened, that traffic is gone forever. Turn them on now, before you need them.',
+    check:'# Trace a path and get the blocking rule named for you\naws ec2 create-network-insights-path \\\n  --source INSTANCE_A --destination INSTANCE_B \\\n  --protocol tcp --destination-port 443\n\naws ec2 start-network-insights-analysis --network-insights-path-id nip-xxx\n\n# NetworkPathFound=false, and ExplanationCode names the exact culprit\naws ec2 describe-network-insights-analyses --network-insights-analysis-ids nia-xxx \\\n  --query \'NetworkInsightsAnalyses[0].{Reachable:NetworkPathFound,\n           Blocked:Explanations[].ExplanationCode}\'\n\n# Query flow logs for rejected traffic\naws logs start-query --log-group-name /aws/vpc/flowlogs \\\n  --start-time $(date -d \'1 hour ago\' +%s) --end-time $(date +%s) \\\n  --query-string \'fields @timestamp, srcAddr, dstAddr, dstPort, action\n                  | filter action = "REJECT" | sort @timestamp desc | limit 20\'',
+    checkHint:'Reachability Analyzer costs about $0.10 per analysis and routinely saves an hour of manual checking.',
+    create:'# Turn on flow logs — do this before you need them\naws ec2 create-flow-logs --resource-type VPC --resource-ids VPC_ID \\\n  --traffic-type ALL --log-destination-type cloud-watch-logs \\\n  --log-group-name /aws/vpc/flowlogs \\\n  --deliver-logs-permission-arn arn:aws:iam::ACCOUNT:role/flowlogsRole\n\n# Cheaper for high volume: send straight to S3\naws ec2 create-flow-logs --resource-type VPC --resource-ids VPC_ID \\\n  --traffic-type REJECT --log-destination-type s3 \\\n  --log-destination arn:aws:s3:::my-flow-logs-bucket',
+    createHint:'traffic-type REJECT only logs blocked traffic — far cheaper, and it is what you need for firewall debugging.',
+    update:'# Audit: what in this VPC can reach the internet?\naws ec2 create-network-insights-access-scope \\\n  --match-paths \'[{"Source":{"ResourceStatement":{"Resources":["VPC_ID"]}},\n                   "Destination":{"ResourceStatement":{"ResourceTypes":["AWS::EC2::InternetGateway"]}}}]\'\n\naws ec2 delete-flow-logs --flow-log-ids fl-xxx',
+    updateHint:'Run the access scope analysis quarterly. It is how you catch a subnet somebody quietly made public.',
+    doc:'https://docs.aws.amazon.com/vpc/latest/userguide/what-is-reachability-analyzer.html'
+  }
 };
 
 function buildRef(cat){
@@ -2077,13 +2068,75 @@ function buildRef(cat){
     </button>`).join('');
 }
 
+/* Renders one CLI group. Commands are read-only text the user copies out,
+   so a copy button is more useful than any interactivity here. */
+function cliBlock(label, hint, cmds, tone){
+  if(!cmds) return '';
+  const bar = tone==='check'  ? 'var(--ok)'
+            : tone==='create' ? 'var(--accent)'
+            :                   'var(--warn)';
+  return `<div class="mt-4">
+    <div class="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+      <div class="t-xs font-semibold" style="color:var(--text-3);letter-spacing:.05em">
+        <span style="color:${bar}">■</span> ${label}</div>
+      <button class="btn btn-ghost px-2 py-1 t-xs" onclick="copyCli(this)">Copy</button>
+    </div>
+    ${hint ? `<p class="t-xs mb-2" style="color:var(--text-2)">${hint}</p>` : ''}
+    <pre class="mono t-xs p-3 overflow-x-auto" style="background:var(--code-bg);color:var(--code-text);
+      line-height:1.6;border-left:3px solid ${bar}">${cmds.replace(/</g,'&lt;')}</pre>
+  </div>`;
+}
+
+function copyCli(btn){
+  const pre = btn.closest('div').parentElement.querySelector('pre');
+  const text = pre.textContent;
+  const done = () => { btn.textContent='Copied'; setTimeout(()=>btn.textContent='Copy',1400); };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done){
+  const ta=document.createElement('textarea');
+  ta.value=text; ta.style.cssText='position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done(); }catch(e){}
+  document.body.removeChild(ta);
+}
+
 function openModal(k){
   const r = REF[k]; if(!r) return;
   $('mKicker').textContent = r.kicker;
   $('mTitle').textContent = r.title;
-  $('mBody').innerHTML = r.body +
-    (r.ex ? `<div class="mt-4"><div class="t-xs font-semibold mb-2" style="color:var(--text-3)">EXAMPLE</div>
-      <pre class="mono t-xs p-3 overflow-x-auto" style="background:var(--code-bg);color:var(--code-text);line-height:1.6">${r.ex.replace(/</g,'&lt;')}</pre></div>` : '');
+
+  const plain = r.plain ? `
+    <div class="p-3 mb-4" style="background:var(--accent-soft);border-left:3px solid var(--accent)">
+      <div class="t-xs font-semibold mb-1" style="color:var(--accent-text)">IN PLAIN TERMS</div>
+      <p class="t-sm" style="color:var(--text)">${r.plain}</p>
+    </div>` : '';
+
+  const ex = r.ex ? `<div class="mt-4">
+      <div class="t-xs font-semibold mb-2" style="color:var(--text-3)">HOW IT LOOKS</div>
+      <pre class="mono t-xs p-3 overflow-x-auto" style="background:var(--code-bg);color:var(--code-text);line-height:1.6">${r.ex.replace(/</g,'&lt;')}</pre>
+    </div>` : '';
+
+  const cli = (r.check || r.create || r.update) ? `
+    <div class="mt-5 pt-4" style="border-top:1px solid var(--border)">
+      <div class="t-sm font-semibold mb-1">AWS CLI</div>
+      <p class="t-xs mb-1" style="color:var(--text-2)">
+        Replace placeholders in CAPS with your own IDs. Run
+        <span class="mono">aws configure</span> first if you have not.</p>
+      ${cliBlock('CHECK — safe, read-only', r.checkHint, r.check, 'check')}
+      ${cliBlock('CREATE', r.createHint, r.create, 'create')}
+      ${cliBlock('UPDATE / FIX', r.updateHint, r.update, 'update')}
+    </div>` : '';
+
+  const gotcha = r.gotcha ? `
+    <div class="mt-4 p-3" style="background:var(--warn-bg);border-left:3px solid var(--warn-line)">
+      <div class="t-xs font-semibold mb-1" style="color:var(--warn)">EASY TO GET WRONG</div>
+      <p class="t-sm" style="color:var(--text)">${r.gotcha}</p>
+    </div>` : '';
+
+  $('mBody').innerHTML = plain + r.body + ex + gotcha + cli;
   $('mFoot').innerHTML = `<a href="${r.doc}" target="_blank" rel="noopener"
       class="btn btn-primary px-4 py-2.5 t-sm">Read the AWS documentation ↗</a>`;
   $('modal').classList.add('show');
