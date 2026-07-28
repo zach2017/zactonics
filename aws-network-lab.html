@@ -809,6 +809,12 @@
         </div>
       </div>
       <button id="bRun" onclick="B.run()" class="btn btn-primary px-4 py-3 t-sm w-full">Create simulation →</button>
+      <div class="flex flex-wrap items-center gap-2 mt-2">
+        <button id="bPrint" onclick="B.print()" class="btn btn-ghost px-3 py-1.5 t-xs" disabled>Print</button>
+        <button id="bPng"   onclick="B.png()"   class="btn btn-ghost px-3 py-1.5 t-xs" disabled>Save PNG</button>
+        <button id="bSvg"   onclick="B.svg()"   class="btn btn-ghost px-3 py-1.5 t-xs" disabled>Save SVG</button>
+        <span id="bExportHint" class="t-xs" style="color:var(--text-3)">available once a packet has been sent</span>
+      </div>
       <div id="bVerdict" class="mt-4 p-3 t-sm accent-l hidden"></div>
       <div id="bLog" class="mt-3 mono t-xs space-y-1 max-h-80 overflow-y-auto"
            style="background:var(--layer);padding:.6rem" aria-live="polite"></div>
@@ -2686,6 +2692,7 @@ let cur     = newDesign();
 let editId  = null;
 let formEnabled = true;
 let simTimer = null;
+let lastRun  = null;   /* the most recent simulation, kept for print and image export */
 
 const R      = () => cur.resources;
 const byName = n => R().find(r => r.name === n) || null;
@@ -3702,6 +3709,21 @@ function run(){
   const hops = simulate(q('bSrc').value, q('bDst').value, q('bProto').value, port);
   let i = 0;
 
+  /* Kept whole, before the animation starts, so the export is available
+     immediately and does not depend on the walk finishing. */
+  lastRun = {
+    hops: hops,
+    src: label(q('bSrc').value),
+    dst: label(q('bDst').value),
+    proto: q('bProto').value,
+    port: port,
+    design: cur.name || 'untitled-design',
+    when: new Date().toLocaleString()
+  };
+  ['bPrint','bPng','bSvg'].forEach(id => { const el = q(id); if(el) el.disabled = false; });
+  const hint = q('bExportHint');
+  if(hint) hint.textContent = 'of this run · ' + hops.length + ' hop' + (hops.length === 1 ? '' : 's');
+
   (function step(){
     if(i >= hops.length){
       q('bRun').disabled = false;
@@ -3813,6 +3835,217 @@ function schemaYaml(){
 '# protocol may be tcp, udp, icmp or any.\n' +
 '# source may be a CIDR or the name of a security group in the same design.\n';
   return y;
+}
+
+/* ------------------------------------------------------------
+   EXPORTING A RUN — as a picture, or on paper
+   The flow is redrawn as standalone SVG rather than screenshotting
+   the DOM: no external library, no fonts to embed, and the result
+   scales cleanly into a document or a ticket.
+   ------------------------------------------------------------ */
+const SANS = 'IBM Plex Sans, Helvetica Neue, Helvetica, Arial, sans-serif';
+const MONO = 'IBM Plex Mono, SFMono-Regular, Menlo, Consolas, monospace';
+
+const LIGHT = {
+  bg:'#ffffff', layer:'#f4f4f4', border:'#e0e0e0', line:'#a8a8a8',
+  text:'#161616', text2:'#525252', text3:'#6f6f6f',
+  accent:'#0062ff', ok:'#198038', okbg:'#defbe6', okline:'#24a148',
+  bad:'#da1e28', badbg:'#fff1f1', warn:'#8a3800', warnbg:'#fff2e8', warnline:'#ff832b'
+};
+function livePalette(){
+  const g = n => (getComputedStyle(document.documentElement).getPropertyValue('--' + n) || '').trim();
+  const pick = (a, b) => g(a) || b;
+  return {
+    bg:      pick('card', LIGHT.bg),      layer:  pick('layer', LIGHT.layer),
+    border:  pick('border', LIGHT.border), line:  pick('border-strong', LIGHT.line),
+    text:    pick('text', LIGHT.text),    text2:  pick('text-2', LIGHT.text2),
+    text3:   pick('text-3', LIGHT.text3), accent: pick('accent', LIGHT.accent),
+    ok:      pick('ok', LIGHT.ok),        okbg:   pick('ok-bg', LIGHT.okbg),
+    okline:  pick('ok-line', LIGHT.okline), bad:  pick('bad', LIGHT.bad),
+    badbg:   pick('bad-bg', LIGHT.badbg), warn:   pick('warn', LIGHT.warn),
+    warnbg:  pick('warn-bg', LIGHT.warnbg), warnline: pick('warn-line', LIGHT.warnline)
+  };
+}
+
+function wrapText(str, maxChars){
+  const words = String(str == null ? '' : str).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    if(!line){ line = w; return; }
+    if((line + ' ' + w).length <= maxChars) line += ' ' + w;
+    else { lines.push(line); line = w; }
+  });
+  if(line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+const svgText = (x, y, txt, size, fill, weight, mono) =>
+  '<text x="' + x + '" y="' + y + '" font-family="' + (mono ? MONO : SANS) + '" font-size="' + size +
+  '" fill="' + fill + '"' + (weight ? ' font-weight="' + weight + '"' : '') + '>' + esc(txt) + '</text>';
+
+/* The picture of one run: header, numbered hop chain, verdict. */
+function flowSvg(run, p){
+  const W = 840, PAD = 28, CX = 44, TX = 78;
+  const detChars = Math.floor((W - TX - PAD) / 6.15);
+  const labChars = Math.floor((W - TX - PAD) / 7.3);
+  const body = [];
+  let y = PAD;
+
+  /* header */
+  body.push(svgText(PAD, y + 18, 'Packet simulation', 19, p.text, '600'));
+  y += 30;
+  body.push(svgText(PAD, y + 14, run.src + '  →  ' + run.dst + '   ·   ' + run.proto + '/' + run.port, 13, p.accent, '500', true));
+  y += 22;
+  body.push(svgText(PAD, y + 12, run.design + '   ·   ' + run.when, 11.5, p.text3));
+  y += 24;
+  body.push('<line x1="' + PAD + '" y1="' + y + '" x2="' + (W - PAD) + '" y2="' + y + '" stroke="' + p.border + '" stroke-width="1"/>');
+  y += 22;
+
+  /* hops */
+  const centres = [];
+  run.hops.forEach((h, i) => {
+    const stop = !h.pass;
+    const col  = stop ? p.bad : h.warn ? p.warnline : p.accent;
+    const labL = wrapText(h.label, labChars);
+    const detL = wrapText(h.detail, detChars);
+    const top  = y;
+    const cy   = y + 12;
+    centres.push({ cy, col, stop });
+
+    body.push('<circle cx="' + CX + '" cy="' + cy + '" r="13" fill="' + (stop ? p.badbg : h.warn ? p.warnbg : p.bg) +
+              '" stroke="' + col + '" stroke-width="2"/>');
+    body.push('<text x="' + CX + '" y="' + (cy + 4) + '" font-family="' + MONO + '" font-size="11" fill="' + col +
+              '" font-weight="600" text-anchor="middle">' + (stop ? '\u2715' : String(i + 1).padStart(2, '0')) + '</text>');
+
+    let ty = cy + 5;
+    labL.forEach((l, k) => { body.push(svgText(TX, ty + k * 17, (k === 0 && h.warn ? '\u26A0 ' : '') + l, 13.5, stop ? p.bad : p.text, '600')); });
+    ty += labL.length * 17 + 1;
+    detL.forEach((l, k) => { body.push(svgText(TX, ty + k * 15, l, 11.5, p.text2)); });
+
+    y = Math.max(cy + 26, ty + detL.length * 15 + 10);
+    if(i < run.hops.length - 1) y += 6;
+  });
+
+  /* the line threading the hops together */
+  for(let i = 0; i < centres.length - 1; i++){
+    body.unshift('<line x1="' + CX + '" y1="' + (centres[i].cy + 15) + '" x2="' + CX + '" y2="' + (centres[i + 1].cy - 15) +
+      '" stroke="' + centres[i + 1].col + '" stroke-width="2"' + (centres[i + 1].stop ? ' stroke-dasharray="3 3"' : '') + '/>');
+  }
+
+  /* verdict */
+  const last = run.hops[run.hops.length - 1] || {};
+  const good = !!last.pass;
+  const vTitle = good ? 'Packet delivered' : 'Traffic stopped at ' + last.label;
+  const vLines = good
+    ? wrapText('Every hop allowed it through — ' + run.hops.length + ' checks from ' + run.src + ' to ' + run.dst + '.', detChars)
+    : wrapText('What happened: ' + (last.why || last.detail || ''), detChars)
+        .concat(wrapText('Fix: ' + (last.fix || ''), detChars));
+  y += 10;
+  const vh = 26 + vLines.length * 15 + 12;
+  body.push('<rect x="' + PAD + '" y="' + y + '" width="' + (W - PAD * 2) + '" height="' + vh + '" fill="' + (good ? p.okbg : p.badbg) + '"/>');
+  body.push('<rect x="' + PAD + '" y="' + y + '" width="3" height="' + vh + '" fill="' + (good ? p.okline : p.bad) + '"/>');
+  body.push(svgText(PAD + 14, y + 20, vTitle, 13.5, good ? p.ok : p.bad, '600'));
+  vLines.forEach((l, k) => body.push(svgText(PAD + 14, y + 38 + k * 15, l, 11.5, p.text2)));
+  y += vh + PAD;
+
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + Math.round(y) +
+         '" viewBox="0 0 ' + W + ' ' + Math.round(y) + '" role="img" aria-label="Packet simulation from ' +
+         esc(run.src) + ' to ' + esc(run.dst) + '">' +
+         '<rect width="100%" height="100%" fill="' + p.bg + '"/>' + body.join('') + '</svg>';
+}
+
+/* ------------------------------------------------------------ */
+function slug(s){
+  return String(s || 'run').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'run';
+}
+function saveBlob(filename, blob){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function runFilename(run, ext){
+  return slug(run.design) + '-' + slug(run.src) + '-to-' + slug(run.dst) + '.' + ext;
+}
+
+/* SVG → canvas → PNG. Falls back to handing over the SVG if the
+   browser refuses to rasterise it. */
+function svgToPng(svg, filename, onFail){
+  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const size = svg.match(/width="(\d+)" height="(\d+)"/);
+  const w = size ? +size[1] : 840, h = size ? +size[2] : 600, scale = 2;
+  const img = new Image();
+  img.onload = function(){
+    try{
+      const c = document.createElement('canvas');
+      c.width = w * scale; c.height = h * scale;
+      const ctx = c.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      if(c.toBlob) c.toBlob(b => { b ? saveBlob(filename, b) : onFail(); }, 'image/png');
+      else onFail();
+    }catch(e){ URL.revokeObjectURL(url); onFail(); }
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); onFail(); };
+  img.src = url;
+}
+
+/* A printable page: the flow, then the design that produced it. */
+function printDoc(run){
+  const rows = R().map(r =>
+    '<tr><td class="m"><strong>' + esc(r.name) + '</strong></td><td>' + esc(TYPES[r.type].label) + '</td>' +
+    '<td class="m">' + esc(r.parent || '—') + '</td><td class="m">' + summarise(r) + '</td>' +
+    '<td>' + (r.enabled ? 'on' : 'off') + '</td></tr>').join('');
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    '<title>' + esc(run.design + ' — ' + run.src + ' to ' + run.dst) + '</title><style>' +
+    '@page{margin:14mm}' +
+    'body{font-family:' + SANS + ';color:#161616;margin:0;font-size:12px;line-height:1.5}' +
+    'h2{font-size:13px;font-weight:600;margin:22px 0 8px;letter-spacing:.02em;text-transform:uppercase;color:#525252}' +
+    'svg{max-width:100%;height:auto;display:block}' +
+    'table{width:100%;border-collapse:collapse;font-size:10.5px}' +
+    'th{text-align:left;font-weight:600;border-bottom:1px solid #8d8d8d;padding:4px 6px}' +
+    'td{border-bottom:1px solid #e0e0e0;padding:4px 6px;vertical-align:top}' +
+    '.m{font-family:' + MONO + '}' +
+    'footer{margin-top:20px;padding-top:8px;border-top:1px solid #e0e0e0;color:#6f6f6f;font-size:10px}' +
+    'tr{break-inside:avoid;page-break-inside:avoid}' +
+    '</style></head><body>' +
+    flowSvg(run, LIGHT) +
+    '<h2>The design this ran against</h2>' +
+    '<table><thead><tr><th>Name</th><th>Type</th><th>Parent</th><th>Values</th><th>On</th></tr></thead><tbody>' +
+    rows + '</tbody></table>' +
+    '<footer>' + esc(run.design) + ' · ' + esc(run.when) +
+    ' · AWS Network Traffic Lab. A teaching model — verify anything load-bearing against the AWS documentation.</footer>' +
+    '</body></html>';
+}
+
+/* Printing from a hidden iframe rather than a popup, which pop-up
+   blockers stop without telling anybody. */
+function printFlow(run){
+  const html = printDoc(run);
+  const fr = document.createElement('iframe');
+  fr.setAttribute('aria-hidden', 'true');
+  fr.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0';
+  fr.onload = function(){
+    try{ fr.contentWindow.focus(); }catch(e){}   /* nice to have, never fatal */
+    try{
+      fr.contentWindow.print();
+    }catch(e){
+      const wnd = window.open('', '_blank');
+      if(wnd){ wnd.document.write(html); wnd.document.close(); wnd.focus(); wnd.print(); }
+      else status('The browser blocked the print window. Save a PNG instead.', true);
+    }
+    setTimeout(() => { if(fr.parentNode) fr.parentNode.removeChild(fr); }, 60000);
+  };
+  document.body.appendChild(fr);
+  if('srcdoc' in fr) fr.srcdoc = html;
+  else {
+    const cd = fr.contentWindow.document;
+    cd.open(); cd.write(html); cd.close();
+    fr.onload();
+  }
 }
 
 /* ------------------------------------------------------------
@@ -4031,6 +4264,26 @@ const api = {
     setTimeout(run, 250);
   },
   run,
+  print(){
+    if(!lastRun) return status('Send a packet first — there is nothing to print yet.', true);
+    printFlow(lastRun);
+  },
+  png(){
+    if(!lastRun) return status('Send a packet first — there is nothing to export yet.', true);
+    const name = runFilename(lastRun, 'png');
+    status('Rendering ' + name + '…');
+    svgToPng(flowSvg(lastRun, livePalette()), name, () => {
+      saveBlob(runFilename(lastRun, 'svg'), new Blob([flowSvg(lastRun, livePalette())], { type:'image/svg+xml' }));
+      status('This browser would not rasterise it, so you have the SVG instead.', true);
+    });
+    setTimeout(() => status('Saved ' + name + '.'), 400);
+  },
+  svg(){
+    if(!lastRun) return status('Send a packet first — there is nothing to export yet.', true);
+    const name = runFilename(lastRun, 'svg');
+    saveBlob(name, new Blob([flowSvg(lastRun, livePalette())], { type:'image/svg+xml;charset=utf-8' }));
+    status('Saved ' + name + '.');
+  },
   syncPort(){
     const r = byId(q('bDst').value);
     if(r) q('bPort').value = dstListen(r) || q('bPort').value;
