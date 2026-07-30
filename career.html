@@ -188,6 +188,7 @@
     .print-only{ display: block !important; }
     .opt{ padding: .12rem .2rem; border-left-width: 2px; page-break-inside: avoid; }
     .opt:not(:has(input:checked)){ display: none; }        /* print the chosen answers only */
+    .opt:has(input[type=checkbox]:checked) > span::before{ content:"\2713  "; font-weight:600; }
     .opt:has(input:checked){ border-left-color: #000; }
     .opt input{ display: none; }
     section, .q, .card{ page-break-inside: avoid; }
@@ -198,7 +199,8 @@
     .cell.on{ background:#000 !important; }
     .bar{ border:.5px solid #999; } .bar > i{ background:#000 !important; }
     body.results-only .q-body, body.results-only #part1, body.results-only #part2,
-    body.results-only #intro, body.results-only #resources{ display: none !important; }
+    body.results-only #part3, body.results-only #intro,
+    body.results-only #resources{ display: none !important; }
   }
   .print-only{ display: none; }
 </style>
@@ -265,23 +267,24 @@
 
   <!-- ======================= INTRO ======================= -->
   <section id="intro" class="pt-10 pb-8">
-    <p class="eyebrow">Self-assessment · 37 questions · 15–20 minutes</p>
+    <p class="eyebrow">Self-assessment · 47 questions + 3 inventories · 25–30 minutes</p>
     <h1 class="t-h1 mt-3" style="max-width:34ch">Where are you, really, with your career direction?</h1>
     <p class="t-lg mt-4" style="max-width:60ch;color:var(--text-2)">
       Twenty-five scored questions measure how far along you are. Twelve unscored questions sort your
       preferences across <strong style="color:var(--text)">Mathematics</strong>,
       <strong style="color:var(--text)">Business Information Systems</strong>, and
-      <strong style="color:var(--text)">Computer Science</strong>.
+      <strong style="color:var(--text)">Computer Science</strong>. Ten more, plus three inventories,
+      measure what you can actually build.
     </p>
 
     <div class="grid sm:grid-cols-3 gap-px mt-8" style="background:var(--border)">
       <div class="p-4" style="background:var(--layer)">
-        <p class="eyebrow">Scoring</p>
-        <p class="t-sm mt-2">Every answer is worth 4, 3, 2, or 1 point. 25 questions, 100 points, five levels.</p>
+        <p class="eyebrow">Two scores</p>
+        <p class="t-sm mt-2">Career clarity out of 100, technical capability out of 40. They move independently, so they are reported separately.</p>
       </div>
       <div class="p-4" style="background:var(--layer)">
         <p class="eyebrow">The number that matters</p>
-        <p class="t-sm mt-2">Your <em>lowest section</em>, not your total. It names your next action.</p>
+        <p class="t-sm mt-2">Your <em>lowest</em> section, not your total. It names your next action.</p>
       </div>
       <div class="p-4" style="background:var(--layer)">
         <p class="eyebrow">Not a verdict</p>
@@ -297,6 +300,9 @@
 
   <!-- ======================= PART 2 ======================= -->
   <div id="part2"></div>
+
+  <!-- ======================= PART 3 ======================= -->
+  <div id="part3"></div>
 
   <!-- ======================= RESULTS ======================= -->
   <section id="results" class="pt-12">
@@ -329,6 +335,39 @@
 
     <div id="diag" class="mt-8"></div>
     <div id="tallyOut" class="mt-8"></div>
+
+    <!-- technical profile -->
+    <div class="hair mt-10 pt-6">
+      <p class="eyebrow">Part 3 · technical profile</p>
+      <div class="grid md:grid-cols-[auto_1fr] gap-8 mt-4 items-start">
+        <div aria-live="polite">
+          <p class="t-num" id="techOut">—</p>
+          <p class="eyebrow" style="margin-top:-.2rem">out of 40 · <span id="techAnsweredOut">0 of 10 answered</span></p>
+          <div class="mt-4 inline-block px-3 py-1" id="techChip" style="border-left:4px solid var(--border);background:var(--layer)">
+            <p class="t-xs eyebrow" style="letter-spacing:.08em">Band</p>
+            <p class="t-h3" id="techBandOut">Not started</p>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow">Capability grid — one cell per point</p>
+          <div class="mt-3 space-y-2" id="techGrid"></div>
+          <div class="mt-4 t-xs font-mono" id="checkCounts" style="color:var(--text-2)"></div>
+        </div>
+      </div>
+      <div id="techBody" class="surface p-5 mt-6">
+        <p class="t-sm" style="color:var(--text-2)">Answer Part 3 and your capability band and next steps appear here.</p>
+      </div>
+    </div>
+
+    <!-- gap analysis -->
+    <div class="hair mt-10 pt-6">
+      <p class="eyebrow">Part 3 · gap analysis</p>
+      <div class="flex flex-wrap items-baseline gap-3 mt-2">
+        <h3 class="t-h3">Core items by track</h3>
+        <button class="btn t-sm no-print" data-modal="gap">How this works</button>
+      </div>
+      <div id="gapOut" class="mt-5"></div>
+    </div>
   </section>
 
   <!-- ======================= RESOURCES ======================= -->
@@ -461,6 +500,74 @@ const SORTER = [
     ['A deep specialist in a quantitative domain','In a bridge role, moving toward management or consulting','A senior individual contributor or architect']]
 ];
 
+/* ---- Part 3: technical inventory. Scored out of 40, separately from Part 1. ---- */
+const TECH = [
+  ['In how many programming languages could you write a working 200-line program without following a tutorial?',
+    ['Four or more','Two or three','One','None yet']],
+  ['Version control (Git)',
+    ['I branch, merge, resolve conflicts, and review pull requests','I commit and push routinely to my own repositories','I used it once in a class','Never used it']],
+  ['SQL',
+    ['Joins, aggregation, subqueries, indexing — and I can design a schema','I write joins and GROUP BY comfortably','Basic SELECT statements','None']],
+  ['Personal projects outside coursework',
+    ['Three or more finished, and published or deployed somewhere public','One or two finished','Several started, none finished','None']],
+  ['Could you take a blank laptop to a working development setup?',
+    ['Yes, unaided — runtime, editor, package manager, Git, virtual environment','Yes, following documentation','Partly; I would need help','No']],
+  ['Working with data',
+    ['I have cleaned a messy real dataset end to end and communicated the findings','I have analysed a clean dataset someone gave me','Spreadsheet work only','None']],
+  ['Mathematical or statistical computing (NumPy/SciPy, R, MATLAB, Mathematica, Julia, SAS)',
+    ['Fluent in at least one and I use it on real problems','Working knowledge of one','Used one for a class exercise','None']],
+  ['AI coding and analysis assistants',
+    ['I use them and can read, correct, and explain every line they produce','I use them and always verify the output before trusting it','I use them and mostly accept what they produce','I have not used them for technical work']],
+  ['Debugging',
+    ['Debugger, stack traces, logging, and isolating a minimal reproducible case','Print statements and reading the error message','I search the error text and try the suggestions','I get stuck and stop']],
+  ['Could you talk a technical interviewer through one of your projects for ten minutes — design choices, trade-offs, what you would change?',
+    ['Yes, for several projects','Yes, for one','I could say what it does but not defend the design','No']]
+];
+
+const TECH_LEVELS = [
+  { min:35, n:4, name:'Practitioner', color:'#198038',
+    body:'You build things and you can account for them. Your constraint is no longer skill acquisition — it is choosing which depth to specialise in and getting that work in front of employers. Target harder problems: open-source contribution, research, or a system with real users.' },
+  { min:28, n:3, name:'Building', color:'#0f62fe',
+    body:'You are past coursework and into real work. The next gain comes from finishing and publishing: one deployed project you can defend beats three half-built repositories. Add depth in the one language you already know best rather than starting a fourth.' },
+  { min:20, n:2, name:'Coursework level', color:'#f1c21b',
+    body:'You can do what assignments ask. The gap employers notice is the unassigned project — something you scoped, built, and shipped yourself. Start small and finish it: one script that solves a problem you actually have.' },
+  { min:0, n:1, name:'Getting started', color:'#ff832b',
+    body:'Normal early on, and the fastest-moving score on this page. Pick one language, install it properly on your own machine, learn Git in an afternoon, and complete one small project end to end. Six weeks of consistent work moves this band.' }
+];
+
+/* ---- Checklists. Not scored; they feed the gap analysis and the export. ---- */
+const CHECKS = [
+  { id:'lang', title:'Languages & tools you have actually written code in',
+    note:'Count it only if you have written working code yourself — not watched a lecture on it.',
+    cols:[
+      ['General purpose', ['Python','Java','C','C++','C#','JavaScript','TypeScript','Go','Rust','Swift / Kotlin','Assembly','Haskell / Lisp / OCaml']],
+      ['Data & maths', ['SQL','R','MATLAB','Julia','SAS','Stata / SPSS','Mathematica / SymPy','NumPy / pandas','scikit-learn','PyTorch / TensorFlow','LaTeX','Excel — formulas, pivots, Power Query']],
+      ['Systems & platform', ['Git / GitHub','Linux / command line','Docker / containers','AWS / Azure / GCP','Power BI','Tableau','VBA','HTML / CSS','React or similar','REST APIs','Kubernetes','Low-code — Power Apps, Airtable']]
+    ]},
+  { id:'course', title:'Courses completed or currently enrolled in',
+    note:'Tick anything you have finished or are taking this term.',
+    cols:[
+      ['Computing', ['Intro Programming (CS1)','Object-Oriented Programming (CS2)','Data Structures','Algorithms','Computer Organisation / Architecture','Operating Systems','Databases','Computer Networks','Software Engineering','Theory of Computation','Cybersecurity','Artificial Intelligence / Machine Learning','Web or Mobile Development','Compilers']],
+      ['Mathematics', ['Calculus I','Calculus II','Calculus III / Multivariable','Linear Algebra','Differential Equations','Discrete Mathematics','Probability','Statistics / Statistical Methods','Real Analysis','Abstract Algebra','Numerical Analysis','Operations Research / Optimisation','Mathematical Modelling','Actuarial or Financial Mathematics']],
+      ['Business & information systems', ['Introduction to MIS','Systems Analysis & Design','Database Management','Business Statistics','Financial or Managerial Accounting','Business Process / ERP','Project Management','Business Analytics / Data Visualisation','IT Infrastructure','Enterprise Architecture','Information Security Management','Technical or Business Writing']]
+    ]},
+  { id:'setup', title:'Your setup, habits, and evidence',
+    note:'Hardware, environment, and the traces of work someone else could actually look at.',
+    cols:[
+      ['Machine & environment', ['A laptop that runs my coursework tools without struggling','8 GB RAM or more','An external monitor or second screen','A configured editor or IDE — VS Code, IntelliJ, PyCharm','A Linux environment — native, dual boot, WSL, or VM','I use the command line most weeks','A cloud free-tier account I have actually used','A GPU, Raspberry Pi, or university cluster access']],
+      ['Practices', ['I use Git for my own work, not just for class','I write documentation or a README for my projects','I keep notes on what I learn','I write tests for code that matters','I read other people’s code','I can explain code an AI assistant wrote for me','I have set up my own database or server','I track my applications and deadlines somewhere']],
+      ['Public evidence', ['A GitHub or GitLab account with public work','A pinned repository I would show an employer','A deployed site, app, or dashboard','A portfolio page, personal site, or technical blog','An open-source contribution, however small','Competition entries — Kaggle, ICPC, MCM/ICM, CTF, hackathon','A research poster, paper, or presentation','A LinkedIn profile that lists real projects']]
+    ]}
+];
+
+/* ---- Gap analysis: the core items each track expects, drawn from the checklists ---- */
+const TRACKS = {
+  M:{ name:'Mathematics', need:['Calculus III / Multivariable','Linear Algebra','Probability','Statistics / Statistical Methods','Real Analysis','Python','R','LaTeX','Numerical Analysis'] },
+  B:{ name:'Business Information Systems', need:['Introduction to MIS','Systems Analysis & Design','Database Management','Business Analytics / Data Visualisation','Project Management','SQL','Excel — formulas, pivots, Power Query','Power BI','Business Statistics'] },
+  C:{ name:'Computer Science', need:['Data Structures','Algorithms','Discrete Mathematics','Operating Systems','Databases','Git / GitHub','Linux / command line','Python','A GitHub or GitLab account with public work'] },
+  AI:{ name:'AI / Data Science', need:['Linear Algebra','Probability','Statistics / Statistical Methods','Artificial Intelligence / Machine Learning','Data Structures','Python','SQL','NumPy / pandas','scikit-learn','Git / GitHub'] }
+};
+
 const LEVELS = [
   { min:88, n:5, name:'Focused & launch-ready', color:'#198038',
     body:'You know what you want, why, and what it takes. Shift from exploring to competing: interview preparation, portfolio polish, targeted applications, offer negotiation. Consider mentoring a younger student — teaching will expose whatever gaps are left.' },
@@ -585,7 +692,97 @@ const MODALS = {
   sorter:{ kicker:'Part 2', title:'Reading the field-fit sorter', html:`
     <p>There is no score here and no wrong answer. The sorter counts how often you lean toward the mathematician's instinct (M), the business-systems instinct (B), or the builder's instinct (C).</p>
     <p class="mt-3"><strong>A tie is good news.</strong> The three fields overlap heavily, and the most employable graduates usually sit in an overlap zone. Data science lives between Maths and CS; data engineering between CS and BIS; business analytics between Maths and BIS.</p>
-    <p class="mt-3">Treat the result as a hypothesis to test with one course and one conversation — not as an assignment.</p>` }
+    <p class="mt-3">Treat the result as a hypothesis to test with one course and one conversation — not as an assignment.</p>` },
+  F:{ kicker:'Part 3', title:'Technical inventory — what this measures', html:`
+    <p>Part 1 measures how well you know yourself and the market. This part measures what you can actually do at a keyboard. It is scored out of 40 and reported separately, because the two move independently: plenty of students have a clear plan and thin skills, or strong skills and no direction.</p>
+    <p class="mt-3">The distinction that runs through all ten questions is <strong>exposure versus evidence</strong>. Having sat in a Java course is exposure. A repository someone else can clone and run is evidence. Employers hire on the second.</p>
+    <p class="mt-3">On the AI-assistant question: a low score is not a deficiency, it is unexplored territory. What is measured is critical fluency — whether you can read, correct, and explain what the tool produced — not how much you use it.</p>
+    <p class="mt-4 eyebrow">Official language &amp; tool documentation</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://docs.python.org/3/" target="_blank" rel="noopener">Python</a> · <a href="https://numpy.org/doc/stable/" target="_blank" rel="noopener">NumPy</a> · <a href="https://pandas.pydata.org/docs/" target="_blank" rel="noopener">pandas</a></li>
+      <li><a href="https://docs.oracle.com/en/java/" target="_blank" rel="noopener">Java (Oracle)</a> · <a href="https://isocpp.org/" target="_blank" rel="noopener">ISO C++</a> · <a href="https://learn.microsoft.com/en-us/dotnet/csharp/" target="_blank" rel="noopener">C# and .NET</a></li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank" rel="noopener">JavaScript (MDN)</a> · <a href="https://www.typescriptlang.org/docs/" target="_blank" rel="noopener">TypeScript</a></li>
+      <li><a href="https://go.dev/doc/" target="_blank" rel="noopener">Go</a> · <a href="https://doc.rust-lang.org/book/" target="_blank" rel="noopener">Rust</a> · <a href="https://docs.julialang.org/" target="_blank" rel="noopener">Julia</a></li>
+      <li><a href="https://cran.r-project.org/manuals.html" target="_blank" rel="noopener">R manuals (CRAN)</a> · <a href="https://www.mathworks.com/help/matlab/" target="_blank" rel="noopener">MATLAB</a> · <a href="https://www.latex-project.org/help/documentation/" target="_blank" rel="noopener">LaTeX</a></li>
+      <li><a href="https://www.postgresql.org/docs/" target="_blank" rel="noopener">PostgreSQL — SQL reference</a></li>
+      <li><a href="https://git-scm.com/doc" target="_blank" rel="noopener">Git</a> · <a href="https://docs.docker.com/" target="_blank" rel="noopener">Docker</a> · <a href="https://kubernetes.io/docs/home/" target="_blank" rel="noopener">Kubernetes</a></li>
+    </ul>` },
+
+  matheng:{ kicker:'Options', title:'Mathematics, engineering &amp; the licensure route', html:`
+    <p>A mathematics degree opens three doors students routinely miss. <strong>Engineering-adjacent</strong> work — operations research, systems engineering, industrial engineering, reliability, control — hires mathematicians directly and rarely requires an engineering degree. <strong>Applied and computational</strong> work sits in national laboratories, aerospace, energy, and logistics. <strong>Licensure</strong> matters only if you want to sign off on physical systems.</p>
+    <p class="mt-3">If licensure interests you, the sequence is: ABET-accredited programme, then the Fundamentals of Engineering exam, then supervised experience, then the Professional Engineer exam. Check ABET accreditation before you commit to a programme — it is difficult to retrofit.</p>
+    <p class="mt-4 eyebrow">Licensure &amp; accreditation</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://ncees.org/" target="_blank" rel="noopener">NCEES</a> — the FE and PE examinations</li>
+      <li><a href="https://www.nspe.org/resources/licensure" target="_blank" rel="noopener">NSPE — engineering licensure</a></li>
+      <li><a href="https://www.abet.org/" target="_blank" rel="noopener">ABET</a> — accreditation search for computing, engineering, and applied science programmes</li>
+      <li><a href="https://www.bls.gov/ooh/architecture-and-engineering/home.htm" target="_blank" rel="noopener">BLS Handbook — architecture &amp; engineering occupations</a></li>
+    </ul>
+    <p class="mt-4 eyebrow">Mathematics societies</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://www.ams.org/profession/career-info/career-index" target="_blank" rel="noopener">American Mathematical Society — careers</a></li>
+      <li><a href="https://www.siam.org/students-education/careers/" target="_blank" rel="noopener">SIAM</a> — applied and industrial mathematics; student membership is free through many departments</li>
+      <li><a href="https://www.maa.org/" target="_blank" rel="noopener">Mathematical Association of America</a></li>
+      <li><a href="https://www.amstat.org/your-career" target="_blank" rel="noopener">American Statistical Association — careers</a> · <a href="https://imstat.org/" target="_blank" rel="noopener">Institute of Mathematical Statistics</a></li>
+      <li><a href="https://awm-math.org/" target="_blank" rel="noopener">Association for Women in Mathematics</a> · <a href="https://www.nam-math.org/" target="_blank" rel="noopener">National Association of Mathematicians</a></li>
+      <li><a href="https://pme-math.org/" target="_blank" rel="noopener">Pi Mu Epsilon</a> — mathematics honour society</li>
+    </ul>
+    <p class="mt-4 eyebrow">Engineering societies</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://www.ieee.org/" target="_blank" rel="noopener">IEEE</a> · <a href="https://www.computer.org/" target="_blank" rel="noopener">IEEE Computer Society</a></li>
+      <li><a href="https://www.iise.org/" target="_blank" rel="noopener">IISE</a> — industrial and systems engineering, the discipline closest to applied mathematics</li>
+      <li><a href="https://www.informs.org/" target="_blank" rel="noopener">INFORMS</a> — operations research and analytics</li>
+      <li><a href="https://www.asme.org/" target="_blank" rel="noopener">ASME</a> · <a href="https://www.aiche.org/" target="_blank" rel="noopener">AIChE</a> · <a href="https://www.asee.org/" target="_blank" rel="noopener">ASEE</a></li>
+      <li><a href="https://swe.org/" target="_blank" rel="noopener">Society of Women Engineers</a> · <a href="https://www.nsbe.org/" target="_blank" rel="noopener">NSBE</a> · <a href="https://www.shpe.org/" target="_blank" rel="noopener">SHPE</a></li>
+      <li><a href="https://www.tbp.org/" target="_blank" rel="noopener">Tau Beta Pi</a> — engineering honour society</li>
+    </ul>
+    <p class="mt-4 eyebrow">Competitions that count as evidence</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://www.comap.com/contests/mcm-icm" target="_blank" rel="noopener">COMAP MCM/ICM</a> — mathematical contest in modelling; a strong résumé line</li>
+      <li><a href="https://www.maa.org/math-competitions/putnam-competition" target="_blank" rel="noopener">Putnam Competition</a> · <a href="https://icpc.global/" target="_blank" rel="noopener">ICPC</a> — competitive programming</li>
+    </ul>` },
+
+  ai:{ kicker:'Options', title:'AI, data science &amp; analytics', html:`
+    <p>Data-facing work splits into three roles that get confused constantly. A <strong>data analyst</strong> answers business questions with data that already exists. A <strong>data scientist</strong> builds models to answer questions nobody has framed yet. A <strong>machine-learning or data engineer</strong> builds the systems that make either possible at scale. The engineering roles pay the most and are hardest to enter without a portfolio.</p>
+    <p class="mt-3">All three rest on the same foundation: linear algebra, probability, statistics, Python, SQL. With those five you can enter from a mathematics, BIS, or CS degree — the major matters far less than the demonstrated stack.</p>
+    <p class="mt-3">One thing worth absorbing early: the field rewards people who can tell a real result from a plausible one. Statistics is the moat, not the framework of the month.</p>
+    <p class="mt-4 eyebrow">Government &amp; policy</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener">NIST AI Risk Management Framework</a> — the reference most US employers now cite</li>
+      <li><a href="https://airc.nist.gov/" target="_blank" rel="noopener">NIST Trustworthy &amp; Responsible AI Resource Center</a></li>
+      <li><a href="https://www.nsf.gov/focus-areas/artificial-intelligence" target="_blank" rel="noopener">NSF — artificial intelligence programmes</a></li>
+      <li><a href="https://oecd.ai/" target="_blank" rel="noopener">OECD AI Policy Observatory</a></li>
+    </ul>
+    <p class="mt-4 eyebrow">Societies &amp; conferences</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://aaai.org/" target="_blank" rel="noopener">AAAI</a> — Association for the Advancement of Artificial Intelligence</li>
+      <li><a href="https://www.kdd.org/" target="_blank" rel="noopener">ACM SIGKDD</a> — data mining · <a href="https://sigai.acm.org/" target="_blank" rel="noopener">ACM SIGAI</a></li>
+      <li><a href="https://www.amstat.org/your-career" target="_blank" rel="noopener">American Statistical Association</a> — the statistics half of data science</li>
+      <li><a href="https://academicdatascience.org/" target="_blank" rel="noopener">Academic Data Science Alliance</a></li>
+      <li><a href="https://neurips.cc/" target="_blank" rel="noopener">NeurIPS</a> · <a href="https://icml.cc/" target="_blank" rel="noopener">ICML</a> — read the proceedings, they are open access</li>
+      <li><a href="https://www.certifiedanalytics.org/" target="_blank" rel="noopener">Certified Analytics Professional</a> — INFORMS</li>
+    </ul>
+    <p class="mt-4 eyebrow">Learning &amp; official library documentation</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://scikit-learn.org/stable/" target="_blank" rel="noopener">scikit-learn</a> — the user guide is a statistics course in disguise</li>
+      <li><a href="https://pytorch.org/tutorials/" target="_blank" rel="noopener">PyTorch tutorials</a> · <a href="https://www.tensorflow.org/learn" target="_blank" rel="noopener">TensorFlow</a></li>
+      <li><a href="https://developers.google.com/machine-learning/crash-course" target="_blank" rel="noopener">Google Machine Learning Crash Course</a> — free</li>
+      <li><a href="https://www.deeplearningbook.org/" target="_blank" rel="noopener">Deep Learning</a> (Goodfellow, Bengio, Courville) — free to read online</li>
+      <li><a href="https://arxiv.org/list/cs.LG/recent" target="_blank" rel="noopener">arXiv cs.LG</a> · <a href="https://huggingface.co/docs" target="_blank" rel="noopener">Hugging Face documentation</a></li>
+      <li><a href="https://www.kaggle.com/competitions" target="_blank" rel="noopener">Kaggle competitions</a> — the fastest route to a portfolio project</li>
+      <li><a href="https://aiindex.stanford.edu/report/" target="_blank" rel="noopener">Stanford HAI AI Index</a> — annual data on hiring, capability, and investment</li>
+    </ul>
+    <p class="mt-4 eyebrow">Certifications</p>
+    <ul class="mt-2 space-y-1" style="list-style:disc;padding-left:1.2rem">
+      <li><a href="https://learn.microsoft.com/en-us/credentials/certifications/azure-data-scientist/" target="_blank" rel="noopener">Microsoft Azure Data Scientist Associate</a></li>
+      <li><a href="https://aws.amazon.com/certification/certified-machine-learning-engineer-associate/" target="_blank" rel="noopener">AWS Machine Learning Engineer Associate</a></li>
+      <li><a href="https://cloud.google.com/learn/certification/machine-learning-engineer" target="_blank" rel="noopener">Google Professional Machine Learning Engineer</a></li>
+    </ul>` },
+
+  gap:{ kicker:'Part 3', title:'How the gap analysis works', html:`
+    <p>Each of the four tracks carries a short list of core items — the courses, languages, and evidence that appear in most entry-level postings for that track. The tool compares your ticked boxes against that list and names what is missing.</p>
+    <p class="mt-3">Two caveats. The lists are deliberately short, so clearing one does not mean you are finished; it means you have cleared the floor. And a missing item is not a failure — a second-year student should be missing most of them. Read the list as a sequence and take whichever missing item is available to you next term.</p>
+    <p class="mt-3">If your strongest gap-analysis track differs from your field-fit result in Part 2, that is worth a conversation with an adviser. It usually means your interests point one way while your accumulated coursework points another — cheap to fix early, expensive late.</p>` }
 };
 
 const RESOURCES = [
@@ -599,13 +796,10 @@ const RESOURCES = [
     ['Gallup CliftonStrengths','https://www.gallup.com/cliftonstrengths/'],
     ['NACE career readiness competencies','https://www.naceweb.org/career-readiness/competencies/career-readiness-defined/']
   ]],
-  ['Mathematics', [
+  ['Actuarial science', [
     ['Be An Actuary (SOA + CAS)','https://www.beanactuary.org/'],
     ['Society of Actuaries exams','https://www.soa.org/education/exam-req/'],
-    ['Casualty Actuarial Society','https://www.casact.org/exams-admissions'],
-    ['American Mathematical Society careers','https://www.ams.org/profession/career-info/career-index'],
-    ['SIAM careers in applied maths','https://www.siam.org/students-education/careers/'],
-    ['Mathematical Association of America','https://www.maa.org/']
+    ['Casualty Actuarial Society','https://www.casact.org/exams-admissions']
   ]],
   ['Business Information Systems / MIS', [
     ['Association for Information Systems','https://aisnet.org/'],
@@ -623,6 +817,80 @@ const RESOURCES = [
     ['Microsoft credentials','https://learn.microsoft.com/en-us/credentials/'],
     ['CNCF / Kubernetes certification','https://www.cncf.io/training/certification/'],
     ['NICE Cybersecurity Workforce Framework','https://niccs.cisa.gov/workforce-development/nice-framework']
+  ]],
+  ['Mathematics societies', [
+    ['American Mathematical Society — careers','https://www.ams.org/profession/career-info/career-index'],
+    ['SIAM — applied &amp; industrial mathematics','https://www.siam.org/students-education/careers/'],
+    ['Mathematical Association of America','https://www.maa.org/'],
+    ['American Statistical Association — careers','https://www.amstat.org/your-career'],
+    ['Institute of Mathematical Statistics','https://imstat.org/'],
+    ['Association for Women in Mathematics','https://awm-math.org/'],
+    ['National Association of Mathematicians','https://www.nam-math.org/'],
+    ['Pi Mu Epsilon — honour society','https://pme-math.org/']
+  ]],
+  ['Mathematics → engineering options', [
+    ['BLS — architecture &amp; engineering occupations','https://www.bls.gov/ooh/architecture-and-engineering/home.htm'],
+    ['NCEES — FE and PE examinations','https://ncees.org/'],
+    ['NSPE — engineering licensure','https://www.nspe.org/resources/licensure'],
+    ['ABET — programme accreditation search','https://www.abet.org/'],
+    ['IEEE','https://www.ieee.org/'],
+    ['IEEE Computer Society','https://www.computer.org/'],
+    ['IISE — industrial &amp; systems engineering','https://www.iise.org/'],
+    ['INFORMS — operations research','https://www.informs.org/'],
+    ['ASME','https://www.asme.org/'],
+    ['AIChE','https://www.aiche.org/'],
+    ['ASEE','https://www.asee.org/'],
+    ['Society of Women Engineers','https://swe.org/'],
+    ['NSBE','https://www.nsbe.org/'],
+    ['SHPE','https://www.shpe.org/'],
+    ['Tau Beta Pi — honour society','https://www.tbp.org/']
+  ]],
+  ['AI, data science &amp; analytics', [
+    ['NIST AI Risk Management Framework','https://www.nist.gov/itl/ai-risk-management-framework'],
+    ['NIST Trustworthy &amp; Responsible AI Center','https://airc.nist.gov/'],
+    ['NSF — artificial intelligence programmes','https://www.nsf.gov/focus-areas/artificial-intelligence'],
+    ['OECD AI Policy Observatory','https://oecd.ai/'],
+    ['AAAI','https://aaai.org/'],
+    ['ACM SIGKDD — data mining','https://www.kdd.org/'],
+    ['ACM SIGAI','https://sigai.acm.org/'],
+    ['Academic Data Science Alliance','https://academicdatascience.org/'],
+    ['NeurIPS proceedings','https://neurips.cc/'],
+    ['ICML','https://icml.cc/'],
+    ['Certified Analytics Professional (INFORMS)','https://www.certifiedanalytics.org/'],
+    ['Stanford HAI AI Index','https://aiindex.stanford.edu/report/'],
+    ['Kaggle competitions','https://www.kaggle.com/competitions'],
+    ['Google ML Crash Course','https://developers.google.com/machine-learning/crash-course'],
+    ['Deep Learning (free online)','https://www.deeplearningbook.org/'],
+    ['arXiv cs.LG','https://arxiv.org/list/cs.LG/recent']
+  ]],
+  ['Official language &amp; tool documentation', [
+    ['Python','https://docs.python.org/3/'],
+    ['NumPy','https://numpy.org/doc/stable/'],
+    ['pandas','https://pandas.pydata.org/docs/'],
+    ['scikit-learn','https://scikit-learn.org/stable/'],
+    ['PyTorch','https://pytorch.org/tutorials/'],
+    ['TensorFlow','https://www.tensorflow.org/learn'],
+    ['Java (Oracle)','https://docs.oracle.com/en/java/'],
+    ['ISO C++','https://isocpp.org/'],
+    ['C# and .NET','https://learn.microsoft.com/en-us/dotnet/csharp/'],
+    ['JavaScript (MDN)','https://developer.mozilla.org/en-US/docs/Web/JavaScript'],
+    ['TypeScript','https://www.typescriptlang.org/docs/'],
+    ['Go','https://go.dev/doc/'],
+    ['Rust','https://doc.rust-lang.org/book/'],
+    ['R manuals (CRAN)','https://cran.r-project.org/manuals.html'],
+    ['Julia','https://docs.julialang.org/'],
+    ['MATLAB','https://www.mathworks.com/help/matlab/'],
+    ['LaTeX','https://www.latex-project.org/help/documentation/'],
+    ['PostgreSQL — SQL reference','https://www.postgresql.org/docs/'],
+    ['Git','https://git-scm.com/doc'],
+    ['Docker','https://docs.docker.com/'],
+    ['Kubernetes','https://kubernetes.io/docs/home/']
+  ]],
+  ['Competitions & portfolio evidence', [
+    ['COMAP MCM/ICM — modelling contest','https://www.comap.com/contests/mcm-icm'],
+    ['Putnam Competition','https://www.maa.org/math-competitions/putnam-competition'],
+    ['ICPC — competitive programming','https://icpc.global/'],
+    ['Hugging Face','https://huggingface.co/docs']
   ]],
   ['Internships & research', [
     ['NSF Research Experiences for Undergraduates','https://www.nsf.gov/funding/initiatives/reu'],
@@ -698,6 +966,68 @@ function renderPart2(){
   host.appendChild(sec);
 }
 
+function renderPart3(){
+  const host = document.getElementById('part3');
+  host.appendChild(el(`<div class="hair pt-6 mt-14"><p class="eyebrow">Part 3 of 3 · scored out of 40, separately</p>
+    <h2 class="t-h2 mt-2">Technical inventory</h2>
+    <p class="t-sm mt-2" style="color:var(--text-2);max-width:62ch">What you can do at a keyboard, what you have taken, and what your setup looks like. Scored on its own scale — a clear plan and thin skills is a different problem from strong skills and no direction.</p>
+    <p class="mt-3 no-print flex flex-wrap gap-2">
+      <button class="btn t-sm" data-modal="F">What this measures &amp; official docs</button>
+      <button class="btn t-sm" data-modal="ai">AI &amp; data science options</button>
+      <button class="btn t-sm" data-modal="matheng">Maths &amp; engineering options</button>
+    </p></div>`));
+
+  // --- 3.1 scored questions ---
+  const sec = el(`<section class="mt-8" id="sec-F"></section>`);
+  sec.appendChild(el(`<div style="border-left:3px solid var(--interactive);padding-left:.9rem">
+      <p class="eyebrow">Section F · 10 questions · 40 points</p>
+      <h3 class="t-h3 mt-1">Capability</h3>
+      <p class="t-sm mt-1" style="color:var(--text-2)">Exposure versus evidence. Answer for what you could do unaided today.</p>
+    </div>`));
+  TECH.forEach((q, i) => {
+    const qid = 'F' + (i+1);
+    const wrap = el(`<div class="q mt-6"></div>`);
+    wrap.appendChild(el(`<p class="t-base" style="font-weight:500"><span class="font-mono t-sm" style="color:var(--text-2)">${qid}</span> &nbsp;${q[0]}</p>`));
+    const list = el(`<div class="mt-2 space-y-px q-body" role="radiogroup" aria-label="Question ${qid}"></div>`);
+    q[1].forEach((txt, oi) => {
+      const pts = 4 - oi;
+      list.appendChild(el(`<label class="opt">
+          <input type="radio" name="${qid}" value="${pts}" data-sec="F" data-kind="tech">
+          <span><span class="t-sm">${txt}</span> <span class="pts">· ${pts}</span></span>
+        </label>`));
+    });
+    wrap.appendChild(list);
+    sec.appendChild(wrap);
+  });
+  host.appendChild(sec);
+
+  // --- 3.2 checklists ---
+  CHECKS.forEach((c, ci) => {
+    const s = el(`<section class="mt-12"></section>`);
+    s.appendChild(el(`<div style="border-left:3px solid var(--border-strong);padding-left:.9rem">
+        <p class="eyebrow">Inventory ${ci+1} of 3 · not scored</p>
+        <h3 class="t-h3 mt-1">${c.title}</h3>
+        <p class="t-sm mt-1" style="color:var(--text-2)">${c.note}</p>
+        <p class="t-xs font-mono mt-2" id="count-${c.id}" style="color:var(--text-2)">0 selected</p>
+      </div>`));
+    const grid = el(`<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-6 mt-5"></div>`);
+    c.cols.forEach(([label, items]) => {
+      const col = el(`<div><p class="eyebrow" style="border-bottom:1px solid var(--border);padding-bottom:.3rem">${label}</p>
+        <div class="mt-2 space-y-px"></div></div>`);
+      const box = col.lastElementChild;
+      items.forEach(it => {
+        box.appendChild(el(`<label class="opt" style="padding:.4rem .6rem">
+            <input type="checkbox" data-kind="check" data-group="${c.id}" value="${it.replace(/"/g,'&quot;')}">
+            <span class="t-sm">${it}</span>
+          </label>`));
+      });
+      grid.appendChild(col);
+    });
+    s.appendChild(grid);
+    host.appendChild(s);
+  });
+}
+
 function renderGrid(){
   const g = document.getElementById('grid');
   SECTIONS.forEach(s => {
@@ -710,6 +1040,15 @@ function renderGrid(){
     `<p><span class="font-mono">${s.id}</span> ${s.title} <span class="font-mono" id="sub-${s.id}" style="color:var(--text-2)">0/20</span></p>`).join('');
 }
 
+function renderTechGrid(){
+  const g = document.getElementById('techGrid');
+  for(let r=0;r<2;r++){
+    const row = el(`<div class="cellrow" data-techrow="${r}"></div>`);
+    for(let i=0;i<20;i++) row.appendChild(el(`<div class="cell"></div>`));
+    g.appendChild(row);
+  }
+}
+
 function renderResources(){
   document.getElementById('resList').innerHTML = RESOURCES.map(([group, links]) => `
     <div class="p-4" style="background:var(--layer)">
@@ -720,13 +1059,13 @@ function renderResources(){
     </div>`).join('');
 }
 
-renderPart1(); renderPart2(); renderGrid(); renderResources();
+renderPart1(); renderPart2(); renderPart3(); renderGrid(); renderTechGrid(); renderResources();
 document.getElementById('printDate').textContent = new Date().toLocaleDateString();
 
 /* =========================================================================
    3. SCORING  (all state in memory — nothing is stored or transmitted)
    ========================================================================= */
-const state = { score:{}, sort:{} };
+const state = { score:{}, sort:{}, tech:{}, check:{ lang:new Set(), course:new Set(), setup:new Set() } };
 
 function compute(){
   const subs = {}; let total = 0, answered = 0;
@@ -737,17 +1076,101 @@ function compute(){
   }
   const tally = { M:0, B:0, C:0 };
   Object.values(state.sort).forEach(k => tally[k]++);
-  return { subs, total, answered, tally, sorted:Object.keys(state.sort).length };
+
+  let tech = 0, techAnswered = 0;
+  Object.values(state.tech).forEach(v => { tech += v; techAnswered++; });
+
+  const ticked = new Set([...state.check.lang, ...state.check.course, ...state.check.setup]);
+
+  return { subs, total, answered, tally, sorted:Object.keys(state.sort).length, tech, techAnswered, ticked };
 }
 
+function techLevelFor(t){ return TECH_LEVELS.find(l => t >= l.min); }
+
 function levelFor(total){ return LEVELS.find(l => total >= l.min); }
+
+function paintTech(r){
+  document.querySelectorAll('#techGrid .cell').forEach((c,i) => c.classList.toggle('on', i < r.tech));
+  document.getElementById('techOut').textContent = r.techAnswered ? r.tech : '—';
+  document.getElementById('techAnsweredOut').textContent = `${r.techAnswered} of 10 answered`;
+
+  document.getElementById('checkCounts').textContent =
+    `Languages & tools ${state.check.lang.size}  ·  Courses ${state.check.course.size}  ·  Setup & evidence ${state.check.setup.size}`;
+  CHECKS.forEach(c => {
+    const n = state.check[c.id].size;
+    document.getElementById('count-'+c.id).textContent = `${n} selected`;
+  });
+
+  const chip = document.getElementById('techChip'), body = document.getElementById('techBody');
+  if(!r.techAnswered){
+    document.getElementById('techBandOut').textContent = 'Not started';
+    chip.style.borderLeftColor = 'var(--border)';
+    body.innerHTML = `<p class="t-sm" style="color:var(--text-2)">Answer Part 3 and your capability band and next steps appear here.</p>`;
+    return;
+  }
+  const T = techLevelFor(r.tech);
+  document.getElementById('techBandOut').textContent = `${T.n} · ${T.name}`;
+  chip.style.borderLeftColor = T.color;
+  const left = 10 - r.techAnswered;
+  body.innerHTML = `
+    ${left ? `<p class="t-sm mb-3" style="border-left:3px solid var(--interactive);padding-left:.7rem;color:var(--text-2)">
+      Partial result — ${left} question${left===1?'':'s'} left in Part 3.</p>` : ''}
+    <p class="eyebrow">Band ${T.n} — ${T.name}</p>
+    <p class="t-base mt-2" style="max-width:66ch">${T.body}</p>`;
+}
+
+function paintGaps(r){
+  const host = document.getElementById('gapOut');
+  if(!r.ticked.size){
+    host.innerHTML = `<p class="t-sm" style="color:var(--text-2)">Tick items in the three inventories above and this compares them against the core requirements of each track.</p>`;
+    return;
+  }
+  const rows = Object.entries(TRACKS).map(([k, t]) => {
+    const have = t.need.filter(n => r.ticked.has(n));
+    const miss = t.need.filter(n => !r.ticked.has(n));
+    return { k, name:t.name, have, miss, pct: have.length / t.need.length, n:t.need.length };
+  }).sort((a,b) => b.pct - a.pct);
+
+  const best = rows[0];
+  host.innerHTML = `
+    ${rows.map(o => `
+      <div class="mt-4" style="border-left:3px solid ${o === best ? 'var(--interactive)' : 'var(--border)'};padding-left:.9rem">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <p class="t-lg">${o.name}</p>
+          <p class="font-mono t-sm">${o.have.length} of ${o.n} core items</p>
+        </div>
+        <div class="bar mt-2"><i style="width:${Math.round(o.pct*100)}%"></i></div>
+        ${o.miss.length
+          ? `<p class="t-sm mt-2"><span style="color:var(--text-2)">Missing:</span> ${o.miss.join(' · ')}</p>`
+          : `<p class="t-sm mt-2">All core items ticked. Depth and evidence are now the constraint, not coverage.</p>`}
+      </div>`).join('')}
+    <div class="surface p-5 mt-6">
+      <p class="eyebrow">Closest by coursework &amp; skills</p>
+      <p class="t-h3 mt-1">${best.name} — ${best.have.length}/${best.n}</p>
+      <p class="t-base mt-2" style="max-width:66ch">
+        ${best.miss.length
+          ? `The single most useful thing you can add next: <strong>${best.miss[0]}</strong>.`
+          : `You have cleared the floor for this track. Move to depth: one substantial project, one internship, one credential.`}
+      </p>
+      ${r.sorted >= 6 ? gapVsFit(r, best) : ''}
+    </div>`;
+}
+
+function gapVsFit(r, best){
+  const fit = tallyKey(r.tally);
+  const fitKeys = fit === 'MBC' ? ['M','B','C'] : fit.split('');
+  const aligned = fitKeys.includes(best.k) || (best.k === 'AI' && fitKeys.length > 1);
+  return aligned
+    ? `<p class="t-sm mt-3" style="color:var(--text-2)">This matches your field-fit result in Part 2 — interests and coursework are pointing the same way.</p>`
+    : `<p class="t-sm mt-3" style="border-left:3px solid #f1c21b;padding-left:.7rem">Your interests in Part 2 lean toward <strong>${TALLY[fit].name}</strong>, but your coursework and skills sit closest to <strong>${best.name}</strong>. Worth one conversation with an adviser — this is cheap to correct now and expensive later.</p>`;
+}
 
 function paint(){
   const r = compute();
   const done = r.answered === 25;
 
   document.getElementById('prog').style.width =
-    Math.round(((r.answered + r.sorted) / 37) * 100) + '%';
+    Math.round(((r.answered + r.sorted + r.techAnswered) / 47) * 100) + '%';
   document.getElementById('totalOut').textContent = r.answered ? r.total : '—';
   document.getElementById('answeredOut').textContent = `${r.answered} of 25 answered`;
 
@@ -765,7 +1188,7 @@ function paint(){
     chip.style.borderLeftColor = 'var(--border)';
     body.innerHTML = `<p class="t-sm" style="color:var(--text-2)">Answer the questions above and your level, priorities, and field fit appear here.</p>`;
     document.getElementById('diag').innerHTML = '';
-    paintTally(r);
+    paintTally(r); paintTech(r); paintGaps(r);
     return;
   }
 
@@ -805,7 +1228,7 @@ function paint(){
       }).join('')}
     </table>`;
 
-  paintTally(r);
+  paintTally(r); paintTech(r); paintGaps(r);
 }
 
 function tallyKey(t){
@@ -846,9 +1269,14 @@ function paintTally(r){
 
 document.addEventListener('change', (e) => {
   const i = e.target;
-  if(i.type !== 'radio') return;
-  if(i.dataset.kind === 'score') state.score[i.name] = +i.value;
-  if(i.dataset.kind === 'sort')  state.sort[i.name]  = i.value;
+  if(i.type === 'radio'){
+    if(i.dataset.kind === 'score') state.score[i.name] = +i.value;
+    if(i.dataset.kind === 'sort')  state.sort[i.name]  = i.value;
+    if(i.dataset.kind === 'tech')  state.tech[i.name]  = +i.value;
+  } else if(i.type === 'checkbox' && i.dataset.kind === 'check'){
+    const set = state.check[i.dataset.group];
+    if(i.checked) set.add(i.value); else set.delete(i.value);
+  } else return;
   paint();
 });
 paint();
@@ -938,7 +1366,8 @@ function reportText(){
   let out = [];
   out.push('CAREER PATH CLARITY ASSESSMENT', 'Mathematics / Business Information Systems / Computer Science',
            'Date: ' + new Date().toLocaleString(), line, '');
-  out.push(`TOTAL SCORE: ${r.total} / 100   (${r.answered} of 25 questions answered)`);
+  out.push(`CAREER CLARITY: ${r.total} / 100   (${r.answered} of 25 answered)`,
+           `TECHNICAL:      ${r.tech} / 40    (${r.techAnswered} of 10 answered)`, '');
   if(L) out.push(`LEVEL ${L.n} — ${L.name.toUpperCase()}`, '', wrap(L.body));
   out.push('', line, 'SECTION BREAKDOWN', '');
   SECTIONS.forEach(s => out.push(
@@ -954,6 +1383,34 @@ function reportText(){
            `  Computer Science .... ${r.tally.C}`,
            `  (${r.sorted} of 12 answered)`);
   if(k) out.push('', `CLOSEST FIT: ${TALLY[k].name}`, '', wrap(TALLY[k].body));
+  out.push('', line, 'TECHNICAL PROFILE (PART 3)', '');
+  out.push(`  SCORE: ${r.tech} / 40   (${r.techAnswered} of 10 answered)`);
+  if(r.techAnswered){
+    const T = techLevelFor(r.tech);
+    out.push(`  BAND ${T.n} — ${T.name.toUpperCase()}`, '', wrap(T.body, 72));
+  }
+  out.push('', '  Languages & tools ticked: ' + state.check.lang.size,
+               '  Courses ticked:           ' + state.check.course.size,
+               '  Setup & evidence ticked:  ' + state.check.setup.size);
+  CHECKS.forEach(c => {
+    const items = [...state.check[c.id]];
+    out.push('', `  ${c.title.toUpperCase()} (${items.length})`);
+    out.push(items.length ? wrap('    ' + items.join(' · '), 72) : '    (none ticked)');
+  });
+
+  if(r.ticked.size){
+    out.push('', line, 'GAP ANALYSIS — CORE ITEMS BY TRACK', '');
+    Object.entries(TRACKS).map(([k,t]) => {
+      const have = t.need.filter(n => r.ticked.has(n));
+      const miss = t.need.filter(n => !r.ticked.has(n));
+      return {k, t, have, miss, pct: have.length/t.need.length};
+    }).sort((a,b) => b.pct - a.pct).forEach(o => {
+      out.push(`  ${o.t.name}  —  ${o.have.length} of ${o.t.need.length}`);
+      out.push(o.miss.length ? wrap('    Missing: ' + o.miss.join(' · '), 72) : '    All core items ticked.');
+      out.push('');
+    });
+  }
+
   out.push('', line, 'YOUR ANSWERS', '');
   SECTIONS.forEach(s => s.qs.forEach((q, qi) => {
     const qid = s.id + (qi+1);
@@ -964,6 +1421,11 @@ function reportText(){
   SORTER.forEach((q, i) => {
     const qid = 'S' + (i+1), v = state.sort[qid];
     out.push(`  ${qid}  ${v ? v + ' — ' + strip(q[1][{M:0,B:1,C:2}[v]]) : '(not answered)'}`);
+  });
+  out.push('');
+  TECH.forEach((q, i) => {
+    const qid = 'F' + (i+1), v = state.tech[qid];
+    out.push(`  ${qid}  ${v ? v + ' pts — ' + strip(q[1][4-v]) : '(not answered)'}`);
   });
   out.push('', line, 'NEXT STEP: bring this to your campus career centre.', '');
   return out.join('\n');
@@ -985,10 +1447,21 @@ function csvText(){
     const qid = 'S' + (i+1), v = state.sort[qid];
     rows.push([qid, 'Field fit', 'Sorter', v ? strip(q[1][{M:0,B:1,C:2}[v]]) : '', v || '']);
   });
+  TECH.forEach((q, i) => {
+    const qid = 'F' + (i+1), v = state.tech[qid];
+    rows.push([qid, 'Technical', 'Capability', v ? strip(q[1][4-v]) : '', v || '']);
+  });
+  CHECKS.forEach(c => [...state.check[c.id]].forEach(item =>
+    rows.push(['', 'Inventory', c.title, item, 'ticked'])));
   const r = compute();
   rows.push([], ['TOTAL','','', r.answered ? levelFor(r.total).name : '', r.total]);
   SECTIONS.forEach(s => rows.push(['Subtotal ' + s.id, '', s.title, '', r.subs[s.id]]));
   rows.push(['Fit tally','','', `M=${r.tally.M} B=${r.tally.B} C=${r.tally.C}`, r.sorted ? TALLY[tallyKey(r.tally)].name : '']);
+  rows.push(['Technical score','','', r.techAnswered ? techLevelFor(r.tech).name : '', r.tech]);
+  Object.entries(TRACKS).forEach(([k,t]) => {
+    const have = t.need.filter(n => r.ticked.has(n));
+    rows.push(['Gap: ' + t.name, '', '', t.need.filter(n => !r.ticked.has(n)).join(' | '), have.length + '/' + t.need.length]);
+  });
   return rows.map(r2 => r2.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n');
 }
 function download(name, text, mime){
