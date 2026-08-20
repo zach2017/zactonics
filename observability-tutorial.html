@@ -1,0 +1,3026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grafana + Loki + Prometheus — A Complete Beginner's Guide</title>
+<meta name="description" content="Step-by-step tutorial: what Grafana, Loki and Prometheus are, why they exist, and how to configure them in Docker, on AWS EC2 launch templates, and on Amazon EKS.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        ink:    '#161616',
+        ink2:   '#262626',
+        gray70: '#525252',
+        gray60: '#6f6f6f',
+        gray20: '#e0e0e0',
+        gray10: '#f4f4f4',
+        blue60: '#0f62fe',
+        blue70: '#0043ce',
+        blue80: '#002d9c',
+        blue90: '#001d6c',
+        blue10: '#edf5ff'
+      },
+      fontFamily: {
+        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace']
+      }
+    }
+  }
+}
+</script>
+<style>
+  :root{
+    --fs: 18px;
+    --white:#ffffff; --gray10:#f4f4f4; --gray20:#e0e0e0; --gray60:#6f6f6f;
+    --gray70:#525252; --ink:#161616; --blue60:#0f62fe; --blue80:#002d9c;
+    --blue90:#001d6c; --blue10:#edf5ff; --yellow10:#fcf4d6; --yellow40:#f1c21b;
+    --red10:#fff1f1; --red60:#da1e28; --green10:#defbe6; --green50:#24a148;
+    --header-h:48px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth; scroll-padding-top:calc(var(--header-h) + 16px)}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important; animation:none!important} }
+  body{
+    margin:0; background:var(--white); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- header ---------- */
+  .app-header{
+    position:fixed; top:0; left:0; right:0; height:var(--header-h); z-index:60;
+    background:var(--ink); color:#fff; display:flex; align-items:center;
+    border-bottom:1px solid #393939;
+  }
+  .app-header .brand{font-weight:600; font-size:14px; letter-spacing:.01em}
+  .app-header .brand span{font-weight:400; color:#c6c6c6}
+  .hbtn{
+    height:var(--header-h); min-width:var(--header-h); border:0; background:transparent;
+    color:#fff; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+    font-family:"IBM Plex Mono",monospace; font-size:14px;
+  }
+  .hbtn:hover{background:#353535}
+  .hbtn:disabled{color:#6f6f6f; cursor:not-allowed; background:transparent}
+  .hbtn:focus-visible{outline:2px solid #fff; outline-offset:-2px}
+  .fs-readout{
+    font-family:"IBM Plex Mono",monospace; font-size:12px; color:#78a9ff;
+    min-width:54px; text-align:center; letter-spacing:.02em;
+  }
+  .fs-group{display:flex; align-items:center; border-left:1px solid #393939; border-right:1px solid #393939}
+  #progress{position:fixed; top:var(--header-h); left:0; height:2px; background:var(--blue60); width:0; z-index:59}
+
+  /* ---------- layout ---------- */
+  .shell{display:flex; padding-top:var(--header-h); min-height:100vh}
+  .sidebar{
+    width:272px; flex:0 0 272px; border-right:1px solid var(--gray20);
+    position:sticky; top:var(--header-h); height:calc(100vh - var(--header-h));
+    overflow-y:auto; background:var(--white); padding:24px 0 64px;
+  }
+  .sidebar h2{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--gray60); padding:0 24px 12px;
+  }
+  .sidebar a{
+    display:block; padding:7px 24px; color:var(--gray70);
+    font-size:calc(13px + (var(--fs) - 18px) * 0.35);
+    text-decoration:none; border-left:3px solid transparent; line-height:1.35;
+  }
+  .sidebar a:hover{background:var(--gray10); color:var(--ink)}
+  .sidebar a.active{border-left-color:var(--blue60); color:var(--blue80); background:var(--gray10); font-weight:500}
+  .sidebar a .num{font-family:"IBM Plex Mono",monospace; color:var(--gray60); margin-right:8px; font-size:12px}
+  main{flex:1 1 auto; min-width:0}
+  .wrap{max-width:820px; margin:0 auto; padding:0 24px 120px}
+
+  @media (max-width:1023px){
+    .sidebar{
+      position:fixed; top:var(--header-h); left:0; z-index:55; transform:translateX(-100%);
+      transition:transform .18s ease; box-shadow:0 8px 24px rgba(0,0,0,.18); width:86%; max-width:320px; flex-basis:auto;
+    }
+    body.nav-open .sidebar{transform:translateX(0)}
+    body.nav-open .scrim{opacity:1; pointer-events:auto}
+    .scrim{
+      position:fixed; inset:var(--header-h) 0 0 0; background:rgba(22,22,22,.5); z-index:50;
+      opacity:0; pointer-events:none; transition:opacity .18s ease;
+    }
+    .wrap{padding:0 16px 96px}
+  }
+  @media (min-width:1024px){ .scrim{display:none} }
+
+  /* ---------- document typography (scales with --fs) ---------- */
+  .doc{font-size:var(--fs); line-height:1.6; color:var(--ink)}
+  .doc p{margin:0 0 1em; max-width:74ch}
+  .doc li{margin:.35em 0; max-width:72ch}
+  .doc ul,.doc ol{padding-left:1.35em; margin:0 0 1.1em}
+  .doc strong{font-weight:600}
+  .doc a{color:var(--blue60); text-decoration:underline; text-underline-offset:2px}
+  .doc a:hover{color:var(--blue80)}
+  .doc a:focus-visible, .info-btn:focus-visible, .copy-btn:focus-visible{outline:2px solid var(--blue60); outline-offset:2px}
+
+  .doc h2{
+    font-size:2.05em; font-weight:300; letter-spacing:-.01em; line-height:1.15;
+    margin:0 0 .5em; color:var(--ink);
+  }
+  .doc h3{font-size:1.3em; font-weight:600; margin:2em 0 .55em; line-height:1.25}
+  .doc h4{font-size:1.02em; font-weight:600; margin:1.6em 0 .4em; color:var(--blue90)}
+  .doc .lede{font-size:1.12em; color:var(--gray70); font-weight:300; max-width:70ch}
+
+  section.chapter{padding:56px 0 8px; border-top:1px solid var(--gray20)}
+  section.chapter:first-of-type{border-top:0}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace; font-size:.72em; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--blue60); display:flex; align-items:center;
+    gap:10px; margin-bottom:14px;
+  }
+  .eyebrow::before{content:""; width:22px; height:2px; background:var(--blue60); display:block}
+
+  /* ---------- code ---------- */
+  .codeblock{margin:1.2em 0; border:1px solid var(--gray20); background:var(--gray10)}
+  .code-bar{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--gray20); padding:4px 8px 4px 12px;
+  }
+  .code-lang{
+    font-family:"IBM Plex Mono",monospace; font-size:.68em; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--gray70);
+  }
+  .copy-btn{
+    font-family:"IBM Plex Mono",monospace; font-size:.68em; letter-spacing:.06em;
+    background:transparent; border:1px solid transparent; color:var(--blue80);
+    padding:3px 8px; cursor:pointer; text-transform:uppercase;
+  }
+  .copy-btn:hover{background:#cfcfcf}
+  .codeblock pre{
+    margin:0; padding:14px 16px; overflow-x:auto; border-left:3px solid var(--blue60);
+  }
+  .codeblock code{
+    font-family:"IBM Plex Mono",monospace; font-size:.8em; line-height:1.55;
+    color:#161616; white-space:pre; display:block;
+  }
+  .doc :not(pre) > code{
+    font-family:"IBM Plex Mono",monospace; font-size:.86em; background:var(--gray10);
+    padding:1px 5px; border:1px solid var(--gray20); word-break:break-word;
+  }
+
+  /* ---------- tables ---------- */
+  .tablewrap{overflow-x:auto; margin:1.2em 0; border:1px solid var(--gray20)}
+  .doc table{border-collapse:collapse; width:100%; font-size:.88em; min-width:460px}
+  .doc th{
+    background:var(--gray10); text-align:left; font-weight:600; padding:10px 14px;
+    border-bottom:1px solid var(--gray20); white-space:nowrap;
+  }
+  .doc td{padding:10px 14px; border-bottom:1px solid var(--gray20); vertical-align:top; line-height:1.45}
+  .doc tr:last-child td{border-bottom:0}
+
+  /* ---------- callouts ---------- */
+  .callout{padding:14px 18px; margin:1.3em 0; border-left:3px solid var(--blue60); background:var(--blue10)}
+  .callout.warn{border-left-color:var(--yellow40); background:var(--yellow10)}
+  .callout.danger{border-left-color:var(--red60); background:var(--red10)}
+  .callout.ok{border-left-color:var(--green50); background:var(--green10)}
+  .callout p:last-child{margin-bottom:0}
+  .callout .tag{
+    font-family:"IBM Plex Mono",monospace; font-size:.7em; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; display:block; margin-bottom:6px; color:var(--blue80);
+  }
+  .callout.warn .tag{color:#8e6a00} .callout.danger .tag{color:#a2191f} .callout.ok .tag{color:#0e6027}
+
+  /* ---------- step markers ---------- */
+  .step{display:flex; gap:16px; margin:2em 0 1em; align-items:baseline}
+  .step .n{
+    font-family:"IBM Plex Mono",monospace; font-size:.8em; color:#fff; background:var(--ink);
+    min-width:2.4em; height:2.4em; display:inline-flex; align-items:center; justify-content:center;
+    flex:0 0 auto; font-weight:500;
+  }
+  .step h3{margin:0; font-size:1.22em}
+
+  /* ---------- info popup trigger ---------- */
+  .info-btn{
+    display:inline-flex; align-items:center; gap:7px; font-family:"IBM Plex Sans",sans-serif;
+    font-size:.82em; background:var(--white); color:var(--blue80);
+    border:1px solid var(--blue60); padding:6px 12px; cursor:pointer; margin:.35em .4em .35em 0;
+    line-height:1.3; text-align:left;
+  }
+  .info-btn:hover{background:var(--blue10)}
+  .info-btn .i{
+    font-family:"IBM Plex Mono",monospace; font-weight:600; background:var(--blue60); color:#fff;
+    width:1.35em; height:1.35em; display:inline-flex; align-items:center; justify-content:center;
+    flex:0 0 auto; font-size:.9em;
+  }
+  .btnrow{display:flex; flex-wrap:wrap; margin:.6em 0 1.2em}
+
+  /* ---------- modal ---------- */
+  .modal-scrim{
+    position:fixed; inset:0; background:rgba(22,22,22,.55); z-index:80;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-scrim[hidden]{display:none}
+  .modal{
+    background:#fff; width:min(640px,100%); max-height:82vh; display:flex; flex-direction:column;
+    border-top:3px solid var(--blue60); box-shadow:0 12px 40px rgba(0,0,0,.3);
+  }
+  .modal-head{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+    padding:20px 20px 12px; border-bottom:1px solid var(--gray20);
+  }
+  .modal-head h3{margin:0; font-size:calc(var(--fs) * 1.1); font-weight:600; line-height:1.3}
+  .modal-close{
+    border:0; background:transparent; font-size:22px; line-height:1; cursor:pointer;
+    color:var(--gray70); width:32px; height:32px; flex:0 0 auto;
+  }
+  .modal-close:hover{background:var(--gray10); color:var(--ink)}
+  .modal-body{padding:18px 20px 24px; overflow-y:auto; font-size:calc(var(--fs) * 0.95); line-height:1.6}
+  .modal-body p{margin:0 0 .9em}
+  .modal-body ul{padding-left:1.25em; margin:0 0 .9em}
+  .modal-body li{margin:.3em 0}
+  .modal-body code{font-family:"IBM Plex Mono",monospace; font-size:.88em; background:var(--gray10); padding:1px 5px; border:1px solid var(--gray20)}
+  .modal-body .doclink{
+    display:inline-block; margin-top:6px; font-family:"IBM Plex Mono",monospace; font-size:.8em;
+    color:var(--blue60); text-decoration:underline; word-break:break-all;
+  }
+  @media (max-width:640px){
+    .modal-scrim{align-items:flex-end; padding:0}
+    .modal{max-height:88vh; width:100%}
+  }
+
+  /* ---------- hero ---------- */
+  .hero{padding:64px 0 40px}
+  .hero h1{
+    font-size:2.6em; font-weight:300; line-height:1.05; letter-spacing:-.02em; margin:0 0 20px;
+  }
+  .hero h1 b{font-weight:600; display:block; color:var(--blue80)}
+  .hero .meta{
+    font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--gray60); border-top:1px solid var(--gray20);
+    padding-top:12px; margin-top:28px;
+  }
+  .stack-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1px; background:var(--gray20); border:1px solid var(--gray20); margin:32px 0}
+  .stack-cell{background:#fff; padding:18px}
+  .stack-cell .k{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue60)}
+  .stack-cell .v{font-size:calc(var(--fs) * 1.02); font-weight:600; margin:6px 0 4px}
+  .stack-cell .d{font-size:calc(var(--fs) * 0.82); color:var(--gray70); line-height:1.45}
+  @media (max-width:640px){ .hero h1{font-size:2em} }
+
+  .totop{
+    position:fixed; right:16px; bottom:16px; z-index:40; background:var(--ink); color:#fff;
+    border:0; width:44px; height:44px; cursor:pointer; font-size:18px; display:none;
+  }
+  .totop.show{display:block}
+  .totop:hover{background:var(--blue80)}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <button class="hbtn lg:hidden" id="navToggle" aria-label="Open contents" aria-expanded="false">☰</button>
+  <div class="brand px-4 truncate">Observability&nbsp;<span>/ Grafana · Loki · Prometheus</span></div>
+  <div class="ml-auto flex items-center">
+    <div class="fs-group">
+      <button class="hbtn" id="fsDown" aria-label="Decrease text size">A−</button>
+      <span class="fs-readout" id="fsReadout" aria-live="polite">18 px</span>
+      <button class="hbtn" id="fsUp" aria-label="Increase text size">A+</button>
+    </div>
+    <button class="hbtn px-3" id="fsReset" aria-label="Reset text size" title="Reset to 18px">Reset</button>
+  </div>
+</header>
+<div id="progress"></div>
+
+<div class="shell">
+  <div class="scrim" id="scrim"></div>
+  <nav class="sidebar" id="sidebar" aria-label="Table of contents">
+    <h2>Contents</h2>
+    <a href="#top"><span class="num">00</span>Start</a>
+    <a href="#s1"><span class="num">01</span>How to use this guide</a>
+    <a href="#s2"><span class="num">02</span>Background: the problem</a>
+    <a href="#s3"><span class="num">03</span>The three tools</a>
+    <a href="#s4"><span class="num">04</span>Current versions</a>
+    <a href="#s5"><span class="num">05</span>Build it: Docker walkthrough</a>
+    <a href="#s6"><span class="num">06</span>Prometheus in depth</a>
+    <a href="#s7"><span class="num">07</span>Loki in depth</a>
+    <a href="#s8"><span class="num">08</span>Grafana in depth</a>
+    <a href="#s9"><span class="num">09</span>Grafana Alloy</a>
+    <a href="#s10"><span class="num">10</span>Docker for production</a>
+    <a href="#s11"><span class="num">11</span>AWS EC2 + Launch Template</a>
+    <a href="#s12"><span class="num">12</span>Amazon EKS</a>
+    <a href="#s13"><span class="num">13</span>Dashboards &amp; alerts</a>
+    <a href="#s14"><span class="num">14</span>PromQL &amp; LogQL cheat sheets</a>
+    <a href="#s15"><span class="num">15</span>Best practices</a>
+    <a href="#s16"><span class="num">16</span>Pros, cons, alternatives</a>
+    <a href="#s17"><span class="num">17</span>Troubleshooting</a>
+    <a href="#s18"><span class="num">18</span>Glossary</a>
+    <a href="#s19"><span class="num">19</span>Official docs</a>
+  </nav>
+
+  <main>
+  <div class="wrap doc" id="top">
+
+    <div class="hero">
+      <div class="eyebrow">Tutorial · Updated 20 August 2026</div>
+      <h1>Grafana, Loki and Prometheus<b>explained from zero</b></h1>
+      <p class="lede">What each tool does, why it exists, and exactly how to configure the three of them together — first on your laptop with Docker, then on AWS EC2 with a launch template, then on Amazon EKS. Written so that a curious beginner can follow every step.</p>
+
+      <div class="stack-grid">
+        <div class="stack-cell">
+          <div class="k">Metrics</div>
+          <div class="v">Prometheus</div>
+          <div class="d">Collects numbers on a schedule and stores them over time.</div>
+        </div>
+        <div class="stack-cell">
+          <div class="k">Logs</div>
+          <div class="v">Loki</div>
+          <div class="d">Stores log lines cheaply, indexed by labels instead of words.</div>
+        </div>
+        <div class="stack-cell">
+          <div class="k">Visualisation</div>
+          <div class="v">Grafana</div>
+          <div class="d">Draws dashboards from both, and sends the alerts.</div>
+        </div>
+        <div class="stack-cell">
+          <div class="k">Agent</div>
+          <div class="v">Alloy</div>
+          <div class="d">Runs on each machine and ships logs and metrics onward.</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="tag">Reading tip</span>
+        <p>Use <strong>A−</strong> and <strong>A+</strong> in the top bar to set any text size from 14 px to 36 px. Blue buttons marked <strong>i</strong> open a pop-up with extra background and links to the official documentation.</p>
+      </div>
+
+      <div class="meta">Docker · AWS EC2 Launch Templates · Amazon EKS · Prometheus 3.13 LTS · Loki 3.7 · Grafana 13 · Alloy</div>
+    </div>
+
+    <!-- ================= 1 ================= -->
+    <section class="chapter" id="s1">
+      <div class="eyebrow">Section 01</div>
+      <h2>How to use this guide</h2>
+      <p>This guide is ordered the way that actually helps a beginner: a little background, then <strong>one complete working example you can run in about fifteen minutes</strong>, then the deep explanations, then the two real-world deployments people ask about most — AWS EC2 launch templates and Amazon EKS.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Part of the guide</th><th>What you need</th></tr></thead>
+          <tbody>
+            <tr><td>Docker walkthrough (section 5)</td><td>A laptop with Docker Desktop, or Docker Engine plus Compose v2</td></tr>
+            <tr><td>AWS EC2 (section 11)</td><td>An AWS account with permission to create EC2 instances, IAM roles and security groups</td></tr>
+            <tr><td>Amazon EKS (section 12)</td><td>An AWS account plus <code>kubectl</code>, <code>helm</code> v3 and <code>eksctl</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout ok">
+        <span class="tag">Advice</span>
+        <p>Do the Docker walkthrough first even if your real goal is AWS. Everything in AWS is the same idea with more moving parts, and it is far easier to debug a stack you have already seen working.</p>
+      </div>
+    </section>
+
+    <!-- ================= 2 ================= -->
+    <section class="chapter" id="s2">
+      <div class="eyebrow">Section 02</div>
+      <h2>Background: what problem are we solving?</h2>
+
+      <h3>The story</h3>
+      <p>Imagine you run a small pizza website. One Saturday night, customers start complaining that the site is slow. You log in to the server and stare at it. Is the processor busy? Is the database slow? Did a bug start throwing errors ten minutes ago, or has this been happening all week?</p>
+      <p>Without instrumentation you are guessing. <strong>Observability</strong> is the practice of making a system explain itself, so you can answer those questions without guessing and without needing to be logged in at the exact moment things break.</p>
+
+      <h3>The three kinds of data</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Pillar</th><th>What it is</th><th>Everyday analogy</th><th>Tool</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Metrics</strong></td><td>Numbers measured over and over (CPU 42%, 130 requests/sec)</td><td>The dashboard in a car</td><td>Prometheus</td></tr>
+            <tr><td><strong>Logs</strong></td><td>Lines of text describing single events</td><td>A diary, or a shop's receipt roll</td><td>Loki</td></tr>
+            <tr><td><strong>Traces</strong></td><td>The path one request took through many services</td><td>A parcel tracking page</td><td>Tempo / Jaeger</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>And you need something to <em>look</em> at all of it. That is Grafana.</p>
+
+      <h3>Metrics or logs — why not just one?</h3>
+      <p>This confuses beginners more than anything else, so here is the core idea:</p>
+      <ul>
+        <li><strong>Metrics are small and cheap.</strong> A CPU number recorded every 15 seconds for a year is only a few megabytes. You can keep metrics for everything and graph them instantly — but a metric cannot tell you <em>which</em> customer hit the error or <em>why</em>.</li>
+        <li><strong>Logs are big and detailed.</strong> A log line has the user ID and the stack trace. But storing every line from every server is expensive, and searching all of them is slow.</li>
+      </ul>
+      <p>So the professional workflow is: <strong>metrics tell you that something is wrong and when; logs tell you why.</strong> You spot a spike on a graph at 21:03, then read the logs from 21:03.</p>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="pillars"><span class="i">i</span> More on the three pillars and where traces fit</button>
+        <button class="info-btn" data-popup="pullpush"><span class="i">i</span> Pull versus push, explained properly</button>
+      </div>
+    </section>
+
+    <!-- ================= 3 ================= -->
+    <section class="chapter" id="s3">
+      <div class="eyebrow">Section 03</div>
+      <h2>The three tools in plain English</h2>
+
+      <h3>Prometheus — the number collector</h3>
+      <p>Prometheus is a time-series database plus a scraper. Every 15 seconds (you choose the interval) it visits a URL on each machine or application — usually <code>http://the-machine:9100/metrics</code> — and copies down the numbers it finds there, stamped with the time. You then ask questions using a query language called <strong>PromQL</strong>.</p>
+      <p>A metrics page is literally just text served over HTTP:</p>
+
+      <div class="codeblock" data-lang="text"><script type="text/plain">
+# HELP node_cpu_seconds_total Seconds the CPUs spent in each mode.
+# TYPE node_cpu_seconds_total counter
+node_cpu_seconds_total{cpu="0",mode="idle"} 102934.52
+node_cpu_seconds_total{cpu="0",mode="user"} 4021.17
+http_requests_total{method="GET",status="200"} 91823
+</script></div>
+
+      <p>Each line is a <strong>metric name</strong>, then <strong>labels</strong> in curly braces, then a number. The labels are what make it powerful: later you can ask for only <code>status="500"</code> requests, grouped by method.</p>
+
+      <h3>Loki — the log collector</h3>
+      <p>Loki is often described as "Prometheus, but for logs", and that is accurate in one specific way: <strong>Loki indexes labels, not words.</strong></p>
+      <p>Traditional log systems build a giant index of every word in every line, which is powerful but expensive — the index can end up as large as the logs. Loki instead compresses log lines into <strong>chunks</strong> in cheap object storage such as Amazon S3, and indexes only a small set of labels like <code>{app="checkout", env="prod"}</code>. When you search, it uses the labels to pick a small pile of chunks and then greps inside them. The result is far cheaper storage and fast queries — provided you label things sensibly.</p>
+
+      <h3>Grafana — the screen</h3>
+      <p>Grafana is the web interface. It connects to data sources (Prometheus, Loki, CloudWatch, MySQL and 150-plus others), draws dashboards and sends alerts. It stores none of your metrics or logs itself; it asks the other systems and draws the answers.</p>
+
+      <h3>How they fit together</h3>
+      <div class="codeblock" data-lang="architecture"><script type="text/plain">
+   ┌────────────────────────────────────────────────────────────────┐
+   │  YOUR MACHINES / CONTAINERS / PODS                             │
+   │                                                                │
+   │   app  ──exposes──►  /metrics  ◄────scrape (pull)──────┐       │
+   │   app  ──writes──►   stdout / log files ──┐            │       │
+   └───────────────────────────────────────────┼────────────┼───────┘
+                                               │            │
+                                    ┌──────────▼──────┐     │
+                                    │  Grafana Alloy  │     │
+                                    │   (the agent)   │     │
+                                    └──────────┬──────┘     │
+                                        push logs           │
+                                               │            │
+                              ┌────────────────▼──┐   ┌─────▼────────┐
+                              │       LOKI        │   │  PROMETHEUS  │
+                              │  logs + labels    │   │  metrics DB  │
+                              │  chunks on S3     │   │  local TSDB  │
+                              └────────────────┬──┘   └─────┬────────┘
+                                               │            │
+                                        ┌──────▼────────────▼──────┐
+                                        │        GRAFANA           │
+                                        │   dashboards + alerts    │
+                                        └──────────────────────────┘
+</script></div>
+
+      <div class="callout">
+        <span class="tag">One sentence</span>
+        <p>Alloy collects, Prometheus stores numbers, Loki stores text, Grafana shows both.</p>
+      </div>
+    </section>
+
+    <!-- ================= 4 ================= -->
+    <section class="chapter" id="s4">
+      <div class="eyebrow">Section 04</div>
+      <h2>Current versions (August 2026)</h2>
+      <p>Pin versions in real deployments. The tag <code>latest</code> will eventually break you at three in the morning.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Component</th><th>Use</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Prometheus</td><td><strong>3.13.x (LTS)</strong></td><td>The current long-term-support line, supported into July 2027.</td></tr>
+            <tr><td>Grafana</td><td><strong>13.x</strong></td><td>Grafana 13 shipped in April 2026. Version 11 and older are past end of life.</td></tr>
+            <tr><td>Loki</td><td><strong>3.7.x</strong></td><td>3.7.6 is current; Loki 3.5 reached end of life in March 2026.</td></tr>
+            <tr><td>Log agent</td><td><strong>Grafana Alloy</strong></td><td>Promtail reached end of life on 2 March 2026.</td></tr>
+            <tr><td>Machine metrics</td><td>node_exporter 1.9.x+</td><td>Or Alloy's built-in <code>prometheus.exporter.unix</code>.</td></tr>
+            <tr><td>Kubernetes metrics</td><td>kube-prometheus-stack 88.x</td><td>Helm chart from the <code>prometheus-community</code> repo.</td></tr>
+            <tr><td>Kubernetes Loki</td><td><code>grafana-community/loki</code> 18.x</td><td>The open-source chart moved repos on 16 March 2026.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout danger">
+        <span class="tag">Two things that trip people up in 2026</span>
+        <p><strong>1. Promtail is dead.</strong> Almost every older blog post uses it. Use Alloy. An existing config converts with one command: <code>alloy convert --source-format=promtail --output=config.alloy promtail.yaml</code></p>
+        <p><strong>2. The Loki Helm chart moved</strong> to the <code>grafana-community</code> repository and renumbered (6.x, then 7.x, now 18.x). Instructions that say <code>helm repo add grafana</code> for Loki are stale for open-source users.</p>
+      </div>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="lts"><span class="i">i</span> What "LTS" means and how to choose a version</button>
+        <button class="info-btn" data-popup="promtail"><span class="i">i</span> Promtail end of life: what to do about it</button>
+      </div>
+    </section>
+
+    <!-- ================= 5 ================= -->
+    <section class="chapter" id="s5">
+      <div class="eyebrow">Section 05 · The walkthrough</div>
+      <h2>Build the whole stack on your laptop</h2>
+      <p class="lede">Goal: in about fifteen minutes you will have Prometheus, Loki, Grafana and Alloy running together, collecting real data from your own computer, with a working graph and a working log search.</p>
+
+      <div class="step"><span class="n">00</span><h3>Check that Docker works</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+docker --version
+docker compose version
+</script></div>
+      <p>You should see version numbers. If not, install Docker Desktop (Windows or macOS) or Docker Engine with the Compose plugin (Linux) before continuing.</p>
+
+      <div class="step"><span class="n">01</span><h3>Make a folder</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+mkdir observability-lab
+cd observability-lab
+mkdir -p prometheus loki alloy grafana/provisioning/datasources
+</script></div>
+      <p>Why folders? Each tool reads a configuration file. We keep them tidy so we can mount each one into the right container.</p>
+
+      <div class="step"><span class="n">02</span><h3>Write the Prometheus config</h3></div>
+      <p>Create <code>prometheus/prometheus.yml</code>:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+# How often to collect numbers, and defaults for everyone.
+global:
+  scrape_interval: 15s          # ask every target every 15 seconds
+  evaluation_interval: 15s      # check alert rules every 15 seconds
+  external_labels:
+    cluster: laptop             # stamped onto data sent to other systems
+    env: dev
+
+# WHO to collect from. Each "job" is a group of similar targets.
+scrape_configs:
+  # 1. Prometheus watching itself — a good first sanity check.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 2. The machine's CPU / RAM / disk, via node_exporter.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          host: laptop
+
+  # 3. Per-container CPU and memory, via cAdvisor.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # 4. Alloy's own health metrics.
+  - job_name: alloy
+    static_configs:
+      - targets: ["alloy:12345"]
+</script></div>
+      <p>Read it like a sentence: "every 15 seconds, go to <code>node-exporter:9100/metrics</code>, write down everything you find, and tag it <code>job=node, host=laptop</code>."</p>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="scrapeinterval"><span class="i">i</span> How do I choose a scrape interval?</button>
+      </div>
+
+      <div class="step"><span class="n">03</span><h3>Write the Loki config</h3></div>
+      <p>Create <code>loki/loki-config.yaml</code>:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+auth_enabled: false             # single tenant. Do NOT expose this to the internet.
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:                 # laptop mode: chunks on disk instead of S3
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# How Loki organises its index. tsdb + schema v13 is the current pairing.
+schema_config:
+  configs:
+    - from: 2024-04-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 168h        # keep logs for 7 days
+  allow_structured_metadata: true
+  volume_enabled: true          # enables the "logs volume" bar in Grafana
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true       # without this, nothing is ever deleted
+  delete_request_store: filesystem
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+analytics:
+  reporting_enabled: false
+</script></div>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="schema"><span class="i">i</span> What is a Loki "schema" and why must I never edit one?</button>
+      </div>
+
+      <div class="step"><span class="n">04</span><h3>Write the Alloy config</h3></div>
+      <p>Alloy's configuration is not YAML. It is a set of <strong>components</strong> wired together with <code>forward_to</code>, rather like plugging audio cables between boxes. Each block sends its output to the next.</p>
+      <p>Create <code>alloy/config.alloy</code>:</p>
+      <div class="codeblock" data-lang="alloy"><script type="text/plain">
+// Alloy's own logging
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// 1. FIND: ask Docker which containers are running
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// 2. LABEL: turn Docker metadata into clean Loki labels
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"          // strip the slash Docker prefixes
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"         // stdout or stderr
+  }
+  rule {
+    target_label = "job"
+    replacement  = "docker"
+  }
+}
+
+// 3. READ: tail the logs of those containers
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = { host = "laptop", env = "dev" }
+  forward_to = [loki.write.default.receiver]
+}
+
+// 4. SEND: push to Loki
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+</script></div>
+
+      <div class="step"><span class="n">05</span><h3>Tell Grafana about its data sources</h3></div>
+      <p>Create <code>grafana/provisioning/datasources/datasources.yml</code>:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+</script></div>
+      <p>This is called <strong>provisioning</strong>: instead of clicking through the interface, Grafana reads this file at start-up. Configuration you can commit to Git beats configuration you clicked.</p>
+
+      <div class="step"><span class="n">06</span><h3>Write the Compose file</h3></div>
+      <p>Create <code>docker-compose.yml</code> in the top folder:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+name: observability-lab
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle          # allows config reload without restart
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"           # localhost only = much safer
+
+  loki:
+    image: grafana/loki:3.7.6
+    container_name: loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+
+  alloy:
+    image: grafana/alloy:latest         # pin a real version in production
+    container_name: alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "127.0.0.1:12345:12345"         # Alloy's own web UI
+    depends_on: [loki]
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.9.1
+    container_name: node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  grafana:
+    image: grafana/grafana:13.0.0
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: changeme
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus, loki]
+
+volumes:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+  alloy-data:
+</script></div>
+
+      <div class="callout warn">
+        <span class="tag">Two details worth understanding</span>
+        <p><strong>Named volumes</strong> (<code>prometheus-data:</code>) keep your data when containers restart. Without them, <code>docker compose down</code> throws away your history.</p>
+        <p><strong>The <code>127.0.0.1:</code> prefix</strong> on a port publishes it only to your own machine. Plain <code>9090:9090</code> would expose Prometheus to your entire network — and Prometheus has no login screen at all.</p>
+      </div>
+
+      <div class="step"><span class="n">07</span><h3>Start it</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+docker compose up -d
+docker compose ps
+
+# if something is restarting, read its logs:
+docker compose logs --tail=50 loki
+</script></div>
+
+      <div class="step"><span class="n">08</span><h3>Verify each piece separately</h3></div>
+      <p>Check things from the bottom up. This habit saves hours later.</p>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+# Prometheus alive and healthy?
+curl -s http://localhost:9090/-/healthy
+
+# Prometheus actually scraping? (every entry should say "up")
+curl -s http://localhost:9090/api/v1/targets | grep -o '"health":"[a-z]*"'
+
+# Loki ready?
+curl -s http://localhost:3100/ready
+
+# Loki has received labels from Alloy?
+curl -s http://localhost:3100/loki/api/v1/labels
+</script></div>
+      <p>Also open the built-in interfaces: the Prometheus targets page at <code>localhost:9090/targets</code> (everything should be green), the Alloy UI at <code>localhost:12345</code> (shows each component and its health), and Grafana at <code>localhost:3000</code> (log in with <code>admin</code> / <code>changeme</code>).</p>
+
+      <div class="step"><span class="n">09</span><h3>Your first metric graph</h3></div>
+      <p>In Grafana, click <strong>Explore</strong> (the compass icon), choose the <strong>Prometheus</strong> data source, switch to <strong>Code</strong> mode and paste:</p>
+      <div class="codeblock" data-lang="promql"><script type="text/plain">
+100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+</script></div>
+      <p>That is your CPU usage as a percentage. Word by word:</p>
+      <ul>
+        <li><code>node_cpu_seconds_total{mode="idle"}</code> — the counter of seconds the processor spent doing nothing.</li>
+        <li><code>rate(...[5m])</code> — how fast that counter grew per second, averaged over five minutes. Counters only ever go up, so you nearly always wrap them in <code>rate</code>.</li>
+        <li><code>avg by (instance)</code> — average across all processor cores, one result per machine.</li>
+        <li><code>100 - (... * 100)</code> — turn the idle fraction into a "busy percent".</li>
+      </ul>
+
+      <div class="step"><span class="n">10</span><h3>Your first log search</h3></div>
+      <p>Still in Explore, switch the data source to <strong>Loki</strong> and run:</p>
+      <div class="codeblock" data-lang="logql"><script type="text/plain">
+{job="docker"}
+</script></div>
+      <p>You should see live logs from your own containers. Now filter down to errors from one container:</p>
+      <div class="codeblock" data-lang="logql"><script type="text/plain">
+{job="docker", container="grafana"} |= "error"
+</script></div>
+      <p>The symbol <code>|=</code> means "the line contains". That is the whole trick of LogQL: pick a small set of streams with labels in the braces, then filter the text.</p>
+
+      <div class="step"><span class="n">11</span><h3>Import a real dashboard</h3></div>
+      <p>You do not have to build dashboards by hand. Go to <strong>Dashboards → New → Import</strong>, type the ID <strong>1860</strong> ("Node Exporter Full"), click Load, choose your Prometheus data source and import. You now have around eighty panels of machine health.</p>
+
+      <div class="step"><span class="n">12</span><h3>Clean up when you are finished</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+docker compose down          # stop containers, keep the data
+docker compose down -v       # stop AND delete the volumes (a fresh start)
+</script></div>
+
+      <div class="callout ok">
+        <span class="tag">Done</span>
+        <p>You now have a complete observability stack. Everything after this section is explanation and scaling up.</p>
+      </div>
+    </section>
+
+    <!-- ================= 6 ================= -->
+    <section class="chapter" id="s6">
+      <div class="eyebrow">Section 06</div>
+      <h2>Prometheus in depth</h2>
+
+      <h3>What it actually is</h3>
+      <p>Prometheus is a single program written in Go that does four jobs: <strong>service discovery</strong> (work out what to scrape), <strong>scraping</strong> (fetch <code>/metrics</code> on a schedule), <strong>storage</strong> (write samples to a local time-series database), and <strong>rules</strong> (evaluate expressions and fire alerts).</p>
+      <p>It is deliberately not clustered, not long-term storage, and not a log system. When one server is no longer enough, you either shard it or forward the data to Mimir, Thanos, VictoriaMetrics or Amazon Managed Service for Prometheus.</p>
+
+      <h3>The four metric types</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Type</th><th>Meaning</th><th>Example</th><th>How you query it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Counter</strong></td><td>Only goes up; resets to zero on restart</td><td><code>http_requests_total</code></td><td>Always <code>rate()</code> or <code>increase()</code></td></tr>
+            <tr><td><strong>Gauge</strong></td><td>Goes up and down</td><td><code>node_memory_MemAvailable_bytes</code></td><td>Directly, or <code>avg_over_time()</code></td></tr>
+            <tr><td><strong>Histogram</strong></td><td>Counts observations into buckets</td><td><code>http_request_duration_seconds_bucket</code></td><td><code>histogram_quantile()</code></td></tr>
+            <tr><td><strong>Summary</strong></td><td>Quantiles pre-computed by the client</td><td><code>rpc_duration_seconds{quantile="0.9"}</code></td><td>Directly; cannot be aggregated across instances</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <span class="tag">Beginner trap</span>
+        <p>Graphing a counter directly gives a boring line that climbs forever. <code>rate(counter[5m])</code> is what you actually want: "how many per second, lately".</p>
+      </div>
+
+      <h3>Exporters: monitoring things that do not speak Prometheus</h3>
+      <p>An <strong>exporter</strong> is a small program that translates something else into the <code>/metrics</code> format.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What you want to monitor</th><th>Exporter</th><th>Default port</th></tr></thead>
+          <tbody>
+            <tr><td>Linux / Windows machine</td><td>node_exporter / windows_exporter</td><td>9100 / 9182</td></tr>
+            <tr><td>Docker containers</td><td>cAdvisor</td><td>8080</td></tr>
+            <tr><td>PostgreSQL / MySQL</td><td>postgres_exporter / mysqld_exporter</td><td>9187 / 9104</td></tr>
+            <tr><td>Redis</td><td>redis_exporter</td><td>9121</td></tr>
+            <tr><td>Nginx</td><td>nginx-prometheus-exporter</td><td>9113</td></tr>
+            <tr><td>A URL, a ping, a TLS certificate</td><td>blackbox_exporter</td><td>9115</td></tr>
+            <tr><td>Your own application</td><td>A client library inside the app</td><td>the app's port</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Instrumenting your own app (Python)</h4>
+      <div class="codeblock" data-lang="python"><script type="text/plain">
+from prometheus_client import Counter, Histogram, start_http_server
+import time, random
+
+REQUESTS = Counter("app_requests_total", "Total requests", ["endpoint", "status"])
+LATENCY  = Histogram("app_request_duration_seconds", "Request duration", ["endpoint"])
+
+def handle(endpoint):
+    with LATENCY.labels(endpoint).time():
+        time.sleep(random.uniform(0.01, 0.4))
+    REQUESTS.labels(endpoint, "200").inc()
+
+if __name__ == "__main__":
+    start_http_server(8000)      # now http://localhost:8000/metrics exists
+    while True:
+        handle(random.choice(["/", "/cart", "/checkout"]))
+</script></div>
+      <p>Naming rules that make future-you happy: use <code>snake_case</code>, end counters in <code>_total</code>, include the base unit (<code>_seconds</code>, <code>_bytes</code>), and always use seconds and bytes rather than milliseconds and megabytes.</p>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="metricnaming"><span class="i">i</span> Metric naming conventions in full</button>
+        <button class="info-btn" data-popup="histograms"><span class="i">i</span> Histograms, quantiles and native histograms</button>
+      </div>
+
+      <h3>Service discovery</h3>
+      <p>A static list is fine for three servers and terrible for three hundred that come and go. Prometheus can ask an authority for the current list instead:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+scrape_configs:
+  # AWS EC2 — asks the EC2 API which instances exist right now
+  - job_name: ec2
+    ec2_sd_configs:
+      - region: us-east-1
+        port: 9100
+
+  # Kubernetes — asks the API server for pods
+  - job_name: k8s-pods
+    kubernetes_sd_configs:
+      - role: pod
+
+  # A file that another program writes — the simplest dynamic option
+  - job_name: file
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/*.json"]
+        refresh_interval: 30s
+</script></div>
+      <p>Discovery produces <code>__meta_*</code> labels (such as <code>__meta_ec2_tag_Name</code>) which you reshape with <strong>relabeling</strong> — covered in the AWS section.</p>
+
+      <h3>Storage and retention</h3>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+--storage.tsdb.path=/prometheus
+--storage.tsdb.retention.time=15d     # by age
+--storage.tsdb.retention.size=50GB    # or by size; whichever comes first
+</script></div>
+      <p>Rough sizing: each sample costs roughly one to two bytes after compression, so</p>
+      <div class="codeblock" data-lang="formula"><script type="text/plain">
+bytes ≈ active_series × (seconds_of_retention ÷ scrape_interval) × 2
+
+example: 200,000 series × (15 days ÷ 15s) × 2 bytes ≈ 17 GB
+</script></div>
+      <p>Add 30 to 50 percent headroom and use fast disks (gp3 EBS or better). Prometheus local storage is <strong>not a backup</strong>; for long retention use <code>remote_write</code> to a long-term store.</p>
+
+      <h3>Alerting rules and Alertmanager</h3>
+      <p>Prometheus evaluates rules and sends firing alerts to <strong>Alertmanager</strong>, which groups, silences, deduplicates and routes them to Slack, PagerDuty or email.</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+groups:
+  - name: node-basics
+    interval: 30s
+    rules:
+      # A RECORDING rule pre-computes an expensive query.
+      - record: instance:node_cpu_utilisation:rate5m
+        expr: 1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+
+      # An ALERTING rule fires when a condition stays true.
+      - alert: HighCpu
+        expr: instance:node_cpu_utilisation:rate5m > 0.85
+        for: 10m                    # must hold for 10 straight minutes
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU above 85% on {{ $labels.instance }}"
+          runbook: "https://wiki.example.com/runbooks/high-cpu"
+
+      - alert: DiskWillFillIn4Hours
+        expr: predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[6h], 4*3600) < 0
+        for: 15m
+        labels:
+          severity: critical
+
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+</script></div>
+      <p>Wire the rules and Alertmanager into <code>prometheus.yml</code>:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+</script></div>
+      <p>A minimal <code>alertmanager.yml</code>:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+route:
+  receiver: slack
+  group_by: [alertname, cluster]
+  group_wait: 30s          # batch related alerts before sending
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: pagerduty
+
+receivers:
+  - name: slack
+    slack_configs:
+      - api_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+        channel: "#alerts"
+        title: "{{ .CommonAnnotations.summary }}"
+  - name: pagerduty
+    pagerduty_configs:
+      - routing_key: YOUR_INTEGRATION_KEY
+
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname, instance]     # do not page twice for the same thing
+</script></div>
+      <p>Always validate before shipping, and reload without a restart:</p>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+promtool check config /etc/prometheus/prometheus.yml
+promtool check rules  /etc/prometheus/rules/*.yml
+promtool test rules   tests.yml          # yes, alerts can have unit tests
+
+curl -X POST http://localhost:9090/-/reload   # needs --web.enable-lifecycle
+</script></div>
+
+      <h3>What changed in Prometheus 3.x</h3>
+      <ul>
+        <li><strong>UTF-8 metric and label names</strong>, so OpenTelemetry names survive intact.</li>
+        <li><strong>A rewritten web interface</strong> with a much better query explorer.</li>
+        <li><strong>Native histograms</strong> — far higher resolution latency data at lower cost than classic buckets.</li>
+        <li><strong>Remote Write 2.0</strong> for more efficient shipping to long-term storage.</li>
+        <li><strong>OTLP ingestion</strong>: Prometheus can receive OpenTelemetry metrics directly.</li>
+        <li><strong>Range selector behaviour was made consistent</strong> at boundaries — re-check queries that relied on the old edge behaviour when migrating from 2.x.</li>
+      </ul>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="longterm"><span class="i">i</span> When Prometheus is not enough: Thanos, Mimir, AMP</button>
+      </div>
+    </section>
+
+    <!-- ================= 7 ================= -->
+    <section class="chapter" id="s7">
+      <div class="eyebrow">Section 07</div>
+      <h2>Loki in depth</h2>
+
+      <h3>The mental model</h3>
+      <div class="codeblock" data-lang="model"><script type="text/plain">
+log line ──► labels {app,env,level} ──► stream ──► chunk (compressed) ──► S3
+                    │
+                    └──► tiny index (which stream, which time range, which chunk)
+</script></div>
+      <ul>
+        <li>A <strong>stream</strong> is one unique combination of labels. Every line with the same labels joins the same stream.</li>
+        <li>A <strong>chunk</strong> is a compressed block of one stream's lines, flushed to storage when it is full or old.</li>
+        <li>The <strong>index</strong> records only label sets and time ranges, which is why it stays small.</li>
+      </ul>
+
+      <h3>Deployment modes</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Mode</th><th>What runs</th><th>Good for</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Monolithic</strong></td><td>One process containing everything</td><td>Up to roughly 100 GB per day; labs and small teams</td></tr>
+            <tr><td><strong>Simple scalable</strong></td><td>Read / write / backend targets</td><td>Mid-size — but this mode is being deprecated before Loki 4.0</td></tr>
+            <tr><td><strong>Microservices</strong></td><td>Distributor, ingester, querier, query-frontend, compactor, index-gateway, ruler</td><td>Large scale and high availability; what Grafana Labs runs internally</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Start monolithic. Grafana now recommends going straight to microservices for production rather than adopting simple-scalable, since that mode is on its way out.</p>
+
+      <h3>Storage configuration</h3>
+      <p>The current recommended setup is a TSDB index with schema v13 on object storage. For AWS:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+schema_config:
+  configs:
+    - from: 2026-01-01          # the date you START using this schema
+      store: tsdb
+      object_store: s3
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/index_cache
+  aws:
+    region: us-east-1
+    bucketnames: my-company-loki-chunks
+    s3forcepathstyle: false
+</script></div>
+      <div class="callout danger">
+        <span class="tag">Never do this</span>
+        <p>Never edit an existing <code>schema_config</code> entry. To change schema, <strong>append a new entry with a future date</strong>. Loki then reads old data with the old rules and new data with the new rules. Editing history silently corrupts queries.</p>
+      </div>
+
+      <h3>Retention and deletion</h3>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+limits_config:
+  retention_period: 720h        # 30 days for everything by default
+
+  # optional per-stream overrides
+  retention_stream:
+    - selector: '{namespace="prod", level="error"}'
+      priority: 1
+      period: 2160h             # 90 days for production errors
+    - selector: '{namespace="dev"}'
+      priority: 2
+      period: 72h               # 3 days for development
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true       # without this, nothing is deleted
+  delete_request_store: s3
+  compaction_interval: 10m
+</script></div>
+      <p>An S3 lifecycle policy can act as a safety net, but be careful: deleting objects behind Loki's back causes query errors. Prefer Loki-managed retention.</p>
+
+      <h3>LogQL: querying logs</h3>
+      <p>A LogQL query has two halves: a <strong>stream selector</strong> (required) and a <strong>pipeline</strong> (optional).</p>
+      <div class="codeblock" data-lang="logql"><script type="text/plain">
+{app="checkout", env="prod"} |= "timeout" | json | duration > 2s
+ └──── selector ───────────┘ └── filter ─┘ └parser┘ └── label filter ──┘
+</script></div>
+      <p>Line filters, cheapest first:</p>
+      <div class="codeblock" data-lang="logql"><script type="text/plain">
+{app="api"} |= "error"           # contains
+{app="api"} != "healthcheck"     # does not contain
+{app="api"} |~ "5\\d\\d"          # regular expression match
+{app="api"} !~ "debug|trace"     # regular expression does not match
+</script></div>
+      <p>Parsers turn a line into fields you can filter on, and then you can format or aggregate:</p>
+      <div class="codeblock" data-lang="logql"><script type="text/plain">
+{app="api"} | json                              # parse JSON lines
+{app="api"} | logfmt                            # parse key=value lines
+{app="api"} | pattern "<ip> - - <_> \"<method> <path>\""
+{app="api"} | regexp "(?P<status>\\d{3})"
+
+{app="api"} | json | line_format "{{.level}} {{.msg}}"
+
+# COUNT: errors per second in 5-minute windows, grouped by pod
+sum by (pod) (rate({app="api"} |= "error" [5m]))
+
+# EXTRACT a number from the logs and average it
+avg_over_time({app="api"} | json | unwrap duration_ms [5m])
+
+# 95th percentile latency computed entirely from logs
+quantile_over_time(0.95, {app="api"} | json | unwrap duration_ms [5m]) by (route)
+</script></div>
+      <div class="callout">
+        <span class="tag">The killer feature</span>
+        <p>Those last queries turn logs into metrics, which means you can alert on things you never instrumented in code.</p>
+      </div>
+
+      <h3>Structured metadata</h3>
+      <p>Loki 3.x lets you attach high-cardinality details — trace IDs, user IDs, pod IPs — to a line <em>without</em> creating new streams. Enable it with <code>allow_structured_metadata: true</code>. This is the correct home for anything that is unique per request; putting those in labels would explode your stream count.</p>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="lokilabels"><span class="i">i</span> How to choose Loki labels (the rules that decide success or failure)</button>
+      </div>
+    </section>
+
+    <!-- ================= 8 ================= -->
+    <section class="chapter" id="s8">
+      <div class="eyebrow">Section 08</div>
+      <h2>Grafana in depth</h2>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Concept</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Data source</strong></td><td>A connection to Prometheus, Loki, CloudWatch, Postgres and so on</td></tr>
+            <tr><td><strong>Dashboard</strong></td><td>A saved page of panels, stored as JSON</td></tr>
+            <tr><td><strong>Panel</strong></td><td>One visualisation: time series, stat, table, logs, gauge, heatmap</td></tr>
+            <tr><td><strong>Variable</strong></td><td>A dropdown at the top of a dashboard that rewrites the queries</td></tr>
+            <tr><td><strong>Annotation</strong></td><td>A vertical marker on a graph: a deploy, an incident</td></tr>
+            <tr><td><strong>Explore</strong></td><td>Ad-hoc querying without saving anything — where you actually debug</td></tr>
+            <tr><td><strong>Alerting</strong></td><td>Grafana's own alert engine, which works across any data source</td></tr>
+            <tr><td><strong>Drilldown</strong></td><td>Point-and-click exploration of metrics and logs with no query writing</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Provision everything as code</h3>
+      <p>Anything you can click, you can also define in files under <code>/etc/grafana/provisioning/</code>:</p>
+      <div class="codeblock" data-lang="text"><script type="text/plain">
+provisioning/
+├── datasources/datasources.yml
+├── dashboards/dashboards.yml     # points at a folder of dashboard JSON
+└── alerting/rules.yml
+</script></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+apiVersion: 1
+providers:
+  - name: "default"
+    orgId: 1
+    folder: "Platform"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false          # dashboards come only from Git
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true
+</script></div>
+
+      <h3>Correlating metrics and logs — the real payoff</h3>
+      <p>Use the <strong>same label names in both systems</strong>: <code>app</code>, <code>env</code>, <code>namespace</code>, <code>instance</code>, <code>cluster</code>. Then when you see a latency spike on a Prometheus panel you can select that time range, split the Explore view to Loki, and your filters carry across. Consistent labels across Prometheus and Loki is the single highest-value convention in this entire guide.</p>
+
+      <h3>Security basics</h3>
+      <div class="codeblock" data-lang="ini"><script type="text/plain">
+# grafana.ini (or the equivalent GF_* environment variables)
+[security]
+admin_user = admin
+admin_password = $__env{GRAFANA_ADMIN_PASSWORD}
+cookie_secure = true
+disable_gravatar = true
+
+[users]
+allow_sign_up = false
+
+[auth.anonymous]
+enabled = false
+
+[server]
+root_url = https://grafana.example.com
+</script></div>
+      <p>Move to single sign-on (Google, Okta, Azure AD, GitHub, generic OAuth or SAML) as soon as more than a handful of people need access. Never put Grafana on the public internet on port 3000 with a default password.</p>
+
+      <h3>Grafana 13, April 2026</h3>
+      <ul>
+        <li><strong>Drilldown</strong> apps for metrics and logs let you explore without writing PromQL or LogQL at all — start there if queries feel intimidating.</li>
+        <li>Dashboard schema v2 with improved editing and version history.</li>
+        <li>Continued investment in Grafana Alerting and in dashboards-as-code tooling.</li>
+      </ul>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="grafanaalerting"><span class="i">i</span> Grafana alerting versus Prometheus alerting — which should I use?</button>
+      </div>
+    </section>
+
+    <!-- ================= 9 ================= -->
+    <section class="chapter" id="s9">
+      <div class="eyebrow">Section 09</div>
+      <h2>Grafana Alloy: the agent</h2>
+
+      <p>Grafana used to ship several agents: Promtail for logs, Grafana Agent for metrics and logs, plus various OpenTelemetry setups. All of that is now consolidated into <strong>Alloy</strong>, a distribution of the OpenTelemetry Collector with native Prometheus and Loki pipelines built in.</p>
+
+      <div class="callout danger">
+        <span class="tag">Important</span>
+        <p>Promtail reached end of life on <strong>2 March 2026</strong>. Alloy is the supported path, and migrating is one command:</p>
+      </div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+alloy convert --source-format=promtail --output=/etc/alloy/config.alloy promtail.yaml
+# also supports: --source-format=prometheus | static | otelcol
+</script></div>
+
+      <h3>The component model</h3>
+      <div class="codeblock" data-lang="alloy"><script type="text/plain">
+component_type "label" {
+  argument   = value
+  forward_to = [next_component.receiver]
+}
+</script></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Component family</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr><td><code>discovery.docker</code>, <code>discovery.kubernetes</code>, <code>discovery.ec2</code>, <code>discovery.file</code></td><td>Find things</td></tr>
+            <tr><td><code>discovery.relabel</code></td><td>Rename, keep or drop labels before collection</td></tr>
+            <tr><td><code>loki.source.file</code>, <code>loki.source.docker</code>, <code>loki.source.kubernetes</code>, <code>loki.source.journal</code></td><td>Read logs</td></tr>
+            <tr><td><code>loki.process</code></td><td>Parse, filter, add labels, drop noise</td></tr>
+            <tr><td><code>loki.write</code></td><td>Push to Loki</td></tr>
+            <tr><td><code>prometheus.exporter.*</code></td><td>Built-in exporters — no separate binary needed</td></tr>
+            <tr><td><code>prometheus.scrape</code>, <code>prometheus.relabel</code>, <code>prometheus.remote_write</code></td><td>Pull, reshape and push metrics</td></tr>
+            <tr><td><code>otelcol.receiver.*</code>, <code>otelcol.exporter.*</code></td><td>OpenTelemetry pipelines</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>A realistic Linux server config</h3>
+      <div class="codeblock" data-lang="alloy"><script type="text/plain">
+logging { level = "info" }
+
+// ---------- METRICS ----------
+prometheus.exporter.unix "host" {
+  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
+  enable_collectors  = ["systemd"]
+}
+
+prometheus.scrape "host" {
+  targets         = prometheus.exporter.unix.host.targets
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.remote_write "central" {
+  endpoint {
+    url = "http://prometheus.internal:9090/api/v1/write"
+    // for Amazon Managed Prometheus add:  sigv4 { region = "us-east-1" }
+  }
+  external_labels = {
+    env = "prod",
+  }
+}
+
+// ---------- LOGS ----------
+local.file_match "applogs" {
+  path_targets = [
+    { __path__ = "/var/log/myapp/*.log", job = "myapp", env = "prod" },
+  ]
+}
+
+loki.source.file "applogs" {
+  targets    = local.file_match.applogs.targets
+  forward_to = [loki.process.clean.receiver]
+}
+
+loki.process "clean" {
+  // parse JSON logs and promote one low-cardinality field to a label
+  stage.json {
+    expressions = { level = "level", msg = "message" }
+  }
+  stage.labels {
+    values = { level = "level" }
+  }
+  // throw away health-check noise before it costs you money
+  stage.drop {
+    expression          = ".*GET /healthz.*"
+    drop_counter_reason = "healthcheck"
+  }
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.write "central" {
+  endpoint {
+    url = "http://loki.internal:3100/loki/api/v1/push"
+  }
+}
+
+// also collect the systemd journal
+loki.source.journal "systemd" {
+  max_age    = "12h"
+  labels     = { job = "systemd-journal" }
+  forward_to = [loki.write.central.receiver]
+}
+</script></div>
+
+      <div class="callout warn">
+        <span class="tag">Gotcha</span>
+        <p>If you use <code>prometheus.remote_write</code> against a self-hosted Prometheus, start Prometheus with <code>--web.enable-remote-write-receiver</code>, otherwise it refuses the writes.</p>
+      </div>
+
+      <p>Alloy serves a web interface on port 12345 showing every component, its health and the live data flow. When something is not arriving, open that first — it usually names the unhealthy component and the reason.</p>
+    </section>
+
+    <!-- ================= 10 ================= -->
+    <section class="chapter" id="s10">
+      <div class="eyebrow">Section 10</div>
+      <h2>Docker: production-shaped configuration</h2>
+      <p>The lab in section 5 is fine for learning. Here is what changes for something people depend on.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Change</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Pin exact image tags</td><td><code>latest</code> upgrades silently and breaks configs</td></tr>
+            <tr><td>Bind ports to 127.0.0.1 and front them with a TLS reverse proxy</td><td>Prometheus and Loki have <strong>no built-in authentication</strong></td></tr>
+            <tr><td>Set <code>mem_limit</code> and <code>cpus</code> per service</td><td>One runaway query should not take down the host</td></tr>
+            <tr><td>Use named volumes and back them up</td><td>Restarts must not lose data</td></tr>
+            <tr><td>Add <code>healthcheck</code> blocks</td><td>So broken containers actually get restarted</td></tr>
+            <tr><td>Cap container log files</td><td>Log files fill disks faster than anything else</td></tr>
+            <tr><td>Keep secrets in <code>.env</code> or Docker secrets</td><td>Never commit them</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+services:
+  loki:
+    image: grafana/loki:3.7.6
+    mem_limit: 2g
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+</script></div>
+
+      <h3>Two ways to collect container logs</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>Alloy on the Docker socket</th><th>Loki Docker log driver</th></tr></thead>
+          <tbody>
+            <tr><td>Pros</td><td>Central config, buffering, parsing, keeps working if Loki is down, one agent for logs and metrics</td><td>Almost no setup, no extra container</td></tr>
+            <tr><td>Cons</td><td>Needs access to the Docker socket, which is a privilege</td><td>If Loki is unreachable containers can block or drop logs; <code>docker logs</code> may stop working; plugin upgrades are fiddly</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Recommendation: use Alloy.</strong> For reference, the driver approach looks like this:</p>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+docker plugin install grafana/loki-docker-driver:3.7.6 --alias loki --grant-all-permissions
+</script></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+services:
+  myapp:
+    image: myapp:1.2.3
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-retries: "5"
+        loki-batch-size: "400"
+        max-size: "10m"
+</script></div>
+
+      <h3>Backups</h3>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+# Grafana: the dashboards and users database
+docker run --rm -v observability-lab_grafana-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/grafana-$(date +%F).tar.gz -C /data .
+
+# Prometheus: snapshot via the admin API (needs --web.enable-admin-api)
+curl -XPOST http://localhost:9090/api/v1/admin/tsdb/snapshot
+</script></div>
+      <p>The better long-term answer: keep dashboards in Git through provisioning, and keep metrics in remote storage. Then a lost server is an annoyance rather than an outage.</p>
+    </section>
+
+    <!-- ================= 11 ================= -->
+    <section class="chapter" id="s11">
+      <div class="eyebrow">Section 11 · AWS</div>
+      <h2>EC2 and Launch Templates</h2>
+
+      <h3>What a launch template is, and why it matters here</h3>
+      <p>A <strong>launch template</strong> is a saved recipe for an EC2 instance: which image, which instance type, which security groups, which IAM role, and — most importantly for us — a <strong>user-data script</strong> that runs automatically the first time the instance boots.</p>
+      <p>That last part is the whole trick. Instead of connecting to every new server to install monitoring agents, you bake the installation into the template. Every instance launched from it, whether by hand, by an Auto Scaling Group or by a pipeline, arrives already monitored.</p>
+
+      <div class="codeblock" data-lang="architecture"><script type="text/plain">
+      ┌────────────── monitoring subnet ──────────────────┐
+      │  EC2 "monitoring" instance                        │
+      │   Prometheus :9090  Loki :3100  Grafana :3000     │
+      └───────▲───────────────────────▲───────────────────┘
+              │ scrape :9100          │ push logs
+   ┌──────────┴───────────┐   ┌───────┴────────────┐
+   │ App instance (ASG)   │   │ App instance (ASG) │
+   │  node_exporter :9100 │   │  node_exporter     │
+   │  Alloy (logs)        │   │  Alloy             │
+   └──────────────────────┘   └────────────────────┘
+        ▲ both launched from the same launch template
+</script></div>
+
+      <div class="step"><span class="n">01</span><h3>IAM role for the monitored instances</h3></div>
+      <p>Attach the AWS managed policy <code>AmazonSSMManagedInstanceCore</code>. That lets you open a shell through Session Manager without exposing SSH to the internet, and costs you nothing.</p>
+
+      <div class="step"><span class="n">02</span><h3>IAM role for the Prometheus server</h3></div>
+      <p>Prometheus needs permission to ask AWS which instances exist:</p>
+      <div class="codeblock" data-lang="json"><script type="text/plain">
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "ec2:DescribeInstances",
+      "ec2:DescribeAvailabilityZones",
+      "ec2:DescribeTags"
+    ],
+    "Resource": "*"
+  }]
+}
+</script></div>
+      <p>The <code>ec2:Describe*</code> actions do not support resource-level restriction, so <code>"Resource": "*"</code> is expected here.</p>
+
+      <div class="step"><span class="n">03</span><h3>Security groups</h3></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Group</th><th>Inbound rule</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>sg-monitoring-server</code></td><td>Port 3000 from your office or VPN range only</td><td>The Grafana interface</td></tr>
+            <tr><td><code>sg-monitored-node</code></td><td>Port 9100 <strong>from <code>sg-monitoring-server</code></strong> (source is the security group, not an address range)</td><td>node_exporter</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout danger">
+        <span class="tag">Never</span>
+        <p>Never open ports 9090, 9100 or 3100 to <code>0.0.0.0/0</code>. Those endpoints have no authentication and will happily describe your entire infrastructure to anyone who asks.</p>
+      </div>
+
+      <div class="step"><span class="n">04</span><h3>The user-data script</h3></div>
+      <p>This runs as root on first boot. This version targets Amazon Linux 2023; on Ubuntu use <code>apt-get</code> and the Grafana APT repository.</p>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+#!/bin/bash
+set -euxo pipefail
+
+LOKI_URL="http://loki.internal:3100/loki/api/v1/push"
+NODE_EXPORTER_VERSION="1.9.1"
+
+############################################
+# 1. node_exporter (machine metrics on :9100)
+############################################
+useradd --system --no-create-home --shell /sbin/nologin node_exporter || true
+
+curl -fsSL -o /tmp/ne.tar.gz \
+  "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+tar -xzf /tmp/ne.tar.gz -C /tmp
+install -m 0755 "/tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" \
+  /usr/local/bin/node_exporter
+
+cat >/etc/systemd/system/node_exporter.service <<'UNIT'
+[Unit]
+Description=Prometheus Node Exporter
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter --collector.systemd --web.listen-address=:9100
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now node_exporter
+
+############################################
+# 2. Grafana Alloy (logs)
+############################################
+cat >/etc/yum.repos.d/grafana.repo <<'REPO'
+[grafana]
+name=grafana
+baseurl=https://rpm.grafana.com
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+REPO
+
+dnf install -y alloy
+
+# Pull instance identity from IMDSv2 so logs carry useful labels
+TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/instance-id)
+AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/placement/availability-zone)
+
+mkdir -p /etc/alloy
+cat >/etc/alloy/config.alloy <<ALLOY
+logging { level = "info" }
+
+loki.source.journal "systemd" {
+  max_age    = "12h"
+  labels     = { job = "systemd-journal", instance = "${IID}", az = "${AZ}", env = "prod" }
+  forward_to = [loki.write.central.receiver]
+}
+
+local.file_match "applogs" {
+  path_targets = [{
+    __path__ = "/var/log/app/*.log",
+    job      = "app",
+    instance = "${IID}",
+    env      = "prod",
+  }]
+}
+
+loki.source.file "applogs" {
+  targets    = local.file_match.applogs.targets
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.write "central" {
+  endpoint { url = "${LOKI_URL}" }
+}
+ALLOY
+
+systemctl enable --now alloy
+echo "monitoring bootstrap complete"
+</script></div>
+      <div class="callout warn">
+        <span class="tag">Debugging user data</span>
+        <p>Output lands in <code>/var/log/cloud-init-output.log</code> on the instance. The <code>set -euxo pipefail</code> line at the top makes failures loud instead of silent. User data runs only once, on first boot.</p>
+      </div>
+
+      <div class="step"><span class="n">05</span><h3>Create the launch template</h3></div>
+      <p>In the console: EC2 → Launch templates → Create, fill in the image, instance type, security group and IAM instance profile, then paste the script under Advanced details → User data. From the command line:</p>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+B64=$(base64 -w0 user-data.sh)
+
+aws ec2 create-launch-template \
+  --launch-template-name app-monitored \
+  --version-description "v1 node_exporter + alloy" \
+  --launch-template-data "{
+    \"ImageId\": \"ami-0abcdef1234567890\",
+    \"InstanceType\": \"t3.small\",
+    \"IamInstanceProfile\": {\"Name\": \"app-instance-profile\"},
+    \"SecurityGroupIds\": [\"sg-0monitorednode\"],
+    \"MetadataOptions\": {\"HttpTokens\": \"required\", \"HttpEndpoint\": \"enabled\"},
+    \"Monitoring\": {\"Enabled\": true},
+    \"TagSpecifications\": [{
+      \"ResourceType\": \"instance\",
+      \"Tags\": [
+        {\"Key\": \"Name\",       \"Value\": \"app-server\"},
+        {\"Key\": \"Monitoring\", \"Value\": \"true\"},
+        {\"Key\": \"Env\",        \"Value\": \"prod\"},
+        {\"Key\": \"Service\",    \"Value\": \"checkout\"}
+      ]
+    }],
+    \"UserData\": \"${B64}\"
+  }"
+</script></div>
+      <p>Or in Terraform, with an Auto Scaling Group on top:</p>
+      <div class="codeblock" data-lang="hcl"><script type="text/plain">
+resource "aws_launch_template" "app" {
+  name_prefix   = "app-monitored-"
+  image_id      = data.aws_ami.al2023.id
+  instance_type = "t3.small"
+
+  iam_instance_profile { name = aws_iam_instance_profile.app.name }
+  vpc_security_group_ids = [aws_security_group.monitored_node.id]
+
+  metadata_options {
+    http_tokens   = "required"   # IMDSv2 only
+    http_endpoint = "enabled"
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+    loki_url = "http://loki.internal:3100/loki/api/v1/push"
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name       = "app-server"
+      Monitoring = "true"
+      Env        = "prod"
+      Service    = "checkout"
+    }
+  }
+
+  lifecycle { create_before_destroy = true }
+}
+
+resource "aws_autoscaling_group" "app" {
+  min_size            = 2
+  max_size            = 10
+  desired_capacity    = 2
+  vpc_zone_identifier = var.private_subnet_ids
+
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Monitoring"
+    value               = "true"
+    propagate_at_launch = true
+  }
+}
+</script></div>
+      <div class="callout">
+        <span class="tag">The tags are the important part</span>
+        <p>Prometheus uses these tags to discover and label the instances. Decide your tag vocabulary — <code>Env</code>, <code>Service</code>, <code>Monitoring</code> — before you create two hundred instances.</p>
+      </div>
+
+      <div class="step"><span class="n">06</span><h3>Teach Prometheus to find the instances</h3></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+scrape_configs:
+  - job_name: ec2-nodes
+    ec2_sd_configs:
+      - region: us-east-1
+        port: 9100
+        refresh_interval: 60s
+        filters:
+          - name: tag:Monitoring
+            values: ["true"]
+          - name: instance-state-name
+            values: ["running"]
+
+    relabel_configs:
+      # scrape the PRIVATE address, never the public one
+      - source_labels: [__meta_ec2_private_ip]
+        replacement: "$1:9100"
+        target_label: __address__
+
+      # turn EC2 tags into friendly labels
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: instance_name
+      - source_labels: [__meta_ec2_tag_Env]
+        target_label: env
+      - source_labels: [__meta_ec2_tag_Service]
+        target_label: service
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+
+      # safety net: drop anything not explicitly opted in
+      - source_labels: [__meta_ec2_tag_Monitoring]
+        regex: "true"
+        action: keep
+</script></div>
+      <p><strong>Relabeling in one sentence:</strong> a small pipeline of find-and-replace rules that runs before scraping, letting you rewrite the target address and turn discovery metadata into permanent labels.</p>
+      <div class="btnrow">
+        <button class="info-btn" data-popup="relabel"><span class="i">i</span> Relabeling explained slowly, with the six actions</button>
+      </div>
+
+      <div class="step"><span class="n">07</span><h3>The monitoring server itself</h3></div>
+      <p><strong>Option A — one EC2 instance running the Compose stack from section 5.</strong> Simple, cheap and adequate for tens of servers. Give it a gp3 volume sized with the formula from section 6, an EBS snapshot schedule, and an Application Load Balancer with an ACM certificate in front of Grafana.</p>
+      <p><strong>Option B — AWS managed services:</strong></p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Self-hosted</th><th>AWS managed equivalent</th></tr></thead>
+          <tbody>
+            <tr><td>Prometheus storage</td><td><strong>Amazon Managed Service for Prometheus</strong> — you still run a collector and remote-write into it</td></tr>
+            <tr><td>Grafana</td><td><strong>Amazon Managed Grafana</strong> — single sign-on through IAM Identity Center, no upgrades to run</td></tr>
+            <tr><td>Loki</td><td>No AWS equivalent; use CloudWatch Logs, OpenSearch, or run Loki yourself on S3</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="codeblock" data-lang="alloy"><script type="text/plain">
+prometheus.remote_write "amp" {
+  endpoint {
+    url = "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-abc123/api/v1/remote_write"
+    sigv4 { region = "us-east-1" }
+  }
+}
+</script></div>
+      <p>Cost sanity check: a self-hosted t3.medium with a 100 GB gp3 volume is roughly forty to fifty dollars a month. The managed services bill per ingested sample and per active user, which is often cheaper at small scale and pricier at large scale. Model both before committing.</p>
+
+      <h3>Common EC2 mistakes</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Symptom</th><th>Cause</th></tr></thead>
+          <tbody>
+            <tr><td>Targets show <code>context deadline exceeded</code></td><td>The security group does not allow 9100 from the Prometheus security group</td></tr>
+            <tr><td>EC2 discovery returns zero targets</td><td>Missing <code>ec2:DescribeInstances</code>, wrong region, or a filter typo — <code>tag:Monitoring</code> is case sensitive</td></tr>
+            <tr><td>User data never ran</td><td>Instance built from an image that had already booted, or a syntax error — check <code>/var/log/cloud-init-output.log</code></td></tr>
+            <tr><td>Metadata calls hang</td><td>IMDSv2 is required but the script used the old unauthenticated call; always fetch a token first</td></tr>
+            <tr><td>Metrics vanish when instances scale in</td><td>Normal. Use <code>avg by (service)</code> rather than per-instance panels for autoscaled workloads</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= 12 ================= -->
+    <section class="chapter" id="s12">
+      <div class="eyebrow">Section 12 · AWS</div>
+      <h2>Amazon EKS (Kubernetes)</h2>
+      <p class="lede">Kubernetes is where this stack really shines, because everything is dynamic and label-driven.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Piece</th><th>Helm chart</th><th>What it gives you</th></tr></thead>
+          <tbody>
+            <tr><td>Prometheus, Alertmanager, Grafana, node-exporter, kube-state-metrics, operator</td><td><code>prometheus-community/kube-prometheus-stack</code></td><td>Metrics plus about thirty ready-made dashboards</td></tr>
+            <tr><td>Loki</td><td><code>grafana-community/loki</code></td><td>Log storage on S3</td></tr>
+            <tr><td>Alloy</td><td><code>grafana/alloy</code></td><td>Collects pod logs as a DaemonSet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="step"><span class="n">01</span><h3>Prerequisites and a cluster</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+kubectl version --client
+helm version            # v3.2 or newer
+eksctl version
+aws sts get-caller-identity
+</script></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+# cluster.yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: obs-demo
+  region: us-east-1
+  version: "1.33"
+
+iam:
+  withOIDC: true              # required for IRSA
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver  # required for PersistentVolumes
+  - name: eks-pod-identity-agent
+
+managedNodeGroups:
+  - name: ng-default
+    instanceType: t3.large
+    desiredCapacity: 3
+    minSize: 2
+    maxSize: 6
+    volumeSize: 50
+    volumeType: gp3
+</script></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+eksctl create cluster -f cluster.yaml
+</script></div>
+      <div class="callout warn">
+        <span class="tag">Why the EBS CSI driver</span>
+        <p>Prometheus, Grafana and Loki all want persistent disks. Without the driver, every PersistentVolumeClaim stays <code>Pending</code> forever — one of the most common "it just hangs" problems on EKS.</p>
+      </div>
+      <p>EKS still defaults to gp2 in many versions, so create a gp3 storage class and make it the default:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: gp3
+  encrypted: "true"
+</script></div>
+
+      <div class="step"><span class="n">02</span><h3>Install kube-prometheus-stack</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+kubectl create namespace monitoring
+</script></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+# values-kps.yaml
+# EKS runs the control plane for you and does NOT expose these components.
+# Leaving them enabled produces permanently-red targets and false alerts.
+kubeEtcd:              { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler:         { enabled: false }
+kubeProxy:             { enabled: true }
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 45GB
+    scrapeInterval: 30s
+    # pick up ServiceMonitors from ALL namespaces, not only labelled ones
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 500m, memory: 2Gi }
+      limits:   { memory: 4Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests: { storage: 5Gi }
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 10Gi
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki-gateway.monitoring.svc.cluster.local
+      jsonData:
+        maxLines: 1000
+  service:
+    type: ClusterIP          # expose via Ingress, not a raw LoadBalancer
+  grafana.ini:
+    server:
+      root_url: https://grafana.example.com
+    users:
+      allow_sign_up: false
+
+nodeExporter:     { enabled: true }
+kubeStateMetrics: { enabled: true }
+</script></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+kubectl create secret generic grafana-admin -n monitoring \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="$(openssl rand -base64 24)"
+
+helm install kps prometheus-community/kube-prometheus-stack \
+  -n monitoring -f values-kps.yaml
+
+kubectl get pods -n monitoring -w
+
+# open Grafana
+kubectl port-forward -n monitoring svc/kps-grafana 3000:80
+kubectl get secret -n monitoring grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
+</script></div>
+
+      <div class="step"><span class="n">03</span><h3>Scrape your own apps with a ServiceMonitor</h3></div>
+      <p>The Prometheus Operator means you never edit <code>prometheus.yml</code> again. You create Kubernetes objects instead:</p>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: checkout
+  namespace: shop
+  labels:
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      app: checkout            # matches the SERVICE's labels
+  namespaceSelector:
+    matchNames: [shop]
+  endpoints:
+    - port: http-metrics       # the NAME of the port in the Service, not the number
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: checkout-rules
+  namespace: shop
+spec:
+  groups:
+    - name: checkout
+      rules:
+        - alert: CheckoutHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job="checkout",status=~"5.."}[5m]))
+              /
+            sum(rate(http_requests_total{job="checkout"}[5m])) > 0.05
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "Checkout 5xx rate above 5%"
+</script></div>
+
+      <div class="step"><span class="n">04</span><h3>S3 bucket and IAM for Loki</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+export AWS_REGION=us-east-1
+export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export BUCKET="loki-chunks-${ACCOUNT_ID}"
+
+aws s3api create-bucket --bucket "$BUCKET" --region "$AWS_REGION"
+
+aws s3api put-bucket-encryption --bucket "$BUCKET" \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+
+aws s3api put-public-access-block --bucket "$BUCKET" \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+</script></div>
+      <div class="codeblock" data-lang="json"><script type="text/plain">
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": "arn:aws:s3:::loki-chunks-ACCOUNT_ID"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::loki-chunks-ACCOUNT_ID/*"
+    }
+  ]
+}
+</script></div>
+      <p>Now give the Loki pods that permission. Either way works:</p>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+# IRSA — the classic approach, still fully supported
+eksctl create iamserviceaccount \
+  --cluster obs-demo \
+  --namespace monitoring \
+  --name loki \
+  --attach-policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/loki-s3 \
+  --approve
+
+# EKS Pod Identity — newer and simpler, no OIDC trust policy to maintain
+aws eks create-pod-identity-association \
+  --cluster-name obs-demo \
+  --namespace monitoring \
+  --service-account loki \
+  --role-arn arn:aws:iam::${ACCOUNT_ID}:role/loki-s3-role
+</script></div>
+      <div class="btnrow">
+        <button class="info-btn" data-popup="irsa"><span class="i">i</span> IRSA versus EKS Pod Identity — which to choose</button>
+      </div>
+
+      <div class="step"><span class="n">05</span><h3>Install Loki</h3></div>
+      <div class="callout danger">
+        <span class="tag">2026 change</span>
+        <p>The open-source Loki Helm chart now lives in the <strong>grafana-community</strong> repository and the version numbers restarted. Chart values change between major versions, so always inspect the defaults for the exact version you are installing.</p>
+      </div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm repo update
+helm show values grafana-community/loki --version 18.9.0 > /tmp/loki-defaults.yaml
+</script></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+# values-loki.yaml — monolithic mode on S3, good to roughly 100 GB/day
+deploymentMode: Monolithic        # renamed from "SingleBinary" in chart 12.0.0
+
+loki:
+  auth_enabled: false             # single tenant; keep it inside the cluster
+  schemaConfig:
+    configs:
+      - from: "2026-01-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  storage:
+    type: s3
+    bucketNames:
+      chunks: loki-chunks-ACCOUNT_ID
+      ruler:  loki-chunks-ACCOUNT_ID
+    s3:
+      region: us-east-1
+  limits_config:
+    retention_period: 720h
+    allow_structured_metadata: true
+    volume_enabled: true
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+
+serviceAccount:
+  create: false
+  name: loki                      # the account bound to the IAM role above
+
+monolithic:                       # was "singleBinary:" in older chart versions
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: gp3
+    size: 30Gi
+  resources:
+    requests: { cpu: 500m, memory: 2Gi }
+    limits:   { memory: 4Gi }
+
+# turn off what a monolithic install does not use
+read:    { replicas: 0 }
+write:   { replicas: 0 }
+backend: { replicas: 0 }
+
+# the bundled MinIO subchart is deprecated (removal planned for 31 Oct 2026)
+minio: { enabled: false }
+
+chunksCache:  { enabled: false }  # enable these for larger installations
+resultsCache: { enabled: false }
+
+gateway:
+  enabled: true                   # the nginx front door; this is the URL Grafana uses
+</script></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+helm install loki grafana-community/loki -n monitoring -f values-loki.yaml
+kubectl get pods -n monitoring -l app.kubernetes.io/name=loki
+
+# sanity check from inside the cluster
+kubectl run curl --rm -it --image=curlimages/curl -n monitoring --restart=Never -- \
+  curl -s http://loki-gateway/loki/api/v1/labels
+</script></div>
+
+      <div class="step"><span class="n">06</span><h3>Install Alloy to collect pod logs</h3></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+# values-alloy.yaml
+controller:
+  type: daemonset               # one Alloy per node
+
+alloy:
+  mounts:
+    varlog: true                # so it can read container log files
+  configMap:
+    content: |-
+      logging { level = "info" }
+
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        // only tail pods on THIS node
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+        rule {
+          target_label = "cluster"
+          replacement  = "obs-demo"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.pipeline.receiver]
+      }
+
+      loki.process "pipeline" {
+        stage.drop {
+          source              = "namespace"
+          expression          = "kube-system"
+          drop_counter_reason = "kube_system_noise"
+        }
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+        }
+      }
+
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { memory: 512Mi }
+</script></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+helm install alloy grafana/alloy -n monitoring -f values-alloy.yaml
+kubectl get pods -n monitoring -l app.kubernetes.io/name=alloy
+</script></div>
+
+      <div class="step"><span class="n">07</span><h3>Verify the whole thing</h3></div>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+# are the metric targets healthy?
+kubectl port-forward -n monitoring svc/kps-kube-prometheus-stack-prometheus 9090:9090
+# then open http://localhost:9090/targets
+
+# are logs arriving?
+kubectl port-forward -n monitoring svc/loki-gateway 8080:80
+curl -s "http://localhost:8080/loki/api/v1/labels"
+</script></div>
+      <p>Then in Grafana, Explore with Loki: <code>{namespace="shop"} |= "error"</code>, and with Prometheus: <code>sum by (namespace) (rate(container_cpu_usage_seconds_total{container!=""}[5m]))</code>.</p>
+
+      <div class="step"><span class="n">08</span><h3>Expose Grafana properly</h3></div>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/abc
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+spec:
+  rules:
+    - host: grafana.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kps-grafana
+                port: { number: 80 }
+</script></div>
+      <p>This needs the AWS Load Balancer Controller. Better still, put the load balancer behind Cognito or your own identity provider so authentication happens before Grafana is even reached.</p>
+
+      <h3>EKS-specific gotchas</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td>etcd, scheduler and controller-manager targets always down</td><td>Disable them — AWS manages the control plane and does not expose them</td></tr>
+            <tr><td>PersistentVolumeClaims stuck <code>Pending</code></td><td>Install the EBS CSI driver add-on and set a default storage class</td></tr>
+            <tr><td>Prometheus pod killed for using too much memory</td><td>Too many series: raise memory, drop unused metrics with <code>metricRelabelings</code>, shorten retention</td></tr>
+            <tr><td>Loki gets <code>AccessDenied</code> from S3</td><td>The service account is not bound to the IAM role, or the chart created its own account — check <code>kubectl describe sa loki -n monitoring</code></td></tr>
+            <tr><td>Helm upgrade fails on custom resources</td><td>kube-prometheus-stack CRDs are not upgraded by Helm; apply new CRDs manually before a major chart upgrade</td></tr>
+            <tr><td>Costs creep upward</td><td>Spot and Karpenter churn create many short-lived series; drop <code>container_*</code> metrics you never query</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= 13 ================= -->
+    <section class="chapter" id="s13">
+      <div class="eyebrow">Section 13</div>
+      <h2>Dashboards and alerts</h2>
+
+      <h3>Dashboards worth importing on day one</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ID</th><th>Dashboard</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td>1860</td><td>Node Exporter Full</td><td>node_exporter</td></tr>
+            <tr><td>15757</td><td>Kubernetes / Views / Global</td><td>kube-state-metrics</td></tr>
+            <tr><td>15760</td><td>Kubernetes / Views / Pods</td><td>kube-state-metrics</td></tr>
+            <tr><td>13639</td><td>Loki logs / app</td><td>Loki</td></tr>
+            <tr><td>19268</td><td>Prometheus self-monitoring</td><td>Prometheus</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The four golden signals</h3>
+      <p>Design dashboards around these rather than around whichever metric was easiest to collect.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Signal</th><th>Question</th><th>Typical query</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Latency</strong></td><td>How slow?</td><td><code>histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))</code></td></tr>
+            <tr><td><strong>Traffic</strong></td><td>How busy?</td><td><code>sum(rate(http_requests_total[5m]))</code></td></tr>
+            <tr><td><strong>Errors</strong></td><td>How broken?</td><td><code>sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))</code></td></tr>
+            <tr><td><strong>Saturation</strong></td><td>How full?</td><td><code>1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Alert design rules</h3>
+      <ul>
+        <li><strong>Alert on symptoms, not causes.</strong> "Checkout error rate is 8 percent" wakes the right person. "CPU is 91 percent" often does not matter at all.</li>
+        <li><strong>Always use <code>for:</code>.</strong> A thirty-second blip is not an incident.</li>
+        <li><strong>Every alert needs an owner and a runbook link</strong> in its annotations. An alert nobody knows how to fix trains people to ignore alerts.</li>
+        <li><strong>Route by severity:</strong> critical to a pager, warning to chat, informational to a dashboard only.</li>
+        <li><strong>Review firing history monthly</strong> and delete alerts that never led to an action.</li>
+      </ul>
+
+      <div class="btnrow">
+        <button class="info-btn" data-popup="variables"><span class="i">i</span> Dashboard variables: turning one dashboard into fifty</button>
+      </div>
+    </section>
+
+    <!-- ================= 14 ================= -->
+    <section class="chapter" id="s14">
+      <div class="eyebrow">Section 14</div>
+      <h2>PromQL and LogQL cheat sheets</h2>
+
+      <h3>PromQL</h3>
+      <div class="codeblock" data-lang="promql"><script type="text/plain">
+# --- basics ---
+node_memory_MemAvailable_bytes                    # instant value
+node_memory_MemAvailable_bytes{instance="a:9100"} # filter by label
+{__name__=~"node_cpu.*"}                          # regex on the metric name
+
+# --- counters ---
+rate(http_requests_total[5m])                     # per-second average
+irate(http_requests_total[5m])                    # per-second from last 2 points
+increase(http_requests_total[1h])                 # total added in one hour
+
+# --- aggregation ---
+sum by (job) (rate(http_requests_total[5m]))
+avg without (instance) (node_load1)
+topk(5, sum by (pod) (rate(container_cpu_usage_seconds_total[5m])))
+count(up == 1)
+
+# --- percentiles from histograms ---
+histogram_quantile(0.99,
+  sum by (le, route) (rate(http_request_duration_seconds_bucket[5m])))
+
+# --- ratios, the error-budget shape ---
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+  / sum(rate(http_requests_total[5m]))
+
+# --- prediction and time ---
+predict_linear(node_filesystem_avail_bytes[6h], 4*3600) < 0
+time() - node_boot_time_seconds                   # uptime in seconds
+
+# --- comparing and joining ---
+node_filesystem_avail_bytes / node_filesystem_size_bytes * 100
+kube_pod_info * on(pod) group_left(node) kube_pod_container_info
+
+# --- absence and restarts ---
+absent(up{job="checkout"})                        # the whole job disappeared
+changes(process_start_time_seconds[1h]) > 3       # crash looping
+</script></div>
+      <div class="callout">
+        <span class="tag">Golden rules</span>
+        <p>Wrap counters in <code>rate()</code>; use a range at least four times your scrape interval; and always <code>sum</code> <em>after</em> <code>rate</code>, never before.</p>
+      </div>
+
+      <h3>LogQL</h3>
+      <div class="codeblock" data-lang="logql"><script type="text/plain">
+# --- selectors (always required, always first) ---
+{app="checkout"}
+{namespace="prod", container=~"api|worker"}
+
+# --- line filters (cheap; apply early) ---
+{app="checkout"} |= "ERROR" != "healthz"
+{app="checkout"} |~ `(?i)timeout|refused`
+
+# --- parsers ---
+{app="checkout"} | json
+{app="checkout"} | logfmt
+{app="checkout"} | pattern `<_> <method> <path> <status> <duration>`
+
+# --- label filters after parsing ---
+{app="checkout"} | json | status >= 500 | duration > 1s
+
+# --- formatting the output ---
+{app="checkout"} | json | line_format "{{.ts}} {{.level}} {{.msg}}"
+
+# --- metrics FROM logs ---
+sum by (level) (rate({app="checkout"}[5m]))
+count_over_time({app="checkout"} |= "ERROR" [1h])
+sum by (route) (
+  quantile_over_time(0.95, {app="checkout"} | json | unwrap duration_ms [5m])
+)
+bytes_over_time({app="checkout"}[1h])             # how much volume this app produces
+</script></div>
+      <p>Performance rules: narrow the time range, use the most specific labels you have, put string filters before parsers, and avoid regular expressions when a plain "contains" filter will do.</p>
+    </section>
+
+    <!-- ================= 15 ================= -->
+    <section class="chapter" id="s15">
+      <div class="eyebrow">Section 15</div>
+      <h2>Best practices</h2>
+
+      <h3>Naming and labels</h3>
+      <ul>
+        <li>Use the <strong>same label names everywhere</strong>: <code>env</code>, <code>cluster</code>, <code>service</code>, <code>namespace</code>, <code>instance</code>. This is what makes moving from a metric to its logs one click instead of a research project.</li>
+        <li>Metric names in <code>snake_case</code>, base units (<code>_seconds</code>, <code>_bytes</code>), counters ending in <code>_total</code>.</li>
+        <li>Set <code>external_labels</code> on every Prometheus and every Alloy so data merged into a central store is never ambiguous.</li>
+      </ul>
+
+      <h3>The single most important rule: cardinality</h3>
+      <p><strong>Cardinality</strong> is the number of unique label combinations. Every unique combination is a separate time series in Prometheus, or a separate stream in Loki, and your cost and failure risk grow with it.</p>
+      <div class="callout danger">
+        <span class="tag">Never use as a label</span>
+        <p>User ID, request ID, trace ID, session ID, a full URL with query parameters, a timestamp, an IP address, an error message, a pod IP.</p>
+      </div>
+      <div class="codeblock" data-lang="text"><script type="text/plain">
+BAD:  http_requests_total{user_id="83719", url="/order/9931?ref=abc"}
+      → millions of series, Prometheus falls over
+
+GOOD: http_requests_total{route="/order/:id", status="200"}
+      → dozens of series, everything stays fast
+</script></div>
+      <p>Put the unique details in the log line or in Loki's structured metadata, not in labels. Check your worst offenders with:</p>
+      <div class="codeblock" data-lang="promql"><script type="text/plain">
+topk(10, count by (__name__)({__name__=~".+"}))     # your biggest metrics
+</script></div>
+      <div class="btnrow">
+        <button class="info-btn" data-popup="cardinality"><span class="i">i</span> Cardinality explained with numbers</button>
+      </div>
+
+      <h3>Retention strategy</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Data</th><th>Typical retention</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>Raw metrics</td><td>15 to 30 days</td><td>Prometheus local disk</td></tr>
+            <tr><td>Downsampled metrics</td><td>1 to 2 years</td><td>Mimir, Thanos or Amazon Managed Prometheus</td></tr>
+            <tr><td>Application logs</td><td>7 to 30 days</td><td>Loki on S3</td></tr>
+            <tr><td>Audit and compliance logs</td><td>1 to 7 years</td><td>S3 Glacier, kept separate from Loki</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Security</h3>
+      <ul>
+        <li>Prometheus, Loki and Alertmanager ship with <strong>no authentication</strong>. Assume anything that can reach them can read everything. Keep them on private networks behind a proxy that terminates TLS and checks identity.</li>
+        <li>Grafana: single sign-on, no anonymous access, rotated admin password, least-privilege data source permissions.</li>
+        <li>Encrypt S3 buckets, block public access, use IAM roles instead of static keys everywhere.</li>
+        <li>Scrub secrets before they are written to logs — the cheapest place to fix a leaked token is in the application.</li>
+      </ul>
+
+      <h3>Reliability</h3>
+      <ul>
+        <li>Do not monitor your monitoring only with itself. Add a dead-man's switch: an alert that is <em>always</em> firing, and a receiver that pages you if it ever stops arriving. kube-prometheus-stack ships one called Watchdog.</li>
+        <li>Run two Prometheus servers scraping the same targets for high availability; Alertmanager deduplicates the alerts.</li>
+        <li>Put Loki chunks in S3, not on an instance disk. Instances die; buckets do not.</li>
+        <li>Test your restores. A backup you have never restored is a rumour.</li>
+      </ul>
+
+      <h3>Cost control</h3>
+      <div class="codeblock" data-lang="yaml"><script type="text/plain">
+    # drop metrics you never query, at scrape time
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "go_gc_duration_seconds.*|apiserver_request_duration_seconds_bucket"
+        action: drop
+</script></div>
+      <p>Drop noisy logs at the agent with <code>stage.drop</code> — health checks and static-asset access logs are usually more than half of all volume. Use recording rules for expensive dashboard queries, and sample high-volume debug logs rather than discarding the whole category.</p>
+    </section>
+
+    <!-- ================= 16 ================= -->
+    <section class="chapter" id="s16">
+      <div class="eyebrow">Section 16</div>
+      <h2>Pros, cons and alternatives</h2>
+
+      <h3>Prometheus versus the field</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Option</th><th>Pros</th><th>Cons</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Prometheus self-hosted</strong></td><td>Free, enormous ecosystem, PromQL, no lock-in, runs anywhere</td><td>Single node, no built-in high availability or long-term storage, you operate it</td></tr>
+            <tr><td><strong>Amazon Managed Prometheus</strong></td><td>No servers, scales, integrates with IAM</td><td>Pay per sample; you still need a collector; less configuration control</td></tr>
+            <tr><td><strong>CloudWatch Metrics</strong></td><td>Zero setup for AWS services, integrated alarms</td><td>Expensive at high cardinality, weaker query language, coarse default granularity</td></tr>
+            <tr><td><strong>VictoriaMetrics</strong></td><td>Very fast, much lower memory use, PromQL compatible</td><td>Smaller community, some subtle query differences</td></tr>
+            <tr><td><strong>Datadog / New Relic</strong></td><td>Everything in one product, polished, supported</td><td>Cost grows fast and unpredictably; lock-in</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Loki versus the field</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Option</th><th>Pros</th><th>Cons</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Loki</strong></td><td>Cheap (S3 plus a tiny index), same labels as Prometheus, excellent Grafana integration, LogQL can generate metrics</td><td>Full-text search is slower than an inverted index; poor labelling ruins performance; microservices mode is real work to operate</td></tr>
+            <tr><td><strong>OpenSearch / Elasticsearch</strong></td><td>Fast arbitrary full-text search, mature analytics</td><td>Expensive storage and memory, heavier to operate</td></tr>
+            <tr><td><strong>CloudWatch Logs</strong></td><td>Zero setup on AWS, integrated with Lambda and ECS</td><td>Ingestion and query costs add up; Logs Insights is limited</td></tr>
+            <tr><td><strong>ClickHouse-based tools</strong></td><td>Very fast columnar storage, strong price to performance</td><td>Newer ecosystems, fewer ready-made dashboards</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Agent comparison</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Agent</th><th>Status in 2026</th><th>Use when</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Grafana Alloy</strong></td><td>Current and recommended</td><td>Default choice; one agent for logs, metrics, traces and profiles</td></tr>
+            <tr><td><strong>Promtail</strong></td><td><strong>End of life, 2 March 2026</strong></td><td>Never for new work — convert with <code>alloy convert</code></td></tr>
+            <tr><td><strong>Grafana Agent</strong></td><td>Retired, replaced by Alloy</td><td>Migrate</td></tr>
+            <tr><td><strong>OpenTelemetry Collector</strong></td><td>Healthy and vendor-neutral</td><td>You want maximum neutrality and OTel-native pipelines</td></tr>
+            <tr><td><strong>Fluent Bit / Fluentd</strong></td><td>Healthy</td><td>Logs only, very light footprint, huge plugin list</td></tr>
+            <tr><td><strong>Prometheus agent mode</strong></td><td>Healthy</td><td>Metrics only, minimal configuration, straight remote write</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Should you self-host at all?</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>Self-hosted open source</th><th>Grafana Cloud</th><th>AWS managed</th></tr></thead>
+          <tbody>
+            <tr><td>Money</td><td>Cheapest raw infrastructure</td><td>Per usage; a generous free tier for small teams</td><td>Per usage, on your AWS bill</td></tr>
+            <tr><td>Time</td><td>You run upgrades, storage and scaling</td><td>Almost none</td><td>Low</td></tr>
+            <tr><td>Control</td><td>Total</td><td>Limited</td><td>Limited</td></tr>
+            <tr><td>Best for</td><td>Cost-sensitive teams with operations skills, or strict data residency</td><td>Small teams who value time over money</td><td>Shops standardised on AWS and IAM</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <span class="tag">Honest rule of thumb</span>
+        <p>Fewer than about five engineers and nobody dedicated to operations? Use a managed offering. Your time is worth more than the licence.</p>
+      </div>
+    </section>
+
+    <!-- ================= 17 ================= -->
+    <section class="chapter" id="s17">
+      <div class="eyebrow">Section 17</div>
+      <h2>Troubleshooting</h2>
+
+      <h3>Prometheus</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+          <tbody>
+            <tr><td>Target down, "connection refused"</td><td>Is the exporter running? <code>curl http://target:9100/metrics</code> from the Prometheus host</td></tr>
+            <tr><td>Target down, "context deadline exceeded"</td><td>Firewall or security group, or the target is slower than <code>scrape_timeout</code></td></tr>
+            <tr><td>Target is up but the graph is empty</td><td>Metric name typo, or the time range predates the data — try the bare metric name with no filters</td></tr>
+            <tr><td>"out of order sample" errors</td><td>Two scrapers writing the same series, or clock skew — check time synchronisation</td></tr>
+            <tr><td>Prometheus runs out of memory</td><td>Too many series. Find them with <code>topk(10, count by (__name__)({__name__=~".+"}))</code> and drop the worst</td></tr>
+            <tr><td>Config change had no effect</td><td><code>promtool check config</code>, then <code>curl -XPOST .../-/reload</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Loki</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+          <tbody>
+            <tr><td>Empty results, or "no such table"</td><td>The schema <code>from:</code> date is in the future, or an existing schema entry was edited</td></tr>
+            <tr><td>"entry too far behind" / out of order</td><td>Clock skew on the sending host, or a very old log file being tailed</td></tr>
+            <tr><td>429 "ingestion rate limit exceeded"</td><td>Raise <code>ingestion_rate_mb</code> and the burst size, or drop noisy logs at the agent</td></tr>
+            <tr><td>"max streams per user exceeded"</td><td>Cardinality — something unique ended up in a label</td></tr>
+            <tr><td>Queries are very slow</td><td>Time range too wide, or too few labels in the selector; add line filters before parsers</td></tr>
+            <tr><td>Logs stop after a deployment</td><td>The agent lost its file position, or a pod label changed — open the Alloy UI</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Grafana</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+          <tbody>
+            <tr><td>"Data source not found" on an imported dashboard</td><td>The dashboard hard-codes a data source ID; re-select it during import</td></tr>
+            <tr><td>Panel says "No data"</td><td>Run the same query in Explore; nine times out of ten it is a label typo</td></tr>
+            <tr><td>Dashboards are slow</td><td>Too many panels, ranges too wide, no recording rules; set a sensible minimum interval</td></tr>
+            <tr><td>Cannot log in after an upgrade</td><td>Read the container logs. Do not delete the volume — that deletes every dashboard</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The general debugging ladder</h3>
+      <ol>
+        <li>Is the process running? (<code>docker compose ps</code>, <code>kubectl get pods</code>, <code>systemctl status</code>)</li>
+        <li>Is it healthy? (<code>/-/healthy</code>, <code>/ready</code>, the Alloy UI)</li>
+        <li>Can the collector reach the target? (<code>curl</code> from inside the same network)</li>
+        <li>Is data arriving? (the targets API for Prometheus, the labels API for Loki)</li>
+        <li>Is the query right? (test the simplest possible query in Explore)</li>
+      </ol>
+      <p>Work top to bottom. Jumping straight to step five is why debugging takes hours instead of minutes.</p>
+    </section>
+
+    <!-- ================= 18 ================= -->
+    <section class="chapter" id="s18">
+      <div class="eyebrow">Section 18</div>
+      <h2>Glossary</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Agent / collector</strong></td><td>A small program on each machine that gathers telemetry and ships it onward — Alloy</td></tr>
+            <tr><td><strong>Cardinality</strong></td><td>The number of unique label combinations; the main driver of cost and failure</td></tr>
+            <tr><td><strong>Chunk</strong></td><td>A compressed block of log lines in Loki</td></tr>
+            <tr><td><strong>Exporter</strong></td><td>A program that translates a system's internals into Prometheus metrics</td></tr>
+            <tr><td><strong>Instance / job</strong></td><td>Labels Prometheus adds itself: instance is host and port, job is the group name</td></tr>
+            <tr><td><strong>PromQL / LogQL</strong></td><td>The query languages of Prometheus and Loki</td></tr>
+            <tr><td><strong>Relabeling</strong></td><td>Rewrite, keep and drop rules applied to labels before scraping or storing</td></tr>
+            <tr><td><strong>Remote write</strong></td><td>Prometheus pushing samples onward to another system</td></tr>
+            <tr><td><strong>Scrape</strong></td><td>One HTTP fetch of a metrics page</td></tr>
+            <tr><td><strong>Series</strong></td><td>A unique metric name plus label set, tracked over time</td></tr>
+            <tr><td><strong>ServiceMonitor</strong></td><td>A Kubernetes object telling the Prometheus Operator what to scrape</td></tr>
+            <tr><td><strong>Stream</strong></td><td>A unique label set in Loki; the log equivalent of a series</td></tr>
+            <tr><td><strong>TSDB</strong></td><td>Time-series database — the on-disk format used by Prometheus and Loki's index</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= 19 ================= -->
+    <section class="chapter" id="s19">
+      <div class="eyebrow">Section 19</div>
+      <h2>Official documentation and references</h2>
+
+      <h4>Prometheus</h4>
+      <ul>
+        <li><a href="https://prometheus.io/docs/introduction/overview/" target="_blank" rel="noopener">Documentation home</a></li>
+        <li><a href="https://prometheus.io/docs/prometheus/latest/getting_started/" target="_blank" rel="noopener">Getting started</a></li>
+        <li><a href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/" target="_blank" rel="noopener">Configuration reference</a></li>
+        <li><a href="https://prometheus.io/docs/prometheus/latest/querying/basics/" target="_blank" rel="noopener">PromQL basics</a></li>
+        <li><a href="https://prometheus.io/docs/alerting/latest/alertmanager/" target="_blank" rel="noopener">Alertmanager</a></li>
+        <li><a href="https://prometheus.io/docs/instrumenting/exporters/" target="_blank" rel="noopener">List of exporters</a> · <a href="https://prometheus.io/docs/instrumenting/clientlibs/" target="_blank" rel="noopener">Client libraries</a></li>
+        <li><a href="https://prometheus.io/docs/practices/naming/" target="_blank" rel="noopener">Naming best practices</a> · <a href="https://prometheus.io/docs/introduction/release-cycle/" target="_blank" rel="noopener">Release cycle and LTS</a></li>
+      </ul>
+
+      <h4>Loki</h4>
+      <ul>
+        <li><a href="https://grafana.com/docs/loki/latest/" target="_blank" rel="noopener">Documentation home</a> · <a href="https://grafana.com/docs/loki/latest/get-started/" target="_blank" rel="noopener">Get started</a></li>
+        <li><a href="https://grafana.com/docs/loki/latest/configure/" target="_blank" rel="noopener">Configuration reference</a> · <a href="https://grafana.com/docs/loki/latest/query/" target="_blank" rel="noopener">LogQL</a></li>
+        <li><a href="https://grafana.com/docs/loki/latest/setup/install/helm/" target="_blank" rel="noopener">Install with Helm (community chart)</a></li>
+        <li><a href="https://grafana.com/docs/loki/latest/operations/storage/" target="_blank" rel="noopener">Storage and schema</a> · <a href="https://grafana.com/docs/loki/latest/operations/storage/retention/" target="_blank" rel="noopener">Retention</a></li>
+        <li><a href="https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/" target="_blank" rel="noopener">Label best practices</a></li>
+      </ul>
+
+      <h4>Grafana</h4>
+      <ul>
+        <li><a href="https://grafana.com/docs/grafana/latest/" target="_blank" rel="noopener">Documentation home</a> · <a href="https://grafana.com/docs/grafana/latest/datasources/" target="_blank" rel="noopener">Data sources</a></li>
+        <li><a href="https://grafana.com/docs/grafana/latest/administration/provisioning/" target="_blank" rel="noopener">Provisioning</a> · <a href="https://grafana.com/docs/grafana/latest/alerting/" target="_blank" rel="noopener">Alerting</a></li>
+        <li><a href="https://grafana.com/grafana/dashboards/" target="_blank" rel="noopener">Dashboard library</a> · <a href="https://grafana.com/docs/grafana/latest/whatsnew/" target="_blank" rel="noopener">What's new</a></li>
+      </ul>
+
+      <h4>Grafana Alloy</h4>
+      <ul>
+        <li><a href="https://grafana.com/docs/alloy/latest/" target="_blank" rel="noopener">Documentation home</a> · <a href="https://grafana.com/docs/alloy/latest/reference/components/" target="_blank" rel="noopener">Components reference</a></li>
+        <li><a href="https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/" target="_blank" rel="noopener">Migrate from Promtail</a> · <a href="https://grafana.com/docs/loki/latest/send-data/promtail/" target="_blank" rel="noopener">Promtail end-of-life notice</a></li>
+      </ul>
+
+      <h4>Kubernetes and Helm</h4>
+      <ul>
+        <li><a href="https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack" target="_blank" rel="noopener">kube-prometheus-stack chart</a></li>
+        <li><a href="https://prometheus-operator.dev/docs/api-reference/api/" target="_blank" rel="noopener">Prometheus Operator API</a></li>
+        <li><a href="https://github.com/grafana-community/helm-charts/tree/main/charts/loki" target="_blank" rel="noopener">Loki community Helm chart</a></li>
+      </ul>
+
+      <h4>AWS</h4>
+      <ul>
+        <li><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-launch-templates.html" target="_blank" rel="noopener">Launch templates</a> · <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html" target="_blank" rel="noopener">EC2 user data</a> · <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html" target="_blank" rel="noopener">IMDSv2</a></li>
+        <li><a href="https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html" target="_blank" rel="noopener">EKS user guide</a> · <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identity.html" target="_blank" rel="noopener">EKS Pod Identity</a> · <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener">IRSA</a> · <a href="https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html" target="_blank" rel="noopener">EBS CSI driver</a></li>
+        <li><a href="https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html" target="_blank" rel="noopener">Amazon Managed Prometheus</a> · <a href="https://docs.aws.amazon.com/grafana/latest/userguide/what-is-Amazon-Managed-Service-Grafana.html" target="_blank" rel="noopener">Amazon Managed Grafana</a></li>
+      </ul>
+
+      <h4>Further reading</h4>
+      <ul>
+        <li><a href="https://sre.google/sre-book/monitoring-distributed-systems/" target="_blank" rel="noopener">Google SRE Book — monitoring chapter</a></li>
+        <li><a href="https://opentelemetry.io/docs/" target="_blank" rel="noopener">OpenTelemetry documentation</a></li>
+      </ul>
+
+      <h3>One-page quick reference</h3>
+      <div class="codeblock" data-lang="bash"><script type="text/plain">
+# --- the Docker lab ---
+docker compose up -d
+docker compose logs -f loki
+docker compose down -v
+
+# --- health checks ---
+curl localhost:9090/-/healthy            # Prometheus
+curl localhost:9090/api/v1/targets       # who is being scraped
+curl localhost:3100/ready                # Loki
+curl localhost:3100/loki/api/v1/labels   # has Loki got data?
+curl localhost:12345                     # the Alloy UI
+
+# --- validate before deploying ---
+promtool check config prometheus.yml
+promtool check rules  rules/*.yml
+alloy fmt config.alloy
+alloy validate config.alloy
+helm template loki grafana-community/loki -f values-loki.yaml | less
+
+# --- reload without a restart ---
+curl -XPOST localhost:9090/-/reload
+
+# --- kubernetes ---
+kubectl get pods -n monitoring
+kubectl logs -n monitoring -l app.kubernetes.io/name=alloy --tail=100
+kubectl port-forward -n monitoring svc/kps-grafana 3000:80
+</script></div>
+
+      <div class="callout ok">
+        <span class="tag">The three sentences that matter most</span>
+        <p><strong>1.</strong> Metrics tell you that something broke; logs tell you why.<br>
+           <strong>2.</strong> Labels are cheap only when they have few possible values — never put IDs in labels.<br>
+           <strong>3.</strong> Pin your versions, keep configuration in Git, and never expose Prometheus or Loki to the internet.</p>
+      </div>
+    </section>
+
+  </div><!-- /wrap -->
+  </main>
+</div><!-- /shell -->
+
+<button class="totop" id="toTop" aria-label="Back to top">↑</button>
+
+<!-- ===================== POPUP CONTENT ===================== -->
+<template id="pop-pillars" data-title="The three pillars, and where traces fit">
+  <p><strong>Metrics</strong> answer "how much / how many / how fast", cheaply and continuously. <strong>Logs</strong> answer "what exactly happened to this one request". <strong>Traces</strong> answer "which of my twelve services made this request slow".</p>
+  <p>If you run one or two services, metrics plus logs is usually enough. Once a single user action fans out across many services, traces stop being a luxury: without them you are guessing which hop cost the time.</p>
+  <p>In the Grafana ecosystem the trace store is <strong>Tempo</strong>, and Alloy can collect traces with the same OpenTelemetry pipeline it already uses for logs and metrics — so adding tracing later is a configuration change, not a new architecture.</p>
+  <a class="doclink" href="https://opentelemetry.io/docs/concepts/observability-primer/" target="_blank" rel="noopener">OpenTelemetry observability primer</a><br>
+  <a class="doclink" href="https://grafana.com/docs/tempo/latest/" target="_blank" rel="noopener">Grafana Tempo documentation</a>
+</template>
+
+<template id="pop-pullpush" data-title="Pull versus push">
+  <p><strong>Pull</strong> means the monitoring server reaches out on a schedule and asks each target for its current numbers. Prometheus works this way.</p>
+  <ul>
+    <li>One list of who to ask, kept in one place.</li>
+    <li>If a target stops answering, you instantly know it is down — that is the <code>up</code> metric.</li>
+    <li>You can open a target's metrics page in a browser and see exactly what Prometheus sees.</li>
+  </ul>
+  <p><strong>Push</strong> means each machine sends data whenever it wants. Loki works this way for logs, and Prometheus can also receive pushed metrics through remote write.</p>
+  <ul>
+    <li>Better for short-lived jobs that may finish before anyone scrapes them.</li>
+    <li>Better across firewalls, NAT, or someone else's network.</li>
+    <li>Harder to notice absence: nothing arriving looks the same as nothing happening.</li>
+  </ul>
+  <p>For batch jobs that finish too quickly to be scraped, Prometheus offers the <strong>Pushgateway</strong> — but use it sparingly; it is for service-level batch jobs, not for general application metrics.</p>
+  <a class="doclink" href="https://prometheus.io/docs/practices/pushing/" target="_blank" rel="noopener">Prometheus: when to use the Pushgateway</a>
+</template>
+
+<template id="pop-lts" data-title="What LTS means, and how to pick a version">
+  <p>Prometheus cuts a new minor release roughly every six weeks, and older minors stop getting fixes almost immediately. Once a year one release is designated <strong>Long Term Support</strong> and receives bug, security and documentation fixes for about twelve months.</p>
+  <p>Practical rule: run the current LTS in production, and follow the latest minor only if you need a specific new feature. Prometheus 3.13 is the current LTS line.</p>
+  <p>Grafana and Loki have their own cadences. Loki generally patches the last two minor releases of the current major, plus the last minor of the previous major — so staying within two minors of the newest release keeps you supported.</p>
+  <a class="doclink" href="https://prometheus.io/docs/introduction/release-cycle/" target="_blank" rel="noopener">Prometheus release cycle and LTS policy</a>
+</template>
+
+<template id="pop-promtail" data-title="Promtail end of life: what to do">
+  <p>Promtail was the original log agent for Loki. It was deprecated in February 2025, entered long-term support, and reached <strong>end of life on 2 March 2026</strong>. It receives no fixes of any kind now, including security fixes.</p>
+  <p>The replacement is <strong>Grafana Alloy</strong>, which absorbed Promtail's code and adds metrics, traces and OpenTelemetry support in the same binary. Converting an existing configuration is a single command:</p>
+  <p><code>alloy convert --source-format=promtail --output=config.alloy promtail.yaml</code></p>
+  <p>Two things to watch during migration: Alloy uses its own configuration language rather than YAML, and the positions file moves, so on first start the agent may re-read or skip a little depending on your settings. Test on one host before rolling out fleet-wide.</p>
+  <a class="doclink" href="https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/" target="_blank" rel="noopener">Official migration guide</a>
+</template>
+
+<template id="pop-scrapeinterval" data-title="Choosing a scrape interval">
+  <p>Fifteen seconds is the common default and a good starting point. The interval directly multiplies your storage cost and your series count, so it is worth a moment's thought.</p>
+  <ul>
+    <li><strong>15s</strong> — the standard. Good resolution for dashboards and alerts.</li>
+    <li><strong>30s or 60s</strong> — large fleets, or metrics that barely move (disk capacity, certificate expiry).</li>
+    <li><strong>5s or faster</strong> — only for a small set of targets during an investigation. It gets expensive very quickly.</li>
+  </ul>
+  <p>Whatever you choose, your PromQL range must be larger. A <code>rate(...[1m])</code> over a 60-second scrape interval sees at most two points and will produce gaps. Use a range of at least four times the interval.</p>
+  <a class="doclink" href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config" target="_blank" rel="noopener">scrape_config reference</a>
+</template>
+
+<template id="pop-schema" data-title="Loki schemas, and why you never edit one">
+  <p>A <code>schema_config</code> entry tells Loki how data written <em>from a given date onward</em> is organised: which index type (now <code>tsdb</code>), which storage backend, and which schema version (now <code>v13</code>).</p>
+  <p>Loki keeps the whole list forever and uses whichever entry covers the timestamp of the data being read. That is what allows an upgrade with no downtime and no migration: you append a new entry with tomorrow's date, restart, and from tomorrow new data uses the new layout while old data is still readable.</p>
+  <p>If you instead edit an existing entry, Loki will try to read yesterday's chunks with today's rules. Queries return nothing or fail, and there is no clean way back other than restoring the previous configuration.</p>
+  <a class="doclink" href="https://grafana.com/docs/loki/latest/operations/storage/schema/" target="_blank" rel="noopener">Loki schema configuration</a>
+</template>
+
+<template id="pop-metricnaming" data-title="Metric naming conventions">
+  <ul>
+    <li>Use <code>snake_case</code>, with a single-word application prefix: <code>checkout_orders_total</code>.</li>
+    <li>Counters end in <code>_total</code>.</li>
+    <li>Use base units only: seconds, bytes, ratios. Never milliseconds, megabytes or percentages in the name — convert at display time in Grafana.</li>
+    <li>The name should describe what is measured; labels describe the dimensions. So <code>http_requests_total{status="500"}</code>, never <code>http_500_requests_total</code>.</li>
+    <li>Keep the label set stable. Adding a label to an existing metric creates entirely new series and breaks old queries.</li>
+  </ul>
+  <a class="doclink" href="https://prometheus.io/docs/practices/naming/" target="_blank" rel="noopener">Prometheus metric and label naming</a>
+</template>
+
+<template id="pop-histograms" data-title="Histograms, quantiles and native histograms">
+  <p>A classic histogram records how many observations fell below each of a fixed set of thresholds ("buckets"). A latency histogram might have buckets at 5 ms, 10 ms, 25 ms, 100 ms and so on. Every bucket is its own time series, so a ten-bucket histogram with three labels is already thirty-plus series.</p>
+  <p>You then estimate a percentile with <code>histogram_quantile()</code>. The result is an approximation: accuracy depends entirely on where you placed the buckets. If everything lands between two widely spaced buckets, your ninety-fifth percentile is a guess.</p>
+  <p><strong>Native histograms</strong>, introduced in Prometheus 2.40 and matured through 3.x, store an automatically-scaled exponential set of buckets in a single series. You get far better resolution at a fraction of the series count, without having to guess bucket boundaries in advance.</p>
+  <p><strong>Summaries</strong> compute quantiles in the client instead. They are cheap to query but cannot be aggregated: averaging the ninety-fifth percentiles of ten servers is mathematically meaningless. Prefer histograms.</p>
+  <a class="doclink" href="https://prometheus.io/docs/practices/histograms/" target="_blank" rel="noopener">Histograms and summaries</a>
+</template>
+
+<template id="pop-longterm" data-title="When one Prometheus is not enough">
+  <p>A single Prometheus can comfortably handle a few million active series on a well-sized machine. Past that, or when you need more than a month of history or high availability, you add a layer behind it.</p>
+  <ul>
+    <li><strong>Thanos</strong> — a sidecar uploads Prometheus blocks to object storage, and a querier fans out across many Prometheus servers. Good when you already have several Prometheus instances to unify.</li>
+    <li><strong>Grafana Mimir</strong> — a horizontally scalable store that receives remote writes. Designed for very large single systems, and shares its heritage with Loki.</li>
+    <li><strong>VictoriaMetrics</strong> — simpler to operate, very memory-efficient, PromQL-compatible.</li>
+    <li><strong>Amazon Managed Service for Prometheus</strong> — the same idea as a managed service; you keep a collector and remote-write into it with SigV4 signing.</li>
+  </ul>
+  <p>All four keep PromQL and your existing dashboards, which is exactly why the ecosystem stayed coherent as it grew.</p>
+  <a class="doclink" href="https://prometheus.io/docs/prometheus/latest/storage/#remote-storage-integrations" target="_blank" rel="noopener">Remote storage integrations</a>
+</template>
+
+<template id="pop-lokilabels" data-title="How to choose Loki labels">
+  <p>Loki's performance is decided almost entirely by labelling. The guidance is the opposite of what people expect coming from Elasticsearch: <strong>use very few labels, each with very few possible values.</strong></p>
+  <p><strong>Good labels</strong> — things with a handful of values that you would naturally filter on: <code>env</code>, <code>cluster</code>, <code>namespace</code>, <code>app</code>, <code>container</code>, <code>level</code>.</p>
+  <p><strong>Bad labels</strong> — anything unbounded: request ID, user ID, trace ID, full path, IP address, timestamp. Each unique value multiplies the number of streams, and each stream carries its own chunks and index entries.</p>
+  <p>Ten labels with ten values each is not a hundred streams; it is potentially ten billion. Aim for the low thousands of streams, not millions.</p>
+  <p>For details you genuinely need per line, use <strong>structured metadata</strong> instead — it attaches key-value pairs to a line without creating a new stream — and use the line filter <code>|=</code> to search text, which is fast because Loki only greps the chunks your labels already narrowed down.</p>
+  <a class="doclink" href="https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/" target="_blank" rel="noopener">Loki label best practices</a>
+</template>
+
+<template id="pop-grafanaalerting" data-title="Grafana alerting or Prometheus alerting?">
+  <p>Both exist, both work, and you can run them together.</p>
+  <p><strong>Prometheus rules plus Alertmanager</strong> live next to the data. They keep working even if Grafana is down, they are plain YAML you can version and unit-test with <code>promtool</code>, and they are the right answer for infrastructure alerts. The downside: they can only see Prometheus data.</p>
+  <p><strong>Grafana Alerting</strong> can query any data source — Prometheus, Loki, CloudWatch, a SQL database — and even combine them in one rule. It has a friendly editor, built-in notification policies and silences. The downside: your alerting now depends on Grafana being healthy, and rules are stored in Grafana rather than in your repository unless you provision them as files.</p>
+  <p>A common split: infrastructure and availability alerts in Prometheus, business and cross-source alerts in Grafana. Whichever you choose, provision the rules from files so they live in Git.</p>
+  <a class="doclink" href="https://grafana.com/docs/grafana/latest/alerting/" target="_blank" rel="noopener">Grafana Alerting documentation</a>
+</template>
+
+<template id="pop-relabel" data-title="Relabeling, explained slowly">
+  <p>Relabeling is a small list of find-and-replace rules that Prometheus runs over each target's labels <em>before</em> it scrapes. It exists because service discovery hands you machine-generated metadata like <code>__meta_ec2_tag_Env</code>, and you want a clean label called <code>env</code>.</p>
+  <p>Each rule reads one or more <code>source_labels</code>, joins them, matches a <code>regex</code>, and then performs an <code>action</code>:</p>
+  <ul>
+    <li><strong>replace</strong> (the default) — write the result into <code>target_label</code>.</li>
+    <li><strong>keep</strong> — discard the target entirely unless the regex matches.</li>
+    <li><strong>drop</strong> — discard the target if the regex matches.</li>
+    <li><strong>labelmap</strong> — copy every label matching a pattern to a new name.</li>
+    <li><strong>labeldrop</strong> / <strong>labelkeep</strong> — remove or retain labels wholesale.</li>
+  </ul>
+  <p>Two special labels matter: <code>__address__</code> is the host and port that will actually be scraped, and any label starting with two underscores is dropped after relabeling finishes — which is why <code>__meta_*</code> values must be copied to a real name if you want to keep them.</p>
+  <p>The same mechanism appears again as <code>metric_relabel_configs</code>, which runs after the scrape and lets you drop expensive metrics before they are stored.</p>
+  <a class="doclink" href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config" target="_blank" rel="noopener">relabel_config reference</a>
+</template>
+
+<template id="pop-irsa" data-title="IRSA or EKS Pod Identity?">
+  <p>Both let a pod assume an IAM role without static credentials. The difference is plumbing.</p>
+  <p><strong>IRSA</strong> (IAM Roles for Service Accounts) uses the cluster's OIDC provider. Each role's trust policy names a specific cluster, namespace and service account. It works on every EKS version and on self-managed clusters, but the trust policies are fiddly, and a role has to be edited whenever you reuse it in another cluster.</p>
+  <p><strong>EKS Pod Identity</strong> uses an agent running on the nodes and a simple association resource. The trust policy is generic, and mapping a role to a namespace plus service account is one API call that you can move between clusters. It requires the <code>eks-pod-identity-agent</code> add-on.</p>
+  <p>For new clusters, Pod Identity is the simpler default. Existing clusters running IRSA have no urgent reason to change, and the two can coexist.</p>
+  <a class="doclink" href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identity.html" target="_blank" rel="noopener">EKS Pod Identity documentation</a>
+</template>
+
+<template id="pop-variables" data-title="Dashboard variables">
+  <p>A variable is a dropdown at the top of a dashboard whose value is substituted into every query. It turns one dashboard into as many as you have services.</p>
+  <p>Create one under <strong>Dashboard settings → Variables → New</strong>. The most useful type is <em>Query</em>, which asks the data source for the options:</p>
+  <ul>
+    <li><code>label_values(up, job)</code> — every job Prometheus knows about.</li>
+    <li><code>label_values(kube_pod_info{namespace="$namespace"}, pod)</code> — a variable that depends on another variable.</li>
+  </ul>
+  <p>Then reference it in queries as <code>$namespace</code>, or <code>$namespace</code> inside a label matcher. Enable "Multi-value" and "Include All", and use the regex matcher form <code>namespace=~"$namespace"</code> so that selecting several values still works.</p>
+  <p>Panel titles accept variables too, which keeps a dashboard readable when it is showing one of fifty services.</p>
+  <a class="doclink" href="https://grafana.com/docs/grafana/latest/dashboards/variables/" target="_blank" rel="noopener">Grafana variables documentation</a>
+</template>
+
+<template id="pop-cardinality" data-title="Cardinality, with numbers">
+  <p>Cardinality is simply multiplication. A metric with three labels has as many time series as the product of the number of values each label can take.</p>
+  <ul>
+    <li><code>http_requests_total{method, status, service}</code> with 5 methods, 8 statuses and 20 services = 800 series. Fine.</li>
+    <li>Add <code>pod</code> with 200 pods = 160,000 series. Manageable, but noticeable.</li>
+    <li>Add <code>user_id</code> with 50,000 users = 8,000,000,000 series. Your Prometheus is gone.</li>
+  </ul>
+  <p>Memory is the first thing to fail: each active series costs roughly a few kilobytes of resident memory in Prometheus. A rule of thumb is that a well-sized server handles a few million active series; anything beyond that needs sharding or a scalable backend.</p>
+  <p>In Loki the same arithmetic applies to <strong>streams</strong>, and the failure mode is the error "max streams per user exceeded" plus enormous numbers of tiny chunks, which makes every query slow.</p>
+  <p>The fix is always the same: move the unique value out of the label and into the log line, an exemplar, or structured metadata.</p>
+  <a class="doclink" href="https://prometheus.io/docs/practices/naming/#labels" target="_blank" rel="noopener">Prometheus guidance on labels</a><br>
+  <a class="doclink" href="https://grafana.com/docs/loki/latest/get-started/labels/cardinality/" target="_blank" rel="noopener">Loki cardinality guidance</a>
+</template>
+
+<!-- ===================== MODAL ===================== -->
+<div class="modal-scrim" id="modalScrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h3 id="modalTitle">Title</h3>
+      <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 1. render code blocks safely ---------- */
+  document.querySelectorAll(".codeblock").forEach(function (block) {
+    var src = block.querySelector('script[type="text/plain"]');
+    if (!src) return;
+    var text = src.textContent.replace(/^\n/, "").replace(/\s+$/, "");
+
+    var bar = document.createElement("div");
+    bar.className = "code-bar";
+    var lang = document.createElement("span");
+    lang.className = "code-lang";
+    lang.textContent = block.dataset.lang || "code";
+    var copy = document.createElement("button");
+    copy.className = "copy-btn";
+    copy.type = "button";
+    copy.textContent = "Copy";
+    copy.addEventListener("click", function () {
+      var done = function () {
+        copy.textContent = "Copied";
+        setTimeout(function () { copy.textContent = "Copy"; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+      } else { fallback(); }
+      function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); done(); } catch (e) { copy.textContent = "Select manually"; }
+        document.body.removeChild(ta);
+      }
+    });
+    bar.appendChild(lang);
+    bar.appendChild(copy);
+
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = text;          // textContent = no escaping worries
+    pre.appendChild(code);
+
+    src.remove();
+    block.appendChild(bar);
+    block.appendChild(pre);
+  });
+
+  /* ---------- 2. font size control (14 - 36 px) ---------- */
+  var MIN = 14, MAX = 36, STEP = 2, DEFAULT = 18;
+  var size = DEFAULT;
+  var readout = document.getElementById("fsReadout");
+  var upBtn = document.getElementById("fsUp");
+  var downBtn = document.getElementById("fsDown");
+
+  function applySize() {
+    document.documentElement.style.setProperty("--fs", size + "px");
+    readout.textContent = size + " px";
+    downBtn.disabled = size <= MIN;
+    upBtn.disabled = size >= MAX;
+  }
+  upBtn.addEventListener("click", function () { size = Math.min(MAX, size + STEP); applySize(); });
+  downBtn.addEventListener("click", function () { size = Math.max(MIN, size - STEP); applySize(); });
+  document.getElementById("fsReset").addEventListener("click", function () { size = DEFAULT; applySize(); });
+  applySize();
+
+  /* ---------- 3. mobile navigation ---------- */
+  var navToggle = document.getElementById("navToggle");
+  var scrim = document.getElementById("scrim");
+  function closeNav() {
+    document.body.classList.remove("nav-open");
+    navToggle.setAttribute("aria-expanded", "false");
+  }
+  navToggle.addEventListener("click", function () {
+    var open = document.body.classList.toggle("nav-open");
+    navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  scrim.addEventListener("click", closeNav);
+  document.querySelectorAll("#sidebar a").forEach(function (a) {
+    a.addEventListener("click", closeNav);
+  });
+
+  /* ---------- 4. popups ---------- */
+  var modalScrim = document.getElementById("modalScrim");
+  var modalTitle = document.getElementById("modalTitle");
+  var modalBody = document.getElementById("modalBody");
+  var lastFocus = null;
+
+  function openPopup(key, trigger) {
+    var tpl = document.getElementById("pop-" + key);
+    if (!tpl) return;
+    lastFocus = trigger || null;
+    modalTitle.textContent = tpl.dataset.title || "More information";
+    modalBody.innerHTML = "";
+    modalBody.appendChild(tpl.content.cloneNode(true));
+    modalScrim.hidden = false;
+    document.getElementById("modalClose").focus();
+  }
+  function closePopup() {
+    modalScrim.hidden = true;
+    if (lastFocus) lastFocus.focus();
+  }
+  document.querySelectorAll("[data-popup]").forEach(function (btn) {
+    btn.addEventListener("click", function () { openPopup(btn.dataset.popup, btn); });
+  });
+  document.getElementById("modalClose").addEventListener("click", closePopup);
+  modalScrim.addEventListener("click", function (e) { if (e.target === modalScrim) closePopup(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      if (!modalScrim.hidden) closePopup();
+      else if (document.body.classList.contains("nav-open")) closeNav();
+    }
+  });
+
+  /* ---------- 5. scroll spy + progress + back to top ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll("#sidebar a"));
+  var sections = links
+    .map(function (a) { return document.querySelector(a.getAttribute("href")); })
+    .filter(Boolean);
+  var progress = document.getElementById("progress");
+  var toTop = document.getElementById("toTop");
+
+  function onScroll() {
+    var y = window.scrollY;
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    progress.style.width = (h > 0 ? (y / h) * 100 : 0) + "%";
+    toTop.classList.toggle("show", y > 800);
+
+    var current = sections[0];
+    sections.forEach(function (sec) {
+      if (sec.getBoundingClientRect().top <= 120) current = sec;
+    });
+    links.forEach(function (a) {
+      a.classList.toggle("active", a.getAttribute("href") === "#" + current.id);
+    });
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  toTop.addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+})();
+</script>
+</body>
+</html>
