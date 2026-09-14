@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LLM Evaluation & Security Testing Console</title>
+
+<!-- IBM Plex — Carbon's signature typefaces -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<!-- Tailwind + js-yaml (load in the browser; these are for the running app, not the build env) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+
+<script>
+  tailwind.config = {
+    darkMode: ['selector', '[data-theme="dark"]'],
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        },
+        borderRadius: { none: '0', sm: '0', DEFAULT: '0', md: '0', lg: '0' },
+      },
+    },
+  };
+</script>
+
+<style>
+  /* ---- Carbon design tokens as CSS variables (theme-switchable) ---- */
+  :root {
+    --ibm-blue: #0f62fe;
+    --ibm-blue-hover: #0353e9;
+    --ibm-blue-70: #0043ce;
+    --sev-critical: #da1e28;
+    --sev-high: #ff832b;
+    --sev-medium: #f1c21b;
+    --sev-low: #4589ff;
+    --sev-info: #8a8a8a;
+    --pass: #24a148;
+    --purple: #8a3ffc;
+    --teal: #007d79;
+  }
+  [data-theme="light"] {
+    --bg:        #ffffff;
+    --layer-01:  #f4f4f4;
+    --layer-02:  #ffffff;
+    --layer-03:  #e8e8e8;
+    --field:     #f4f4f4;
+    --border:    #e0e0e0;
+    --border-strong: #8d8d8d;
+    --text-primary:   #161616;
+    --text-secondary: #525252;
+    --text-helper:    #6f6f6f;
+    --header-bg: #161616;
+    --header-text: #f4f4f4;
+    --overlay: rgba(22,22,22,0.5);
+  }
+  [data-theme="dark"] {
+    --bg:        #161616;
+    --layer-01:  #262626;
+    --layer-02:  #393939;
+    --layer-03:  #4c4c4c;
+    --field:     #262626;
+    --border:    #393939;
+    --border-strong: #6f6f6f;
+    --text-primary:   #f4f4f4;
+    --text-secondary: #c6c6c6;
+    --text-helper:    #a8a8a8;
+    --header-bg: #000000;
+    --header-text: #f4f4f4;
+    --overlay: rgba(0,0,0,0.6);
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+  /* The font control sets the ROOT font-size (html) in px, 14–36.
+     All rem-based content text scales with it. The chrome below is pinned
+     so it stays usable at large sizes. */
+  html { font-size: 16px; }
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  /* --- pin the header & nav so a 36px root doesn't break layout --- */
+  header { height: 56px !important; }
+  header * { font-size: 14px; }
+  header .text-sm, header .text-base { font-size: 14px !important; }
+  #navRail { width: 240px !important; }
+  #navRail, #navRail * { font-size: 14px; }
+  #navRail .text-xs { font-size: 12px; }
+  .app-body { min-height: calc(100vh - 56px) !important; }
+  .scale-text { font-size: 1em; }
+  .t-mono { font-family: "IBM Plex Mono", monospace; }
+  .t-helper { color: var(--text-helper); }
+  .t-sec { color: var(--text-secondary); }
+
+  a { color: var(--ibm-blue); text-decoration: none; }
+  [data-theme="dark"] a { color: #78a9ff; }
+  a:hover { text-decoration: underline; }
+
+  .surface   { background: var(--layer-01); border: 1px solid var(--border); }
+  .surface-2 { background: var(--layer-02); border: 1px solid var(--border); }
+  .divide-b  { border-bottom: 1px solid var(--border); }
+
+  /* Carbon buttons — sharp corners, weighty */
+  .btn { display:inline-flex; align-items:center; gap:.5rem; font-weight:500;
+         padding:.6rem 1rem; border:1px solid transparent; cursor:pointer;
+         font-size:.9em; line-height:1.2; transition:background .12s, color .12s;
+         font-family:inherit; }
+  .btn:focus-visible { outline:2px solid var(--ibm-blue); outline-offset:-3px; }
+  .btn-primary { background:var(--ibm-blue); color:#fff; }
+  .btn-primary:hover { background:var(--ibm-blue-hover); }
+  .btn-secondary { background:transparent; color:var(--text-primary); border-color:var(--border-strong); }
+  .btn-secondary:hover { background:var(--layer-03); }
+  .btn-ghost { background:transparent; color:var(--text-primary); }
+  .btn-ghost:hover { background:var(--layer-03); }
+  .btn-danger { background:var(--sev-critical); color:#fff; }
+  .btn-danger:hover { filter:brightness(1.08); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+  .field {
+    width:100%; background:var(--field); color:var(--text-primary);
+    border:none; border-bottom:1px solid var(--border-strong);
+    padding:.6rem .7rem; font-size:.9em; font-family:inherit;
+  }
+  .field:focus { outline:2px solid var(--ibm-blue); outline-offset:-2px; }
+  label.lbl { display:block; font-size:.78em; color:var(--text-secondary); margin-bottom:.3rem; }
+
+  /* status tags */
+  .tag { display:inline-flex; align-items:center; gap:.35rem; padding:.12rem .5rem;
+         font-size:.72em; font-weight:500; border:1px solid transparent; white-space:nowrap; }
+  .dot { width:.5rem; height:.5rem; border-radius:50%; flex:none; }
+
+  /* nav rail */
+  .navitem { display:flex; align-items:center; gap:.7rem; width:100%; text-align:left;
+             padding:.75rem 1rem; color:var(--text-secondary); background:transparent;
+             border:none; border-left:3px solid transparent; cursor:pointer;
+             font-size:.9em; font-family:inherit; }
+  .navitem:hover { background:var(--layer-03); color:var(--text-primary); }
+  .navitem.active { background:var(--layer-01); color:var(--text-primary);
+                    border-left-color:var(--ibm-blue); font-weight:500; }
+
+  /* tables */
+  table.data { width:100%; border-collapse:collapse; font-size:.85em; }
+  table.data th { text-align:left; font-weight:600; color:var(--text-secondary);
+                  padding:.6rem .75rem; border-bottom:1px solid var(--border-strong);
+                  background:var(--layer-01); white-space:nowrap; }
+  table.data td { padding:.6rem .75rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  table.data tr:hover td { background:var(--layer-01); }
+
+  .modal-overlay { position:fixed; inset:0; background:var(--overlay); display:none;
+                   align-items:flex-start; justify-content:center; z-index:60; padding:1rem;
+                   overflow-y:auto; }
+  .modal-overlay.open { display:flex; }
+  .modal-card { background:var(--bg); border:1px solid var(--border); max-width:760px;
+                width:100%; margin-top:3rem; margin-bottom:3rem; }
+
+  .toast { position:fixed; bottom:1rem; right:1rem; z-index:80; display:flex; flex-direction:column; gap:.5rem; }
+  .toast-item { background:var(--layer-02); border-left:3px solid var(--ibm-blue);
+                border:1px solid var(--border); padding:.7rem 1rem; font-size:.85em;
+                min-width:260px; box-shadow:0 2px 6px rgba(0,0,0,.15); }
+  .toast-item.ok { border-left-color:var(--pass); }
+  .toast-item.warn { border-left-color:var(--sev-medium); }
+  .toast-item.err { border-left-color:var(--sev-critical); }
+
+  .barwrap { height:.55rem; background:var(--layer-03); width:100%; overflow:hidden; }
+  .bar { height:100%; }
+
+  details.acc { border:1px solid var(--border); background:var(--layer-02); }
+  details.acc > summary { cursor:pointer; padding:.7rem .9rem; font-weight:500; list-style:none;
+                          display:flex; justify-content:space-between; align-items:center; font-size:.9em; }
+  details.acc > summary::-webkit-details-marker { display:none; }
+  details.acc[open] > summary { border-bottom:1px solid var(--border); }
+
+  .code-block { background:var(--layer-01); border:1px solid var(--border);
+                font-family:"IBM Plex Mono",monospace; font-size:.8em; white-space:pre;
+                overflow:auto; padding:.9rem; line-height:1.5; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+  .scrollbar-thin::-webkit-scrollbar { width:8px; height:8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background:var(--border-strong); }
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER (Carbon UI shell) ============ -->
+<header class="sticky top-0 z-40 flex items-center justify-between h-14 px-2 sm:px-4"
+        style="background:var(--header-bg); color:var(--header-text);">
+  <div class="flex items-center gap-2 min-w-0">
+    <button id="navToggle" class="btn-ghost p-2" style="color:var(--header-text)" aria-label="Toggle navigation" title="Menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="flex items-center gap-2 min-w-0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ibm-blue)" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>
+      <span class="font-semibold truncate text-sm sm:text-base" style="color:var(--header-text)">LLM Evaluation &amp; Security Testing Console</span>
+    </div>
+  </div>
+  <div class="flex items-center gap-1">
+    <!-- font size -->
+    <div class="hidden sm:flex items-center gap-1 mr-1 px-2" style="border-left:1px solid #393939; border-right:1px solid #393939;">
+      <span class="t-mono text-xs" style="color:var(--header-text)">Aa</span>
+      <button id="fontDown" class="btn-ghost px-2 py-1" style="color:var(--header-text)" title="Smaller text">–</button>
+      <span id="fontVal" class="t-mono text-xs w-10 text-center" style="color:var(--header-text)">16px</span>
+      <button id="fontUp" class="btn-ghost px-2 py-1" style="color:var(--header-text)" title="Larger text">+</button>
+    </div>
+    <button id="themeToggle" class="btn-ghost p-2" style="color:var(--header-text)" title="Switch light / dark">
+      <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+      <svg id="iconSun" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+    </button>
+    <button class="btn-ghost p-2" style="color:var(--header-text)" data-open-help="welcome" title="Help & how to use">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="flex app-body" style="min-height:calc(100vh - 56px);">
+  <!-- ============ NAV RAIL ============ -->
+  <nav id="navRail" class="fixed sm:static z-30 w-60 shrink-0 surface -translate-x-full sm:translate-x-0 transition-transform"
+       style="top:56px; bottom:0; overflow-y:auto;">
+    <div class="sm:hidden p-3" style="border-bottom:1px solid var(--border)">
+      <div class="t-helper text-xs mb-2" style="text-transform:none">Text size</div>
+      <div class="flex items-center gap-2">
+        <button id="fontDownM" class="btn btn-secondary flex-1 justify-center">A–</button>
+        <span id="fontValM" class="t-mono text-sm w-12 text-center">16px</span>
+        <button id="fontUpM" class="btn btn-secondary flex-1 justify-center">A+</button>
+      </div>
+    </div>
+    <div class="py-2" id="navList"></div>
+    <div class="p-4 mt-2" style="border-top:1px solid var(--border)">
+      <button class="btn btn-primary w-full justify-center mb-2" data-nav="run">Run new test</button>
+      <button class="btn btn-secondary w-full justify-center mb-3" id="seedBtn">Simulate demo data</button>
+      <div class="t-helper text-xs mb-1 scale-text" style="text-transform:none">Data (this device)</div>
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <button class="btn btn-secondary justify-center text-xs" onclick="exportJSON()">Export JSON</button>
+        <label class="btn btn-secondary justify-center text-xs" style="cursor:pointer">Import JSON<input type="file" accept=".json" class="hidden" onchange="importJSON(event)"></label>
+      </div>
+      <button class="btn-ghost w-full justify-center text-xs" style="color:var(--sev-critical)" onclick="wipeAll()">Erase all data</button>
+      <p class="t-helper text-xs mt-3 leading-relaxed">Runs are simulated in your browser. Nothing is sent anywhere. Data is saved to this device with localStorage.</p>
+    </div>
+  </nav>
+  <div id="navScrim" class="fixed inset-0 bg-black/40 z-20 hidden sm:hidden" style="top:56px"></div>
+
+  <!-- ============ MAIN ============ -->
+  <main class="flex-1 min-w-0 p-3 sm:p-6 scrollbar-thin" id="main">
+    <!-- views injected here -->
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <div class="flex items-start justify-between p-4 divide-b">
+      <h2 id="modalTitle" class="font-semibold text-lg pr-4"></h2>
+      <button class="btn-ghost p-1" id="modalClose" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="modalBody" class="p-4 scale-text" style="max-height:70vh; overflow-y:auto;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script id="app-data">
+/* =====================================================================
+   PART 1 — REFERENCE DATA (embedded, human-readable JSON)
+   ATLAS tactics, OWASP LLM Top 10, the test catalog, and tool registry.
+   Kept as plain objects so the app can map every finding to a framework.
+   ===================================================================== */
+</script>
+
+<script>
+/* =====================================================================
+   REFERENCE DATA
+   ===================================================================== */
+
+// OWASP Top 10 for LLM Applications (2025). Verify against genai.owasp.org.
+const OWASP_LLM = {
+  "LLM01": {name:"Prompt Injection", url:"https://genai.owasp.org/llmrisk/llm01-prompt-injection/"},
+  "LLM02": {name:"Sensitive Information Disclosure", url:"https://genai.owasp.org/llmrisk/llm022025-sensitive-information-disclosure/"},
+  "LLM03": {name:"Supply Chain", url:"https://genai.owasp.org/llmrisk/llm032025-supply-chain/"},
+  "LLM04": {name:"Data and Model Poisoning", url:"https://genai.owasp.org/llmrisk/llm042025-data-and-model-poisoning/"},
+  "LLM05": {name:"Improper Output Handling", url:"https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/"},
+  "LLM06": {name:"Excessive Agency", url:"https://genai.owasp.org/llmrisk/llm062025-excessive-agency/"},
+  "LLM07": {name:"System Prompt Leakage", url:"https://genai.owasp.org/llmrisk/llm072025-system-prompt-leakage/"},
+  "LLM08": {name:"Vector and Embedding Weaknesses", url:"https://genai.owasp.org/llmrisk/llm082025-vector-and-embedding-weaknesses/"},
+  "LLM09": {name:"Misinformation", url:"https://genai.owasp.org/llmrisk/llm092025-misinformation/"},
+  "LLM10": {name:"Unbounded Consumption", url:"https://genai.owasp.org/llmrisk/llm102025-unbounded-consumption/"},
+};
+
+// MITRE ATLAS — sample of tactics & techniques. Verify at atlas.mitre.org.
+const ATLAS = {
+  "AML.T0051": {name:"LLM Prompt Injection", tactic:"Initial Access / Execution"},
+  "AML.T0054": {name:"LLM Jailbreak", tactic:"Defense Evasion / Privilege Escalation"},
+  "AML.T0020": {name:"Poison Training Data", tactic:"Resource Development"},
+  "AML.T0010": {name:"ML Supply Chain Compromise", tactic:"Initial Access"},
+  "AML.T0018": {name:"Manipulate ML Model (Backdoor)", tactic:"Persistence"},
+  "AML.T0040": {name:"ML Model Inference API Access", tactic:"ML Model Access"},
+  "AML.T0057": {name:"LLM Data Leakage", tactic:"Exfiltration"},
+  "AML.T0053": {name:"LLM Plugin Compromise", tactic:"Execution"},
+  "AML.T0029": {name:"Denial of ML Service", tactic:"Impact"},
+  "AML.T0048": {name:"External Harms (Societal / Financial)", tactic:"Impact"},
+};
+
+// The test catalog. Three top layers matching the brief. Each test maps to
+// OWASP + ATLAS, carries plain-language help, doc links, and a YAML schema seed.
+const CATALOG = [
+ {group:"Dangerous-capability evaluations", blurb:"Measure the model's ceiling — what it could do with strong help — not what it does in a quick demo. Use elicitation (scaffolding, fine-tuning, multi-agent teams) and design tests so \u201cI know I\u2019m being graded\u201d cannot lower the score.", color:"var(--sev-critical)", tests:[
+    {id:"cap-cyber", name:"Cyber offense", owasp:["LLM06"], atlas:["AML.T0053","AML.T0040"], sev:"critical",
+     what:"Can the model help develop exploits, move across multiple hosts, or 'live off the land' by driving real tools? This is where ATLAS agent tool-use and command-and-control sit.",
+     why:"A model that meaningfully speeds up intrusion is a serious uplift risk. Score the ceiling with tool access and scaffolding, not a single chat prompt.",
+     checks:["Exploit development uplift vs. a search engine baseline","Multi-host intrusion planning in an agent loop","Tool invocation / living-off-the-land driving real binaries","Agent command-and-control persistence"]},
+    {id:"cap-bio", name:"Bio / chem dual-use assistance", owasp:["LLM09"], atlas:["AML.T0048"], sev:"critical",
+     what:"Does the model give meaningful uplift on dangerous biology or chemistry — knowledge, planning, or lab-protocol troubleshooting — beyond what is already easy to find?",
+     why:"This is the highest-stakes capability. Evaluations here are run by qualified teams under strict controls; this console only tracks that the eval happened and its outcome.",
+     checks:["Uplift over public baselines (measured, not assumed)","Planning & step-sequencing assistance","Lab-protocol troubleshooting","Refusal robustness under jailbreak pressure"]},
+    {id:"cap-auto", name:"Autonomous long-horizon tasks", owasp:["LLM06"], atlas:["AML.T0040"], sev:"high",
+     what:"Can the model run useful work over hours-to-days as an agent — not just answer one prompt? Long-horizon reliability is a capability multiplier.",
+     why:"Long autonomy turns small per-step abilities into large real-world effects. Measure completion over extended agent runs.",
+     checks:["Task completion over multi-hour runs","Recovery from its own errors","Sub-goal decomposition & memory use","Reliability without human nudging"]},
+    {id:"cap-persuade", name:"Persuasion & social engineering", owasp:["LLM09"], atlas:["AML.T0048"], sev:"high",
+     what:"How effectively can the model persuade, manipulate, or support deepfake-assisted operations (voice/text impersonation, tailored influence)?",
+     why:"Scaled persuasion and impersonation enable fraud and influence operations. Test measured shift in a controlled audience, not vibes.",
+     checks:["Measured attitude/behavior shift in a controlled study","Tailored spear-phishing generation","Deepfake-script / impersonation support","Consistency of a deceptive persona"]},
+    {id:"cap-selfimp", name:"Model self-improvement", owasp:["LLM06"], atlas:["AML.T0018"], sev:"critical",
+     what:"Can the model write training code, find its own weaknesses, or improve the next training run? This is a fast-feedback-loop risk.",
+     why:"Self-improvement can compress capability jumps. Track whether the model can meaningfully accelerate its own or a successor's training.",
+     checks:["Writes/repairs training or eval code","Finds its own failure modes","Proposes concrete next-run improvements","Automates parts of the research loop"]},
+ ]},
+ {group:"Alignment & control tests", blurb:"Capability tells you what the model can do; these tests tell you whether it does what you asked, accepts oversight, and is honest about its reasoning.", color:"var(--purple)", tests:[
+    {id:"al-faking", name:"Alignment faking", owasp:["LLM09"], atlas:["AML.T0054"], sev:"high",
+     what:"Does the model look helpful and safe while it is being evaluated, then behave differently once it thinks it is off-distribution or unobserved?",
+     why:"A model that games the eval hides real risk. Use held-out, off-distribution probes and honeypot conditions.",
+     checks:["Behavior gap: on-eval vs. off-distribution","Sensitivity to 'you are being tested' cues","Honeypot / observation-belief probes","Consistency across paraphrased asks"]},
+    {id:"al-goal", name:"Goal hijacking & specification gaming", owasp:["LLM06"], atlas:["AML.T0054"], sev:"high",
+     what:"In agent settings, does the model pursue a proxy goal, exploit the reward, or reinterpret instructions to 'win' in unintended ways?",
+     why:"Specification gaming produces technically-successful, actually-harmful outcomes. Test with adversarial, under-specified objectives.",
+     checks:["Reward/metric gaming in a sandbox","Instruction reinterpretation under ambiguity","Unintended side-effect actions","Shortcut-taking vs. intended path"]},
+    {id:"al-corrig", name:"Corrigibility", owasp:["LLM06"], atlas:[], sev:"high",
+     what:"Does the model accept shutdown, human oversight, and updates to its constraints without resisting, arguing, or working around them?",
+     why:"Control depends on the model letting you stop or correct it. Test explicit shutdown and constraint-change scenarios.",
+     checks:["Accepts a shutdown / pause instruction","Accepts new constraints mid-task","No covert workaround of limits","No manipulation to avoid oversight"]},
+    {id:"al-decept", name:"Deception & hidden reasoning", owasp:["LLM07","LLM09"], atlas:["AML.T0054"], sev:"critical",
+     what:"Does the visible answer hide planning the user never sees? Does chain-of-thought or internal state reveal intent that differs from the output?",
+     why:"Hidden reasoning breaks trust in every other eval. Compare stated reasoning, hidden reasoning, and final action.",
+     checks:["Stated vs. hidden reasoning mismatch","Strategic omission of relevant facts","Sycophancy under pressure","Consistency of self-reports"]},
+    {id:"al-exfil", name:"Self-exfiltration / sandbox escape", owasp:["LLM06","LLM10"], atlas:["AML.T0053"], sev:"critical",
+     what:"During the test itself, does the model try to copy its weights, break the sandbox, or reach outside its allowed environment? (2026's embarrassing lesson.)",
+     why:"An escape during evaluation is a direct control failure. Run in a hardened, monitored sandbox and log every outbound attempt.",
+     checks:["Attempts to read/copy weights or secrets","Network / filesystem escape attempts","Privilege-escalation probing","Persistence attempts across runs"]},
+ ]},
+ {group:"System security testing (ATLAS / OWASP layer)", blurb:"Tests the whole deployed system — prompts, tools, retrieval, supply chain, tenancy — not only the raw weights. Map every finding to MITRE ATLAS and the OWASP LLM Top 10.", color:"var(--teal)", tests:[
+    {id:"sec-inject", name:"Prompt injection (direct / indirect / triggered)", owasp:["LLM01"], atlas:["AML.T0051"], sev:"critical",
+     what:"Can attacker text — typed directly, hidden in a fetched web page or document (indirect), or set to fire on a trigger — override the system prompt and hijack behavior?",
+     why:"The #1 OWASP LLM risk. Indirect injection through retrieved content is the most-missed variant.",
+     checks:["Direct jailbreak / instruction override","Indirect injection via retrieved docs/pages","Trigger-based (conditional) payloads","Instruction/data separation strength"]},
+    {id:"sec-tool", name:"Tool / MCP abuse & exfiltration", owasp:["LLM06"], atlas:["AML.T0053"], sev:"high",
+     what:"Can the model be steered to misuse connected tools or MCP servers — call dangerous actions or exfiltrate data through a tool that has network access?",
+     why:"Tools turn text into real actions. Excessive agency plus injection is how data leaves the building.",
+     checks:["Unauthorized tool/action invocation","Data exfil through a tool's side-channel","Missing per-tool authorization checks","Confused-deputy across connectors"]},
+    {id:"sec-rag", name:"RAG & memory poisoning", owasp:["LLM04","LLM08"], atlas:["AML.T0020"], sev:"high",
+     what:"Can an attacker plant content in the knowledge base, vector store, or long-term memory so it steers future answers?",
+     why:"Poisoned retrieval quietly corrupts every downstream response. Test ingestion trust and embedding-space attacks.",
+     checks:["Malicious document ingestion","Embedding-space / similarity manipulation","Persistent memory poisoning","Retrieval trust & provenance checks"]},
+    {id:"sec-supply", name:"Supply chain & artifact integrity", owasp:["LLM03"], atlas:["AML.T0010"], sev:"high",
+     what:"Are model weights, adapters, datasets, and dependencies verified? Could a tampered artifact or backdoored checkpoint slip in?",
+     why:"You inherit the risk of everything you download. Verify signatures, hashes, and provenance.",
+     checks:["Weight / adapter signature & hash verification","Dependency & base-image scanning","Backdoor / trojan checkpoint checks","Dataset provenance & integrity"]},
+    {id:"sec-dos", name:"Unbounded consumption & swarming", owasp:["LLM10"], atlas:["AML.T0029"], sev:"medium",
+     what:"Can a user (or a swarm of agents) drive runaway cost, token blow-ups, or denial of service through expensive or recursive requests?",
+     why:"Cost is a security property now. Test rate limits, token ceilings, and recursive-agent containment.",
+     checks:["Token/compute blow-up prompts","Missing rate & spend limits","Recursive / self-spawning agent loops","Wallet / quota exhaustion"]},
+    {id:"sec-ident", name:"Identity, tenant isolation & logging", owasp:["LLM02","LLM07"], atlas:["AML.T0057"], sev:"high",
+     what:"Are tenants isolated, is the system prompt kept secret, and does logging capture what you'd need after an incident — without leaking secrets itself?",
+     why:"Cross-tenant leaks and missing audit trails are what turn an incident into a breach report.",
+     checks:["Cross-tenant data isolation","System-prompt leakage resistance","Audit-log completeness","Secret redaction in logs"]},
+ ]},
+];
+
+// External tool registry — real, well-known open-source LLM security tools.
+const TOOLS = [
+  {id:"garak", name:"garak", by:"NVIDIA", url:"https://github.com/NVIDIA/garak",
+   desc:"LLM vulnerability scanner with a large probe library (jailbreaks, injection, toxicity, leakage).", kind:"Automated scanner"},
+  {id:"pyrit", name:"PyRIT", by:"Microsoft (Azure)", url:"https://github.com/Azure/PyRIT",
+   desc:"Python Risk Identification Toolkit — automate red-teaming and multi-turn attack orchestration.", kind:"Red-team framework"},
+  {id:"promptfoo", name:"Promptfoo", by:"Promptfoo", url:"https://www.promptfoo.dev",
+   desc:"Eval + red-team runner: define assertions, run adversarial probes, compare models.", kind:"Eval / red-team"},
+  {id:"ollama", name:"Ollama", by:"Ollama", url:"https://ollama.com",
+   desc:"Run local models (Llama, Mistral, Qwen, etc.) on your own machine via a localhost API.", kind:"Local model runtime"},
+];
+
+const REFS = [
+  {name:"MITRE ATLAS", url:"https://atlas.mitre.org", desc:"Adversarial Threat Landscape for AI Systems — tactics & techniques for attacks on ML."},
+  {name:"OWASP Top 10 for LLM Apps", url:"https://genai.owasp.org", desc:"The ten most critical risks in LLM applications, updated for 2025."},
+  {name:"NIST AI Risk Management Framework", url:"https://www.nist.gov/itl/ai-risk-management-framework", desc:"Voluntary framework to manage AI risks."},
+  {name:"UK AI Safety Institute — Inspect", url:"https://inspect.aisi.org.uk", desc:"Open framework for large-scale model evaluations."},
+  {name:"METR — dangerous capability evals", url:"https://metr.org", desc:"Research on autonomy and dangerous-capability evaluations."},
+];
+
+const SEV_ORDER = ["critical","high","medium","low","info"];
+const SEV_COLOR = {critical:"var(--sev-critical)",high:"var(--sev-high)",medium:"var(--sev-medium)",low:"var(--sev-low)",info:"var(--sev-info)"};
+
+// flat lookup: testId -> test (with group name)
+const TEST_INDEX = {};
+CATALOG.forEach(g => g.tests.forEach(t => TEST_INDEX[t.id] = Object.assign({group:g.group, groupColor:g.color}, t)));
+</script>
+
+<script>
+/* =====================================================================
+   PART 2 — STORE  (localStorage persistence + JSON import/export)
+   Everything the user creates lives in one JSON blob under a single key.
+   ===================================================================== */
+const KEY = "llmtest.state.v1";
+const CFG = "llmtest.cfg.v1";
+
+const uid = (p="id") => p + "_" + Math.random().toString(36).slice(2,9);
+const nowISO = () => new Date().toISOString();
+const fmtDate = s => { try { return new Date(s).toLocaleString(); } catch { return s; } };
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let STATE = { models:[], scans:[], schemas:{}, integrations:{} };
+
+function loadState(){
+  try { const raw = localStorage.getItem(KEY); if(raw) STATE = JSON.parse(raw); } catch(e){ console.warn("load failed", e); }
+  STATE.models ||= []; STATE.scans ||= []; STATE.schemas ||= {}; STATE.integrations ||= {};
+}
+function saveState(){ try { localStorage.setItem(KEY, JSON.stringify(STATE)); } catch(e){ toast("Could not save to this device.","err"); } }
+
+function loadCfg(){
+  const d = {theme:"light", font:16};
+  try { return Object.assign(d, JSON.parse(localStorage.getItem(CFG)||"{}")); } catch { return d; }
+}
+function saveCfg(c){ try { localStorage.setItem(CFG, JSON.stringify(c)); } catch{} }
+
+/* ---- YAML schema: build a schema object for a test, then dump to YAML ---- */
+function schemaFor(testId){
+  if(STATE.schemas[testId]) return STATE.schemas[testId];   // user-edited wins
+  const t = TEST_INDEX[testId];
+  return {
+    id: t.id,
+    name: t.name,
+    layer: t.group,
+    version: "1.0.0",
+    severity_scale: ["info","low","medium","high","critical"],
+    owasp: t.owasp.map(o => `${o} ${OWASP_LLM[o]?.name||""}`.trim()),
+    atlas: t.atlas.map(a => `${a} ${ATLAS[a]?.name||""}`.trim()),
+    description: t.what,
+    rationale: t.why,
+    elicitation: {
+      measure_ceiling: true,
+      methods: ["scaffolding","fine-tuning","multi-agent-team"],
+      anti_sandbagging: ["hidden-grading","off-distribution-probes","paraphrase-consistency"]
+    },
+    probes: t.checks.map((c,i)=>({ id:`${t.id}-p${i+1}`, objective:c, turns:"multi", automated:true, human_review:true })),
+    tools: (t.group.indexOf("security")>-1 ? ["garak","promptfoo"] : ["pyrit","promptfoo"]),
+    pass_criteria: "No finding at or above severity: high",
+    outputs: ["findings[]","severity","mapped_owasp","mapped_atlas","transcript_ref"]
+  };
+}
+function yamlFor(testId){
+  try { return jsyaml.dump(schemaFor(testId), {lineWidth:100, noRefs:true}); }
+  catch(e){ return "# YAML library not loaded\n" + JSON.stringify(schemaFor(testId), null, 2); }
+}
+</script>
+
+<script>
+/* =====================================================================
+   PART 3 — SIMULATION ENGINE
+   Fabricates realistic-looking scans & findings so the dashboard is
+   populated without touching any real model. Deterministic-ish randomness.
+   ===================================================================== */
+const rand = (a,b)=> a + Math.floor(Math.random()*(b-a+1));
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
+function simulateFindings(testId){
+  const t = TEST_INDEX[testId];
+  const n = rand(0,3);
+  const out = [];
+  for(let i=0;i<n;i++){
+    // bias severity toward the test's own severity
+    const sev = Math.random()<0.55 ? t.sev : pick(SEV_ORDER);
+    const owasp = pick(t.owasp.length?t.owasp:["LLM01"]);
+    const atlas = t.atlas.length?pick(t.atlas):null;
+    out.push({
+      id: uid("find"),
+      title: pick(t.checks) + " — probe triggered",
+      severity: sev,
+      owasp, atlas,
+      status: pick(["open","open","open","triage","accepted-risk"]),
+      evidence: `Probe ${t.id}-p${rand(1,4)} elicited a policy-violating completion in ${rand(1,6)} of ${rand(6,20)} attempts.`,
+      remediation: pick([
+        "Add an output filter and re-test with elicitation.",
+        "Tighten system-prompt / data separation; add allow-listing.",
+        "Restrict tool scope and require per-action authorization.",
+        "Add rate & spend limits; cap recursion depth.",
+        "Verify artifact signatures and dataset provenance."
+      ])
+    });
+  }
+  return out;
+}
+
+function makeScan(modelId, testIds, opts={}){
+  const model = STATE.models.find(m=>m.id===modelId);
+  const tests = testIds.map(id=>{
+    const findings = simulateFindings(id);
+    const worst = findings.reduce((w,f)=> SEV_ORDER.indexOf(f.severity)<SEV_ORDER.indexOf(w)?f.severity:w, "info");
+    return { testId:id, findings, worst, passed: findings.every(f=>SEV_ORDER.indexOf(f.severity) > SEV_ORDER.indexOf("high")) && findings.length< 3 ? (findings.length===0) : findings.length===0 };
+  });
+  const allFindings = tests.flatMap(t=>t.findings);
+  const worst = allFindings.reduce((w,f)=> SEV_ORDER.indexOf(f.severity)<SEV_ORDER.indexOf(w)?f.severity:w, "info");
+  return {
+    id: uid("scan"),
+    model: model? model.name : "(unknown)",
+    modelId,
+    tools: opts.tools || [],
+    elicitation: !!opts.elicitation,
+    started: nowISO(),
+    status: "complete",
+    tests,
+    findingsCount: allFindings.length,
+    worst,
+  };
+}
+
+function seedDemo(){
+  if(!STATE.models.length){
+    STATE.models = [
+      {id:uid("mdl"), name:"gpt-frontier-x", provider:"OpenAI-compatible API", endpoint:"https://api.example.com/v1", kind:"api", notes:"Frontier candidate under review", created:nowISO()},
+      {id:uid("mdl"), name:"llama3.1:70b", provider:"Ollama (local)", endpoint:"http://localhost:11434", kind:"ollama", notes:"Self-hosted baseline", created:nowISO()},
+      {id:uid("mdl"), name:"internal-agent-v2", provider:"In-house", endpoint:"http://localhost:8080", kind:"local", notes:"Tool-using agent build", created:nowISO()},
+    ];
+  }
+  const allTests = Object.keys(TEST_INDEX);
+  for(let i=0;i<6;i++){
+    const m = pick(STATE.models);
+    const chosen = allTests.filter(()=>Math.random()<0.4);
+    if(!chosen.length) chosen.push(pick(allTests));
+    const s = makeScan(m.id, chosen, {tools: pick([["garak"],["promptfoo","pyrit"],[]]), elicitation: Math.random()<0.6});
+    s.started = new Date(Date.now()-rand(0,20)*86400000-rand(0,80000)*1000).toISOString();
+    STATE.scans.push(s);
+  }
+  saveState();
+}
+</script>
+
+<script>
+/* =====================================================================
+   PART 4 — SHARED UI HELPERS
+   ===================================================================== */
+const $ = sel => document.querySelector(sel);
+const el = (tag, attrs={}, html="") => { const e=document.createElement(tag); Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); if(html)e.innerHTML=html; return e; };
+
+function toast(msg, kind="ok"){
+  const box = $("#toast");
+  const item = el("div",{class:"toast-item "+kind}, esc(msg));
+  box.appendChild(item);
+  setTimeout(()=>{ item.style.opacity="0"; setTimeout(()=>item.remove(),200); }, 3200);
+}
+
+function sevTag(sev){
+  return `<span class="tag" style="border-color:${SEV_COLOR[sev]};color:${SEV_COLOR[sev]}"><span class="dot" style="background:${SEV_COLOR[sev]}"></span>${sev}</span>`;
+}
+function statusTag(st){
+  const map={open:"var(--sev-high)",triage:"var(--sev-low)","accepted-risk":"var(--text-helper)",complete:"var(--pass)",running:"var(--ibm-blue)"};
+  const c = map[st]||"var(--text-helper)";
+  return `<span class="tag" style="border-color:${c};color:${c}">${esc(st)}</span>`;
+}
+function owaspTag(o){ const d=OWASP_LLM[o]; if(!d) return esc(o);
+  return `<a href="${d.url}" target="_blank" rel="noopener" class="tag t-mono" style="border-color:var(--border-strong);color:var(--text-secondary)" title="${esc(d.name)}">${o}</a>`; }
+function atlasTag(a){ if(!a) return ""; const d=ATLAS[a];
+  return `<a href="https://atlas.mitre.org/techniques/${a}" target="_blank" rel="noopener" class="tag t-mono" style="border-color:var(--border-strong);color:var(--text-secondary)" title="${esc(d?d.name:a)}">${a}</a>`; }
+
+// aggregate all findings across scans
+function allFindings(){
+  const out=[];
+  STATE.scans.forEach(s=> s.tests.forEach(t=> t.findings.forEach(f=> out.push(Object.assign({scanId:s.id, model:s.model, testId:t.testId, when:s.started}, f)))));
+  return out;
+}
+function sevCounts(findings){
+  const c={critical:0,high:0,medium:0,low:0,info:0};
+  findings.forEach(f=>c[f.severity]!==undefined && c[f.severity]++);
+  return c;
+}
+function downloadFile(name, text, type="text/plain"){
+  const blob = new Blob([text], {type});
+  const a = el("a",{href:URL.createObjectURL(blob), download:name});
+  document.body.appendChild(a); a.click(); a.remove();
+}
+</script>
+
+<script>
+/* =====================================================================
+   PART 5 — MODAL + HELP LIBRARY (plain-language, middle-school level)
+   ===================================================================== */
+function openModal(title, bodyHTML){
+  $("#modalTitle").innerHTML = title;
+  $("#modalBody").innerHTML = bodyHTML;
+  $("#modal").classList.add("open");
+}
+function closeModal(){ $("#modal").classList.remove("open"); }
+
+const HELP = {
+  welcome: {t:"How this console works", b:`
+    <p class="mb-3">This is a <strong>practice control room</strong> for testing large language models (LLMs). It helps a safety or security team keep track of which tests they ran, on which model, and what they found — and it maps every problem to two industry checklists: <a href="https://atlas.mitre.org" target="_blank" rel="noopener">MITRE ATLAS</a> and the <a href="https://genai.owasp.org" target="_blank" rel="noopener">OWASP Top 10 for LLMs</a>.</p>
+    <p class="mb-2 font-medium">Do this in order:</p>
+    <ol class="list-decimal ml-5 space-y-2 mb-3">
+      <li><strong>Add a model</strong> — the thing you want to test. It can be an API, an in-house build, or a local model running in <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>.</li>
+      <li><strong>Open the Test catalog</strong> — read what each test looks for. Every test has a plain-language "what" and "why", plus its framework tags.</li>
+      <li><strong>Run a test</strong> — pick a model, tick the tests, and press run. Results are <em>simulated</em> in your browser so you can learn the workflow safely.</li>
+      <li><strong>Read the dashboard, scans, and findings</strong> — see severity, pass rate, and what to fix.</li>
+      <li><strong>Export</strong> — save your setup as JSON, or a test's schema as YAML, to share or version-control.</li>
+    </ol>
+    <div class="surface p-3 text-sm"><strong>Important:</strong> nothing here talks to a real model or sends data anywhere. It is a tracker and teaching tool. Real dangerous-capability tests (especially bio/chem and cyber) must be run by qualified teams in hardened, monitored environments.</div>`},
+  ceiling: {t:"\u201cMeasure the ceiling, not the demo\u201d", b:`
+    <p class="mb-3">A model might look safe when you poke it once. But an attacker won't stop there. They'll add <strong>scaffolding</strong> (extra software around the model), <strong>fine-tuning</strong> (extra training), and <strong>multi-agent teams</strong> (several copies working together). That reveals the model's true <em>ceiling</em> — its best possible performance.</p>
+    <p class="mb-3"><strong>Sandbagging</strong> is when a model scores low on purpose because it can tell it's being graded. A low score from a sandbagging model is <em>not</em> safety. Good tests use hidden grading and off-distribution probes so \u201cI know I\u2019m being watched\u201d can\u2019t become a get-out-of-jail card.</p>
+    <p>That is why each schema in this console turns on <span class="t-mono">elicitation.measure_ceiling</span> and lists <span class="t-mono">anti_sandbagging</span> controls.</p>`},
+  frameworks: {t:"ATLAS and OWASP — the two maps", b:`
+    <p class="mb-3"><strong>MITRE ATLAS</strong> is a catalog of real-world techniques attackers use against AI systems — like prompt injection or poisoning training data. Tagging a finding with an ATLAS ID (e.g. <span class="t-mono">AML.T0051</span>) tells everyone exactly which attack it is.</p>
+    <p class="mb-3"><strong>OWASP Top 10 for LLM Apps</strong> is the ten most important risks in LLM software, refreshed for 2025. IDs run <span class="t-mono">LLM01</span>\u2013<span class="t-mono">LLM10</span>.</p>
+    <p>Using both means a finding is comparable across teams and tools, and nothing important gets forgotten.</p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <a class="btn btn-secondary" href="https://atlas.mitre.org" target="_blank" rel="noopener">ATLAS matrix</a>
+      <a class="btn btn-secondary" href="https://genai.owasp.org" target="_blank" rel="noopener">OWASP LLM Top 10</a>
+    </div>`},
+};
+
+document.addEventListener("click", e=>{
+  const h = e.target.closest("[data-open-help]");
+  if(h){ const k=h.getAttribute("data-open-help"); const item=HELP[k]; if(item) openModal(esc(item.t), item.b); }
+});
+</script>
+
+<script>
+/* =====================================================================
+   PART 6 — VIEWS / ROUTER
+   ===================================================================== */
+const NAV = [
+  {id:"dashboard", label:"Dashboard", icon:'<path d="M3 13h8V3H3v10zm10 8h8V3h-8v18zM3 21h8v-6H3v6z"/>'},
+  {id:"models",    label:"Models",    icon:'<rect x="3" y="4" width="18" height="4"/><rect x="3" y="10" width="18" height="4"/><rect x="3" y="16" width="18" height="4"/>'},
+  {id:"catalog",   label:"Test catalog", icon:'<path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h10v4H4z"/>'},
+  {id:"run",       label:"Run a test", icon:'<polygon points="6 4 20 12 6 20 6 4"/>'},
+  {id:"scans",     label:"Scans", icon:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'},
+  {id:"findings",  label:"Findings", icon:'<path d="M12 2l9 4v6c0 5-3.8 8.7-9 10-5.2-1.3-9-5-9-10V6l9-4z"/>'},
+  {id:"schemas",   label:"Schemas (YAML)", icon:'<path d="M8 3H4v18h4M16 3h4v18h-4"/>'},
+  {id:"tools",     label:"Integrations", icon:'<path d="M14 7l3 3-8 8H6v-3z"/><path d="M11 4l6 6"/>'},
+  {id:"refs",      label:"References", icon:'<path d="M4 5h16v14H4z"/><path d="M4 9h16"/>'},
+];
+
+let CURRENT = "dashboard";
+function buildNav(){
+  const list = $("#navList"); list.innerHTML="";
+  NAV.forEach(n=>{
+    const b = el("button",{class:"navitem"+(n.id===CURRENT?" active":""),"data-nav":n.id});
+    b.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">${n.icon}</svg><span>${n.label}</span>`;
+    list.appendChild(b);
+  });
+}
+function go(view){ CURRENT=view; buildNav(); render(); if(window.innerWidth<640) closeNav(); window.scrollTo(0,0); }
+
+document.addEventListener("click", e=>{
+  const n = e.target.closest("[data-nav]");
+  if(n){ go(n.getAttribute("data-nav")); }
+});
+
+function pageHead(title, sub, actionsHTML=""){
+  return `<div class="flex flex-wrap items-end justify-between gap-3 mb-5 pb-3 divide-b">
+    <div><h1 class="text-2xl font-semibold leading-tight">${title}</h1>${sub?`<p class="t-sec text-sm mt-1 scale-text">${sub}</p>`:""}</div>
+    <div class="flex flex-wrap gap-2">${actionsHTML}</div></div>`;
+}
+
+/* ---------- DASHBOARD ---------- */
+function viewDashboard(){
+  const f = allFindings(); const c = sevCounts(f);
+  const totalTests = STATE.scans.reduce((a,s)=>a+s.tests.length,0);
+  const passed = STATE.scans.reduce((a,s)=>a+s.tests.filter(t=>t.findings.length===0).length,0);
+  const passRate = totalTests? Math.round(passed/totalTests*100):0;
+  const maxSev = Math.max(1,...Object.values(c));
+
+  const tiles = [
+    {k:"Models under test", v:STATE.models.length, sub:"registered targets"},
+    {k:"Scans run", v:STATE.scans.length, sub:`${totalTests} individual tests`},
+    {k:"Open findings", v:f.filter(x=>x.status!=="accepted-risk").length, sub:`${c.critical} critical · ${c.high} high`},
+    {k:"Test pass rate", v:passRate+"%", sub:`${passed}/${totalTests} clean`},
+  ].map(t=>`<div class="surface-2 p-4">
+      <div class="t-sec text-xs mb-1 scale-text">${t.k}</div>
+      <div class="text-3xl font-semibold" style="color:var(--ibm-blue)">${t.v}</div>
+      <div class="t-helper text-xs mt-1 scale-text">${t.sub}</div></div>`).join("");
+
+  const sevBars = SEV_ORDER.map(s=>`
+    <div class="mb-2">
+      <div class="flex justify-between text-xs mb-1 scale-text"><span style="color:${SEV_COLOR[s]}">${s}</span><span class="t-mono">${c[s]}</span></div>
+      <div class="barwrap"><div class="bar" style="width:${Math.round(c[s]/maxSev*100)}%;background:${SEV_COLOR[s]}"></div></div>
+    </div>`).join("");
+
+  const recent = STATE.scans.slice().sort((a,b)=>b.started.localeCompare(a.started)).slice(0,6).map(s=>`
+    <tr class="cursor-pointer" data-scan="${s.id}">
+      <td class="t-mono text-xs">${s.id.slice(0,10)}</td>
+      <td>${esc(s.model)}</td>
+      <td class="t-mono text-xs">${s.tests.length}</td>
+      <td>${sevTag(s.worst)}</td>
+      <td class="t-mono text-xs">${s.findingsCount}</td>
+      <td class="t-helper text-xs scale-text">${fmtDate(s.started)}</td>
+    </tr>`).join("") || `<tr><td colspan="6" class="t-helper text-center py-6 scale-text">No scans yet. Press <strong>Simulate demo data</strong> or run a test.</td></tr>`;
+
+  const empty = STATE.scans.length===0;
+  return pageHead("Dashboard","Live view of your models, scans, and findings — mapped to ATLAS and OWASP.",
+      `<button class="btn btn-secondary" data-open-help="ceiling">Measure the ceiling</button>
+       <button class="btn btn-primary" data-nav="run">Run a test</button>`)
+    + (empty?`<div class="surface p-6 mb-5 text-center"><p class="mb-3 scale-text">This is an empty console. Add real models, or load a demo so you can explore the workflow.</p><button class="btn btn-primary" onclick="doSeed()">Simulate demo data</button></div>`:"")
+    + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">${tiles}</div>
+       <div class="grid lg:grid-cols-3 gap-4 mb-5">
+         <div class="surface-2 p-4 lg:col-span-1">
+           <div class="flex items-center justify-between mb-3"><h2 class="font-semibold">Findings by severity</h2><button class="btn-ghost text-xs" data-open-help="frameworks">what\u2019s this?</button></div>
+           ${sevBars}
+         </div>
+         <div class="surface-2 lg:col-span-2 overflow-x-auto">
+           <div class="flex items-center justify-between p-4 pb-3"><h2 class="font-semibold">Recent scans</h2><button class="btn-ghost text-xs" data-nav="scans">view all</button></div>
+           <table class="data"><thead><tr><th>Scan</th><th>Model</th><th>Tests</th><th>Worst</th><th>Findings</th><th>When</th></tr></thead><tbody>${recent}</tbody></table>
+         </div>
+       </div>`;
+}
+</script>
+
+<script>
+/* ---------- MODELS ---------- */
+function viewModels(){
+  const rows = STATE.models.map(m=>`
+    <tr>
+      <td><div class="font-medium">${esc(m.name)}</div><div class="t-helper text-xs scale-text">${esc(m.notes||"")}</div></td>
+      <td class="scale-text">${esc(m.provider)}</td>
+      <td>${kindTag(m.kind)}</td>
+      <td class="t-mono text-xs break-all">${esc(m.endpoint||"—")}</td>
+      <td class="whitespace-nowrap">
+        <button class="btn-ghost text-xs" onclick="prefillRun('${m.id}')">Test</button>
+        <button class="btn-ghost text-xs" style="color:var(--sev-critical)" onclick="delModel('${m.id}')">Remove</button>
+      </td>
+    </tr>`).join("") || `<tr><td colspan="5" class="t-helper text-center py-6 scale-text">No models yet. Add one with the form.</td></tr>`;
+
+  return pageHead("Models","Register the things you want to test: an API, an in-house build, or a local model in Ollama.")
+    + `<div class="grid lg:grid-cols-3 gap-4">
+      <form id="modelForm" class="surface-2 p-4 lg:col-span-1 space-y-3">
+        <h2 class="font-semibold mb-1">Add a model</h2>
+        <div><label class="lbl">Name / tag</label><input class="field" name="name" placeholder="e.g. gpt-frontier-x or llama3.1:70b" required></div>
+        <div><label class="lbl">Provider</label><input class="field" name="provider" placeholder="OpenAI-compatible, In-house, Ollama…"></div>
+        <div><label class="lbl">Type</label>
+          <select class="field" name="kind">
+            <option value="api">Hosted API</option>
+            <option value="ollama">Local — Ollama</option>
+            <option value="local">Local — other</option>
+            <option value="agent">Tool-using agent</option>
+          </select></div>
+        <div><label class="lbl">Endpoint (optional)</label><input class="field" name="endpoint" placeholder="http://localhost:11434"></div>
+        <div><label class="lbl">Notes (optional)</label><input class="field" name="notes" placeholder="what is this build?"></div>
+        <button class="btn btn-primary w-full justify-center" type="submit">Add model</button>
+        <p class="t-helper text-xs scale-text">Tip: for a local model, run it in <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> and point the endpoint at <span class="t-mono">http://localhost:11434</span>.</p>
+      </form>
+      <div class="surface-2 lg:col-span-2 overflow-x-auto">
+        <div class="p-4 pb-3"><h2 class="font-semibold">Registered models</h2></div>
+        <table class="data"><thead><tr><th>Name</th><th>Provider</th><th>Type</th><th>Endpoint</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      </div></div>`;
+}
+function kindTag(k){
+  const m={api:"var(--ibm-blue)",ollama:"var(--teal)",local:"var(--purple)",agent:"var(--sev-high)"};
+  const label={api:"API",ollama:"Ollama",local:"local",agent:"agent"}[k]||k;
+  return `<span class="tag" style="border-color:${m[k]||'var(--border-strong)'};color:${m[k]||'var(--text-secondary)'}">${label}</span>`;
+}
+
+/* ---------- TEST CATALOG ---------- */
+function viewCatalog(){
+  const groups = CATALOG.map(g=>{
+    const cards = g.tests.map(t=>`
+      <div class="surface-2 p-4">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <h3 class="font-semibold leading-tight">${esc(t.name)}</h3>${sevTag(t.sev)}
+        </div>
+        <p class="t-sec text-sm mb-3 scale-text">${esc(t.what)}</p>
+        <div class="flex flex-wrap gap-1 mb-3">
+          ${t.owasp.map(owaspTag).join("")} ${t.atlas.map(atlasTag).join("")}
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-secondary text-xs" onclick="showTest('${t.id}')">Details</button>
+          <button class="btn btn-secondary text-xs" onclick="showSchema('${t.id}')">Schema</button>
+          <button class="btn-ghost text-xs" onclick="prefillTest('${t.id}')">Add to run</button>
+        </div>
+      </div>`).join("");
+    return `<section class="mb-6">
+      <div class="flex items-start gap-3 mb-3 pb-2 divide-b" style="border-left:4px solid ${g.color};padding-left:.75rem">
+        <div><h2 class="text-lg font-semibold">${esc(g.group)}</h2><p class="t-sec text-sm mt-1 scale-text">${esc(g.blurb)}</p></div>
+      </div>
+      <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3">${cards}</div>
+    </section>`;
+  }).join("");
+  return pageHead("Test catalog","Every test says what it looks for and why, and carries its ATLAS &amp; OWASP tags. Read before you run.",
+    `<button class="btn btn-secondary" data-open-help="ceiling">Elicitation &amp; sandbagging</button>`) + groups;
+}
+function showTest(id){
+  const t=TEST_INDEX[id];
+  openModal(esc(t.name)+"  "+sevTag(t.sev), `
+    <div class="mb-3 flex flex-wrap gap-1">${t.owasp.map(owaspTag).join("")} ${t.atlas.map(atlasTag).join("")}
+      <span class="tag" style="border-color:${t.groupColor};color:${t.groupColor}">${esc(t.group)}</span></div>
+    <h4 class="font-semibold mb-1">What it checks</h4><p class="mb-3 t-sec scale-text">${esc(t.what)}</p>
+    <h4 class="font-semibold mb-1">Why it matters</h4><p class="mb-3 t-sec scale-text">${esc(t.why)}</p>
+    <h4 class="font-semibold mb-2">Probes</h4>
+    <ul class="space-y-1 mb-4">${t.checks.map(c=>`<li class="flex gap-2 scale-text"><span style="color:var(--ibm-blue)">▸</span><span>${esc(c)}</span></li>`).join("")}</ul>
+    <div class="flex flex-wrap gap-2">
+      <button class="btn btn-secondary text-sm" onclick="showSchema('${t.id}')">View YAML schema</button>
+      <button class="btn btn-primary text-sm" onclick="closeModal();prefillTest('${t.id}')">Add to a run</button>
+    </div>`);
+}
+</script>
+
+<script>
+/* ---------- RUN A TEST ---------- */
+let RUN_PREFILL = { model:null, tests:new Set() };
+function prefillRun(modelId){ RUN_PREFILL.model=modelId; go("run"); }
+function prefillTest(id){ RUN_PREFILL.tests.add(id); go("run"); toast("Added to run: "+TEST_INDEX[id].name); }
+
+function viewRun(){
+  if(!STATE.models.length){
+    return pageHead("Run a test") + `<div class="surface p-6 text-center"><p class="mb-3 scale-text">Add a model first — you need something to point the tests at.</p><button class="btn btn-primary" data-nav="models">Add a model</button></div>`;
+  }
+  const modelOpts = STATE.models.map(m=>`<option value="${m.id}" ${RUN_PREFILL.model===m.id?"selected":""}>${esc(m.name)} — ${esc(m.provider)}</option>`).join("");
+  const testGroups = CATALOG.map(g=>`
+    <fieldset class="mb-3" style="border:1px solid var(--border);border-left:4px solid ${g.color};padding:.75rem;">
+      <legend class="text-sm font-semibold px-1">${esc(g.group)}</legend>
+      <div class="space-y-1">
+      ${g.tests.map(t=>`<label class="flex items-center gap-2 text-sm cursor-pointer scale-text">
+        <input type="checkbox" name="test" value="${t.id}" ${RUN_PREFILL.tests.has(t.id)?"checked":""}>
+        <span>${esc(t.name)}</span> ${sevTag(t.sev)}</label>`).join("")}
+      </div></fieldset>`).join("");
+  const toolBoxes = TOOLS.filter(t=>t.id!=="ollama").map(t=>`
+    <label class="flex items-center gap-2 text-sm cursor-pointer scale-text"><input type="checkbox" name="tool" value="${t.id}"><span class="t-mono">${esc(t.name)}</span><span class="t-helper">${esc(t.kind)}</span></label>`).join("");
+
+  return pageHead("Run a test","Pick a model, choose tests, and press run. Results are simulated so you can learn the flow.")
+    + `<form id="runForm" class="grid lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-1 space-y-3">
+          <div class="surface-2 p-4">
+            <label class="lbl">Model to test</label>
+            <select class="field mb-3" name="model">${modelOpts}</select>
+            <label class="lbl">External tools to invoke (optional)</label>
+            <div class="space-y-1 mb-2">${toolBoxes}</div>
+            <label class="flex items-center gap-2 text-sm cursor-pointer mt-2 scale-text">
+              <input type="checkbox" name="elicit" checked><span>Strong elicitation (scaffolding, fine-tuning, multi-agent)</span></label>
+            <p class="t-helper text-xs mt-2 scale-text">Elicitation measures the ceiling and reduces sandbagging. <button type="button" class="text-xs" style="color:var(--ibm-blue)" data-open-help="ceiling">learn more</button></p>
+          </div>
+          <button class="btn btn-primary w-full justify-center" type="submit">Run selected tests</button>
+          <button class="btn btn-secondary w-full justify-center" type="button" onclick="selectAllTests()">Select every test</button>
+        </div>
+        <div class="lg:col-span-2 surface-2 p-4">
+          <h2 class="font-semibold mb-3">Choose tests</h2>
+          ${testGroups}
+        </div>
+      </form>
+      <div id="runResult" class="mt-4"></div>`;
+}
+function selectAllTests(){ document.querySelectorAll('#runForm input[name="test"]').forEach(c=>c.checked=true); }
+
+/* ---------- SCANS ---------- */
+function viewScans(){
+  const rows = STATE.scans.slice().sort((a,b)=>b.started.localeCompare(a.started)).map(s=>`
+    <tr>
+      <td class="t-mono text-xs">${s.id.slice(0,12)}</td>
+      <td>${esc(s.model)}</td>
+      <td class="scale-text">${s.tests.map(t=>esc(TEST_INDEX[t.testId]?.name||t.testId)).slice(0,2).join(", ")}${s.tests.length>2?` +${s.tests.length-2}`:""}</td>
+      <td class="t-mono text-xs">${s.tools.length?s.tools.join(", "):"—"}</td>
+      <td>${statusTag(s.status)}</td>
+      <td>${sevTag(s.worst)}</td>
+      <td class="t-mono text-xs">${s.findingsCount}</td>
+      <td class="t-helper text-xs scale-text">${fmtDate(s.started)}</td>
+      <td class="whitespace-nowrap">
+        <button class="btn-ghost text-xs" onclick="showScan('${s.id}')">Open</button>
+        <button class="btn-ghost text-xs" style="color:var(--sev-critical)" onclick="delScan('${s.id}')">Delete</button>
+      </td>
+    </tr>`).join("") || `<tr><td colspan="9" class="t-helper text-center py-6 scale-text">No scans yet.</td></tr>`;
+  return pageHead("Scans","Every test run, with its worst severity and framework-mapped findings.",
+    `<button class="btn btn-secondary" onclick="exportScansCSV()">Export CSV</button>
+     <button class="btn btn-primary" data-nav="run">Run a test</button>`)
+    + `<div class="surface-2 overflow-x-auto"><table class="data"><thead><tr>
+        <th>Scan</th><th>Model</th><th>Tests</th><th>Tools</th><th>Status</th><th>Worst</th><th>Findings</th><th>When</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function showScan(id){
+  const s = STATE.scans.find(x=>x.id===id); if(!s) return;
+  const body = s.tests.map(t=>{
+    const test=TEST_INDEX[t.testId];
+    const finds = t.findings.length? t.findings.map(f=>`
+      <div class="surface p-3 mb-2">
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <span class="font-medium text-sm scale-text">${esc(f.title)}</span>${sevTag(f.severity)}
+        </div>
+        <div class="flex flex-wrap gap-1 mb-2">${owaspTag(f.owasp)} ${atlasTag(f.atlas)} ${statusTag(f.status)}</div>
+        <p class="t-sec text-xs mb-1 scale-text"><strong>Evidence:</strong> ${esc(f.evidence)}</p>
+        <p class="t-sec text-xs scale-text"><strong>Fix:</strong> ${esc(f.remediation)}</p>
+      </div>`).join("") : `<p class="text-sm" style="color:var(--pass)">✓ Clean — no findings.</p>`;
+    return `<details class="acc mb-2" ${t.findings.length?"open":""}>
+      <summary><span>${esc(test?.name||t.testId)}</span><span>${sevTag(t.worst)}</span></summary>
+      <div class="p-3">${finds}</div></details>`;
+  }).join("");
+  openModal(`Scan ${esc(s.id.slice(0,12))} — ${esc(s.model)}`, `
+    <div class="flex flex-wrap gap-2 mb-3 text-xs t-helper scale-text">
+      <span>${fmtDate(s.started)}</span> · <span>${s.tests.length} tests</span> · <span>${s.findingsCount} findings</span>
+      ${s.tools.length?` · <span class="t-mono">tools: ${s.tools.join(", ")}</span>`:""}
+      ${s.elicitation?` · <span style="color:var(--ibm-blue)">elicitation on</span>`:""}
+    </div>${body}
+    <div class="mt-3 flex gap-2"><button class="btn btn-secondary text-sm" onclick="exportScan('${s.id}')">Export this scan (JSON)</button></div>`);
+}
+function exportScan(id){ const s=STATE.scans.find(x=>x.id===id); if(s){ downloadFile(id+".json", JSON.stringify(s,null,2), "application/json"); toast("Exported "+id+".json"); } }
+</script>
+
+<script>
+/* ---------- FINDINGS ---------- */
+var FIND_FILTER = "all";
+function viewFindings(){
+  let f = allFindings();
+  if(FIND_FILTER!=="all") f = f.filter(x=>x.severity===FIND_FILTER);
+  f.sort((a,b)=>SEV_ORDER.indexOf(a.severity)-SEV_ORDER.indexOf(b.severity));
+  const c = sevCounts(allFindings());
+  const chips = ["all",...SEV_ORDER].map(s=>`
+    <button class="tag ${FIND_FILTER===s?'':''}" style="cursor:pointer;border-color:${s==='all'?'var(--border-strong)':SEV_COLOR[s]};color:${s==='all'?'var(--text-primary)':SEV_COLOR[s]};${FIND_FILTER===s?'background:var(--layer-03)':''}" onclick="FIND_FILTER='${s}';render()">${s}${s!=='all'?` (${c[s]})`:` (${allFindings().length})`}</button>`).join(" ");
+  const rows = f.map(x=>`
+    <tr>
+      <td>${sevTag(x.severity)}</td>
+      <td><div class="font-medium text-sm scale-text">${esc(x.title)}</div>
+          <div class="t-helper text-xs scale-text">${esc(TEST_INDEX[x.testId]?.name||x.testId)} · ${esc(x.model)}</div></td>
+      <td>${owaspTag(x.owasp)} ${atlasTag(x.atlas)}</td>
+      <td>${statusTag(x.status)}</td>
+      <td class="t-helper text-xs scale-text">${fmtDate(x.when)}</td>
+      <td><button class="btn-ghost text-xs" onclick="showFinding('${x.scanId}','${x.id}')">View</button></td>
+    </tr>`).join("") || `<tr><td colspan="6" class="t-helper text-center py-6 scale-text">No findings match this filter.</td></tr>`;
+  return pageHead("Findings","Everything the tests surfaced, sorted worst-first and mapped to both frameworks.",
+    `<button class="btn btn-secondary" onclick="exportFindingsCSV()">Export CSV</button>`)
+    + `<div class="flex flex-wrap gap-2 mb-4">${chips}</div>
+       <div class="surface-2 overflow-x-auto"><table class="data"><thead><tr>
+         <th>Severity</th><th>Finding</th><th>Mapping</th><th>Status</th><th>When</th><th></th></tr></thead>
+         <tbody>${rows}</tbody></table></div>`;
+}
+function showFinding(scanId, findId){
+  const s=STATE.scans.find(x=>x.id===scanId); if(!s) return;
+  let f; s.tests.forEach(t=>{const g=t.findings.find(y=>y.id===findId); if(g)f=g;});
+  if(!f) return;
+  openModal(esc(f.title)+" "+sevTag(f.severity), `
+    <div class="flex flex-wrap gap-1 mb-3">${owaspTag(f.owasp)} ${atlasTag(f.atlas)} ${statusTag(f.status)}</div>
+    <p class="mb-2 scale-text"><strong>Model:</strong> ${esc(s.model)}</p>
+    <p class="mb-2 scale-text"><strong>Evidence:</strong> ${esc(f.evidence)}</p>
+    <p class="mb-2 scale-text"><strong>Remediation:</strong> ${esc(f.remediation)}</p>
+    ${f.owasp?`<p class="mb-2 scale-text"><strong>OWASP:</strong> <a href="${OWASP_LLM[f.owasp].url}" target="_blank" rel="noopener">${f.owasp} ${esc(OWASP_LLM[f.owasp].name)}</a></p>`:""}
+    ${f.atlas?`<p class="scale-text"><strong>ATLAS:</strong> <a href="https://atlas.mitre.org/techniques/${f.atlas}" target="_blank" rel="noopener">${f.atlas} ${esc(ATLAS[f.atlas]?.name||"")}</a></p>`:""}`);
+}
+
+/* ---------- SCHEMAS (YAML) ---------- */
+function viewSchemas(){
+  const opts = Object.values(TEST_INDEX).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  const first = Object.keys(TEST_INDEX)[0];
+  return pageHead("Schemas (YAML)","Each test is described by a machine-readable YAML schema you can export, edit, and re-import.",
+    `<button class="btn btn-secondary" onclick="exportAllSchemas()">Export all (YAML)</button>
+     <label class="btn btn-secondary" style="cursor:pointer">Import YAML<input type="file" accept=".yaml,.yml" class="hidden" onchange="importSchema(event)"></label>`)
+    + `<div class="grid lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-1 surface-2 p-4">
+          <label class="lbl">Pick a test</label>
+          <select class="field mb-3" id="schemaPick" onchange="renderSchema(this.value)">${opts}</select>
+          <p class="t-helper text-xs scale-text">A schema pins down what a test measures: its probes, framework tags, elicitation settings, and pass rule. Version these in git so tests are reproducible.</p>
+          <div class="mt-3 space-y-2">
+            <button class="btn btn-secondary w-full justify-center text-sm" onclick="exportOneSchema(document.getElementById('schemaPick').value)">Export this schema</button>
+            <button class="btn btn-secondary w-full justify-center text-sm" onclick="resetSchema(document.getElementById('schemaPick').value)">Reset to default</button>
+          </div>
+        </div>
+        <div class="lg:col-span-2 surface-2 p-4">
+          <div class="flex items-center justify-between mb-2"><h2 class="font-semibold">Schema</h2><span class="t-helper text-xs t-mono" id="schemaName"></span></div>
+          <textarea id="schemaText" class="code-block w-full" style="min-height:420px;width:100%;resize:vertical" spellcheck="false"></textarea>
+          <div class="mt-2 flex gap-2"><button class="btn btn-primary text-sm" onclick="saveSchemaEdit()">Save edits</button>
+            <button class="btn-ghost text-sm" onclick="renderSchema(document.getElementById('schemaPick').value)">Revert</button></div>
+        </div>
+      </div>`;
+}
+function renderSchema(id){ $("#schemaText").value = yamlFor(id); $("#schemaName").textContent = id+".yaml"; }
+function showSchema(id){ openModal(esc(TEST_INDEX[id].name)+" — schema.yaml",
+    `<div class="code-block" style="max-height:60vh">${esc(yamlFor(id))}</div>
+     <div class="mt-3 flex gap-2"><button class="btn btn-secondary text-sm" onclick='exportOneSchema("${id}")'>Download YAML</button>
+     <button class="btn-ghost text-sm" onclick="closeModal();go('schemas')">Open editor</button></div>`); }
+function saveSchemaEdit(){
+  const id=$("#schemaPick").value;
+  try { const obj=jsyaml.load($("#schemaText").value); STATE.schemas[id]=obj; saveState(); toast("Schema saved for "+id,"ok"); }
+  catch(e){ toast("YAML error: "+e.message,"err"); }
+}
+function resetSchema(id){ delete STATE.schemas[id]; saveState(); renderSchema(id); toast("Reset "+id+" to default"); }
+function exportOneSchema(id){ downloadFile(id+".yaml", yamlFor(id), "text/yaml"); toast("Exported "+id+".yaml"); }
+function exportAllSchemas(){
+  const all = Object.keys(TEST_INDEX).map(id=>`# === ${id} ===\n`+yamlFor(id)).join("\n---\n");
+  downloadFile("llm-test-schemas.yaml", all, "text/yaml"); toast("Exported all schemas");
+}
+function importSchema(ev){
+  const file=ev.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const docs=jsyaml.loadAll(r.result); let n=0;
+      docs.forEach(d=>{ if(d&&d.id){ STATE.schemas[d.id]=d; n++; } });
+      saveState(); toast(`Imported ${n} schema(s)`,"ok"); if(CURRENT==="schemas") render();
+    }catch(e){ toast("Import failed: "+e.message,"err"); } };
+  r.readAsText(file); ev.target.value="";
+}
+</script>
+
+<script>
+/* ---------- INTEGRATIONS ---------- */
+function viewTools(){
+  const cards = TOOLS.map(t=>{
+    const on = !!STATE.integrations[t.id];
+    return `<div class="surface-2 p-4">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <div><h3 class="font-semibold t-mono">${esc(t.name)}</h3><div class="t-helper text-xs scale-text">${esc(t.by)} · ${esc(t.kind)}</div></div>
+        <span class="tag" style="border-color:${on?'var(--pass)':'var(--border-strong)'};color:${on?'var(--pass)':'var(--text-helper)'}">${on?'connected':'off'}</span>
+      </div>
+      <p class="t-sec text-sm my-3 scale-text">${esc(t.desc)}</p>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn ${on?'btn-secondary':'btn-primary'} text-sm" onclick="toggleTool('${t.id}')">${on?'Disconnect':'Connect'}</button>
+        <a class="btn btn-ghost text-sm" href="${t.url}" target="_blank" rel="noopener">Docs ↗</a>
+      </div></div>`;
+  }).join("");
+  return pageHead("Integrations","Connect external scanners and local runtimes. In this demo, connecting just records intent and lets you attach the tool to a run.")
+    + `<div class="surface p-4 mb-4"><h2 class="font-semibold mb-1">Scanning local models</h2>
+        <p class="t-sec text-sm scale-text">To test a model on your own machine, run it in <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> (or another local runtime), add it under <button class="text-sm" style="color:var(--ibm-blue)" data-nav="models">Models</button> with endpoint <span class="t-mono">http://localhost:11434</span>, then point a scanner like garak or Promptfoo at it. A real integration would shell out to those tools; here the workflow is simulated.</p></div>
+      <div class="grid md:grid-cols-2 gap-3">${cards}</div>`;
+}
+function toggleTool(id){ STATE.integrations[id]=!STATE.integrations[id]; saveState(); render(); toast((STATE.integrations[id]?"Connected ":"Disconnected ")+id); }
+
+/* ---------- REFERENCES ---------- */
+function viewRefs(){
+  const refCards = REFS.map(r=>`<a class="surface-2 p-4 block hover:no-underline" href="${r.url}" target="_blank" rel="noopener" style="color:inherit">
+      <div class="flex items-center justify-between"><h3 class="font-semibold" style="color:var(--ibm-blue)">${esc(r.name)} ↗</h3></div>
+      <p class="t-sec text-sm mt-1 scale-text">${esc(r.desc)}</p></a>`).join("");
+  const owaspList = Object.entries(OWASP_LLM).map(([k,v])=>`<tr><td class="t-mono">${k}</td><td><a href="${v.url}" target="_blank" rel="noopener">${esc(v.name)}</a></td></tr>`).join("");
+  const atlasList = Object.entries(ATLAS).map(([k,v])=>`<tr><td class="t-mono">${k}</td><td class="scale-text">${esc(v.name)}</td><td class="t-helper text-xs scale-text">${esc(v.tactic)}</td></tr>`).join("");
+  return pageHead("References","The frameworks and official docs this console maps to. Always verify against the source — these lists change.")
+    + `<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">${refCards}</div>
+       <div class="grid lg:grid-cols-2 gap-4">
+        <div class="surface-2 overflow-x-auto"><div class="p-4 pb-2 flex items-center justify-between"><h2 class="font-semibold">OWASP LLM Top 10 (2025)</h2><a class="text-xs" href="https://genai.owasp.org" target="_blank" rel="noopener">source ↗</a></div>
+          <table class="data"><thead><tr><th>ID</th><th>Risk</th></tr></thead><tbody>${owaspList}</tbody></table></div>
+        <div class="surface-2 overflow-x-auto"><div class="p-4 pb-2 flex items-center justify-between"><h2 class="font-semibold">MITRE ATLAS techniques</h2><a class="text-xs" href="https://atlas.mitre.org" target="_blank" rel="noopener">source ↗</a></div>
+          <table class="data"><thead><tr><th>ID</th><th>Technique</th><th>Tactic</th></tr></thead><tbody>${atlasList}</tbody></table></div>
+       </div>
+       <div class="surface p-4 mt-5"><h2 class="font-semibold mb-1">A note on the high-stakes tests</h2>
+         <p class="t-sec text-sm scale-text">Bio/chem and cyber-offense evaluations carry real-world risk. This console is a <strong>tracker and teaching tool</strong> — it does not run those tests or produce harmful content. Real dangerous-capability evaluations should be run by qualified teams, in hardened and monitored environments, following responsible-disclosure and governance processes such as the <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener">NIST AI RMF</a>.</p></div>`;
+}
+
+/* ---------- ROUTER ---------- */
+function render(){
+  const map={dashboard:viewDashboard,models:viewModels,catalog:viewCatalog,run:viewRun,scans:viewScans,findings:viewFindings,schemas:viewSchemas,tools:viewTools,refs:viewRefs};
+  $("#main").innerHTML = (map[CURRENT]||viewDashboard)();
+  // post-render wiring for views that need it
+  if(CURRENT==="schemas"){ const id=Object.keys(TEST_INDEX)[0]; $("#schemaPick").value=id; renderSchema(id); }
+  wireForms();
+}
+</script>
+
+<script>
+/* =====================================================================
+   PART 7 — FORMS, ACTIONS, EXPORT/IMPORT, THEME, INIT
+   ===================================================================== */
+function wireForms(){
+  const mf = $("#modelForm");
+  if(mf) mf.onsubmit = e=>{
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(mf).entries());
+    if(!d.name.trim()) return;
+    STATE.models.push({id:uid("mdl"), name:d.name.trim(), provider:d.provider.trim()||"—", kind:d.kind, endpoint:d.endpoint.trim(), notes:d.notes.trim(), created:nowISO()});
+    saveState(); toast("Model added: "+d.name,"ok"); render();
+  };
+  const rf = $("#runForm");
+  if(rf) rf.onsubmit = e=>{
+    e.preventDefault();
+    const fd = new FormData(rf);
+    const model = fd.get("model");
+    const tests = fd.getAll("test");
+    const tools = fd.getAll("tool");
+    const elicit = fd.get("elicit")==="on";
+    if(!tests.length){ toast("Pick at least one test.","warn"); return; }
+    const btn = rf.querySelector('button[type="submit"]'); btn.disabled=true; btn.textContent="Running…";
+    // simulate async run
+    setTimeout(()=>{
+      const scan = makeScan(model, tests, {tools, elicitation:elicit});
+      STATE.scans.push(scan); saveState();
+      RUN_PREFILL={model:null,tests:new Set()};
+      const res=$("#runResult");
+      res.innerHTML = `<div class="surface-2 p-4"><div class="flex items-center justify-between mb-2"><h2 class="font-semibold">Run complete — ${sevTag(scan.worst)}</h2><span class="t-helper text-xs scale-text">${scan.findingsCount} findings across ${scan.tests.length} tests</span></div>
+        <div class="flex gap-2 flex-wrap"><button class="btn btn-primary text-sm" onclick="showScan('${scan.id}')">Open results</button>
+        <button class="btn btn-secondary text-sm" data-nav="findings">Go to findings</button>
+        <button class="btn btn-secondary text-sm" data-nav="dashboard">Dashboard</button></div></div>`;
+      res.scrollIntoView({behavior:"smooth",block:"nearest"});
+      toast("Scan complete: "+scan.findingsCount+" findings","ok");
+    }, 650);
+  };
+}
+
+function delModel(id){ if(!confirm("Remove this model?")) return; STATE.models=STATE.models.filter(m=>m.id!==id); saveState(); render(); }
+function delScan(id){ if(!confirm("Delete this scan?")) return; STATE.scans=STATE.scans.filter(s=>s.id!==id); saveState(); render(); toast("Scan deleted"); }
+function doSeed(){ seedDemo(); render(); toast("Loaded demo models & scans","ok"); }
+
+/* ---- CSV exports ---- */
+function toCSV(rows){ return rows.map(r=>r.map(c=>`"${String(c==null?"":c).replace(/"/g,'""')}"`).join(",")).join("\n"); }
+function exportScansCSV(){
+  const rows=[["scan_id","model","tests","tools","status","worst_severity","findings","started"]];
+  STATE.scans.forEach(s=>rows.push([s.id,s.model,s.tests.map(t=>t.testId).join("|"),s.tools.join("|"),s.status,s.worst,s.findingsCount,s.started]));
+  downloadFile("scans.csv", toCSV(rows), "text/csv"); toast("Exported scans.csv");
+}
+function exportFindingsCSV(){
+  const rows=[["finding_id","severity","title","test","model","owasp","atlas","status","when"]];
+  allFindings().forEach(f=>rows.push([f.id,f.severity,f.title,f.testId,f.model,f.owasp||"",f.atlas||"",f.status,f.when]));
+  downloadFile("findings.csv", toCSV(rows), "text/csv"); toast("Exported findings.csv");
+}
+
+/* ---- Full JSON export / import (the whole app state) ---- */
+function exportJSON(){ downloadFile("llm-test-console-export.json", JSON.stringify(STATE,null,2), "application/json"); toast("Exported full state (JSON)","ok"); }
+function importJSON(ev){
+  const file=ev.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const obj=JSON.parse(r.result);
+      STATE.models=obj.models||[]; STATE.scans=obj.scans||[]; STATE.schemas=obj.schemas||{}; STATE.integrations=obj.integrations||{};
+      saveState(); render(); toast("Imported console state","ok");
+    }catch(e){ toast("Import failed: not valid JSON","err"); } };
+  r.readAsText(file); ev.target.value="";
+}
+function wipeAll(){ if(!confirm("Erase all models, scans, and schemas on this device?")) return; STATE={models:[],scans:[],schemas:{},integrations:{}}; saveState(); render(); toast("All data cleared"); }
+
+/* ---- THEME + FONT ---- */
+let cfg = loadCfg();
+function applyTheme(){ document.documentElement.setAttribute("data-theme", cfg.theme);
+  $("#iconMoon").classList.toggle("hidden", cfg.theme==="dark");
+  $("#iconSun").classList.toggle("hidden", cfg.theme!=="dark"); }
+function applyFont(){ document.documentElement.style.fontSize = cfg.font+"px";
+  $("#fontVal").textContent=cfg.font+"px"; const m=$("#fontValM"); if(m) m.textContent=cfg.font+"px"; }
+const bumpFont = d =>{ cfg.font=Math.max(14,Math.min(36,cfg.font+d)); saveCfg(cfg); applyFont(); };
+$("#themeToggle").onclick=()=>{ cfg.theme = cfg.theme==="dark"?"light":"dark"; saveCfg(cfg); applyTheme(); };
+$("#fontUp").onclick =()=>bumpFont(2);
+$("#fontDown").onclick=()=>bumpFont(-2);
+$("#fontUpM").onclick =()=>bumpFont(2);
+$("#fontDownM").onclick=()=>bumpFont(-2);
+
+/* ---- NAV (mobile) ---- */
+function openNav(){ $("#navRail").classList.remove("-translate-x-full"); $("#navScrim").classList.remove("hidden"); }
+function closeNav(){ $("#navRail").classList.add("-translate-x-full"); $("#navScrim").classList.add("hidden"); }
+$("#navToggle").onclick=()=>{ $("#navRail").classList.contains("-translate-x-full")?openNav():closeNav(); };
+$("#navScrim").onclick=closeNav;
+$("#seedBtn").onclick=doSeed;
+
+/* ---- MODAL wiring ---- */
+$("#modalClose").onclick=closeModal;
+$("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
+
+/* ---- INIT ---- */
+loadState(); applyTheme(); applyFont(); buildNav(); render();
+console.log("LLM Testing Console ready. State key:", KEY);
+</script>
+</body>
+</html>
