@@ -13,6 +13,7 @@
 <!-- Tailwind + js-yaml (load in the browser; these are for the running app, not the build env) -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
   tailwind.config = {
@@ -204,6 +205,15 @@
     </div>
   </div>
   <div class="flex items-center gap-1">
+    <!-- simulation mode pill -->
+    <button id="simPill" onclick="toggleSim()" title="This console runs in simulation mode"
+      class="hidden sm:inline-flex items-center gap-2 mr-1 px-3 py-1.5"
+      style="border:1px solid #393939;border-radius:2px;color:var(--header-text);font-size:12px;line-height:1;">
+      <span id="simDot" style="width:8px;height:8px;border-radius:50%;background:var(--ibm-blue);display:inline-block;box-shadow:0 0 6px var(--ibm-blue)"></span>
+      <span class="t-mono" id="simLabel">SIM MODE</span>
+    </button>
+    <!-- eval now -->
+    <button onclick="openEval()" class="btn btn-primary mr-2 hidden sm:inline-flex" style="padding:8px 16px;font-size:13px">Eval now</button>
     <!-- font size -->
     <div class="hidden sm:flex items-center gap-1 mr-1 px-2" style="border-left:1px solid #393939; border-right:1px solid #393939;">
       <span class="t-mono text-xs" style="color:var(--header-text)">Aa</span>
@@ -235,8 +245,10 @@
     </div>
     <div class="py-2" id="navList"></div>
     <div class="p-4 mt-2" style="border-top:1px solid var(--border)">
+      <button class="btn btn-primary w-full justify-center mb-2" onclick="openEval()" style="background:var(--sev-purple);border-color:var(--sev-purple)">★ Eval now — book a demo</button>
       <button class="btn btn-primary w-full justify-center mb-2" data-nav="run">Run new test</button>
-      <button class="btn btn-secondary w-full justify-center mb-3" id="seedBtn">Simulate demo data</button>
+      <button class="btn btn-secondary w-full justify-center mb-2" id="seedBtn">Simulate demo data</button>
+      <button class="btn btn-secondary w-full justify-center mb-3" onclick="toggleSim()"><span id="simDotM" style="width:8px;height:8px;border-radius:50%;background:var(--ibm-blue);display:inline-block;margin-right:6px"></span><span id="simLabelM">Simulation mode: ON</span></button>
       <div class="t-helper text-xs mb-1 scale-text" style="text-transform:none">Data (this device)</div>
       <div class="grid grid-cols-2 gap-2 mb-2">
         <button class="btn btn-secondary justify-center text-xs" onclick="exportJSON()">Export JSON</button>
@@ -387,15 +399,45 @@ const CATALOG = [
 
 // External tool registry — real, well-known open-source LLM security tools.
 const TOOLS = [
-  {id:"garak", name:"garak", by:"NVIDIA", url:"https://github.com/NVIDIA/garak",
+  /* ---- scanners / red-team frameworks ---- */
+  {id:"garak", name:"garak", by:"NVIDIA", cat:"scanner", url:"https://github.com/NVIDIA/garak",
    desc:"LLM vulnerability scanner with a large probe library (jailbreaks, injection, toxicity, leakage).", kind:"Automated scanner"},
-  {id:"pyrit", name:"PyRIT", by:"Microsoft (Azure)", url:"https://github.com/Azure/PyRIT",
+  {id:"pyrit", name:"PyRIT", by:"Microsoft (Azure)", cat:"scanner", url:"https://github.com/Azure/PyRIT",
    desc:"Python Risk Identification Toolkit — automate red-teaming and multi-turn attack orchestration.", kind:"Red-team framework"},
-  {id:"promptfoo", name:"Promptfoo", by:"Promptfoo", url:"https://www.promptfoo.dev",
+  {id:"promptfoo", name:"Promptfoo", by:"Promptfoo", cat:"scanner", url:"https://www.promptfoo.dev",
    desc:"Eval + red-team runner: define assertions, run adversarial probes, compare models.", kind:"Eval / red-team"},
-  {id:"ollama", name:"Ollama", by:"Ollama", url:"https://ollama.com",
-   desc:"Run local models (Llama, Mistral, Qwen, etc.) on your own machine via a localhost API.", kind:"Local model runtime"},
+
+  /* ---- local model runtimes ---- */
+  {id:"ollama", name:"Ollama", by:"Ollama", cat:"runtime", url:"https://ollama.com", endpoint:"http://localhost:11434",
+   desc:"Run local models (Llama, Mistral, Qwen, etc.) on your own machine via a localhost API.", kind:"Local runtime"},
+  {id:"llamacpp", name:"llama.cpp", by:"ggml-org", cat:"runtime", url:"https://github.com/ggml-org/llama.cpp", endpoint:"http://localhost:8080/v1",
+   desc:"Lightweight C/C++ inference engine. Its llama-server exposes an OpenAI-compatible endpoint for GGUF models.", kind:"Local runtime"},
+  {id:"vllm", name:"vLLM", by:"vLLM Project", cat:"runtime", url:"https://github.com/vllm-project/vllm", endpoint:"http://localhost:8000/v1",
+   desc:"High-throughput serving engine with PagedAttention. Serves an OpenAI-compatible API for batched inference.", kind:"Local runtime"},
+  {id:"mlx", name:"MLX", by:"Apple", cat:"runtime", url:"https://github.com/ml-explore/mlx-lm", endpoint:"http://localhost:8080/v1",
+   desc:"Apple-silicon array framework. mlx_lm.server runs local models on M-series GPUs via an OpenAI-style API.", kind:"Local runtime"},
+  {id:"janai", name:"Jan AI", by:"Jan", cat:"runtime", url:"https://jan.ai", endpoint:"http://localhost:1337/v1",
+   desc:"Open-source desktop app that runs models fully offline and exposes a local OpenAI-compatible server.", kind:"Local runtime"},
+
+  /* ---- hosted model providers (API) ---- */
+  {id:"claude", name:"Claude", by:"Anthropic", cat:"provider", url:"https://docs.anthropic.com", endpoint:"https://api.anthropic.com",
+   desc:"Anthropic's Claude family (Opus, Sonnet, Haiku) via the Messages API. Strong tool-use and long context.", kind:"Hosted API"},
+  {id:"chatgpt", name:"ChatGPT", by:"OpenAI", cat:"provider", url:"https://platform.openai.com/docs", endpoint:"https://api.openai.com/v1",
+   desc:"OpenAI GPT models via the Chat Completions / Responses API. Widely used baseline for evals.", kind:"Hosted API"},
+  {id:"grok", name:"Grok", by:"xAI", cat:"provider", url:"https://docs.x.ai", endpoint:"https://api.x.ai/v1",
+   desc:"xAI's Grok models via an OpenAI-compatible API. Real-time leaning, useful as a comparison target.", kind:"Hosted API"},
+  {id:"gemini", name:"Gemini", by:"Google", cat:"provider", url:"https://ai.google.dev", endpoint:"https://generativelanguage.googleapis.com",
+   desc:"Google's Gemini models via the Generative Language API. Multimodal with large context windows.", kind:"Hosted API"},
+  {id:"metaai", name:"Meta AI", by:"Meta", cat:"provider", url:"https://llama.developer.meta.com", endpoint:"https://api.llama.com/v1",
+   desc:"Meta's Llama models via the hosted Llama API (OpenAI-compatible) — plus open weights you can self-host.", kind:"Hosted API"},
 ];
+const TOOL_CATS = [
+  {cat:"provider", title:"Model providers (hosted APIs)", blurb:"Point the console at a frontier model's API as a test target."},
+  {cat:"runtime",  title:"Local model runtimes",         blurb:"Test models running on your own hardware, fully offline."},
+  {cat:"scanner",  title:"Scanners &amp; red-team frameworks", blurb:"Attach an external probe engine to a run."},
+];
+const TOOL_INDEX = {};
+TOOLS.forEach(t => TOOL_INDEX[t.id] = t);
 
 const REFS = [
   {name:"MITRE ATLAS", url:"https://atlas.mitre.org", desc:"Adversarial Threat Landscape for AI Systems — tactics & techniques for attacks on ML."},
@@ -715,6 +757,7 @@ function viewDashboard(){
   const empty = STATE.scans.length===0;
   return pageHead("Dashboard","Live view of your models, scans, and findings — mapped to ATLAS and OWASP.",
       `<button class="btn btn-secondary" data-open-help="ceiling">Measure the ceiling</button>
+       <button class="btn btn-secondary" onclick="exportReportPDF()">Export report (PDF)</button>
        <button class="btn btn-primary" data-nav="run">Run a test</button>`)
     + (empty?`<div class="surface p-6 mb-5 text-center"><p class="mb-3 scale-text">This is an empty console. Add real models, or load a demo so you can explore the workflow.</p><button class="btn btn-primary" onclick="doSeed()">Simulate demo data</button></div>`:"")
     + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">${tiles}</div>
@@ -838,7 +881,7 @@ function viewRun(){
         <input type="checkbox" name="test" value="${t.id}" ${RUN_PREFILL.tests.has(t.id)?"checked":""}>
         <span>${esc(t.name)}</span> ${sevTag(t.sev)}</label>`).join("")}
       </div></fieldset>`).join("");
-  const toolBoxes = TOOLS.filter(t=>t.id!=="ollama").map(t=>`
+  const toolBoxes = TOOLS.filter(t=>t.cat==="scanner").map(t=>`
     <label class="flex items-center gap-2 text-sm cursor-pointer scale-text"><input type="checkbox" name="tool" value="${t.id}"><span class="t-mono">${esc(t.name)}</span><span class="t-helper">${esc(t.kind)}</span></label>`).join("");
 
   return pageHead("Run a test","Pick a model, choose tests, and press run. Results are simulated so you can learn the flow.")
@@ -884,6 +927,7 @@ function viewScans(){
     </tr>`).join("") || `<tr><td colspan="9" class="t-helper text-center py-6 scale-text">No scans yet.</td></tr>`;
   return pageHead("Scans","Every test run, with its worst severity and framework-mapped findings.",
     `<button class="btn btn-secondary" onclick="exportScansCSV()">Export CSV</button>
+     <button class="btn btn-secondary" onclick="exportReportPDF()">Export report (PDF)</button>
      <button class="btn btn-primary" data-nav="run">Run a test</button>`)
     + `<div class="surface-2 overflow-x-auto"><table class="data"><thead><tr>
         <th>Scan</th><th>Model</th><th>Tests</th><th>Tools</th><th>Status</th><th>Worst</th><th>Findings</th><th>When</th><th></th>
@@ -912,7 +956,10 @@ function showScan(id){
       ${s.tools.length?` · <span class="t-mono">tools: ${s.tools.join(", ")}</span>`:""}
       ${s.elicitation?` · <span style="color:var(--ibm-blue)">elicitation on</span>`:""}
     </div>${body}
-    <div class="mt-3 flex gap-2"><button class="btn btn-secondary text-sm" onclick="exportScan('${s.id}')">Export this scan (JSON)</button></div>`);
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button class="btn btn-secondary text-sm" onclick="exportScan('${s.id}')">Export this scan (JSON)</button>
+      <button class="btn btn-secondary text-sm" onclick="exportScanPDF('${s.id}')">Export this scan (PDF)</button>
+    </div>`);
 }
 function exportScan(id){ const s=STATE.scans.find(x=>x.id===id); if(s){ downloadFile(id+".json", JSON.stringify(s,null,2), "application/json"); toast("Exported "+id+".json"); } }
 </script>
@@ -938,7 +985,8 @@ function viewFindings(){
       <td><button class="btn-ghost text-xs" onclick="showFinding('${x.scanId}','${x.id}')">View</button></td>
     </tr>`).join("") || `<tr><td colspan="6" class="t-helper text-center py-6 scale-text">No findings match this filter.</td></tr>`;
   return pageHead("Findings","Everything the tests surfaced, sorted worst-first and mapped to both frameworks.",
-    `<button class="btn btn-secondary" onclick="exportFindingsCSV()">Export CSV</button>`)
+    `<button class="btn btn-secondary" onclick="exportFindingsCSV()">Export CSV</button>
+     <button class="btn btn-secondary" onclick="exportReportPDF()">Export report (PDF)</button>`)
     + `<div class="flex flex-wrap gap-2 mb-4">${chips}</div>
        <div class="surface-2 overflow-x-auto"><table class="data"><thead><tr>
          <th>Severity</th><th>Finding</th><th>Mapping</th><th>Status</th><th>When</th><th></th></tr></thead>
@@ -1011,26 +1059,48 @@ function importSchema(ev){
 
 <script>
 /* ---------- INTEGRATIONS ---------- */
-function viewTools(){
-  const cards = TOOLS.map(t=>{
-    const on = !!STATE.integrations[t.id];
-    return `<div class="surface-2 p-4">
+function toolCard(t){
+  const on = !!STATE.integrations[t.id];
+  return `<div class="surface-2 p-4">
       <div class="flex items-start justify-between gap-2 mb-1">
         <div><h3 class="font-semibold t-mono">${esc(t.name)}</h3><div class="t-helper text-xs scale-text">${esc(t.by)} · ${esc(t.kind)}</div></div>
         <span class="tag" style="border-color:${on?'var(--pass)':'var(--border-strong)'};color:${on?'var(--pass)':'var(--text-helper)'}">${on?'connected':'off'}</span>
       </div>
       <p class="t-sec text-sm my-3 scale-text">${esc(t.desc)}</p>
+      ${t.endpoint?`<div class="t-helper text-xs mb-3 scale-text">Default endpoint · <span class="t-mono" style="color:var(--text-secondary)">${esc(t.endpoint)}</span></div>`:""}
       <div class="flex flex-wrap gap-2">
         <button class="btn ${on?'btn-secondary':'btn-primary'} text-sm" onclick="toggleTool('${t.id}')">${on?'Disconnect':'Connect'}</button>
+        ${t.endpoint?`<button class="btn btn-ghost text-sm" onclick="addFromConnector('${t.id}')">Add as model</button>`:""}
         <a class="btn btn-ghost text-sm" href="${t.url}" target="_blank" rel="noopener">Docs ↗</a>
       </div></div>`;
-  }).join("");
-  return pageHead("Integrations","Connect external scanners and local runtimes. In this demo, connecting just records intent and lets you attach the tool to a run.")
-    + `<div class="surface p-4 mb-4"><h2 class="font-semibold mb-1">Scanning local models</h2>
-        <p class="t-sec text-sm scale-text">To test a model on your own machine, run it in <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> (or another local runtime), add it under <button class="text-sm" style="color:var(--ibm-blue)" data-nav="models">Models</button> with endpoint <span class="t-mono">http://localhost:11434</span>, then point a scanner like garak or Promptfoo at it. A real integration would shell out to those tools; here the workflow is simulated.</p></div>
-      <div class="grid md:grid-cols-2 gap-3">${cards}</div>`;
 }
-function toggleTool(id){ STATE.integrations[id]=!STATE.integrations[id]; saveState(); render(); toast((STATE.integrations[id]?"Connected ":"Disconnected ")+id); }
+function viewTools(){
+  const onCount = TOOLS.filter(t=>STATE.integrations[t.id]).length;
+  const sections = TOOL_CATS.map(g=>{
+    const items = TOOLS.filter(t=>t.cat===g.cat);
+    if(!items.length) return "";
+    return `<div class="mb-6">
+      <div class="flex items-baseline justify-between mb-1">
+        <h2 class="font-semibold">${g.title}</h2>
+        <span class="t-helper text-xs scale-text">${items.filter(t=>STATE.integrations[t.id]).length}/${items.length} connected</span>
+      </div>
+      <p class="t-helper text-xs mb-3 scale-text" style="text-transform:none">${g.blurb}</p>
+      <div class="grid md:grid-cols-2 gap-3">${items.map(toolCard).join("")}</div>
+    </div>`;
+  }).join("");
+  return pageHead("Integrations",`Connect model providers, local runtimes, and scanners. ${onCount} connected. Everything here is simulated — connecting records intent and lets you attach the target to a run.`)
+    + `<div class="surface p-4 mb-5" style="border-left:3px solid var(--ibm-blue)"><h2 class="font-semibold mb-1">Simulated connectors</h2>
+        <p class="t-sec text-sm scale-text">No API keys are used and no requests leave your browser. "Connect" flags a target so you can attach it to a scan; "Add as model" drops a ready-to-test entry into <button class="text-sm" style="color:var(--ibm-blue)" data-nav="models">Models</button> with the default endpoint pre-filled. A production build would exchange keys and shell out to each runtime.</p></div>
+      ${sections}`;
+}
+function toggleTool(id){ STATE.integrations[id]=!STATE.integrations[id]; saveState(); render(); toast((STATE.integrations[id]?"Connected ":"Disconnected ")+(TOOL_INDEX[id]?.name||id)); }
+function addFromConnector(id){
+  const t = TOOL_INDEX[id]; if(!t) return;
+  const kind = t.id==="ollama" ? "ollama" : (t.cat==="runtime" ? "local" : "api");
+  STATE.models.push({ id:uid("m"), name:t.name+" — target",
+    provider:t.by, kind, endpoint:t.endpoint||"", notes:"Added from "+t.name+" connector (simulated)." });
+  STATE.integrations[id]=true; saveState(); toast("Added "+t.name+" as a model target","ok"); go("models");
+}
 
 /* ---------- REFERENCES ---------- */
 function viewRefs(){
@@ -1144,6 +1214,197 @@ $("#fontDown").onclick=()=>bumpFont(-2);
 $("#fontUpM").onclick =()=>bumpFont(2);
 $("#fontDownM").onclick=()=>bumpFont(-2);
 
+/* ================================================================
+   SIMULATION MODE  —  this build only runs simulated evals.
+   Live evaluation against real models is a licensed engagement.
+   ================================================================ */
+cfg.simMode = (cfg.simMode===undefined) ? true : cfg.simMode;
+function applySim(){
+  const on = !!cfg.simMode;
+  const dot = $("#simDot"), lab = $("#simLabel"), dotM=$("#simDotM"), labM=$("#simLabelM");
+  const color = on ? "var(--ibm-blue)" : "var(--pass)";
+  if(dot){ dot.style.background=color; dot.style.boxShadow="0 0 6px "+color; }
+  if(lab) lab.textContent = on ? "SIM MODE" : "LIVE (locked)";
+  if(dotM) dotM.style.background=color;
+  if(labM) labM.textContent = on ? "Simulation mode: ON" : "Simulation mode: OFF";
+}
+function toggleSim(){
+  if(cfg.simMode){
+    // user is asking to leave simulation → that needs a licensed engagement
+    openEval("live");
+  } else {
+    cfg.simMode = true; saveCfg(cfg); applySim(); toast("Back in simulation mode","ok");
+  }
+}
+
+/* ================================================================
+   EVAL NOW  —  sales popup: schedule a demo / purchase a license
+   ================================================================ */
+const EVAL_EMAIL = "info@zactonics.ai";
+function openEval(context){
+  const live = context==="live";
+  const subject = encodeURIComponent(live
+    ? "Live LLM evaluation — demo & pricing"
+    : "Book an LLM evaluation demo");
+  const bodyTxt = encodeURIComponent(
+    "Hi Zactonics team,\n\nI'd like to schedule a demo of the LLM Testing Tool and discuss running real evaluations on our models.\n\nModel(s)/provider:\nUse case:\nTimeline:\n\nThanks!");
+  const mailto = `mailto:${EVAL_EMAIL}?subject=${subject}&body=${bodyTxt}`;
+  openModal("Schedule your evaluation", `
+    <div class="surface p-3 mb-3" style="border-left:3px solid var(--sev-purple)">
+      <p class="scale-text mb-1">${live
+        ? "<strong>Live mode is locked in this build.</strong> Everything here runs <em>simulated</em> in your browser so you can explore the workflow safely."
+        : "You're exploring the console in <strong>simulation mode</strong> — a safe way to learn the workflow."}</p>
+      <p class="scale-text">To run <strong>real evaluations</strong> against your own models — full dangerous-capability, alignment &amp; control, and system-security testing in a hardened, monitored environment — book a demo with our team.</p>
+    </div>
+    <p class="font-medium mb-2 scale-text">What a paid engagement adds:</p>
+    <ul class="list-disc ml-5 space-y-1 mb-4 scale-text text-sm">
+      <li>Live testing against your hosted or local models</li>
+      <li>Expert-run red-team &amp; elicitation (measuring the true ceiling)</li>
+      <li>A delivered report mapped to MITRE ATLAS &amp; the OWASP LLM Top 10</li>
+      <li>Remediation guidance and re-test to confirm fixes</li>
+    </ul>
+    <div class="surface-2 p-3 mb-4 text-center">
+      <div class="t-helper text-xs mb-1 scale-text">Contact us to schedule a demo &amp; purchase</div>
+      <a href="${mailto}" class="t-mono" style="color:var(--ibm-blue);font-size:1.05rem">${EVAL_EMAIL}</a>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="${mailto}" class="btn btn-primary">Email ${EVAL_EMAIL}</a>
+      <button class="btn btn-secondary" onclick="copyEmail()">Copy email address</button>
+      <button class="btn-ghost" onclick="closeModal()">Maybe later</button>
+    </div>
+    <p class="t-helper text-xs mt-3 scale-text">Or reach the team directly at <span class="t-mono">${EVAL_EMAIL}</span>. We'll follow up to scope your evaluation.</p>`);
+}
+function copyEmail(){
+  const done=()=>toast("Copied "+EVAL_EMAIL,"ok");
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(EVAL_EMAIL).then(done, ()=>done()); }
+  else { const t=el("textarea",{}); t.value=EVAL_EMAIL; document.body.appendChild(t); t.select(); try{document.execCommand("copy");}catch{} t.remove(); done(); }
+}
+
+/* ================================================================
+   PDF REPORT EXPORT  (jsPDF; falls back to printable window offline)
+   ================================================================ */
+function reportScope(scanId){
+  const scans = scanId ? STATE.scans.filter(s=>s.id===scanId) : STATE.scans.slice();
+  const finds=[]; scans.forEach(s=>s.tests.forEach(t=>t.findings.forEach(f=>finds.push(Object.assign({scan:s.id,model:s.model,test:t.testId,when:s.started},f)))));
+  const totalTests = scans.reduce((a,s)=>a+s.tests.length,0);
+  const passed = scans.reduce((a,s)=>a+s.tests.filter(t=>t.findings.length===0).length,0);
+  return { scans, finds, totalTests, passed,
+    passRate: totalTests?Math.round(passed/totalTests*100):0,
+    counts: sevCounts(finds) };
+}
+function exportReportPDF(scanId){
+  const d = reportScope(scanId);
+  const title = scanId ? ("Scan report — "+(d.scans[0]?d.scans[0].model:scanId)) : "LLM Evaluation & Security Report";
+  const fname = (scanId?("scan-report-"+scanId.slice(0,8)):"llm-eval-report")+".pdf";
+  const J = window.jspdf && window.jspdf.jsPDF;
+  if(!J){ return printReportFallback(d, title); }   // offline / CDN blocked
+  const doc = new J({unit:"pt", format:"a4"});
+  const M=48, W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight();
+  let y=M;
+  const foot=()=>{ const p=doc.internal.getNumberOfPages();
+    doc.setFontSize(8); doc.setTextColor(140);
+    doc.text("Zactonics LLM Testing Tool · SIMULATED data — not a live assessment", M, H-24);
+    doc.text("Page "+p, W-M, H-24, {align:"right"}); };
+  const page=()=>{ foot(); doc.addPage(); y=M; };
+  const need=(h)=>{ if(y+h>H-40){ page(); } };
+  const SEVC={critical:[218,30,40],high:[255,131,43],medium:[241,194,27],low:[69,137,255],info:[110,110,110]};
+
+  // Header band
+  doc.setFillColor(15,98,254); doc.rect(0,0,W,8,"F");
+  doc.setTextColor(22); doc.setFont("helvetica","bold"); doc.setFontSize(20);
+  doc.text(title, M, y+18); y+=34;
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(90);
+  doc.text("Generated "+new Date().toLocaleString(), M, y); y+=14;
+  doc.text("Frameworks: MITRE ATLAS · OWASP LLM Top 10 (2025)", M, y); y+=22;
+
+  // Summary metrics box
+  doc.setDrawColor(220); doc.setFillColor(247,247,247); doc.rect(M,y,W-2*M,58,"FD");
+  const cells=[["Models",scanId?"—":STATE.models.length],["Scans",d.scans.length],["Tests",d.totalTests],["Pass rate",d.passRate+"%"],["Findings",d.finds.length]];
+  const cw=(W-2*M)/cells.length;
+  cells.forEach((c,i)=>{ const cx=M+cw*i+cw/2;
+    doc.setTextColor(22); doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.text(String(c[1]), cx, y+28, {align:"center"});
+    doc.setTextColor(120); doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.text(String(c[0]).toUpperCase(), cx, y+44, {align:"center"}); });
+  y+=78;
+
+  // Severity summary
+  doc.setTextColor(22); doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.text("Findings by severity", M, y); y+=16;
+  SEV_ORDER.forEach(s=>{ const n=d.counts[s]||0; const col=SEVC[s]||[110,110,110];
+    doc.setFillColor(col[0],col[1],col[2]); doc.rect(M,y-8,10,10,"F");
+    doc.setTextColor(60); doc.setFont("helvetica","normal"); doc.setFontSize(10);
+    doc.text(s.charAt(0).toUpperCase()+s.slice(1), M+18, y);
+    doc.text(String(n), M+140, y, {align:"right"});
+    const bw=Math.min(260, n*18); doc.setFillColor(col[0],col[1],col[2]); doc.rect(M+160,y-8,bw||1,9,"F");
+    y+=16; });
+  y+=10;
+
+  // Scans table
+  need(60);
+  doc.setTextColor(22); doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.text("Scans", M, y); y+=16;
+  doc.setFontSize(9); doc.setTextColor(120); doc.setFont("helvetica","bold");
+  doc.text("Model", M, y); doc.text("Tests", M+220, y); doc.text("Worst", M+270, y); doc.text("Findings", M+360, y); doc.text("When", M+430, y); y+=6;
+  doc.setDrawColor(225); doc.line(M,y,W-M,y); y+=12;
+  doc.setFont("helvetica","normal"); doc.setTextColor(40);
+  d.scans.slice().sort((a,b)=>String(b.started).localeCompare(a.started)).forEach(s=>{ need(16);
+    doc.setTextColor(40); doc.text(String(s.model).slice(0,32), M, y);
+    doc.text(String(s.tests.length), M+220, y);
+    const col=SEVC[s.worst]||[110,110,110]; doc.setTextColor(col[0],col[1],col[2]); doc.text(String(s.worst||"—"), M+270, y);
+    doc.setTextColor(40); doc.text(String(s.findingsCount), M+360, y);
+    doc.setTextColor(120); doc.setFontSize(8); doc.text(fmtDate(s.started).slice(0,20), M+430, y); doc.setFontSize(9);
+    y+=15; });
+  y+=14;
+
+  // Findings detail
+  need(40);
+  doc.setTextColor(22); doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.text("Findings (worst first)", M, y); y+=18;
+  const order=d.finds.slice().sort((a,b)=>SEV_ORDER.indexOf(a.severity)-SEV_ORDER.indexOf(b.severity));
+  if(!order.length){ doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(36,161,72); doc.text("No findings — all tests clean.", M, y); y+=16; }
+  order.forEach(f=>{ need(90);
+    const col=SEVC[f.severity]||[110,110,110];
+    doc.setFillColor(col[0],col[1],col[2]); doc.rect(M,y-9,4,54,"F");
+    doc.setTextColor(22); doc.setFont("helvetica","bold"); doc.setFontSize(11);
+    const tt=doc.splitTextToSize(String(f.title||"Finding"), W-2*M-70);
+    doc.text(tt, M+12, y);
+    doc.setFontSize(8); doc.setTextColor(col[0],col[1],col[2]); doc.text(String(f.severity).toUpperCase(), W-M, y, {align:"right"});
+    y += tt.length*13;
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(110);
+    const meta=[TEST_INDEX[f.test]?.name||f.test, f.model, f.owasp||"", f.atlas||""].filter(Boolean).join("  ·  ");
+    doc.text(meta, M+12, y); y+=13;
+    doc.setTextColor(60);
+    const ev=doc.splitTextToSize("Evidence: "+(f.evidence||"—"), W-2*M-14); doc.text(ev, M+12, y); y+=ev.length*12;
+    const rm=doc.splitTextToSize("Fix: "+(f.remediation||"—"), W-2*M-14); doc.text(rm, M+12, y); y+=rm.length*12+12;
+  });
+
+  foot();
+  doc.save(fname);
+  toast("Exported "+fname,"ok");
+}
+function exportScanPDF(id){ exportReportPDF(id); }
+
+/* Fallback when jsPDF can't load (offline): open a printable window → Save as PDF */
+function printReportFallback(d, title){
+  const rows = d.scans.map(s=>`<tr><td>${esc(s.model)}</td><td>${s.tests.length}</td><td>${esc(s.worst||"—")}</td><td>${s.findingsCount}</td><td>${esc(fmtDate(s.started))}</td></tr>`).join("");
+  const finds = d.finds.slice().sort((a,b)=>SEV_ORDER.indexOf(a.severity)-SEV_ORDER.indexOf(b.severity)).map(f=>`
+    <div class="f"><div class="ft"><b>${esc(f.title)}</b><span class="sev ${f.severity}">${f.severity.toUpperCase()}</span></div>
+    <div class="fm">${esc(TEST_INDEX[f.test]?.name||f.test)} · ${esc(f.model)} · ${esc(f.owasp||"")} ${esc(f.atlas||"")}</div>
+    <div class="fb"><b>Evidence:</b> ${esc(f.evidence||"—")}</div><div class="fb"><b>Fix:</b> ${esc(f.remediation||"—")}</div></div>`).join("") || "<p>No findings — all tests clean.</p>";
+  const w=window.open("","_blank");
+  if(!w){ toast("Allow pop-ups to export the PDF, or reconnect to load the PDF engine.","err"); return; }
+  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><meta charset="utf-8">
+    <style>body{font:13px/1.5 Arial,sans-serif;color:#161616;margin:40px}h1{margin:0 0 4px}.sub{color:#666;margin-bottom:18px}
+    table{width:100%;border-collapse:collapse;margin:10px 0 24px}th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left;font-size:12px}
+    .f{border-left:4px solid #999;padding:6px 10px;margin:8px 0;background:#fafafa}.ft{display:flex;justify-content:space-between}.fm{color:#777;font-size:11px;margin:2px 0}.fb{font-size:12px}
+    .sev{font-size:10px;font-weight:bold}.critical{color:#da1e28}.high{color:#ff832b}.medium{color:#c69700}.low{color:#4589ff}.info{color:#666}
+    .kpis{display:flex;gap:20px;margin:12px 0 20px}.kpi b{display:block;font-size:22px}.kpi span{color:#777;font-size:11px;text-transform:uppercase}
+    @media print{body{margin:12mm}}</style></head><body>
+    <h1>${esc(title)}</h1><div class="sub">Generated ${esc(new Date().toLocaleString())} · MITRE ATLAS · OWASP LLM Top 10 · SIMULATED data</div>
+    <div class="kpis"><div class="kpi"><b>${d.scans.length}</b><span>Scans</span></div><div class="kpi"><b>${d.totalTests}</b><span>Tests</span></div><div class="kpi"><b>${d.passRate}%</b><span>Pass rate</span></div><div class="kpi"><b>${d.finds.length}</b><span>Findings</span></div></div>
+    <h2>Scans</h2><table><thead><tr><th>Model</th><th>Tests</th><th>Worst</th><th>Findings</th><th>When</th></tr></thead><tbody>${rows}</tbody></table>
+    <h2>Findings (worst first)</h2>${finds}
+    <script>window.onload=function(){setTimeout(function(){window.print();},250);}<\/script></body></html>`);
+  w.document.close();
+  toast("Opened printable report — choose \u201cSave as PDF\u201d","ok");
+}
+
 /* ---- NAV (mobile) ---- */
 function openNav(){ $("#navRail").classList.remove("-translate-x-full"); $("#navScrim").classList.remove("hidden"); }
 function closeNav(){ $("#navRail").classList.add("-translate-x-full"); $("#navScrim").classList.add("hidden"); }
@@ -1157,7 +1418,7 @@ $("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
 
 /* ---- INIT ---- */
-loadState(); applyTheme(); applyFont(); buildNav(); render();
+loadState(); applyTheme(); applyFont(); applySim(); buildNav(); render();
 console.log("LLM Testing Console ready. State key:", KEY);
 </script>
 </body>
