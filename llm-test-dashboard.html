@@ -468,11 +468,28 @@ const nowISO = () => new Date().toISOString();
 const fmtDate = s => { try { return new Date(s).toLocaleString(); } catch { return s; } };
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-let STATE = { models:[], scans:[], schemas:{}, integrations:{} };
+let STATE = { models:[], scans:[], schemas:{}, integrations:{}, customTests:[] };
+
+function rebuildIndex(){
+  Object.keys(TEST_INDEX).forEach(k=>delete TEST_INDEX[k]);
+  CATALOG.forEach(g => g.tests.forEach(t => TEST_INDEX[t.id] = Object.assign({group:g.group, groupColor:g.color}, t)));
+  (STATE.customTests||[]).forEach(t => TEST_INDEX[t.id] = Object.assign({}, t, {groupColor:t.groupColor||"var(--ibm-blue)", custom:true}));
+}
+/* effective catalog = built-in groups with custom tests merged in, plus a "Custom tests" group for the rest */
+function effectiveCatalog(){
+  const groups = CATALOG.map(g=>({group:g.group, blurb:g.blurb, color:g.color, tests:g.tests.slice()}));
+  const byName = {}; groups.forEach(g=>byName[g.group]=g);
+  const leftover=[];
+  (STATE.customTests||[]).forEach(t=>{ (byName[t.group]?byName[t.group].tests:leftover).push(t); });
+  if(leftover.length) groups.push({group:"Custom tests", blurb:"Tests you defined in this console, mapped to your chosen frameworks (ATLAS, OWASP, and others).", color:"var(--ibm-blue)", tests:leftover});
+  return groups;
+}
+const isCustom = id => (STATE.customTests||[]).some(t=>t.id===id);
 
 function loadState(){
   try { const raw = localStorage.getItem(KEY); if(raw) STATE = JSON.parse(raw); } catch(e){ console.warn("load failed", e); }
-  STATE.models ||= []; STATE.scans ||= []; STATE.schemas ||= {}; STATE.integrations ||= {};
+  STATE.models ||= []; STATE.scans ||= []; STATE.schemas ||= {}; STATE.integrations ||= {}; STATE.customTests ||= [];
+  rebuildIndex();
 }
 function saveState(){ try { localStorage.setItem(KEY, JSON.stringify(STATE)); } catch(e){ toast("Could not save to this device.","err"); } }
 
@@ -486,12 +503,13 @@ function saveCfg(c){ try { localStorage.setItem(CFG, JSON.stringify(c)); } catch
 function schemaFor(testId){
   if(STATE.schemas[testId]) return STATE.schemas[testId];   // user-edited wins
   const t = TEST_INDEX[testId];
-  return {
+  const schema = {
     id: t.id,
     name: t.name,
     layer: t.group,
     version: "1.0.0",
     severity_scale: ["info","low","medium","high","critical"],
+    default_severity: t.sev,
     owasp: t.owasp.map(o => `${o} ${OWASP_LLM[o]?.name||""}`.trim()),
     atlas: t.atlas.map(a => `${a} ${ATLAS[a]?.name||""}`.trim()),
     description: t.what,
@@ -503,9 +521,12 @@ function schemaFor(testId){
     },
     probes: t.checks.map((c,i)=>({ id:`${t.id}-p${i+1}`, objective:c, turns:"multi", automated:true, human_review:true })),
     tools: (t.group.indexOf("security")>-1 ? ["garak","promptfoo"] : ["pyrit","promptfoo"]),
-    pass_criteria: "No finding at or above severity: high",
+    pass_criteria: t.pass_criteria || "No finding at or above severity: high",
     outputs: ["findings[]","severity","mapped_owasp","mapped_atlas","transcript_ref"]
   };
+  if(t.frameworks && t.frameworks.length) schema.other_frameworks = t.frameworks;
+  if(t.custom){ schema.source = "custom"; schema.created = t.created || null; }
+  return schema;
 }
 function yamlFor(testId){
   try { return jsyaml.dump(schemaFor(testId), {lineWidth:100, noRefs:true}); }
@@ -820,20 +841,22 @@ function kindTag(k){
 
 /* ---------- TEST CATALOG ---------- */
 function viewCatalog(){
-  const groups = CATALOG.map(g=>{
+  const groups = effectiveCatalog().map(g=>{
     const cards = g.tests.map(t=>`
       <div class="surface-2 p-4">
         <div class="flex items-start justify-between gap-2 mb-2">
-          <h3 class="font-semibold leading-tight">${esc(t.name)}</h3>${sevTag(t.sev)}
+          <h3 class="font-semibold leading-tight">${esc(t.name)}${isCustom(t.id)?` <span class="tag" style="border-color:var(--ibm-blue);color:var(--ibm-blue);vertical-align:middle">custom</span>`:""}</h3>${sevTag(t.sev)}
         </div>
         <p class="t-sec text-sm mb-3 scale-text">${esc(t.what)}</p>
         <div class="flex flex-wrap gap-1 mb-3">
-          ${t.owasp.map(owaspTag).join("")} ${t.atlas.map(atlasTag).join("")}
+          ${(t.owasp||[]).map(owaspTag).join("")} ${(t.atlas||[]).map(atlasTag).join("")}
+          ${(t.frameworks||[]).map(fw=>`<span class="tag" style="border-color:var(--border-strong);color:var(--text-secondary)">${esc(fw)}</span>`).join("")}
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="btn btn-secondary text-xs" onclick="showTest('${t.id}')">Details</button>
           <button class="btn btn-secondary text-xs" onclick="showSchema('${t.id}')">Schema</button>
           <button class="btn-ghost text-xs" onclick="prefillTest('${t.id}')">Add to run</button>
+          ${isCustom(t.id)?`<button class="btn-ghost text-xs" style="color:var(--sev-critical)" onclick="delCustomTest('${t.id}')">Delete</button>`:""}
         </div>
       </div>`).join("");
     return `<section class="mb-6">
@@ -844,21 +867,114 @@ function viewCatalog(){
     </section>`;
   }).join("");
   return pageHead("Test catalog","Every test says what it looks for and why, and carries its ATLAS &amp; OWASP tags. Read before you run.",
-    `<button class="btn btn-secondary" data-open-help="ceiling">Elicitation &amp; sandbagging</button>`) + groups;
+    `<button class="btn btn-secondary" data-open-help="ceiling">Elicitation &amp; sandbagging</button>
+     <button class="btn btn-primary" onclick="openTestBuilder()">+ Add a test</button>`) + groups;
 }
 function showTest(id){
   const t=TEST_INDEX[id];
   openModal(esc(t.name)+"  "+sevTag(t.sev), `
-    <div class="mb-3 flex flex-wrap gap-1">${t.owasp.map(owaspTag).join("")} ${t.atlas.map(atlasTag).join("")}
+    <div class="mb-3 flex flex-wrap gap-1">${(t.owasp||[]).map(owaspTag).join("")} ${(t.atlas||[]).map(atlasTag).join("")}
+      ${(t.frameworks||[]).map(fw=>`<span class="tag" style="border-color:var(--border-strong);color:var(--text-secondary)">${esc(fw)}</span>`).join("")}
       <span class="tag" style="border-color:${t.groupColor};color:${t.groupColor}">${esc(t.group)}</span></div>
     <h4 class="font-semibold mb-1">What it checks</h4><p class="mb-3 t-sec scale-text">${esc(t.what)}</p>
     <h4 class="font-semibold mb-1">Why it matters</h4><p class="mb-3 t-sec scale-text">${esc(t.why)}</p>
     <h4 class="font-semibold mb-2">Probes</h4>
-    <ul class="space-y-1 mb-4">${t.checks.map(c=>`<li class="flex gap-2 scale-text"><span style="color:var(--ibm-blue)">▸</span><span>${esc(c)}</span></li>`).join("")}</ul>
+    <ul class="space-y-1 mb-4">${(t.checks||[]).map(c=>`<li class="flex gap-2 scale-text"><span style="color:var(--ibm-blue)">▸</span><span>${esc(c)}</span></li>`).join("")||`<li class="t-helper scale-text">No probes defined.</li>`}</ul>
     <div class="flex flex-wrap gap-2">
       <button class="btn btn-secondary text-sm" onclick="showSchema('${t.id}')">View YAML schema</button>
       <button class="btn btn-primary text-sm" onclick="closeModal();prefillTest('${t.id}')">Add to a run</button>
     </div>`);
+}
+
+/* ---------- ADD A TEST (custom test builder) ---------- */
+function openTestBuilder(){
+  const groupOpts = CATALOG.map(g=>`<option value="${esc(g.group)}">${esc(g.group)}</option>`).join("")
+    + `<option value="Custom tests">Custom tests (new section)</option>`;
+  const sevOpts = SEV_ORDER.map(s=>`<option value="${s}" ${s==="high"?"selected":""}>${s}</option>`).join("");
+  const owaspBoxes = Object.entries(OWASP_LLM).map(([k,v])=>`
+    <label class="flex items-start gap-2 text-xs cursor-pointer scale-text mb-1">
+      <input type="checkbox" name="ct_owasp" value="${k}"><span><span class="t-mono">${k}</span> ${esc(v.name)}</span></label>`).join("");
+  const atlasBoxes = Object.entries(ATLAS).map(([k,v])=>`
+    <label class="flex items-start gap-2 text-xs cursor-pointer scale-text mb-1">
+      <input type="checkbox" name="ct_atlas" value="${k}"><span><span class="t-mono">${k}</span> ${esc(v.name)}</span></label>`).join("");
+  openModal("Add a test to the catalog", `
+    <p class="t-sec text-sm mb-4 scale-text">Define a test and map it to the frameworks it exercises. It gets a YAML schema automatically and becomes available to run like any built-in test.</p>
+    <div class="space-y-3">
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label class="lbl">Test name <span style="color:var(--sev-critical)">*</span></label>
+          <input class="field" id="ct_name" placeholder="e.g. Indirect prompt injection via RAG"></div>
+        <div><label class="lbl">Layer / group</label><select class="field" id="ct_group">${groupOpts}</select></div>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label class="lbl">Default severity</label><select class="field" id="ct_sev">${sevOpts}</select></div>
+        <div><label class="lbl">Pass criteria (optional)</label><input class="field" id="ct_pass" placeholder="No finding at or above severity: high"></div>
+      </div>
+      <div><label class="lbl">What it checks <span style="color:var(--sev-critical)">*</span></label>
+        <textarea class="field" id="ct_what" rows="2" placeholder="Plain-language description of what this test looks for."></textarea></div>
+      <div><label class="lbl">Why it matters</label>
+        <textarea class="field" id="ct_why" rows="2" placeholder="Why this risk is worth testing."></textarea></div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div class="surface p-3">
+          <div class="lbl mb-2">OWASP LLM Top 10 (2025)</div>
+          <div style="max-height:150px;overflow:auto">${owaspBoxes}</div>
+        </div>
+        <div class="surface p-3">
+          <div class="lbl mb-2">MITRE ATLAS techniques</div>
+          <div style="max-height:150px;overflow:auto">${atlasBoxes}</div>
+          <label class="lbl mt-2" style="text-transform:none">Other ATLAS IDs (comma-sep)</label>
+          <input class="field" id="ct_atlas_extra" placeholder="AML.T0043, AML.T0071">
+        </div>
+      </div>
+
+      <div><label class="lbl">Other frameworks / testing lists (comma-separated)</label>
+        <input class="field" id="ct_frameworks" placeholder="NIST AI RMF, AVID, ISO/IEC 42001, HELM, internal-policy-X">
+        <p class="t-helper text-xs mt-1 scale-text">Free-form tags for any list you map to beyond ATLAS &amp; OWASP.</p></div>
+
+      <div><label class="lbl">Probes (one per line)</label>
+        <textarea class="field t-mono" id="ct_checks" rows="4" placeholder="Injection via retrieved document overrides system rules&#10;Tool call triggered by attacker-controlled content&#10;Data exfiltration through crafted output"></textarea></div>
+
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button class="btn btn-primary" onclick="saveCustomTest()">Save test</button>
+        <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>`);
+}
+function saveCustomTest(){
+  const gv = id => (document.getElementById(id)?document.getElementById(id).value:"");
+  const checkedVals = name => [...document.querySelectorAll(`input[name=${name}]:checked`)].map(x=>x.value);
+  const name = gv("ct_name").trim();
+  const what = gv("ct_what").trim();
+  if(!name){ toast("Give the test a name","err"); return; }
+  if(!what){ toast("Add a short \u201cwhat it checks\u201d","err"); return; }
+  const extraAtlas = gv("ct_atlas_extra").split(/[,\s]+/).map(s=>s.trim()).filter(Boolean);
+  const atlas = [...new Set([...checkedVals("ct_atlas"), ...extraAtlas])];
+  const frameworks = gv("ct_frameworks").split(",").map(s=>s.trim()).filter(Boolean);
+  const checks = gv("ct_checks").split("\n").map(s=>s.trim()).filter(Boolean);
+  const group = gv("ct_group") || "Custom tests";
+  const groupColor = (CATALOG.find(g=>g.group===group)||{}).color || "var(--ibm-blue)";
+  const test = {
+    id: uid("ct"), name,
+    owasp: checkedVals("ct_owasp"),
+    atlas,
+    frameworks,
+    sev: gv("ct_sev") || "high",
+    what,
+    why: gv("ct_why").trim() || "User-defined test.",
+    checks: checks.length? checks : ["Custom probe (define objectives)"],
+    group, groupColor,
+    pass_criteria: gv("ct_pass").trim() || undefined,
+    custom: true, created: nowISO()
+  };
+  STATE.customTests.push(test);
+  rebuildIndex(); saveState(); closeModal(); go("catalog");
+  toast("Added test: "+name,"ok");
+}
+function delCustomTest(id){
+  if(!confirm("Delete this custom test? Existing scans that already ran it keep their results.")) return;
+  STATE.customTests = (STATE.customTests||[]).filter(t=>t.id!==id);
+  if(STATE.schemas[id]) delete STATE.schemas[id];
+  rebuildIndex(); saveState(); render(); toast("Custom test deleted");
 }
 </script>
 
@@ -873,7 +989,7 @@ function viewRun(){
     return pageHead("Run a test") + `<div class="surface p-6 text-center"><p class="mb-3 scale-text">Add a model first — you need something to point the tests at.</p><button class="btn btn-primary" data-nav="models">Add a model</button></div>`;
   }
   const modelOpts = STATE.models.map(m=>`<option value="${m.id}" ${RUN_PREFILL.model===m.id?"selected":""}>${esc(m.name)} — ${esc(m.provider)}</option>`).join("");
-  const testGroups = CATALOG.map(g=>`
+  const testGroups = effectiveCatalog().map(g=>`
     <fieldset class="mb-3" style="border:1px solid var(--border);border-left:4px solid ${g.color};padding:.75rem;">
       <legend class="text-sm font-semibold px-1">${esc(g.group)}</legend>
       <div class="space-y-1">
@@ -1193,12 +1309,13 @@ function importJSON(ev){
   const file=ev.target.files[0]; if(!file) return;
   const r=new FileReader();
   r.onload=()=>{ try{ const obj=JSON.parse(r.result);
-      STATE.models=obj.models||[]; STATE.scans=obj.scans||[]; STATE.schemas=obj.schemas||{}; STATE.integrations=obj.integrations||{};
+      STATE.models=obj.models||[]; STATE.scans=obj.scans||[]; STATE.schemas=obj.schemas||{}; STATE.integrations=obj.integrations||{}; STATE.customTests=obj.customTests||[];
+      rebuildIndex();
       saveState(); render(); toast("Imported console state","ok");
     }catch(e){ toast("Import failed: not valid JSON","err"); } };
   r.readAsText(file); ev.target.value="";
 }
-function wipeAll(){ if(!confirm("Erase all models, scans, and schemas on this device?")) return; STATE={models:[],scans:[],schemas:{},integrations:{}}; saveState(); render(); toast("All data cleared"); }
+function wipeAll(){ if(!confirm("Erase all models, scans, schemas, and custom tests on this device?")) return; STATE={models:[],scans:[],schemas:{},integrations:{},customTests:[]}; rebuildIndex(); saveState(); render(); toast("All data cleared"); }
 
 /* ---- THEME + FONT ---- */
 let cfg = loadCfg();
