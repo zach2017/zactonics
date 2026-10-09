@@ -1,0 +1,644 @@
+<title>Margaret Hamilton's Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: 'var(--bg)', surface: 'var(--surface)', ink: 'var(--ink)', head: 'var(--head)',
+          muted: 'var(--muted)', accent: 'var(--accent)', soft: 'var(--soft)', line: 'var(--line)',
+          good: 'var(--good)', warn: 'var(--warn)', bad: 'var(--bad)'
+        },
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Arial', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace']
+        }
+      }
+    }
+  };
+</script>
+<style>
+  /* Layout: IBM-style 2x grid, single reading column (max ~70ch), square corners, thin rules, one blue accent */
+  :root {
+    --bg: #ffffff; --surface: #f4f4f4; --ink: #161616; --head: #001d6c; --muted: #4d5358;
+    --accent: #0f62fe; --soft: #edf5ff; --line: #dde1e6;
+    --good: #198038; --warn: #8e6a00; --bad: #da1e28; --on-accent: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121619; --surface: #21272a; --ink: #f2f4f8; --head: #a6c8ff; --muted: #c1c7cd;
+      --accent: #78a9ff; --soft: #001d6c; --line: #343a3f;
+      --good: #42be65; --warn: #f1c21b; --bad: #ff8389; --on-accent: #001141; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121619; --surface: #21272a; --ink: #f2f4f8; --head: #a6c8ff; --muted: #c1c7cd;
+    --accent: #78a9ff; --soft: #001d6c; --line: #343a3f;
+    --good: #42be65; --warn: #f1c21b; --bad: #ff8389; --on-accent: #001141; color-scheme: dark;
+  }
+  html { font-size: 18px; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 1rem; line-height: 1.6; }
+  h1, h2, h3 { text-wrap: balance; color: var(--head); }
+  .prose-w { max-width: 70ch; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: .4rem .9rem; border: 1px solid var(--accent); color: var(--accent); background: transparent; font-weight: 500; font-size: .875rem; cursor: pointer; }
+  .btn:hover { background: var(--soft); }
+  .btn-solid { background: var(--accent); color: var(--on-accent); }
+  .btn-solid:hover { background: var(--accent); filter: brightness(1.1); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ctrl { min-width: 2.5rem; min-height: 2.5rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-weight: 600; cursor: pointer; }
+  .ctrl:hover { border-color: var(--accent); }
+  .tile { border-top: 2px solid var(--accent); background: var(--surface); }
+  .example { border-left: 3px solid var(--accent); background: var(--soft); }
+  .tag { font-family: "IBM Plex Mono", monospace; font-size: .7rem; padding: .1rem .4rem; border: 1px solid var(--line); color: var(--muted); }
+  .tnum { font-variant-numeric: tabular-nums; }
+  input[type=range] { accent-color: var(--accent); }
+  .modal-back { background: rgba(0,0,0,.55); }
+  .bit { width: 2.4rem; height: 2.4rem; border: 1px solid var(--line); font-family: "IBM Plex Mono", monospace; font-weight: 500; background: var(--bg); color: var(--muted); cursor: pointer; }
+  .bit[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .switch[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .lnk { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+  table { border-collapse: collapse; }
+  th, td { border-bottom: 1px solid var(--line); padding: .6rem .75rem; text-align: left; vertical-align: top; }
+  th { font-weight: 600; color: var(--head); background: var(--surface); }
+</style>
+
+<!-- Sticky control bar -->
+<header class="sticky z-30 border-b border-line bg-bg" style="top: env(safe-area-inset-top, 0px);">
+  <div class="h-1 bg-accent"></div>
+  <div class="mx-auto max-w-5xl px-4 py-2 flex flex-wrap items-center gap-3 justify-between">
+    <a href="#top" class="font-semibold text-head text-sm tracking-tight">Margaret Hamilton <span class="font-light text-muted">· Apollo code</span></a>
+    <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Reading controls">
+      <button id="fs-down" class="ctrl text-sm" aria-label="Make text smaller">A−</button>
+      <input id="fs-range" type="range" min="14" max="36" step="1" value="18" class="w-24 sm:w-32" aria-label="Text size">
+      <button id="fs-up" class="ctrl text-lg" aria-label="Make text bigger">A+</button>
+      <span id="fs-val" class="font-mono text-xs text-muted tnum w-10">18px</span>
+      <button id="theme-btn" class="ctrl px-3 text-sm" aria-label="Switch light or dark mode">Dark</button>
+    </div>
+  </div>
+  <nav class="mx-auto max-w-5xl px-4 pb-2 overflow-x-auto" aria-label="Sections">
+    <ul class="flex gap-4 text-sm whitespace-nowrap text-muted">
+      <li><a class="hover:text-accent" href="#who">Who</a></li>
+      <li><a class="hover:text-accent" href="#life">Life steps</a></li>
+      <li><a class="hover:text-accent" href="#background">Background</a></li>
+      <li><a class="hover:text-accent" href="#ideas">Her ideas</a></li>
+      <li><a class="hover:text-accent" href="#landing">Moon landing</a></li>
+      <li><a class="hover:text-accent" href="#math">Math &amp; logic</a></li>
+      <li><a class="hover:text-accent" href="#systems">Systems thinking</a></li>
+      <li><a class="hover:text-accent" href="#today">Today</a></li>
+      <li><a class="hover:text-accent" href="#refs">Sources</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="top" class="mx-auto max-w-5xl px-4 py-10 flex flex-col gap-20">
+
+  <!-- HERO -->
+  <section id="who" class="grid gap-8 md:grid-cols-5 items-start">
+    <div class="md:col-span-3 min-w-0 flex flex-col gap-5">
+      <p class="eyebrow">Computer science · Middle school guide</p>
+      <h1 class="text-4xl sm:text-5xl font-light leading-tight">Margaret Hamilton wrote the rules that keep computers from panicking.</h1>
+      <p class="prose-w text-lg text-muted">In 1969 she led the team that wrote the software flying Apollo 11 to the Moon. Her code was so carefully planned that when the computer got overloaded three minutes before landing, it calmly dropped the unimportant jobs, kept the important ones, and let the astronauts land.</p>
+      <p class="prose-w">She also gave her job a name: <strong>software engineering</strong>. Today millions of people have that job title, and the ideas she used are inside your phone, the school's computers, and the cash register at the grocery store.</p>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn btn-solid" data-pop="intro">Quick facts</button>
+        <a class="btn" href="#landing">Jump to the landing story</a>
+      </div>
+    </div>
+    <aside class="md:col-span-2 min-w-0 border border-line">
+      <div class="bg-surface px-4 py-3 border-b border-line"><p class="eyebrow">Fact card</p></div>
+      <dl class="divide-y divide-[color:var(--line)] text-sm">
+        <div class="grid grid-cols-3 gap-2 px-4 py-3"><dt class="text-muted">Born</dt><dd class="col-span-2">August 17, 1936, Paoli, Indiana</dd></div>
+        <div class="grid grid-cols-3 gap-2 px-4 py-3"><dt class="text-muted">College</dt><dd class="col-span-2">Earlham College, math degree (1958)</dd></div>
+        <div class="grid grid-cols-3 gap-2 px-4 py-3"><dt class="text-muted">Job</dt><dd class="col-span-2">Led software for Apollo at the MIT Instrumentation Laboratory</dd></div>
+        <div class="grid grid-cols-3 gap-2 px-4 py-3"><dt class="text-muted">Famous for</dt><dd class="col-span-2">Apollo 11 flight software, the term "software engineering"</dd></div>
+        <div class="grid grid-cols-3 gap-2 px-4 py-3"><dt class="text-muted">Big award</dt><dd class="col-span-2">Presidential Medal of Freedom, 2016</dd></div>
+      </dl>
+    </aside>
+  </section>
+
+  <!-- LIFE TIMELINE -->
+  <section id="life" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">Step by step</p>
+      <h2 class="text-3xl font-light mt-1">Her life in order</h2>
+      <p class="mt-2 text-muted">These steps happened in this order. Tap any "More" button for the longer story.</p>
+    </div>
+    <ol class="relative border-l-2 border-line ml-2 flex flex-col gap-6">
+      <li class="pl-6 relative"><span class="absolute -left-[9px] top-1.5 h-4 w-4 bg-accent"></span>
+        <p class="font-mono text-sm text-accent">1936–1958</p>
+        <h3 class="text-xl font-medium">Step 1: A curious kid who loved math</h3>
+        <p class="prose-w">Margaret grew up in Indiana and Michigan. In college she studied math and also philosophy, which is the study of how to think clearly and argue logically. Both turned out to matter for writing computer code.</p>
+        <button class="btn mt-2" data-pop="early">More</button>
+      </li>
+      <li class="pl-6 relative"><span class="absolute -left-[9px] top-1.5 h-4 w-4 bg-accent"></span>
+        <p class="font-mono text-sm text-accent">1959–1963</p>
+        <h3 class="text-xl font-medium">Step 2: First coding jobs: weather and air defense</h3>
+        <p class="prose-w">She took a job at MIT writing programs to predict the weather. Then she wrote software for SAGE, a giant system that watched the sky for enemy airplanes. There was no "coding class" back then. She learned by doing.</p>
+        <button class="btn mt-2" data-pop="sage">More</button>
+      </li>
+      <li class="pl-6 relative"><span class="absolute -left-[9px] top-1.5 h-4 w-4 bg-accent"></span>
+        <p class="font-mono text-sm text-accent">Mid-1960s</p>
+        <h3 class="text-xl font-medium">Step 3: Joining the Moon project</h3>
+        <p class="prose-w">NASA asked MIT to build the computer that would guide the Apollo spacecraft. Margaret joined and became the leader of the team writing the "onboard flight software," the code that ran inside the spaceship.</p>
+        <button class="btn mt-2" data-pop="apollo">More</button>
+      </li>
+      <li class="pl-6 relative"><span class="absolute -left-[9px] top-1.5 h-4 w-4 bg-accent"></span>
+        <p class="font-mono text-sm text-accent">July 20, 1969</p>
+        <h3 class="text-xl font-medium">Step 4: Apollo 11 lands on the Moon</h3>
+        <p class="prose-w">During the landing, alarms went off. Her software handled the overload and the landing went on. Neil Armstrong and Buzz Aldrin walked on the Moon.</p>
+        <a class="btn mt-2" href="#landing">Read the landing story</a>
+      </li>
+      <li class="pl-6 relative"><span class="absolute -left-[9px] top-1.5 h-4 w-4 bg-accent"></span>
+        <p class="font-mono text-sm text-accent">1976–today</p>
+        <h3 class="text-xl font-medium">Step 5: Starting companies and new ideas</h3>
+        <p class="prose-w">She started her own software companies. She studied every error from Apollo and created a way to design systems so many mistakes can't happen in the first place.</p>
+        <button class="btn mt-2" data-pop="usl">More</button>
+      </li>
+      <li class="pl-6 relative"><span class="absolute -left-[9px] top-1.5 h-4 w-4 bg-accent"></span>
+        <p class="font-mono text-sm text-accent">2003 &amp; 2016</p>
+        <h3 class="text-xl font-medium">Step 6: Big honors</h3>
+        <p class="prose-w">NASA gave her a special award in 2003. In 2016 President Obama gave her the Presidential Medal of Freedom, the highest honor a regular citizen can get in the United States.</p>
+        <button class="btn mt-2" data-pop="awards">More</button>
+      </li>
+    </ol>
+  </section>
+
+  <!-- BACKGROUND -->
+  <section id="background" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">Background</p>
+      <h2 class="text-3xl font-light mt-1">First, some words you need</h2>
+      <p class="mt-2">Before her story makes sense, let's get clear on a few ideas. Each one has a grocery store or school example.</p>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <article class="tile p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">Hardware vs. software</h3>
+        <p><strong>Hardware</strong> is the physical machine you can touch. <strong>Software</strong> is the list of instructions that tells the machine what to do.</p>
+        <p class="example p-3 text-sm"><strong>Grocery store:</strong> The scanner and screen at checkout are hardware. The program that looks up "bananas = $0.59 a pound" and adds it to your total is software.</p>
+      </article>
+      <article class="tile p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">A program</h3>
+        <p>A program is a recipe for a computer. It must be exact, because a computer does only what it is told, in the order it is told.</p>
+        <p class="example p-3 text-sm"><strong>School:</strong> Your morning schedule is a program: homeroom, then math, then science. If the bell schedule had a typo, everyone would end up in the wrong room.</p>
+      </article>
+      <article class="tile p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">A bug</h3>
+        <p>A bug is a mistake in a program. Some bugs are small. In a spaceship, a bug could be deadly.</p>
+        <p class="example p-3 text-sm"><strong>Grocery store:</strong> If the price list said milk costs $40 instead of $4, every customer would be charged wrong until someone fixed it.</p>
+      </article>
+      <article class="tile p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">The Apollo Guidance Computer</h3>
+        <p>The computer in the Apollo spacecraft was about the size of a carry-on suitcase. Your phone has well over a million times more storage.</p>
+        <button class="btn self-start" data-pop="agc">See the numbers</button>
+      </article>
+    </div>
+    <div class="border border-line p-5 flex flex-col gap-3">
+      <h3 class="text-xl font-medium">Why was this so hard in the 1960s?</h3>
+      <ul class="list-disc pl-5 flex flex-col gap-2 prose-w">
+        <li>Nobody had ever written software that people's lives depended on in space.</li>
+        <li>There were no schools for coding, no internet to look things up, and no "undo" button.</li>
+        <li>The final program was stored by literally weaving copper wire through tiny magnetic rings. Changing it once it was woven meant re-weaving.</li>
+        <li>Many people thought software was a small side job, less "real" than building rockets.</li>
+      </ul>
+      <button class="btn self-start" data-pop="rope">How do you weave a program?</button>
+    </div>
+  </section>
+
+  <!-- HER IDEAS -->
+  <section id="ideas" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">Her contributions</p>
+      <h2 class="text-3xl font-light mt-1">Six ideas we still use</h2>
+      <p class="mt-2">Each card explains the idea in plain words, then gives an everyday example. Tap "More" for details and official links.</p>
+    </div>
+    <div class="grid gap-4 md:grid-cols-2">
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <span class="tag self-start">Idea · Name it</span>
+        <h3 class="text-xl font-medium">"Software engineering"</h3>
+        <p>She called her work <em>software engineering</em> so people would treat it as seriously as building bridges or rockets. At first people joked about it. Now it's a real job and a college major.</p>
+        <p class="example p-3 text-sm"><strong>School:</strong> Calling it "the science fair" instead of "a poster thing" tells everyone to take it seriously and follow real steps.</p>
+        <button class="btn self-start" data-pop="se">More</button>
+      </article>
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <span class="tag self-start">Idea · Priorities</span>
+        <h3 class="text-xl font-medium">Do the most important job first</h3>
+        <p>Every task in the Apollo software got a priority number. When the computer was too busy, it ran the highest-priority tasks and let the low ones wait or go.</p>
+        <p class="example p-3 text-sm"><strong>Grocery store:</strong> On a busy Saturday, the cashier keeps scanning and taking payment. Restocking the gum rack waits until later.</p>
+        <button class="btn self-start" data-pop="priority">More</button>
+      </article>
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <span class="tag self-start">Idea · Recovery</span>
+        <h3 class="text-xl font-medium">Expect trouble and recover</h3>
+        <p>Her team planned for things to go wrong. If the computer got confused, it could restart in a split second and pick up the important work where it left off.</p>
+        <p class="example p-3 text-sm"><strong>School:</strong> Google Docs auto-saves. If your Chromebook freezes, you restart and your essay is still there.</p>
+        <button class="btn self-start" data-pop="restart">More</button>
+      </article>
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <span class="tag self-start">Idea · Tell the human</span>
+        <h3 class="text-xl font-medium">Warn people clearly</h3>
+        <p>When something went wrong, the computer interrupted the astronauts' screen with an alarm code so humans could decide what to do.</p>
+        <p class="example p-3 text-sm"><strong>Grocery store:</strong> Self-checkout flashes "Unexpected item in bagging area" and calls a worker instead of silently charging you wrong.</p>
+        <button class="btn self-start" data-pop="displays">More</button>
+      </article>
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <span class="tag self-start">Idea · Testing</span>
+        <h3 class="text-xl font-medium">Test everything, even "impossible" mistakes</h3>
+        <p>Her young daughter pushed the wrong buttons on a simulator and crashed it. Margaret realized a real astronaut could do the same thing. Later, one did.</p>
+        <p class="example p-3 text-sm"><strong>School:</strong> A good quiz app checks what happens if a student types letters in a number box, not just correct answers.</p>
+        <button class="btn self-start" data-pop="lauren">More</button>
+      </article>
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <span class="tag self-start">Idea · Design it right</span>
+        <h3 class="text-xl font-medium">Stop errors before they start</h3>
+        <p>After Apollo, she studied all the bugs and found most came from parts not fitting together. She built a method to design systems so those mistakes can't be made.</p>
+        <p class="example p-3 text-sm"><strong>Grocery store:</strong> A gas pump nozzle for diesel is a different size, so it won't fit in a regular car. The mistake is blocked by design.</p>
+        <button class="btn self-start" data-pop="usl">More</button>
+      </article>
+    </div>
+  </section>
+
+  <!-- LANDING STORY + SIMULATOR -->
+  <section id="landing" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">The big moment · July 20, 1969</p>
+      <h2 class="text-3xl font-light mt-1">The 1202 alarm, step by step</h2>
+      <p class="mt-2">This is the most famous test her software ever faced. The steps happened in this order, over just a few minutes.</p>
+    </div>
+    <ol class="flex flex-col gap-3 prose-w">
+      <li class="flex gap-4"><span class="font-mono text-accent shrink-0 tnum">01</span><p>The lunar module <em>Eagle</em> starts its descent to the Moon. The computer is steering and controlling the engine.</p></li>
+      <li class="flex gap-4"><span class="font-mono text-accent shrink-0 tnum">02</span><p>A radar switch is in a position that makes the radar keep "poking" the computer with signals it doesn't need. This steals part of the computer's time.</p></li>
+      <li class="flex gap-4"><span class="font-mono text-accent shrink-0 tnum">03</span><p>The computer now has more work than it can finish. It flashes <strong class="font-mono">1202</strong>, and later <strong class="font-mono">1201</strong>. These codes mean "I'm overloaded."</p></li>
+      <li class="flex gap-4"><span class="font-mono text-accent shrink-0 tnum">04</span><p>Because of the priority design, the computer restarts quickly, throws out low-priority jobs, and keeps the jobs needed for landing.</p></li>
+      <li class="flex gap-4"><span class="font-mono text-accent shrink-0 tnum">05</span><p>In Mission Control, the experts know this alarm is safe as long as it doesn't keep happening nonstop. They tell the crew "Go."</p></li>
+      <li class="flex gap-4"><span class="font-mono text-accent shrink-0 tnum">06</span><p>Armstrong flies the last part by hand to avoid a field of boulders. <em>Eagle</em> lands safely.</p></li>
+    </ol>
+    <div class="flex flex-wrap gap-2"><button class="btn" data-pop="alarm">More about the alarm</button></div>
+
+    <!-- Simulator -->
+    <div class="border border-line">
+      <div class="bg-surface border-b border-line px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-lg font-medium">Try it: be the Apollo computer</h3>
+        <span class="tag">Interactive</span>
+      </div>
+      <div class="p-5 grid gap-6 lg:grid-cols-2">
+        <div class="flex flex-col gap-4 min-w-0">
+          <p class="text-sm">The computer can only do <strong>100%</strong> worth of work at once. Turn on the radar problem and see what happens with and without Margaret's priority rules.</p>
+          <div class="flex flex-col gap-2" role="group" aria-label="Simulator settings">
+            <button id="sim-radar" class="ctrl switch px-3 text-left text-sm" aria-pressed="false">Radar problem: OFF</button>
+            <button id="sim-mode" class="ctrl switch px-3 text-left text-sm" aria-pressed="true">Priority rules: ON (Hamilton style)</button>
+          </div>
+          <div id="sim-status" class="p-3 border border-line font-mono text-sm" role="status" aria-live="polite"></div>
+          <p class="example p-3 text-sm"><strong>Grocery version:</strong> A cashier can handle so much per minute. A broken coupon machine keeps beeping and stealing her attention. If she has priorities, she keeps scanning and taking payment and skips chatting and bagging. Without priorities, she tries to do everything, the line freezes, and nobody gets out.</p>
+        </div>
+        <div class="flex flex-col gap-3 min-w-0">
+          <p class="eyebrow">Computer time used</p>
+          <div class="w-full h-8 border border-line flex overflow-hidden" id="sim-bar" aria-hidden="true"></div>
+          <div class="flex justify-between font-mono text-xs text-muted tnum"><span>0%</span><span>50%</span><span>100%</span></div>
+          <ul id="sim-list" class="flex flex-col gap-2 text-sm"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MATH & LOGIC -->
+  <section id="math" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">Math &amp; logic</p>
+      <h2 class="text-3xl font-light mt-1">The math under her code</h2>
+      <p class="mt-2">Margaret studied math, and computer code is really math and logic written as instructions. Here are four ideas she used every day.</p>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+      <!-- Binary -->
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">1. Binary: counting with on and off</h3>
+        <p>Computers only understand two states: on (1) and off (0). Each spot is worth double the one to its right: 1, 2, 4, 8, 16, 32, 64, 128. Tap the boxes to turn them on.</p>
+        <div class="overflow-x-auto"><div id="bits" class="flex gap-1 w-max"></div></div>
+        <p class="font-mono text-sm tnum" aria-live="polite">Binary <span id="bin-out">00000000</span> = <strong id="dec-out" class="text-accent">0</strong></p>
+        <p class="example p-3 text-sm"><strong>Grocery store:</strong> A barcode is black and white stripes, which is basically 1s and 0s. The scanner reads them and turns them into a product number.</p>
+        <button class="btn self-start" data-pop="binary">More</button>
+      </article>
+
+      <!-- Boolean -->
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">2. Logic: AND, OR, NOT</h3>
+        <p>Computers make decisions using rules called Boolean logic. Try it with a school rule: "We go outside for recess IF homework is done ___ it's not raining."</p>
+        <div class="flex flex-wrap gap-2" role="group" aria-label="Logic inputs">
+          <button id="lg-a" class="ctrl switch px-3 text-sm" aria-pressed="true">Homework done: YES</button>
+          <button id="lg-b" class="ctrl switch px-3 text-sm" aria-pressed="false">Not raining: NO</button>
+        </div>
+        <div class="flex flex-wrap gap-2" role="group" aria-label="Logic rule">
+          <button class="ctrl switch px-3 text-sm lg-op" data-op="AND" aria-pressed="true">AND</button>
+          <button class="ctrl switch px-3 text-sm lg-op" data-op="OR" aria-pressed="false">OR</button>
+        </div>
+        <p id="lg-out" class="p-3 border border-line font-mono text-sm" aria-live="polite"></p>
+        <p class="text-sm text-muted"><strong>AND</strong> needs both true. <strong>OR</strong> needs at least one. <strong>NOT</strong> flips true and false, so "not raining" is NOT(raining).</p>
+        <button class="btn self-start" data-pop="boolean">More</button>
+      </article>
+
+      <!-- If then -->
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">3. If-then rules and checking every case</h3>
+        <p>Code is full of "IF this happens, THEN do that." Margaret's big lesson: you must also plan for "what if something <em>unexpected</em> happens?"</p>
+        <pre class="bg-surface p-3 font-mono text-sm overflow-x-auto">IF item has a barcode
+  THEN look up the price
+ELSE IF item is produce
+  THEN weigh it
+ELSE
+  THEN call a worker   ← the "just in case" rule</pre>
+        <p class="example p-3 text-sm"><strong>School:</strong> IF it's a school day THEN take the bus. ELSE IF it's a snow day THEN stay home. ELSE (something weird, like a power outage) check the school's message.</p>
+      </article>
+
+      <!-- Ordering / priorities math -->
+      <article class="border border-line p-5 flex flex-col gap-3 min-w-0">
+        <h3 class="text-xl font-medium">4. Ordering and percentages</h3>
+        <p>Priority scheduling is sorting plus adding. Sort the jobs from most to least important, then add up how much time each one needs until you hit 100%. Whatever doesn't fit waits.</p>
+        <div class="overflow-x-auto">
+          <table class="text-sm w-full tnum">
+            <thead><tr><th>Job</th><th>Priority</th><th>Time</th><th>Running total</th></tr></thead>
+            <tbody>
+              <tr><td>Steer the craft</td><td>1</td><td>40%</td><td>40% ✓</td></tr>
+              <tr><td>Control engine</td><td>2</td><td>25%</td><td>65% ✓</td></tr>
+              <tr><td>Radar noise</td><td>can't stop</td><td>25%</td><td>90% ✓</td></tr>
+              <tr><td>Update display</td><td>3</td><td>15%</td><td><span class="text-bad">105% ✗ waits</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-muted">Numbers are simplified for learning. The idea is real: important jobs fit first.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- SYSTEMS THINKING -->
+  <section id="systems" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">Systems thinking</p>
+      <h2 class="text-3xl font-light mt-1">Seeing the whole picture</h2>
+      <p class="mt-2">A <strong>system</strong> is a group of parts that work together to do a job. Margaret didn't only think about her code. She thought about the astronauts, the hardware, Mission Control, and how they all connect. That is <strong>systems thinking</strong>.</p>
+    </div>
+    <div class="overflow-x-auto border border-line">
+      <table class="text-sm w-full min-w-[640px]">
+        <thead><tr><th class="w-1/4">Principle</th><th>What it means</th><th>Grocery store</th><th>School</th></tr></thead>
+        <tbody>
+          <tr><td class="font-medium">Parts</td><td>Name every piece of the system.</td><td>Shelves, cashiers, scanners, trucks, customers.</td><td>Students, teachers, buses, bells, cafeteria.</td></tr>
+          <tr><td class="font-medium">Connections</td><td>Look at how parts affect each other.</td><td>If the truck is late, shelves go empty, customers leave.</td><td>If the bus is late, first period starts late for many kids.</td></tr>
+          <tr><td class="font-medium">Interfaces</td><td>Where two parts meet, make the hand-off clear.</td><td>The barcode is the "handshake" between the product and the scanner.</td><td>A hall pass is the hand-off between two teachers.</td></tr>
+          <tr><td class="font-medium">Feedback</td><td>The system watches results and adjusts.</td><td>Inventory computers see milk selling fast and order more.</td><td>Quiz scores tell the teacher what to re-teach.</td></tr>
+          <tr><td class="font-medium">Plan for failure</td><td>Ask "what if this part breaks?" before it does.</td><td>Backup generator keeps freezers cold in a power outage.</td><td>Fire drills practice what to do in an emergency.</td></tr>
+          <tr><td class="font-medium">Humans are part of it</td><td>People make mistakes, so design for them.</td><td>Self-checkout asks "Are you sure?" before removing an item.</td><td>Online tests warn you before you submit with blank answers.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="border border-line p-5 flex flex-col gap-3">
+      <h3 class="text-xl font-medium">Practice: think like Margaret about your school lunch line</h3>
+      <ol class="list-decimal pl-5 flex flex-col gap-2 prose-w">
+        <li><strong>List the parts:</strong> students, trays, food stations, the cashier, the ID card reader.</li>
+        <li><strong>Draw the connections:</strong> students go to stations, then to the cashier, then to tables.</li>
+        <li><strong>Find the bottleneck:</strong> where does the line get stuck? Usually at the cashier.</li>
+        <li><strong>Set priorities:</strong> what must happen (paying, getting food) versus what can wait (choosing a dessert).</li>
+        <li><strong>Plan for failure:</strong> what if the card reader breaks? Have a paper list as a backup.</li>
+        <li><strong>Get feedback:</strong> time the line for a week and see if your changes helped.</li>
+      </ol>
+      <button class="btn self-start" data-pop="systems">More on systems thinking</button>
+    </div>
+  </section>
+
+  <!-- TODAY -->
+  <section id="today" class="flex flex-col gap-6">
+    <div class="prose-w">
+      <p class="eyebrow">Her impact</p>
+      <h2 class="text-3xl font-light mt-1">What works today because of ideas like hers</h2>
+      <p class="mt-2">Margaret didn't invent every one of these things. But the ideas her team proved on Apollo, like priorities, recovery, clear alarms, and serious testing, are built into them.</p>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Your phone</h3><p class="text-sm">When you get a call during a game, the phone pauses the game and rings. That's priority scheduling.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Airplanes</h3><p class="text-sm">Autopilot and flight computers use priority tasks, backups, and clear cockpit alarms so pilots can react fast.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Cars</h3><p class="text-sm">Airbag and brake computers must react in a fraction of a second, no matter what the radio or screen is doing.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Grocery checkout</h3><p class="text-sm">Registers keep working even when the network hiccups, then catch up later. Error messages call a worker.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">School computers</h3><p class="text-sm">Auto-save, "Are you sure?" pop-ups, and crash recovery protect your homework from mistakes.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Hospitals</h3><p class="text-sm">Heart monitors put urgent alarms ahead of everything else, the same idea as the 1202 priority display.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Space today</h3><p class="text-sm">Modern rockets and Mars rovers run flight software built with the same care: priorities, testing, and fault recovery.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">A whole career</h3><p class="text-sm">"Software engineer" is now one of the most common tech jobs in the world, a name she helped make respected.</p></article>
+      <article class="tile p-5 flex flex-col gap-2 min-w-0"><h3 class="font-medium text-lg">Women in tech</h3><p class="text-sm">A famous 1969 photo shows her next to a stack of code printouts as tall as she was. It inspires students today.</p></article>
+    </div>
+    <div class="overflow-x-auto border border-line">
+      <table class="text-sm w-full min-w-[560px]">
+        <thead><tr><th>Apollo idea (1960s)</th><th>Where you see it today</th></tr></thead>
+        <tbody>
+          <tr><td>Priority scheduling</td><td>Phone and computer operating systems deciding which app gets attention</td></tr>
+          <tr><td>Restart and recover</td><td>Apps that reopen where you left off after a crash</td></tr>
+          <tr><td>Priority alarm displays</td><td>Car dashboard warning lights, phone emergency alerts</td></tr>
+          <tr><td>Simulators and testing</td><td>Video game beta tests, flight simulators, app testing teams</td></tr>
+          <tr><td>Software engineering as a discipline</td><td>College majors, coding bootcamps, careers in every industry</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- REFERENCES -->
+  <section id="refs" class="flex flex-col gap-4">
+    <div class="prose-w">
+      <p class="eyebrow">Official sources</p>
+      <h2 class="text-3xl font-light mt-1">Learn more from the source</h2>
+      <p class="mt-2 text-muted">These links open in a new tab. Ask a parent or teacher before browsing if your school requires it.</p>
+    </div>
+    <ul class="grid gap-3 sm:grid-cols-2 text-sm">
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://news.mit.edu/2016/apollo-code-developer-margaret-hamilton-receives-presidential-medal-of-freedom-1117" target="_blank" rel="noopener">MIT News: Hamilton receives the Presidential Medal of Freedom</a><p class="text-muted mt-1">MIT's news office on her Apollo work and award.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://computerhistory.org/profile/margaret-hamilton/" target="_blank" rel="noopener">Computer History Museum: Margaret Hamilton profile</a><p class="text-muted mt-1">Museum profile of her career.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://www.nasa.gov/mission/apollo-11/" target="_blank" rel="noopener">NASA: Apollo 11 mission page</a><p class="text-muted mt-1">Official overview of the first Moon landing.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://www.hq.nasa.gov/alsj/a11/a11.landing.html" target="_blank" rel="noopener">Apollo Lunar Surface Journal: the landing</a><p class="text-muted mt-1">NASA-hosted transcript of the landing, including the 1202 alarms.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://github.com/chrislgarry/Apollo-11" target="_blank" rel="noopener">The real Apollo 11 code on GitHub</a><p class="text-muted mt-1">Typed-up copy of the original guidance computer code.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://www.ibiblio.org/apollo/" target="_blank" rel="noopener">Virtual AGC project</a><p class="text-muted mt-1">Detailed history and a simulator of the Apollo Guidance Computer.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://physicstoday.aip.org/news/margaret-hamilton" target="_blank" rel="noopener">Physics Today: Margaret Hamilton</a><p class="text-muted mt-1">American Institute of Physics profile.</p></li>
+      <li class="border border-line p-4"><a class="lnk font-medium" href="https://www.draper.com/" target="_blank" rel="noopener">Draper Laboratory</a><p class="text-muted mt-1">Today's name for the MIT lab where Apollo's software was written.</p></li>
+    </ul>
+  </section>
+
+  <footer class="border-t border-line pt-6 text-sm text-muted prose-w">
+    Some numbers in the simulator and percentage table are simplified for teaching. Historical dates and facts come from the sources above.
+  </footer>
+</main>
+
+<!-- Modal -->
+<div id="modal" class="fixed inset-0 z-50 modal-back flex items-end sm:items-center justify-center p-0 sm:p-4" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="modal-title" class="bg-bg text-ink w-full sm:max-w-2xl max-h-[88vh] overflow-y-auto border-t-4 border-accent shadow-2xl" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+    <div class="sticky top-0 bg-bg border-b border-line px-5 py-3 flex items-start justify-between gap-4">
+      <h2 id="modal-title" class="text-xl font-medium"></h2>
+      <button id="modal-close" class="ctrl shrink-0" aria-label="Close">✕</button>
+    </div>
+    <div id="modal-body" class="px-5 py-4 flex flex-col gap-3"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* ---------- Font size 14–36 ---------- */
+  var root = document.documentElement;
+  var range = document.getElementById('fs-range');
+  var valEl = document.getElementById('fs-val');
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function setSize(n) {
+    n = Math.max(14, Math.min(36, Math.round(n)));
+    root.style.fontSize = n + 'px';
+    range.value = n; valEl.textContent = n + 'px';
+    store('mh-fs', n);
+  }
+  document.getElementById('fs-down').addEventListener('click', function () { setSize(+range.value - 2); });
+  document.getElementById('fs-up').addEventListener('click', function () { setSize(+range.value + 2); });
+  range.addEventListener('input', function () { setSize(+range.value); });
+  setSize(+(load('mh-fs') || 18));
+
+  /* ---------- Theme ---------- */
+  var themeBtn = document.getElementById('theme-btn');
+  function isDark() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function labelTheme() { themeBtn.textContent = isDark() ? 'Light' : 'Dark'; }
+  var saved = load('mh-theme'); if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  themeBtn.addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next); store('mh-theme', next); labelTheme();
+  });
+  labelTheme();
+
+  /* ---------- Popup content ---------- */
+  function L(href, text) { return '<li><a class="lnk" href="' + href + '" target="_blank" rel="noopener">' + text + '</a></li>'; }
+  var links = {
+    mit: L('https://news.mit.edu/2016/apollo-code-developer-margaret-hamilton-receives-presidential-medal-of-freedom-1117', 'MIT News: Presidential Medal of Freedom'),
+    chm: L('https://computerhistory.org/profile/margaret-hamilton/', 'Computer History Museum profile'),
+    nasa11: L('https://www.nasa.gov/mission/apollo-11/', 'NASA: Apollo 11 mission'),
+    alsj: L('https://www.hq.nasa.gov/alsj/a11/a11.landing.html', 'Apollo Lunar Surface Journal: landing transcript'),
+    code: L('https://github.com/chrislgarry/Apollo-11', 'Apollo 11 source code (GitHub)'),
+    vagc: L('https://www.ibiblio.org/apollo/', 'Virtual AGC project'),
+    pt: L('https://physicstoday.aip.org/news/margaret-hamilton', 'Physics Today profile'),
+    draper: L('https://www.draper.com/', 'Draper Laboratory'),
+    hti: L('http://www.htius.com/', 'Hamilton Technologies, Inc.')
+  };
+  function linkList(keys) { return '<h3 class="eyebrow mt-2">Official links</h3><ul class="flex flex-col gap-1 text-sm">' + keys.map(function (k) { return links[k]; }).join('') + '</ul>'; }
+  function ex(label, text) { return '<p class="example p-3 text-sm"><strong>' + label + ':</strong> ' + text + '</p>'; }
+
+  var pops = {
+    intro: ['Quick facts', '<ul class="list-disc pl-5 flex flex-col gap-1"><li>Full name: Margaret Heafield Hamilton.</li><li>Born August 17, 1936, in Paoli, Indiana.</li><li>Studied math (with philosophy) at Earlham College, graduating in 1958.</li><li>Led the Software Engineering Division at the MIT Instrumentation Laboratory, which wrote the onboard flight software for Apollo\'s command module and lunar module.</li><li>Helped make "software engineering" a respected field.</li><li>Founded Higher Order Software (1976) and Hamilton Technologies (1986).</li><li>Received NASA\'s Exceptional Space Act Award (2003) and the Presidential Medal of Freedom (2016).</li></ul>' + linkList(['mit', 'chm', 'pt'])],
+    early: ['Growing up and college', '<p>Margaret Heafield was born in Paoli, Indiana. She was strong in math, and a math teacher she admired encouraged her. She went to Earlham College, a small college in Indiana, and studied math with a minor in philosophy.</p><p>Philosophy might sound unrelated to computers, but it teaches <strong>logic</strong>: how to build an argument step by step so every step follows from the one before. That is exactly how a computer program works.</p><p>She planned to study abstract math in graduate school, but first took a programming job to support her family. That "temporary" job became her life\'s work.</p>' + ex('School', 'In a geometry proof, each line must follow from the last. Programs work the same way, and a skipped step causes a bug.') + linkList(['chm', 'pt'])],
+    sage: ['Weather and SAGE', '<p><strong>Weather:</strong> At MIT she wrote software for Edward Lorenz, a scientist studying how to predict weather. His work later led to "chaos theory," the idea that tiny changes (like a butterfly flapping its wings) can lead to big differences over time.</p><p><strong>SAGE:</strong> At MIT\'s Lincoln Laboratory she wrote programs for SAGE, a huge computer network the U.S. used to spot possible enemy aircraft. Her programs helped find the planes on radar. Computers then filled entire rooms.</p><p>On these jobs she learned to read other people\'s code, find bugs, and write programs that had to work every single time.</p>' + ex('Grocery store', 'Stores predict how much bread to order using past sales and the weather forecast. It\'s the same kind of prediction math, just smaller.') + linkList(['chm'])],
+    apollo: ['Joining Apollo', '<p>In 1961 President Kennedy set a goal to land people on the Moon. NASA hired the MIT Instrumentation Laboratory to design the guidance computer and its software.</p><p>Margaret joined and rose to lead the team that wrote the onboard flight software for both spacecraft: the <strong>command module</strong> (which orbited the Moon) and the <strong>lunar module</strong> (which landed). The team grew to hundreds of people.</p><p>She sometimes brought her young daughter Lauren to the lab on nights and weekends. That turned into one of the most important lessons of Apollo (see the "Testing" card).</p>' + ex('School', 'Think of a giant group project where one mistake could hurt someone. You\'d need a leader, clear jobs, and lots of checking.') + linkList(['mit', 'draper', 'nasa11'])],
+    usl: ['Starting companies: designing errors away', '<p>After Apollo, Margaret studied the errors her team had found. A large share happened at the <strong>interfaces</strong>, the places where one part of a system hands information to another part.</p><p>She founded <strong>Higher Order Software</strong> in 1976 and <strong>Hamilton Technologies</strong> in 1986. She developed a method she called <em>Development Before the Fact</em> and a language called the <strong>Universal Systems Language</strong>. The goal: describe a system so carefully that many kinds of errors can\'t be built into it, instead of finding them later.</p>' + ex('Grocery store', 'A self-checkout scale won\'t let you finish until the weight matches what you scanned. The check is built into the design, not added at the end.') + linkList(['hti', 'chm'])],
+    awards: ['Awards and honors', '<ul class="list-disc pl-5 flex flex-col gap-1"><li><strong>2003:</strong> NASA Exceptional Space Act Award for her scientific and technical contributions, which included a large cash prize.</li><li><strong>2016:</strong> Presidential Medal of Freedom, given by President Barack Obama on November 22, 2016.</li><li>She has also received honorary degrees from several universities.</li><li><strong>2017:</strong> She was one of the people honored in a LEGO "Women of NASA" set.</li></ul>' + linkList(['mit', 'chm'])],
+    agc: ['The Apollo Guidance Computer by the numbers', '<div class="overflow-x-auto"><table class="text-sm w-full tnum"><thead><tr><th>Thing</th><th>Apollo computer</th><th>A typical phone today</th></tr></thead><tbody><tr><td>Permanent memory</td><td>36,864 words (about 72 KB)</td><td>128 GB or more</td></tr><tr><td>Working memory</td><td>2,048 words (about 4 KB)</td><td>6–12 GB</td></tr><tr><td>Weight</td><td>About 70 pounds</td><td>Less than half a pound</td></tr></tbody></table></div><p>128 GB divided by 72 KB is about 1.7 million. So a phone stores roughly a million times more. And yet the Apollo computer safely landed people on the Moon because its software was designed so carefully.</p>' + ex('School', 'The whole Apollo program could fit in the space of a few small photos on your phone.') + linkList(['vagc', 'nasa11'])],
+    rope: ['Core rope memory', '<p>Apollo\'s permanent program was stored in <strong>core rope memory</strong>. Workers, mostly women from factories that made textiles and watches, threaded copper wire through or around tiny magnetic rings called cores.</p><ul class="list-disc pl-5"><li>Wire goes <strong>through</strong> a core = 1</li><li>Wire goes <strong>around</strong> a core = 0</li></ul><p>This made the memory nearly impossible to erase by accident, which is great in space. But it took weeks to weave, so the code had to be finished and correct long before launch.</p>' + ex('School', 'It\'s like writing your final essay in permanent marker. You\'d better proofread everything first.') + linkList(['vagc'])],
+    se: ['Naming "software engineering"', '<p>In the 1960s many people thought of programming as less important than "real" engineering like building engines. Margaret started calling her team\'s work <strong>software engineering</strong> so it would get the same respect and the same careful methods: plans, reviews, tests, and documentation.</p><p>She has said people teased her about the name at first. Over time the name stuck, and today it is a major field taught at universities worldwide.</p>' + ex('Grocery store', 'A store that just "puts stuff on shelves" vs. a store with a real plan for ordering, pricing, and safety. The plan is what makes it professional.') + linkList(['mit', 'chm'])],
+    priority: ['Priority scheduling', '<p>The Apollo computer had many jobs: steering, firing the engine, updating screens, reading sensors. Some were life-or-death. Others could wait.</p><p>The software\'s "executive" (the boss program) gave every job a priority. When there wasn\'t enough time to do everything, it ran the important jobs first. This is called <strong>priority scheduling</strong>.</p><ol class="list-decimal pl-5"><li>List every job.</li><li>Give each job a priority number.</li><li>When busy, run highest priority first.</li><li>If still overloaded, drop the lowest jobs.</li></ol>' + ex('School', 'If the fire alarm rings during a test, everyone leaves. The test (lower priority) waits; safety (highest priority) comes first.') + linkList(['vagc', 'mit'])],
+    restart: ['Restart and recovery', '<p>The software regularly saved checkpoints: notes about which important jobs were running and where they were. If something went wrong, the computer could do a <strong>restart</strong> in a tiny fraction of a second, read the checkpoints, and continue the important jobs without losing its place.</p><p>That\'s what happened during the 1202 alarms. Each restart cleared out the pile of extra work and kept the landing going.</p>' + ex('Grocery store', 'If the register freezes, it reboots and still remembers the items it already scanned for you.') + linkList(['vagc', 'alsj'])],
+    displays: ['Priority displays and alarms', '<p>Margaret and her team worked on <strong>priority displays</strong>: when there was an emergency, the computer could interrupt what the astronauts were looking at and show an alarm code. That way the humans knew something was wrong and could decide what to do.</p><p>This is the "human in the loop" idea. The computer handles what it can, and it tells people clearly when they need to step in.</p>' + ex('School', 'When the principal comes over the loudspeaker, class stops so everyone hears the important message.') + linkList(['vagc'])],
+    lauren: ['Lauren\'s "bug" and Apollo 8', '<p>One day Margaret\'s daughter Lauren played with the Apollo simulator. She chose a program called <strong>P01</strong>, which is only for before launch, while the "flight" was already going. The simulation crashed.</p><p>Margaret realized an astronaut could make the same mistake and wanted to add a check to block it. She was told astronauts were too well trained to do that. So she added a note in the instructions instead.</p><p>On <strong>Apollo 8</strong> in 1968, astronaut Jim Lovell accidentally selected P01 during the flight. It erased important navigation data. Margaret\'s team worked hours to send up corrected data and the crew got home safely. After that, protections were added.</p><p><strong>Lesson:</strong> design for human mistakes. Assume someone will press the wrong button.</p>' + ex('School', 'Your little sibling uses your tablet and somehow deletes your homework. That\'s why apps ask "Are you sure?"') + linkList(['chm', 'mit'])],
+    alarm: ['More about 1202 and 1201', '<p><strong>1202</strong> meant "executive overflow": the computer had more jobs waiting than it had room to track. <strong>1201</strong> was a similar overload signal.</p><p>The extra work came from the rendezvous radar, a radar used for meeting up with the other spacecraft later. Because of how a switch was set, it kept sending signals that interrupted the computer and used up some of its time.</p><p>Two engineers in Mission Control, Steve Bales and Jack Garman, knew from practice runs that these alarms were safe if they didn\'t happen too often. They called "Go." Without the priority and restart design, the computer could have locked up and the landing might have been stopped.</p>' + ex('Grocery store', 'A coupon machine beeping nonstop at one lane. The cashier ignores it and keeps checking people out. Annoying but safe, as long as it doesn\'t get worse.') + linkList(['alsj', 'nasa11', 'code'])],
+    binary: ['More about binary', '<p>Binary uses only 0 and 1. Each place is worth twice the place to its right:</p><pre class="bg-surface p-3 font-mono text-sm overflow-x-auto">128  64  32  16   8   4   2   1\n  0   0   0   0   1   0   1   1   = 8 + 2 + 1 = 11</pre><p>The Apollo computer stored numbers in 16-bit "words": 15 bits for the number and 1 extra bit, called a parity bit, to check for errors.</p>' + ex('Grocery store', 'A light switch is a 1-bit memory: on or off. Eight light switches in a row can show any number from 0 to 255.') + linkList(['vagc'])],
+    boolean: ['More about Boolean logic', '<p>Boolean logic is named after George Boole, a mathematician from the 1800s. It uses only TRUE and FALSE.</p><div class="overflow-x-auto"><table class="text-sm w-full font-mono"><thead><tr><th>A</th><th>B</th><th>A AND B</th><th>A OR B</th><th>NOT A</th></tr></thead><tbody><tr><td>F</td><td>F</td><td>F</td><td>F</td><td>T</td></tr><tr><td>F</td><td>T</td><td>F</td><td>T</td><td>T</td></tr><tr><td>T</td><td>F</td><td>F</td><td>T</td><td>F</td></tr><tr><td>T</td><td>T</td><td>T</td><td>T</td><td>F</td></tr></tbody></table></div><p>Apollo\'s software was full of these tests, like "IF the engine is on AND altitude is low THEN check the landing radar."</p>' + ex('Grocery store', 'You get the sale price IF you have a store card OR a coupon.') + linkList(['code'])],
+    systems: ['More on systems thinking', '<p>Margaret looked at Apollo as one big system: astronauts, computer, software, radar, engines, and Mission Control on Earth. A tiny problem in one part (a radar switch) caused trouble in another part (the computer). Systems thinkers look for those connections ahead of time.</p><p>Her later work focused on making each part\'s inputs and outputs crystal clear, so parts fit together like puzzle pieces with only one way to connect.</p><ol class="list-decimal pl-5"><li>See the whole, not only your piece.</li><li>Map how information flows between parts.</li><li>Ask "what if this fails?" for every part.</li><li>Remember that people are part of the system.</li></ol>' + ex('School', 'A school bus route is a system. Change one stop and every later stop shifts, and some kids could be late.') + linkList(['hti', 'chm'])]
+  };
+
+  var modal = document.getElementById('modal');
+  var mTitle = document.getElementById('modal-title');
+  var mBody = document.getElementById('modal-body');
+  var lastFocus = null;
+  function openPop(key) {
+    var p = pops[key]; if (!p) return;
+    lastFocus = document.activeElement;
+    mTitle.textContent = p[0]; mBody.innerHTML = p[1];
+    modal.hidden = false; document.body.style.overflow = 'hidden';
+    document.getElementById('modal-close').focus();
+  }
+  function closePop() {
+    modal.hidden = true; document.body.style.overflow = '';
+    if (lastFocus) lastFocus.focus();
+  }
+  document.querySelectorAll('[data-pop]').forEach(function (b) {
+    b.addEventListener('click', function () { openPop(b.getAttribute('data-pop')); });
+  });
+  document.getElementById('modal-close').addEventListener('click', closePop);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closePop(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) closePop(); });
+
+  /* ---------- Simulator ---------- */
+  var radar = false, priorityOn = true;
+  var jobs = [
+    { name: 'Steer toward the landing spot', pr: 1, load: 40, color: 'var(--accent)' },
+    { name: 'Control the engine', pr: 2, load: 25, color: 'var(--head)' },
+    { name: 'Update the astronauts’ display', pr: 3, load: 15, color: 'var(--good)' },
+    { name: 'Extra calculations (nice to have)', pr: 4, load: 10, color: 'var(--muted)' }
+  ];
+  var noise = { name: 'Radar noise (can’t be stopped)', load: 25, color: 'var(--bad)' };
+  var radarBtn = document.getElementById('sim-radar');
+  var modeBtn = document.getElementById('sim-mode');
+  function renderSim() {
+    radarBtn.setAttribute('aria-pressed', radar); radarBtn.textContent = 'Radar problem: ' + (radar ? 'ON' : 'OFF');
+    modeBtn.setAttribute('aria-pressed', priorityOn); modeBtn.textContent = 'Priority rules: ' + (priorityOn ? 'ON (Hamilton style)' : 'OFF (do everything)');
+    var used = radar ? noise.load : 0;
+    var rows = [], segs = [];
+    if (radar) segs.push(noise);
+    var total = used + jobs.reduce(function (s, j) { return s + j.load; }, 0);
+    var crashed = false, alarm = false;
+    if (!priorityOn && total > 100) crashed = true;
+    jobs.forEach(function (j) {
+      var runs;
+      if (crashed) runs = false;
+      else if (!alarm && used + j.load <= 100) { runs = true; used += j.load; segs.push(j); }
+      else { runs = false; alarm = true; }
+      rows.push('<li class="flex items-start justify-between gap-3 border-b border-line pb-2"><span class="min-w-0"><span class="inline-block w-3 h-3 mr-2 align-middle" style="background:' + j.color + '"></span>' + j.name + ' <span class="tag ml-1">P' + j.pr + ' · ' + j.load + '%</span></span><span class="font-mono text-xs shrink-0 ' + (runs ? 'text-good' : 'text-bad') + '">' + (runs ? 'RUNNING' : (crashed ? 'FROZEN' : 'DROPPED')) + '</span></li>');
+    });
+    if (radar) rows.unshift('<li class="flex items-start justify-between gap-3 border-b border-line pb-2"><span class="min-w-0"><span class="inline-block w-3 h-3 mr-2 align-middle" style="background:' + noise.color + '"></span>' + noise.name + ' <span class="tag ml-1">' + noise.load + '%</span></span><span class="font-mono text-xs shrink-0 text-bad">STEALING TIME</span></li>');
+    document.getElementById('sim-list').innerHTML = rows.join('');
+    var bar = document.getElementById('sim-bar');
+    if (crashed) bar.innerHTML = '<div class="w-full h-full flex items-center justify-center font-mono text-xs text-bad" style="background:var(--surface)">OVERLOADED · ' + total + '% needed</div>';
+    else bar.innerHTML = segs.map(function (s) { return '<div style="width:' + s.load + '%;background:' + s.color + '"></div>'; }).join('');
+    var st = document.getElementById('sim-status');
+    if (crashed) st.innerHTML = '<span class="text-bad font-medium">CRASH.</span> The computer tried to do ' + total + '% of work with only 100% of time. Nothing finishes, including steering. The landing would be called off.';
+    else if (alarm) st.innerHTML = '<span class="text-warn font-medium">ALARM 1202.</span> Overloaded, so the computer restarted and dropped low-priority jobs. Steering and engine keep running. <span class="text-good">Landing: GO.</span>';
+    else st.innerHTML = '<span class="text-good font-medium">ALL GOOD.</span> Using ' + used + '% of the computer’s time. Every job fits.';
+  }
+  radarBtn.addEventListener('click', function () { radar = !radar; renderSim(); });
+  modeBtn.addEventListener('click', function () { priorityOn = !priorityOn; renderSim(); });
+  renderSim();
+
+  /* ---------- Binary ---------- */
+  var bitsEl = document.getElementById('bits');
+  var vals = [128, 64, 32, 16, 8, 4, 2, 1];
+  var state = [0, 0, 0, 0, 1, 0, 1, 1];
+  function renderBits() {
+    bitsEl.innerHTML = vals.map(function (v, i) {
+      return '<div class="flex flex-col items-center gap-1"><span class="font-mono text-[0.65rem] text-muted tnum">' + v + '</span><button class="bit" data-i="' + i + '" aria-pressed="' + (state[i] ? 'true' : 'false') + '" aria-label="Bit worth ' + v + '">' + state[i] + '</button></div>';
+    }).join('');
+    document.getElementById('bin-out').textContent = state.join('');
+    document.getElementById('dec-out').textContent = state.reduce(function (s, b, i) { return s + b * vals[i]; }, 0);
+  }
+  bitsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('.bit'); if (!b) return;
+    var i = +b.getAttribute('data-i'); state[i] = state[i] ? 0 : 1; renderBits();
+    var nb = bitsEl.querySelector('[data-i="' + i + '"]'); if (nb) nb.focus();
+  });
+  renderBits();
+
+  /* ---------- Logic ---------- */
+  var A = true, B = false, OP = 'AND';
+  var aBtn = document.getElementById('lg-a'), bBtn = document.getElementById('lg-b');
+  function renderLogic() {
+    aBtn.setAttribute('aria-pressed', A); aBtn.textContent = 'Homework done: ' + (A ? 'YES' : 'NO');
+    bBtn.setAttribute('aria-pressed', B); bBtn.textContent = 'Not raining: ' + (B ? 'YES' : 'NO');
+    document.querySelectorAll('.lg-op').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-op') === OP); });
+    var r = OP === 'AND' ? (A && B) : (A || B);
+    document.getElementById('lg-out').innerHTML = (A ? 'TRUE' : 'FALSE') + ' ' + OP + ' ' + (B ? 'TRUE' : 'FALSE') + ' = <strong class="' + (r ? 'text-good' : 'text-bad') + '">' + (r ? 'TRUE → Recess outside!' : 'FALSE → Indoor recess') + '</strong>';
+  }
+  aBtn.addEventListener('click', function () { A = !A; renderLogic(); });
+  bBtn.addEventListener('click', function () { B = !B; renderLogic(); });
+  document.querySelectorAll('.lg-op').forEach(function (b) { b.addEventListener('click', function () { OP = b.getAttribute('data-op'); renderLogic(); }); });
+  renderLogic();
+})();
+</script>
